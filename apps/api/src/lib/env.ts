@@ -19,10 +19,10 @@ export function requireEnv(name: string): string {
 }
 
 export function readBooleanEnv(name: string, defaultValue = false): boolean {
-  const value = process.env[name];
+  const value = readOptionalEnv(name);
   if (!value) {
     return defaultValue;
   }
 
-  return truthyValues.has(value.trim().toLowerCase());
+  return truthyValues.has(value.toLowerCase());
 }

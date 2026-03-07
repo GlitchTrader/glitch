@@ -9,8 +9,7 @@ export function getWhopWebhookClient(): Whop {
   }
 
   cachedWebhookClient = new Whop({
-    webhookKey: requireEnv("WHOP_WEBHOOK_SECRET"),
+    webhookKey: requireEnv("db_WHOP_WEBHOOK_SECRET"),
   });
   return cachedWebhookClient;
 }
-
