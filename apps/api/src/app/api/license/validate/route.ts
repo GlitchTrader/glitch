@@ -1,6 +1,12 @@
 import { NextRequest } from "next/server";
+import {
+  EntitlementStoreConfigError,
+  findWhopEntitlementByLicenseKey,
+  isWhopEntitlementStatusActive,
+} from "@/lib/entitlements-store";
 import { readBooleanEnv } from "@/lib/env";
 import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
+import { getWebhookStoreMode } from "@/lib/idempotency-store";
 
 export const runtime = "nodejs";
 
@@ -11,6 +17,54 @@ interface LicenseValidateRequest {
   clientVersion: string;
   nonce: string;
   timestamp: string;
+}
+
+function buildFeatureFlags(active: boolean) {
+  return {
+    premiumFundamentals: active,
+    premiumInsights: active,
+    riskControlsAlwaysOn: true,
+  };
+}
+
+function buildValidateResponse(
+  parsed: LicenseValidateRequest,
+  requestId: string,
+  mode: "stub" | "database",
+  now: number,
+  {
+    valid,
+    reason,
+    plan,
+    active,
+  }: {
+    valid: boolean;
+    reason: string | null;
+    plan: string;
+    active: boolean;
+  },
+) {
+  return jsonResponse({
+    ok: true,
+    mode,
+    requestId,
+    license: {
+      valid,
+      reason,
+    },
+    entitlement: {
+      active,
+      plan,
+      token: null,
+      tokenExpiresAt: new Date(now + 15 * 60 * 1000).toISOString(),
+      graceExpiresAt: new Date(now + 6 * 60 * 60 * 1000).toISOString(),
+      featureFlags: buildFeatureFlags(active),
+    },
+    echo: {
+      installationId: parsed.installationId,
+      clientVersion: parsed.clientVersion,
+    },
+  });
 }
 
 function isNonEmpty(value: unknown): value is string {
@@ -70,34 +124,51 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const allowAll = readBooleanEnv("LICENSE_STUB_ALLOW_ALL", false);
   const now = Date.now();
-
-  // Stub mode for v1 integration. Replace with signed entitlement + DB lookup.
-  return jsonResponse({
-    ok: true,
-    mode: "stub",
-    requestId,
-    license: {
+  if (getWebhookStoreMode() !== "database") {
+    const allowAll = readBooleanEnv("LICENSE_STUB_ALLOW_ALL", false);
+    return buildValidateResponse(parsed, requestId, "stub", now, {
       valid: allowAll,
       reason: allowAll ? null : "stub_deny_by_default",
-    },
-    entitlement: {
-      active: allowAll,
       plan: allowAll ? "pro" : "none",
-      token: null,
-      tokenExpiresAt: new Date(now + 15 * 60 * 1000).toISOString(),
-      graceExpiresAt: new Date(now + 6 * 60 * 60 * 1000).toISOString(),
-      featureFlags: {
-        premiumFundamentals: allowAll,
-        premiumInsights: allowAll,
-        riskControlsAlwaysOn: true,
-      },
-    },
-    echo: {
-      installationId: parsed.installationId,
-      clientVersion: parsed.clientVersion,
-    },
-  });
-}
+      active: allowAll,
+    });
+  }
 
+  try {
+    const entitlement = await findWhopEntitlementByLicenseKey(parsed.licenseKey);
+    if (!entitlement) {
+      return buildValidateResponse(parsed, requestId, "database", now, {
+        valid: false,
+        reason: "license_not_found",
+        plan: "none",
+        active: false,
+      });
+    }
+
+    const active = isWhopEntitlementStatusActive(entitlement.status);
+    return buildValidateResponse(parsed, requestId, "database", now, {
+      valid: active,
+      reason: active ? null : `membership_status_${entitlement.status}`,
+      plan: entitlement.planCode,
+      active,
+    });
+  } catch (error) {
+    if (error instanceof EntitlementStoreConfigError) {
+      return buildValidateResponse(parsed, requestId, "database", now, {
+        valid: false,
+        reason: error.code,
+        plan: "none",
+        active: false,
+      });
+    }
+
+    return errorResponse(
+      requestId,
+      500,
+      "license_lookup_error",
+      "Failed to evaluate license entitlement.",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}

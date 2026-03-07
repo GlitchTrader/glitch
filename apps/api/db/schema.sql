@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS entitlements (
   id TEXT PRIMARY KEY,
   provider TEXT NOT NULL,
   external_membership_id TEXT NOT NULL,
+  license_key_hash TEXT,
   external_user_id TEXT,
   status TEXT NOT NULL,
   plan_code TEXT NOT NULL,
@@ -27,8 +28,15 @@ CREATE TABLE IF NOT EXISTS entitlements (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE entitlements
+  ADD COLUMN IF NOT EXISTS license_key_hash TEXT;
+
 CREATE UNIQUE INDEX IF NOT EXISTS entitlements_provider_membership_idx
   ON entitlements (provider, external_membership_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS entitlements_provider_license_key_hash_idx
+  ON entitlements (provider, license_key_hash)
+  WHERE license_key_hash IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS license_bindings (
   id TEXT PRIMARY KEY,
@@ -43,4 +51,3 @@ CREATE TABLE IF NOT EXISTS license_bindings (
 CREATE UNIQUE INDEX IF NOT EXISTS license_bindings_entitlement_idx
   ON license_bindings (entitlement_id)
   WHERE revoked_at IS NULL;
-
