@@ -16,6 +16,212 @@ interface InMemoryWebhookEventStore {
 }
 
 const globalStoreKey = "__glitchWebhookEventStoreV1";
+const globalPoolKey = "__glitchWebhookEventStoreDbPoolV1";
+const globalSchemaReadyKey = "__glitchWebhookEventStoreSchemaReadyV1";
+
+type PersistedWebhookEventStatus = Exclude<WebhookProcessingStatus, "received">;
+type WebhookStoreMode = "memory" | "database";
+
+interface WebhookEventStoreDbPool {
+  query<T = unknown>(text: string, params?: unknown[]): Promise<{ rowCount: number | null; rows: T[] }>;
+}
+
+interface DatabaseWebhookEventRow {
+  event_id: string;
+  provider: string;
+  event_type: string;
+  payload_sha256: string;
+  status: WebhookProcessingStatus;
+  received_at: string | Date;
+  processed_at: string | Date | null;
+  failure_reason: string | null;
+}
+
+function readDatabaseUrl(): string | null {
+  const raw = process.env.DATABASE_URL;
+  if (!raw || raw.trim().length === 0) {
+    return null;
+  }
+
+  return raw.trim();
+}
+
+function toIsoString(input: string | Date | null): string | null {
+  if (!input) {
+    return null;
+  }
+
+  if (input instanceof Date) {
+    return input.toISOString();
+  }
+
+  const parsed = new Date(input);
+  if (Number.isNaN(parsed.valueOf())) {
+    return input;
+  }
+
+  return parsed.toISOString();
+}
+
+function mapDatabaseRow(row: DatabaseWebhookEventRow): WebhookEventRecord {
+  return {
+    eventId: row.event_id,
+    provider: row.provider,
+    eventType: row.event_type,
+    payloadSha256: row.payload_sha256,
+    status: row.status,
+    receivedAt: toIsoString(row.received_at) ?? new Date().toISOString(),
+    processedAt: toIsoString(row.processed_at),
+    failureReason: row.failure_reason,
+  };
+}
+
+async function getDatabasePool(): Promise<WebhookEventStoreDbPool> {
+  const globalScope = globalThis as typeof globalThis & {
+    [globalPoolKey]?: WebhookEventStoreDbPool;
+  };
+
+  if (globalScope[globalPoolKey]) {
+    return globalScope[globalPoolKey];
+  }
+
+  const connectionString = readDatabaseUrl();
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is required for database webhook store mode.");
+  }
+
+  const pgModule = (await import("pg")) as typeof import("pg");
+  const pool = new pgModule.Pool({
+    connectionString,
+    max: 5,
+    idleTimeoutMillis: 30_000,
+  });
+
+  globalScope[globalPoolKey] = pool;
+  return pool;
+}
+
+async function ensureSchema(pool: WebhookEventStoreDbPool): Promise<void> {
+  const globalScope = globalThis as typeof globalThis & {
+    [globalSchemaReadyKey]?: boolean;
+  };
+
+  if (globalScope[globalSchemaReadyKey]) {
+    return;
+  }
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS webhook_events (
+      event_id TEXT PRIMARY KEY,
+      provider TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      payload_sha256 TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('received', 'processed', 'failed')),
+      received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      processed_at TIMESTAMPTZ,
+      failure_reason TEXT
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS webhook_events_provider_type_idx
+      ON webhook_events (provider, event_type);
+  `);
+
+  globalScope[globalSchemaReadyKey] = true;
+}
+
+async function registerWebhookEventInDatabase(input: {
+  eventId: string;
+  provider: string;
+  eventType: string;
+  payloadSha256: string;
+}): Promise<{
+  inserted: boolean;
+  record: WebhookEventRecord;
+}> {
+  const pool = await getDatabasePool();
+  await ensureSchema(pool);
+
+  const insertResult = await pool.query<DatabaseWebhookEventRow>(
+    `
+      INSERT INTO webhook_events (
+        event_id,
+        provider,
+        event_type,
+        payload_sha256,
+        status
+      )
+      VALUES ($1, $2, $3, $4, 'received')
+      ON CONFLICT (event_id) DO NOTHING
+      RETURNING
+        event_id,
+        provider,
+        event_type,
+        payload_sha256,
+        status,
+        received_at,
+        processed_at,
+        failure_reason;
+    `,
+    [input.eventId, input.provider, input.eventType, input.payloadSha256],
+  );
+
+  if (insertResult.rowCount && insertResult.rowCount > 0) {
+    return {
+      inserted: true,
+      record: mapDatabaseRow(insertResult.rows[0]),
+    };
+  }
+
+  const existingResult = await pool.query<DatabaseWebhookEventRow>(
+    `
+      SELECT
+        event_id,
+        provider,
+        event_type,
+        payload_sha256,
+        status,
+        received_at,
+        processed_at,
+        failure_reason
+      FROM webhook_events
+      WHERE event_id = $1
+      LIMIT 1;
+    `,
+    [input.eventId],
+  );
+
+  if (!existingResult.rows[0]) {
+    throw new Error(`Webhook event read failed after conflict for event_id=${input.eventId}`);
+  }
+
+  return {
+    inserted: false,
+    record: mapDatabaseRow(existingResult.rows[0]),
+  };
+}
+
+async function markWebhookEventProcessedInDatabase(
+  eventId: string,
+  status: PersistedWebhookEventStatus,
+  failureReason?: string,
+): Promise<void> {
+  const pool = await getDatabasePool();
+  await ensureSchema(pool);
+
+  await pool.query(
+    `
+      UPDATE webhook_events
+      SET
+        status = $2,
+        processed_at = NOW(),
+        failure_reason = $3
+      WHERE event_id = $1;
+    `,
+    [eventId, status, failureReason ?? null],
+  );
+}
 
 function getStore(): InMemoryWebhookEventStore {
   const globalScope = globalThis as typeof globalThis & {
@@ -31,7 +237,7 @@ function getStore(): InMemoryWebhookEventStore {
   return globalScope[globalStoreKey];
 }
 
-export function registerWebhookEvent(input: {
+function registerWebhookEventInMemory(input: {
   eventId: string;
   provider: string;
   eventType: string;
@@ -67,9 +273,9 @@ export function registerWebhookEvent(input: {
   };
 }
 
-export function markWebhookEventProcessed(
+function markWebhookEventProcessedInMemory(
   eventId: string,
-  status: Exclude<WebhookProcessingStatus, "received">,
+  status: PersistedWebhookEventStatus,
   failureReason?: string,
 ): void {
   const store = getStore();
@@ -83,3 +289,35 @@ export function markWebhookEventProcessed(
   record.failureReason = failureReason ?? null;
 }
 
+export function getWebhookStoreMode(): WebhookStoreMode {
+  return readDatabaseUrl() ? "database" : "memory";
+}
+
+export async function registerWebhookEvent(input: {
+  eventId: string;
+  provider: string;
+  eventType: string;
+  payloadSha256: string;
+}): Promise<{
+  inserted: boolean;
+  record: WebhookEventRecord;
+}> {
+  if (getWebhookStoreMode() === "database") {
+    return registerWebhookEventInDatabase(input);
+  }
+
+  return registerWebhookEventInMemory(input);
+}
+
+export async function markWebhookEventProcessed(
+  eventId: string,
+  status: PersistedWebhookEventStatus,
+  failureReason?: string,
+): Promise<void> {
+  if (getWebhookStoreMode() === "database") {
+    await markWebhookEventProcessedInDatabase(eventId, status, failureReason);
+    return;
+  }
+
+  markWebhookEventProcessedInMemory(eventId, status, failureReason);
+}

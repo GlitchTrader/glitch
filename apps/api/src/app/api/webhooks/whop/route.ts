@@ -74,12 +74,27 @@ export async function POST(request: NextRequest) {
   }
 
   const eventId = webhookEvent.id;
-  const insertResult = registerWebhookEvent({
-    eventId,
-    provider: "whop",
-    eventType: webhookEvent.type,
-    payloadSha256: sha256(rawBody),
-  });
+  let insertResult:
+    | {
+        inserted: boolean;
+      }
+    | undefined;
+  try {
+    insertResult = await registerWebhookEvent({
+      eventId,
+      provider: "whop",
+      eventType: webhookEvent.type,
+      payloadSha256: sha256(rawBody),
+    });
+  } catch (error) {
+    return errorResponse(
+      requestId,
+      500,
+      "idempotency_store_error",
+      "Failed to persist webhook event.",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
 
   if (!insertResult.inserted) {
     return jsonResponse({
@@ -93,7 +108,7 @@ export async function POST(request: NextRequest) {
 
   try {
     await handleWebhookEvent(webhookEvent);
-    markWebhookEventProcessed(eventId, "processed");
+    await markWebhookEventProcessed(eventId, "processed");
 
     return jsonResponse({
       ok: true,
@@ -104,11 +119,16 @@ export async function POST(request: NextRequest) {
       requestId,
     });
   } catch (error) {
-    markWebhookEventProcessed(
-      eventId,
-      "failed",
-      error instanceof Error ? error.message : String(error),
-    );
+    try {
+      await markWebhookEventProcessed(
+        eventId,
+        "failed",
+        error instanceof Error ? error.message : String(error),
+      );
+    } catch {
+      // Marking failed is best-effort in this pass to avoid masking root errors.
+    }
+
     return errorResponse(
       requestId,
       500,
