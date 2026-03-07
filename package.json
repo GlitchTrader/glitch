@@ -1,0 +1,13 @@
+{
+  "name": "glitch-platform",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "lint": "npm run lint --workspaces",
+    "test": "echo \"No tests yet\""
+  }
+}
