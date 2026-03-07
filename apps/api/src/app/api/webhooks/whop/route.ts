@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { type UnwrapWebhookEvent } from "@whop/sdk/resources/webhooks";
 import { NextRequest } from "next/server";
+import { projectWhopMembershipEntitlement } from "@/lib/entitlements-store";
 import { errorResponse, getRequestId, jsonResponse, toHeaderRecord } from "@/lib/http";
 import { markWebhookEventProcessed, registerWebhookEvent } from "@/lib/idempotency-store";
 import { getWhopWebhookClient } from "@/lib/whop";
@@ -9,20 +10,29 @@ export const runtime = "nodejs";
 
 type WhopWebhookEvent = UnwrapWebhookEvent;
 
-const explicitlyHandledEvents = new Set<WhopWebhookEvent["type"]>([
-  "payment.succeeded",
-  "membership.activated",
-  "membership.deactivated",
-  "membership.cancel_at_period_end_changed",
-]);
+interface WebhookHandlingResult {
+  handled: boolean;
+  reason: string | null;
+}
 
 function sha256(input: string): string {
   return createHash("sha256").update(input, "utf8").digest("hex");
 }
 
-async function handleWebhookEvent(event: WhopWebhookEvent): Promise<void> {
-  void event;
-  // TODO: replace with DB-backed event handling + entitlement transitions.
+async function handleWebhookEvent(event: WhopWebhookEvent): Promise<WebhookHandlingResult> {
+  switch (event.type) {
+    case "membership.activated":
+    case "membership.deactivated":
+    case "membership.cancel_at_period_end_changed": {
+      return projectWhopMembershipEntitlement(event.data);
+    }
+    default: {
+      return {
+        handled: false,
+        reason: "event_not_mapped",
+      };
+    }
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -107,7 +117,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await handleWebhookEvent(webhookEvent);
+    const handlingResult = await handleWebhookEvent(webhookEvent);
     await markWebhookEventProcessed(eventId, "processed");
 
     return jsonResponse({
@@ -115,7 +125,8 @@ export async function POST(request: NextRequest) {
       duplicate: false,
       eventId,
       eventType: webhookEvent.type,
-      handled: explicitlyHandledEvents.has(webhookEvent.type),
+      handled: handlingResult.handled,
+      handlingReason: handlingResult.reason,
       requestId,
     });
   } catch (error) {

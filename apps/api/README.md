@@ -29,4 +29,5 @@ npm run dev --workspace apps/api
 
 - Webhook verification currently uses `@whop/sdk` `webhooks.unwrap`.
 - Webhook idempotency uses Postgres when `DATABASE_URL` is set, otherwise in-memory fallback.
+- Membership webhook events project to `entitlements` only when `DATABASE_URL` is set.
 - SQL scaffold for persistent idempotency and entitlements is in `db/schema.sql`.
