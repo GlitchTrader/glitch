@@ -1,13 +1,18 @@
 @import "tailwindcss";
 
+/* Glitch brand (matches sibling Glitch addon: TealAccent #1ABC9C, OrangeAccent #FF4200) */
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --glitch-teal: #1abc9c;
+  --glitch-orange: #ff4200;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-glitch-teal: var(--glitch-teal);
+  --color-glitch-orange: var(--glitch-orange);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
