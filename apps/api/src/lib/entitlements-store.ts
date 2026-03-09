@@ -39,7 +39,7 @@ export interface EntitlementProjectionResult {
 }
 
 function readDatabaseUrl(): string | null {
-  return readOptionalEnv("db_DATABASE_URL");
+  return readOptionalEnv("DATABASE_URL");
 }
 
 function toIsoOrNull(input: string | Date | null): string | null {
@@ -85,7 +85,7 @@ async function getDatabasePool(): Promise<EntitlementStoreDbPool> {
 
   const connectionString = readDatabaseUrl();
   if (!connectionString) {
-    throw new Error("db_DATABASE_URL is required for entitlement projection.");
+    throw new Error("DATABASE_URL is required for entitlement projection.");
   }
 
   const pgModule = (await import("pg")) as typeof import("pg");
@@ -183,7 +183,7 @@ export async function projectWhopMembershipEntitlement(
   await ensureSchema(pool);
 
   const entitlementId = computeEntitlementId("whop", membership.id);
-  const hashSecret = readOptionalEnv("db_LICENSE_KEY_HASH_SECRET");
+  const hashSecret = readOptionalEnv("LICENSE_KEY_HASH_SECRET");
   const licenseKeyHash =
     membership.license_key && hashSecret
       ? hashLicenseKey(membership.license_key, hashSecret)
@@ -242,15 +242,15 @@ export async function findWhopEntitlementByLicenseKey(
   if (!readDatabaseUrl()) {
     throw new EntitlementStoreConfigError(
       "database_not_configured",
-      "db_DATABASE_URL is not configured.",
+      "DATABASE_URL is not configured.",
     );
   }
 
-  const hashSecret = readOptionalEnv("db_LICENSE_KEY_HASH_SECRET");
+  const hashSecret = readOptionalEnv("LICENSE_KEY_HASH_SECRET");
   if (!hashSecret) {
     throw new EntitlementStoreConfigError(
       "license_hash_secret_missing",
-      "db_LICENSE_KEY_HASH_SECRET is not configured.",
+      "LICENSE_KEY_HASH_SECRET is not configured.",
     );
   }
 

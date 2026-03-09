@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
 
   const now = Date.now();
   if (getWebhookStoreMode() !== "database") {
-    const allowAll = readBooleanEnv("db_LICENSE_STUB_ALLOW_ALL", false);
+    const allowAll = readBooleanEnv("LICENSE_STUB_ALLOW_ALL", false);
     return buildValidateResponse(parsed, requestId, "stub", now, {
       valid: allowAll,
       reason: allowAll ? null : "stub_deny_by_default",

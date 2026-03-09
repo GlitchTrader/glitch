@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const allowAll = readBooleanEnv("db_LICENSE_STUB_ALLOW_ALL", false);
+  const allowAll = readBooleanEnv("LICENSE_STUB_ALLOW_ALL", false);
   const now = Date.now();
 
   // Stub mode for v1 integration. Replace with persisted session/token refresh.

@@ -40,7 +40,7 @@ interface DatabaseWebhookEventRow {
 }
 
 function readDatabaseUrl(): string | null {
-  return readOptionalEnv("db_DATABASE_URL");
+  return readOptionalEnv("DATABASE_URL");
 }
 
 function toIsoString(input: string | Date | null): string | null {
@@ -84,7 +84,7 @@ async function getDatabasePool(): Promise<WebhookEventStoreDbPool> {
 
   const connectionString = readDatabaseUrl();
   if (!connectionString) {
-    throw new Error("db_DATABASE_URL is required for database webhook store mode.");
+    throw new Error("DATABASE_URL is required for database webhook store mode.");
   }
 
   const pgModule = (await import("pg")) as typeof import("pg");
