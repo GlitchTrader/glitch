@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import type {
   MembershipActivatedWebhookEvent,
   MembershipCancelAtPeriodEndChangedWebhookEvent,
@@ -32,10 +33,21 @@ interface EntitlementLookupRow {
   updated_at: string | Date;
 }
 
+interface LicenseBindingRow {
+  id: string;
+  installation_id: string;
+  device_fingerprint_hash: string;
+}
+
 export interface EntitlementProjectionResult {
   handled: boolean;
   reason: string | null;
   entitlementId: string | null;
+}
+
+export interface LicenseBindingResult {
+  ok: boolean;
+  reason: string | null;
 }
 
 function readDatabaseUrl(): string | null {
@@ -161,6 +173,24 @@ async function ensureSchema(pool: EntitlementStoreDbPool): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS entitlements_provider_license_key_hash_idx
       ON entitlements (provider, license_key_hash)
       WHERE license_key_hash IS NOT NULL;
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS license_bindings (
+      id TEXT PRIMARY KEY,
+      entitlement_id TEXT NOT NULL REFERENCES entitlements(id) ON DELETE CASCADE,
+      installation_id TEXT NOT NULL,
+      device_fingerprint_hash TEXT NOT NULL,
+      first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      revoked_at TIMESTAMPTZ
+    );
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS license_bindings_entitlement_idx
+      ON license_bindings (entitlement_id)
+      WHERE revoked_at IS NULL;
   `);
 
   globalScope[globalSchemaReadyKey] = true;
@@ -317,4 +347,122 @@ export async function findWhopEntitlementByLicenseKey(
   }
 
   return mapEntitlementLookupRow(row);
+}
+
+export async function claimLicenseBinding(
+  entitlementId: string,
+  installationId: string,
+  deviceFingerprintHash: string,
+): Promise<LicenseBindingResult> {
+  const pool = await getDatabasePool();
+  await ensureSchema(pool);
+
+  const existingResult = await pool.query<LicenseBindingRow>(
+    `
+      SELECT id, installation_id, device_fingerprint_hash
+      FROM license_bindings
+      WHERE entitlement_id = $1 AND revoked_at IS NULL
+      LIMIT 1;
+    `,
+    [entitlementId],
+  );
+
+  const existing = existingResult.rows[0];
+  if (!existing) {
+    await pool.query(
+      `
+        INSERT INTO license_bindings (
+          id,
+          entitlement_id,
+          installation_id,
+          device_fingerprint_hash,
+          first_seen_at,
+          last_seen_at,
+          revoked_at
+        )
+        VALUES ($1, $2, $3, $4, NOW(), NOW(), NULL);
+      `,
+      [`bind_${randomUUID()}`, entitlementId, installationId, deviceFingerprintHash],
+    );
+
+    return {
+      ok: true,
+      reason: null,
+    };
+  }
+
+  if (existing.installation_id !== installationId) {
+    return {
+      ok: false,
+      reason: "bound_to_other_installation",
+    };
+  }
+
+  if (existing.device_fingerprint_hash !== deviceFingerprintHash) {
+    return {
+      ok: false,
+      reason: "device_fingerprint_mismatch",
+    };
+  }
+
+  await pool.query(
+    `
+      UPDATE license_bindings
+      SET last_seen_at = NOW()
+      WHERE id = $1;
+    `,
+    [existing.id],
+  );
+
+  return {
+    ok: true,
+    reason: null,
+  };
+}
+
+export async function verifyLicenseBinding(
+  entitlementId: string,
+  installationId: string,
+): Promise<LicenseBindingResult> {
+  const pool = await getDatabasePool();
+  await ensureSchema(pool);
+
+  const existingResult = await pool.query<LicenseBindingRow>(
+    `
+      SELECT id, installation_id, device_fingerprint_hash
+      FROM license_bindings
+      WHERE entitlement_id = $1 AND revoked_at IS NULL
+      LIMIT 1;
+    `,
+    [entitlementId],
+  );
+
+  const existing = existingResult.rows[0];
+  if (!existing) {
+    return {
+      ok: false,
+      reason: "binding_not_found",
+    };
+  }
+
+  if (existing.installation_id !== installationId) {
+    return {
+      ok: false,
+      reason: "bound_to_other_installation",
+    };
+  }
+
+  await pool.query(
+    `
+      UPDATE license_bindings
+      SET last_seen_at = NOW()
+      WHERE id = $1;
+    `,
+    [existing.id],
+  );
+
+  return {
+    ok: true,
+    reason: null,
+  };
 }

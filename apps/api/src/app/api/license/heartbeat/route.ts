@@ -3,6 +3,7 @@ import {
   EntitlementStoreConfigError,
   findWhopEntitlementByLicenseKey,
   isWhopEntitlementStatusActive,
+  verifyLicenseBinding,
 } from "@/lib/entitlements-store";
 import { readBooleanEnv } from "@/lib/env";
 import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
@@ -169,6 +170,72 @@ export async function POST(request: NextRequest) {
     }
 
     const active = isWhopEntitlementStatusActive(entitlement.status);
+    if (!active) {
+      return jsonResponse({
+        ok: true,
+        mode: "database",
+        requestId,
+        heartbeat: {
+          accepted: true,
+          nextCheckInSeconds: 300,
+        },
+        license: {
+          valid: false,
+          reason: `membership_status_${entitlement.status}`,
+        },
+        entitlement: {
+          active: false,
+          plan: entitlement.planCode,
+          token: null,
+          tokenExpiresAt: new Date(now + 15 * 60 * 1000).toISOString(),
+          graceExpiresAt: new Date(now + 6 * 60 * 60 * 1000).toISOString(),
+          featureFlags: {
+            premiumFundamentals: false,
+            premiumInsights: false,
+            riskControlsAlwaysOn: true,
+          },
+        },
+        echo: {
+          installationId: parsed.installationId,
+        },
+      });
+    }
+
+    const bindingResult = await verifyLicenseBinding(
+      entitlement.id,
+      parsed.installationId,
+    );
+    if (!bindingResult.ok) {
+      return jsonResponse({
+        ok: true,
+        mode: "database",
+        requestId,
+        heartbeat: {
+          accepted: true,
+          nextCheckInSeconds: 300,
+        },
+        license: {
+          valid: false,
+          reason: bindingResult.reason,
+        },
+        entitlement: {
+          active: false,
+          plan: entitlement.planCode,
+          token: null,
+          tokenExpiresAt: new Date(now + 15 * 60 * 1000).toISOString(),
+          graceExpiresAt: new Date(now + 6 * 60 * 60 * 1000).toISOString(),
+          featureFlags: {
+            premiumFundamentals: false,
+            premiumInsights: false,
+            riskControlsAlwaysOn: true,
+          },
+        },
+        echo: {
+          installationId: parsed.installationId,
+        },
+      });
+    }
+
     return jsonResponse({
       ok: true,
       mode: "database",
@@ -178,18 +245,18 @@ export async function POST(request: NextRequest) {
         nextCheckInSeconds: 300,
       },
       license: {
-        valid: active,
-        reason: active ? null : `membership_status_${entitlement.status}`,
+        valid: true,
+        reason: null,
       },
       entitlement: {
-        active,
+        active: true,
         plan: entitlement.planCode,
         token: null,
         tokenExpiresAt: new Date(now + 15 * 60 * 1000).toISOString(),
         graceExpiresAt: new Date(now + 6 * 60 * 60 * 1000).toISOString(),
         featureFlags: {
-          premiumFundamentals: active,
-          premiumInsights: active,
+          premiumFundamentals: true,
+          premiumInsights: true,
           riskControlsAlwaysOn: true,
         },
       },

@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import {
+  claimLicenseBinding,
   EntitlementStoreConfigError,
   findWhopEntitlementByLicenseKey,
   isWhopEntitlementStatusActive,
@@ -147,11 +148,34 @@ export async function POST(request: NextRequest) {
     }
 
     const active = isWhopEntitlementStatusActive(entitlement.status);
+    if (!active) {
+      return buildValidateResponse(parsed, requestId, "database", now, {
+        valid: false,
+        reason: `membership_status_${entitlement.status}`,
+        plan: entitlement.planCode,
+        active: false,
+      });
+    }
+
+    const bindingResult = await claimLicenseBinding(
+      entitlement.id,
+      parsed.installationId,
+      parsed.deviceFingerprintHash,
+    );
+    if (!bindingResult.ok) {
+      return buildValidateResponse(parsed, requestId, "database", now, {
+        valid: false,
+        reason: bindingResult.reason,
+        plan: entitlement.planCode,
+        active: false,
+      });
+    }
+
     return buildValidateResponse(parsed, requestId, "database", now, {
-      valid: active,
-      reason: active ? null : `membership_status_${entitlement.status}`,
+      valid: true,
+      reason: null,
       plan: entitlement.planCode,
-      active,
+      active: true,
     });
   } catch (error) {
     if (error instanceof EntitlementStoreConfigError) {
