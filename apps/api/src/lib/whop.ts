@@ -7,69 +7,21 @@ function stripCopyPasteWrappers(value: string): string {
   return value.trim().replace(/^['"]|['"]$/g, "");
 }
 
-function toBase64Standard(value: string): string {
-  return value.replace(/-/g, "+").replace(/_/g, "/");
-}
-
-function withBase64Padding(value: string): string {
-  const remainder = value.length % 4;
-  if (remainder === 0) {
-    return value;
+function readWebhookKeyFromEnv(): string {
+  const key = readOptionalEnv("WHOP_WEBHOOK_KEY");
+  if (key) {
+    return stripCopyPasteWrappers(key);
   }
 
-  return value.padEnd(value.length + (4 - remainder), "=");
-}
-
-function addCandidate(result: string[], seen: Set<string>, value: string): void {
-  const candidate = value.trim();
-  if (!candidate || seen.has(candidate)) {
-    return;
-  }
-
-  seen.add(candidate);
-  result.push(candidate);
-}
-
-function readWebhookSecretSource(): string {
-  const source = readOptionalEnv("WHOP_WEBHOOK_SECRET") ?? readOptionalEnv("WHOP_WEBHOOK_KEY");
-  if (!source) {
+  const secret = readOptionalEnv("WHOP_WEBHOOK_SECRET");
+  if (!secret) {
     throw new Error(
-      "Missing required environment variable: WHOP_WEBHOOK_SECRET (or WHOP_WEBHOOK_KEY)",
+      "Missing required environment variable: WHOP_WEBHOOK_KEY or WHOP_WEBHOOK_SECRET",
     );
   }
 
-  return stripCopyPasteWrappers(source);
-}
-
-export function getWhopWebhookSecretCandidates(): string[] {
-  const source = readWebhookSecretSource();
-  const result: string[] = [];
-  const seen = new Set<string>();
-
-  addCandidate(result, seen, source);
-
-  if (source.startsWith("whsec_")) {
-    addCandidate(result, seen, source.slice("whsec_".length));
-  } else {
-    addCandidate(result, seen, `whsec_${source}`);
-  }
-
-  const baseSnapshot = [...result];
-  for (const value of baseSnapshot) {
-    const withoutPrefix = value.startsWith("whsec_")
-      ? value.slice("whsec_".length)
-      : value;
-
-    const normalized = withBase64Padding(toBase64Standard(withoutPrefix));
-    const encodedFromRaw = Buffer.from(withoutPrefix, "utf8").toString("base64");
-
-    addCandidate(result, seen, normalized);
-    addCandidate(result, seen, `whsec_${normalized}`);
-    addCandidate(result, seen, encodedFromRaw);
-    addCandidate(result, seen, `whsec_${encodedFromRaw}`);
-  }
-
-  return result;
+  // Whop docs pattern: webhookKey = btoa(webhookSecret)
+  return Buffer.from(stripCopyPasteWrappers(secret), "utf8").toString("base64");
 }
 
 export function getWhopWebhookClient(): Whop {
@@ -80,7 +32,7 @@ export function getWhopWebhookClient(): Whop {
   const whopApiKey = requireEnv("WHOP_API_KEY");
   cachedWebhookClient = new Whop({
     apiKey: whopApiKey,
-    webhookKey: readWebhookSecretSource(),
+    webhookKey: readWebhookKeyFromEnv(),
   });
   return cachedWebhookClient;
 }

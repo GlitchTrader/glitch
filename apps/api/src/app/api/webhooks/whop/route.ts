@@ -4,11 +4,12 @@ import { NextRequest } from "next/server";
 import { projectWhopMembershipEntitlement } from "@/lib/entitlements-store";
 import { errorResponse, getRequestId, jsonResponse, toHeaderRecord } from "@/lib/http";
 import { markWebhookEventProcessed, registerWebhookEvent } from "@/lib/idempotency-store";
-import { getWhopWebhookClient, getWhopWebhookSecretCandidates } from "@/lib/whop";
+import { getWhopWebhookClient } from "@/lib/whop";
 
 export const runtime = "nodejs";
 
 type WhopWebhookEvent = UnwrapWebhookEvent;
+type MembershipPayload = Parameters<typeof projectWhopMembershipEntitlement>[0];
 
 interface WebhookHandlingResult {
   handled: boolean;
@@ -38,7 +39,7 @@ async function handleWebhookEvent(event: WhopWebhookEvent): Promise<WebhookHandl
     case "membership.activated":
     case "membership.deactivated":
     case "membership.cancel_at_period_end_changed": {
-      return projectWhopMembershipEntitlement(event.data);
+      return projectWhopMembershipEntitlement(event.data as MembershipPayload);
     }
     default: {
       return {
@@ -77,24 +78,9 @@ export async function POST(request: NextRequest) {
   try {
     const headerRecord = toHeaderRecord(request.headers);
     const client = getWhopWebhookClient();
-    const secretCandidates = getWhopWebhookSecretCandidates();
-    let lastError: unknown = null;
-
-    for (const key of secretCandidates) {
-      try {
-        webhookEvent = client.webhooks.unwrap(rawBody, {
-          headers: headerRecord,
-          key,
-        });
-        break;
-      } catch (error) {
-        lastError = error;
-      }
-    }
-
-    if (!webhookEvent) {
-      throw lastError ?? new Error("Unable to verify webhook signature.");
-    }
+    webhookEvent = client.webhooks.unwrap(rawBody, {
+      headers: headerRecord,
+    });
   } catch (error) {
     return errorResponse(
       requestId,
