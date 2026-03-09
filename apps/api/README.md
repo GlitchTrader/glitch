@@ -12,6 +12,7 @@ Next.js app serving backend endpoints for:
 - `POST /api/license/validate`
 - `POST /api/license/heartbeat`
 - `POST /api/admin/license/revoke-binding` (admin token required)
+- `GET /api/admin/attribution/summary` (admin token required)
 
 ## Environment
 
@@ -21,7 +22,7 @@ Copy `.env.example` to `.env.local` and set:
 - `WHOP_API_KEY` (required by SDK initialization)
 - `DATABASE_URL` (optional; enables Postgres-backed webhook idempotency)
 - `LICENSE_KEY_HASH_SECRET` (required for DB-backed `license/validate` lookups)
-- `ADMIN_API_TOKEN` (required for admin revoke endpoint)
+- `ADMIN_API_TOKEN` (required for admin endpoints)
 - `LICENSE_STUB_ALLOW_ALL` (`true`/`false`)
 
 ## Run

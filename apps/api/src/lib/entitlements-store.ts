@@ -33,6 +33,14 @@ interface EntitlementLookupRow {
   updated_at: string | Date;
 }
 
+interface AttributionSummaryRow {
+  promo_code_id: string | null;
+  product_id: string | null;
+  plan_code: string;
+  status: string;
+  entitlement_count: number;
+}
+
 interface LicenseBindingRow {
   id: string;
   installation_id: string;
@@ -48,6 +56,14 @@ export interface EntitlementProjectionResult {
 export interface LicenseBindingResult {
   ok: boolean;
   reason: string | null;
+}
+
+export interface EntitlementAttributionSummary {
+  promoCodeId: string | null;
+  productId: string | null;
+  planCode: string;
+  status: string;
+  entitlementCount: number;
 }
 
 function readDatabaseUrl(): string | null {
@@ -493,4 +509,43 @@ export async function revokeActiveLicenseBinding(
     ok: true,
     reason: null,
   };
+}
+
+export async function listEntitlementAttributionSummary(
+  limit = 200,
+): Promise<EntitlementAttributionSummary[]> {
+  if (!readDatabaseUrl()) {
+    throw new EntitlementStoreConfigError(
+      "database_not_configured",
+      "DATABASE_URL is not configured.",
+    );
+  }
+
+  const pool = await getDatabasePool();
+  await ensureSchema(pool);
+
+  const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(Math.floor(limit), 1000)) : 200;
+  const result = await pool.query<AttributionSummaryRow>(
+    `
+      SELECT
+        promo_code_id,
+        product_id,
+        plan_code,
+        status,
+        COUNT(*)::int AS entitlement_count
+      FROM entitlements
+      GROUP BY promo_code_id, product_id, plan_code, status
+      ORDER BY entitlement_count DESC, plan_code ASC
+      LIMIT $1;
+    `,
+    [safeLimit],
+  );
+
+  return result.rows.map((row) => ({
+    promoCodeId: row.promo_code_id,
+    productId: row.product_id,
+    planCode: row.plan_code,
+    status: row.status,
+    entitlementCount: row.entitlement_count,
+  }));
 }
