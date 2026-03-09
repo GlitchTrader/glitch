@@ -35,8 +35,10 @@ export function getWhopWebhookClient(): Whop {
     return cachedWebhookClient;
   }
 
+  const whopApiKey = requireEnv("WHOP_API_KEY");
   const webhookSecret = normalizeWebhookSecret(requireEnv("WHOP_WEBHOOK_SECRET"));
   cachedWebhookClient = new Whop({
+    apiKey: whopApiKey,
     webhookKey: webhookSecret,
   });
   return cachedWebhookClient;
