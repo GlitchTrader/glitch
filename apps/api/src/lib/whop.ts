@@ -1,5 +1,5 @@
 import { Whop } from "@whop/sdk";
-import { requireEnv } from "@/lib/env";
+import { readOptionalEnv, requireEnv } from "@/lib/env";
 
 let cachedWebhookClient: Whop | null = null;
 
@@ -30,8 +30,19 @@ function addCandidate(result: string[], seen: Set<string>, value: string): void 
   result.push(candidate);
 }
 
+function readWebhookSecretSource(): string {
+  const source = readOptionalEnv("WHOP_WEBHOOK_SECRET") ?? readOptionalEnv("WHOP_WEBHOOK_KEY");
+  if (!source) {
+    throw new Error(
+      "Missing required environment variable: WHOP_WEBHOOK_SECRET (or WHOP_WEBHOOK_KEY)",
+    );
+  }
+
+  return stripCopyPasteWrappers(source);
+}
+
 export function getWhopWebhookSecretCandidates(): string[] {
-  const source = stripCopyPasteWrappers(requireEnv("WHOP_WEBHOOK_SECRET"));
+  const source = readWebhookSecretSource();
   const result: string[] = [];
   const seen = new Set<string>();
 
@@ -50,8 +61,12 @@ export function getWhopWebhookSecretCandidates(): string[] {
       : value;
 
     const normalized = withBase64Padding(toBase64Standard(withoutPrefix));
+    const encodedFromRaw = Buffer.from(withoutPrefix, "utf8").toString("base64");
+
     addCandidate(result, seen, normalized);
     addCandidate(result, seen, `whsec_${normalized}`);
+    addCandidate(result, seen, encodedFromRaw);
+    addCandidate(result, seen, `whsec_${encodedFromRaw}`);
   }
 
   return result;
@@ -65,7 +80,7 @@ export function getWhopWebhookClient(): Whop {
   const whopApiKey = requireEnv("WHOP_API_KEY");
   cachedWebhookClient = new Whop({
     apiKey: whopApiKey,
-    webhookKey: stripCopyPasteWrappers(requireEnv("WHOP_WEBHOOK_SECRET")),
+    webhookKey: readWebhookSecretSource(),
   });
   return cachedWebhookClient;
 }

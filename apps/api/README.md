@@ -16,6 +16,7 @@ Next.js app serving backend endpoints for:
 
 Copy `.env.example` to `.env.local` and set:
 - `WHOP_WEBHOOK_SECRET`
+- `WHOP_WEBHOOK_KEY` (optional alias supported by Whop docs; `WHOP_WEBHOOK_SECRET` wins when both are set)
 - `WHOP_API_KEY` (optional for future direct Whop API operations)
 - `DATABASE_URL` (optional; enables Postgres-backed webhook idempotency)
 - `LICENSE_KEY_HASH_SECRET` (required for DB-backed `license/validate` lookups)
