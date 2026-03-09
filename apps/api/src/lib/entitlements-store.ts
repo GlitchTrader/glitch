@@ -466,3 +466,31 @@ export async function verifyLicenseBinding(
     reason: null,
   };
 }
+
+export async function revokeActiveLicenseBinding(
+  entitlementId: string,
+): Promise<LicenseBindingResult> {
+  const pool = await getDatabasePool();
+  await ensureSchema(pool);
+
+  const result = await pool.query(
+    `
+      UPDATE license_bindings
+      SET revoked_at = NOW()
+      WHERE entitlement_id = $1 AND revoked_at IS NULL;
+    `,
+    [entitlementId],
+  );
+
+  if ((result.rowCount ?? 0) <= 0) {
+    return {
+      ok: false,
+      reason: "binding_not_found",
+    };
+  }
+
+  return {
+    ok: true,
+    reason: null,
+  };
+}
