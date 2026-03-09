@@ -26,6 +26,10 @@ interface EntitlementRow {
 
 interface EntitlementLookupRow {
   id: string;
+  company_id: string | null;
+  product_id: string | null;
+  promo_code_id: string | null;
+  membership_metadata: unknown;
   status: string;
   plan_code: string;
   current_period_end: string | Date | null;
@@ -43,8 +47,12 @@ interface AttributionSummaryRow {
 
 interface LicenseBindingRow {
   id: string;
+  entitlement_id: string;
   installation_id: string;
   device_fingerprint_hash: string;
+  first_seen_at: string | Date;
+  last_seen_at: string | Date;
+  revoked_at: string | Date | null;
 }
 
 export interface EntitlementProjectionResult {
@@ -64,6 +72,15 @@ export interface EntitlementAttributionSummary {
   planCode: string;
   status: string;
   entitlementCount: number;
+}
+
+export interface ActiveLicenseBinding {
+  id: string;
+  entitlementId: string;
+  installationId: string;
+  deviceFingerprintHash: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
 }
 
 function readDatabaseUrl(): string | null {
@@ -94,6 +111,10 @@ function computeEntitlementId(provider: string, membershipId: string): string {
 function mapEntitlementLookupRow(row: EntitlementLookupRow): WhopEntitlement {
   return {
     id: row.id,
+    companyId: row.company_id,
+    productId: row.product_id,
+    promoCodeId: row.promo_code_id,
+    membershipMetadata: row.membership_metadata,
     status: row.status,
     planCode: row.plan_code,
     currentPeriodEnd: toIsoOrNull(row.current_period_end),
@@ -227,6 +248,10 @@ export class EntitlementStoreConfigError extends Error {
 
 export interface WhopEntitlement {
   id: string;
+  companyId: string | null;
+  productId: string | null;
+  promoCodeId: string | null;
+  membershipMetadata: unknown;
   status: string;
   planCode: string;
   currentPeriodEnd: string | null;
@@ -344,6 +369,10 @@ export async function findWhopEntitlementByLicenseKey(
     `
       SELECT
         id,
+        company_id,
+        product_id,
+        promo_code_id,
+        membership_metadata,
         status,
         plan_code,
         current_period_end,
@@ -363,6 +392,93 @@ export async function findWhopEntitlementByLicenseKey(
   }
 
   return mapEntitlementLookupRow(row);
+}
+
+export async function findActiveLicenseBinding(
+  entitlementId: string,
+): Promise<ActiveLicenseBinding | null> {
+  if (!readDatabaseUrl()) {
+    throw new EntitlementStoreConfigError(
+      "database_not_configured",
+      "DATABASE_URL is not configured.",
+    );
+  }
+
+  const pool = await getDatabasePool();
+  await ensureSchema(pool);
+
+  const result = await pool.query<LicenseBindingRow>(
+    `
+      SELECT
+        id,
+        entitlement_id,
+        installation_id,
+        device_fingerprint_hash,
+        first_seen_at,
+        last_seen_at,
+        revoked_at
+      FROM license_bindings
+      WHERE entitlement_id = $1 AND revoked_at IS NULL
+      LIMIT 1;
+    `,
+    [entitlementId],
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    entitlementId: row.entitlement_id,
+    installationId: row.installation_id,
+    deviceFingerprintHash: row.device_fingerprint_hash,
+    firstSeenAt: toIsoOrNull(row.first_seen_at) ?? new Date().toISOString(),
+    lastSeenAt: toIsoOrNull(row.last_seen_at) ?? new Date().toISOString(),
+  };
+}
+
+export async function listRecentLicenseBindings(
+  limit = 200,
+): Promise<ActiveLicenseBinding[]> {
+  if (!readDatabaseUrl()) {
+    throw new EntitlementStoreConfigError(
+      "database_not_configured",
+      "DATABASE_URL is not configured.",
+    );
+  }
+
+  const pool = await getDatabasePool();
+  await ensureSchema(pool);
+
+  const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(Math.floor(limit), 1000)) : 200;
+  const result = await pool.query<LicenseBindingRow>(
+    `
+      SELECT
+        id,
+        entitlement_id,
+        installation_id,
+        device_fingerprint_hash,
+        first_seen_at,
+        last_seen_at,
+        revoked_at
+      FROM license_bindings
+      WHERE revoked_at IS NULL
+      ORDER BY last_seen_at DESC
+      LIMIT $1;
+    `,
+    [safeLimit],
+  );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    entitlementId: row.entitlement_id,
+    installationId: row.installation_id,
+    deviceFingerprintHash: row.device_fingerprint_hash,
+    firstSeenAt: toIsoOrNull(row.first_seen_at) ?? new Date().toISOString(),
+    lastSeenAt: toIsoOrNull(row.last_seen_at) ?? new Date().toISOString(),
+  }));
 }
 
 export async function claimLicenseBinding(
