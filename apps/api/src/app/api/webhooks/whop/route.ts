@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 import { projectWhopMembershipEntitlement } from "@/lib/entitlements-store";
 import { errorResponse, getRequestId, jsonResponse, toHeaderRecord } from "@/lib/http";
 import { markWebhookEventProcessed, registerWebhookEvent } from "@/lib/idempotency-store";
-import { getWhopWebhookClient } from "@/lib/whop";
+import { getWhopWebhookClient, getWhopWebhookSecretCandidates } from "@/lib/whop";
 
 export const runtime = "nodejs";
 
@@ -22,8 +22,11 @@ function sha256(input: string): string {
 async function handleWebhookEvent(event: WhopWebhookEvent): Promise<WebhookHandlingResult> {
   switch (event.type) {
     case "membership.activated":
+    case "membership_activated":
     case "membership.deactivated":
-    case "membership.cancel_at_period_end_changed": {
+    case "membership_deactivated":
+    case "membership.cancel_at_period_end_changed":
+    case "membership_cancel_at_period_end_changed": {
       return projectWhopMembershipEntitlement(event.data);
     }
     default: {
@@ -59,18 +62,38 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let webhookEvent: WhopWebhookEvent;
+  let webhookEvent: WhopWebhookEvent | null = null;
   try {
-    webhookEvent = getWhopWebhookClient().webhooks.unwrap(rawBody, {
-      headers: toHeaderRecord(request.headers),
-    });
+    const headerRecord = toHeaderRecord(request.headers);
+    const client = getWhopWebhookClient();
+    const secretCandidates = getWhopWebhookSecretCandidates();
+    let lastError: unknown = null;
+
+    for (const key of secretCandidates) {
+      try {
+        webhookEvent = client.webhooks.unwrap(rawBody, {
+          headers: headerRecord,
+          key,
+        });
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    if (!webhookEvent) {
+      throw lastError ?? new Error("Unable to verify webhook signature.");
+    }
   } catch (error) {
     return errorResponse(
       requestId,
       401,
       "invalid_signature",
       "Webhook signature verification failed.",
-      error instanceof Error ? error.message : String(error),
+      {
+        reason: error instanceof Error ? error.message : String(error),
+        hint: "Ensure WHOP_WEBHOOK_SECRET matches this webhook endpoint secret.",
+      },
     );
   }
 
