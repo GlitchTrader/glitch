@@ -17,6 +17,13 @@ Next.js app serving backend endpoints for:
 - `GET /api/admin/license/status` (admin token required)
 - `GET /api/admin/license/bindings` (admin token required)
 - `GET /api/admin/metrics/funnel` (admin token required)
+- `GET /api/admin/dashboard/overview` (admin token required)
+
+Example:
+- `GET /api/admin/dashboard/overview?days=30&eventLimit=25&licenseKey=...`
+
+Admin auth header:
+- `Authorization: Bearer <ADMIN_API_TOKEN>`
 
 ## Environment
 
@@ -45,3 +52,19 @@ npm run dev --workspace apps/api
 - Active entitlements are enforced against one active `license_binding` (installation + device fingerprint).
 - Entitlement projection now stores monetization context (`company_id`, `product_id`, `promo_code_id`, `membership_metadata`) for affiliate/promo attribution workflows.
 - SQL scaffold for persistent idempotency and entitlements is in `db/schema.sql`.
+
+## Quick Checks
+
+Status lookup (admin):
+
+```bash
+curl -H "Authorization: Bearer $ADMIN_API_TOKEN" \
+  "https://api.glitchtrader.com/api/admin/license/status?licenseKey=<LICENSE_KEY>"
+```
+
+Dashboard snapshot (admin):
+
+```bash
+curl -H "Authorization: Bearer $ADMIN_API_TOKEN" \
+  "https://api.glitchtrader.com/api/admin/dashboard/overview?days=30&eventLimit=25&licenseKey=<LICENSE_KEY>"
+```

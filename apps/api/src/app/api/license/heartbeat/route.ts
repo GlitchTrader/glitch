@@ -8,12 +8,16 @@ import {
 import { readBooleanEnv } from "@/lib/env";
 import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
 import { getWebhookStoreMode } from "@/lib/idempotency-store";
+import { buildLicenseContractBody } from "@/lib/license-contract";
+import { resolvePlanFromCode } from "@/lib/license-policy";
 
 export const runtime = "nodejs";
 
 interface LicenseHeartbeatRequest {
   licenseKey: string | null;
+  deviceFingerprintHash: string | null;
   installationId: string;
+  clientVersion: string | null;
   nonce: string;
   timestamp: string;
 }
@@ -38,10 +42,46 @@ function parseLicenseHeartbeatPayload(payload: unknown): LicenseHeartbeatRequest
 
   return {
     licenseKey: isNonEmpty(record.licenseKey) ? record.licenseKey.trim() : null,
+    deviceFingerprintHash: isNonEmpty(record.deviceFingerprintHash)
+      ? record.deviceFingerprintHash.trim()
+      : null,
     installationId: record.installationId.trim(),
+    clientVersion: isNonEmpty(record.clientVersion) ? record.clientVersion.trim() : null,
     nonce: record.nonce.trim(),
     timestamp: record.timestamp.trim(),
   };
+}
+
+function buildHeartbeatResponseBody(
+  parsed: LicenseHeartbeatRequest,
+  requestId: string,
+  mode: "stub" | "database",
+  {
+    valid,
+    status,
+    reason,
+    planCode,
+    entitlementStatus,
+  }: {
+    valid: boolean;
+    status: "active" | "inactive";
+    reason: string | null;
+    planCode: string | null;
+    entitlementStatus: string | null;
+  },
+) {
+  return buildLicenseContractBody({
+    requestId,
+    mode,
+    installationId: parsed.installationId,
+    clientVersion: parsed.clientVersion,
+    valid,
+    status,
+    reason,
+    plan: resolvePlanFromCode(planCode),
+    entitlementStatus,
+    sourcePlanCode: planCode,
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -66,234 +106,100 @@ export async function POST(request: NextRequest) {
       requestId,
       400,
       "invalid_payload",
-      "Missing one or more required fields: installationId, nonce, timestamp. licenseKey is optional in stub mode and required in database mode.",
+      "Missing one or more required fields: installationId, nonce, timestamp. licenseKey and deviceFingerprintHash are optional in stub mode and required in database mode.",
     );
   }
 
-  const now = Date.now();
   if (getWebhookStoreMode() !== "database") {
     const allowAll = readBooleanEnv("LICENSE_STUB_ALLOW_ALL", false);
-
-    // Stub mode for early integration.
-    return jsonResponse({
-      ok: true,
-      mode: "stub",
-      requestId,
-      heartbeat: {
-        accepted: true,
-        nextCheckInSeconds: 300,
-      },
-      license: {
+    return jsonResponse(
+      buildHeartbeatResponseBody(parsed, requestId, "stub", {
         valid: allowAll,
+        status: allowAll ? "active" : "inactive",
         reason: allowAll ? null : "stub_deny_by_default",
-      },
-      entitlement: {
-        active: allowAll,
-        plan: allowAll ? "pro" : "none",
-        token: null,
-        tokenExpiresAt: new Date(now + 15 * 60 * 1000).toISOString(),
-        graceExpiresAt: new Date(now + 6 * 60 * 60 * 1000).toISOString(),
-        featureFlags: {
-          premiumFundamentals: allowAll,
-          premiumInsights: allowAll,
-          riskControlsAlwaysOn: true,
-        },
-      },
-      echo: {
-        installationId: parsed.installationId,
-      },
-    });
+        planCode: allowAll ? "premium" : "free_lite",
+        entitlementStatus: allowAll ? "active" : "inactive",
+      }),
+    );
   }
 
-  if (!parsed.licenseKey) {
-    return jsonResponse({
-      ok: true,
-      mode: "database",
-      requestId,
-      heartbeat: {
-        accepted: true,
-        nextCheckInSeconds: 300,
-      },
-      license: {
+  if (!parsed.licenseKey || !parsed.deviceFingerprintHash) {
+    return jsonResponse(
+      buildHeartbeatResponseBody(parsed, requestId, "database", {
         valid: false,
-        reason: "license_key_required_for_database_mode",
-      },
-      entitlement: {
-        active: false,
-        plan: "none",
-        token: null,
-        tokenExpiresAt: new Date(now + 15 * 60 * 1000).toISOString(),
-        graceExpiresAt: new Date(now + 6 * 60 * 60 * 1000).toISOString(),
-        featureFlags: {
-          premiumFundamentals: false,
-          premiumInsights: false,
-          riskControlsAlwaysOn: true,
-        },
-      },
-      echo: {
-        installationId: parsed.installationId,
-      },
-    });
+        status: "inactive",
+        reason: !parsed.licenseKey
+          ? "license_key_required_for_database_mode"
+          : "device_fingerprint_required_for_database_mode",
+        planCode: "free_lite",
+        entitlementStatus: null,
+      }),
+    );
   }
 
   try {
     const entitlement = await findWhopEntitlementByLicenseKey(parsed.licenseKey);
     if (!entitlement) {
-      return jsonResponse({
-        ok: true,
-        mode: "database",
-        requestId,
-        heartbeat: {
-          accepted: true,
-          nextCheckInSeconds: 300,
-        },
-        license: {
+      return jsonResponse(
+        buildHeartbeatResponseBody(parsed, requestId, "database", {
           valid: false,
+          status: "inactive",
           reason: "license_not_found",
-        },
-        entitlement: {
-          active: false,
-          plan: "none",
-          token: null,
-          tokenExpiresAt: new Date(now + 15 * 60 * 1000).toISOString(),
-          graceExpiresAt: new Date(now + 6 * 60 * 60 * 1000).toISOString(),
-          featureFlags: {
-            premiumFundamentals: false,
-            premiumInsights: false,
-            riskControlsAlwaysOn: true,
-          },
-        },
-        echo: {
-          installationId: parsed.installationId,
-        },
-      });
+          planCode: "free_lite",
+          entitlementStatus: null,
+        }),
+      );
     }
 
-    const active = isWhopEntitlementStatusActive(entitlement.status);
-    if (!active) {
-      return jsonResponse({
-        ok: true,
-        mode: "database",
-        requestId,
-        heartbeat: {
-          accepted: true,
-          nextCheckInSeconds: 300,
-        },
-        license: {
+    if (!isWhopEntitlementStatusActive(entitlement.status)) {
+      return jsonResponse(
+        buildHeartbeatResponseBody(parsed, requestId, "database", {
           valid: false,
+          status: "inactive",
           reason: `membership_status_${entitlement.status}`,
-        },
-        entitlement: {
-          active: false,
-          plan: entitlement.planCode,
-          token: null,
-          tokenExpiresAt: new Date(now + 15 * 60 * 1000).toISOString(),
-          graceExpiresAt: new Date(now + 6 * 60 * 60 * 1000).toISOString(),
-          featureFlags: {
-            premiumFundamentals: false,
-            premiumInsights: false,
-            riskControlsAlwaysOn: true,
-          },
-        },
-        echo: {
-          installationId: parsed.installationId,
-        },
-      });
+          planCode: entitlement.planCode,
+          entitlementStatus: entitlement.status,
+        }),
+      );
     }
 
     const bindingResult = await verifyLicenseBinding(
       entitlement.id,
       parsed.installationId,
+      parsed.deviceFingerprintHash,
     );
     if (!bindingResult.ok) {
-      return jsonResponse({
-        ok: true,
-        mode: "database",
-        requestId,
-        heartbeat: {
-          accepted: true,
-          nextCheckInSeconds: 300,
-        },
-        license: {
+      return jsonResponse(
+        buildHeartbeatResponseBody(parsed, requestId, "database", {
           valid: false,
+          status: "inactive",
           reason: bindingResult.reason,
-        },
-        entitlement: {
-          active: false,
-          plan: entitlement.planCode,
-          token: null,
-          tokenExpiresAt: new Date(now + 15 * 60 * 1000).toISOString(),
-          graceExpiresAt: new Date(now + 6 * 60 * 60 * 1000).toISOString(),
-          featureFlags: {
-            premiumFundamentals: false,
-            premiumInsights: false,
-            riskControlsAlwaysOn: true,
-          },
-        },
-        echo: {
-          installationId: parsed.installationId,
-        },
-      });
+          planCode: entitlement.planCode,
+          entitlementStatus: entitlement.status,
+        }),
+      );
     }
 
-    return jsonResponse({
-      ok: true,
-      mode: "database",
-      requestId,
-      heartbeat: {
-        accepted: true,
-        nextCheckInSeconds: 300,
-      },
-      license: {
+    return jsonResponse(
+      buildHeartbeatResponseBody(parsed, requestId, "database", {
         valid: true,
+        status: "active",
         reason: null,
-      },
-      entitlement: {
-        active: true,
-        plan: entitlement.planCode,
-        token: null,
-        tokenExpiresAt: new Date(now + 15 * 60 * 1000).toISOString(),
-        graceExpiresAt: new Date(now + 6 * 60 * 60 * 1000).toISOString(),
-        featureFlags: {
-          premiumFundamentals: true,
-          premiumInsights: true,
-          riskControlsAlwaysOn: true,
-        },
-      },
-      echo: {
-        installationId: parsed.installationId,
-      },
-    });
+        planCode: entitlement.planCode,
+        entitlementStatus: entitlement.status,
+      }),
+    );
   } catch (error) {
     if (error instanceof EntitlementStoreConfigError) {
-      return jsonResponse({
-        ok: true,
-        mode: "database",
-        requestId,
-        heartbeat: {
-          accepted: true,
-          nextCheckInSeconds: 300,
-        },
-        license: {
+      return jsonResponse(
+        buildHeartbeatResponseBody(parsed, requestId, "database", {
           valid: false,
+          status: "inactive",
           reason: error.code,
-        },
-        entitlement: {
-          active: false,
-          plan: "none",
-          token: null,
-          tokenExpiresAt: new Date(now + 15 * 60 * 1000).toISOString(),
-          graceExpiresAt: new Date(now + 6 * 60 * 60 * 1000).toISOString(),
-          featureFlags: {
-            premiumFundamentals: false,
-            premiumInsights: false,
-            riskControlsAlwaysOn: true,
-          },
-        },
-        echo: {
-          installationId: parsed.installationId,
-        },
-      });
+          planCode: "free_lite",
+          entitlementStatus: null,
+        }),
+      );
     }
 
     return errorResponse(

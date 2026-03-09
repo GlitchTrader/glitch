@@ -53,6 +53,16 @@ export interface MembershipDailyMetrics {
   cancelAtPeriodEndChangedCount: number;
 }
 
+export interface RecentWebhookEvent {
+  eventId: string;
+  provider: string;
+  eventType: string;
+  status: WebhookProcessingStatus;
+  receivedAt: string;
+  processedAt: string | null;
+  failureReason: string | null;
+}
+
 function readDatabaseUrl(): string | null {
   return readOptionalEnv("DATABASE_URL");
 }
@@ -331,6 +341,68 @@ export async function markWebhookEventProcessed(
   }
 
   markWebhookEventProcessedInMemory(eventId, status, failureReason);
+}
+
+export async function listRecentWebhookEvents(
+  limit = 50,
+  provider = "whop",
+): Promise<RecentWebhookEvent[]> {
+  if (getWebhookStoreMode() !== "database") {
+    return [];
+  }
+
+  const pool = await getDatabasePool();
+  await ensureSchema(pool);
+
+  const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(Math.floor(limit), 500)) : 50;
+  const safeProvider = provider.trim();
+
+  const result = safeProvider
+    ? await pool.query<DatabaseWebhookEventRow>(
+        `
+          SELECT
+            event_id,
+            provider,
+            event_type,
+            payload_sha256,
+            status,
+            received_at,
+            processed_at,
+            failure_reason
+          FROM webhook_events
+          WHERE provider = $1
+          ORDER BY received_at DESC
+          LIMIT $2;
+        `,
+        [safeProvider, safeLimit],
+      )
+    : await pool.query<DatabaseWebhookEventRow>(
+        `
+          SELECT
+            event_id,
+            provider,
+            event_type,
+            payload_sha256,
+            status,
+            received_at,
+            processed_at,
+            failure_reason
+          FROM webhook_events
+          ORDER BY received_at DESC
+          LIMIT $1;
+        `,
+        [safeLimit],
+      );
+
+  return result.rows.map((row) => ({
+    eventId: row.event_id,
+    provider: row.provider,
+    eventType: row.event_type,
+    status: row.status,
+    receivedAt: toIsoString(row.received_at) ?? new Date().toISOString(),
+    processedAt: toIsoString(row.processed_at),
+    failureReason: row.failure_reason,
+  }));
 }
 
 export async function listMembershipWebhookDailyMetrics(

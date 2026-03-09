@@ -19,12 +19,17 @@ export default function Home() {
           <EndpointRow
             method="POST"
             path="/api/license/validate"
-            description="License validation contract (stub mode)"
+            description="License validation contract with plan, feature flags, and limits"
           />
           <EndpointRow
             method="POST"
             path="/api/license/heartbeat"
-            description="License heartbeat contract (stub mode)"
+            description="Heartbeat contract with policy refresh and grace metadata"
+          />
+          <EndpointRow
+            method="GET"
+            path="/api/admin/dashboard/overview"
+            description="Admin snapshot for webhook events, attribution, bindings, and policy status"
           />
         </div>
       </main>

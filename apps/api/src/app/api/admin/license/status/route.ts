@@ -8,6 +8,7 @@ import {
 } from "@/lib/entitlements-store";
 import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
 import { getWebhookStoreMode } from "@/lib/idempotency-store";
+import { buildPolicy, resolvePlanFromCode } from "@/lib/license-policy";
 
 export const runtime = "nodejs";
 
@@ -50,17 +51,37 @@ export async function GET(request: NextRequest) {
         requestId,
         found: false,
         reason: "license_not_found",
+        license: {
+          valid: false,
+          status: "inactive",
+          reason: "license_not_found",
+        },
+        policy: buildPolicy("free_lite"),
       });
     }
 
     const binding = await findActiveLicenseBinding(entitlement.id);
+    const active = isWhopEntitlementStatusActive(entitlement.status);
+    const valid = active && !!binding;
+    const reason = valid
+      ? null
+      : !active
+        ? `membership_status_${entitlement.status}`
+        : "binding_not_found";
+
     return jsonResponse({
       ok: true,
       requestId,
       found: true,
+      license: {
+        valid,
+        status: valid ? "active" : "inactive",
+        reason,
+      },
+      policy: buildPolicy(resolvePlanFromCode(entitlement.planCode)),
       entitlement: {
         ...entitlement,
-        active: isWhopEntitlementStatusActive(entitlement.status),
+        active,
       },
       binding,
       bindingStatus: binding ? "bound" : "missing",
@@ -84,4 +105,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

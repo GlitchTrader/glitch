@@ -5,6 +5,8 @@ import {
   findWhopEntitlementByLicenseKey,
   isWhopEntitlementStatusActive,
 } from "@/lib/entitlements-store";
+import { buildLicenseContractBody } from "@/lib/license-contract";
+import { resolvePlanFromCode } from "@/lib/license-policy";
 import { readBooleanEnv } from "@/lib/env";
 import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
 import { getWebhookStoreMode } from "@/lib/idempotency-store";
@@ -20,51 +22,35 @@ interface LicenseValidateRequest {
   timestamp: string;
 }
 
-function buildFeatureFlags(active: boolean) {
-  return {
-    premiumFundamentals: active,
-    premiumInsights: active,
-    riskControlsAlwaysOn: true,
-  };
-}
-
-function buildValidateResponse(
+function buildValidateResponseBody(
   parsed: LicenseValidateRequest,
   requestId: string,
   mode: "stub" | "database",
-  now: number,
   {
     valid,
+    status,
     reason,
-    plan,
-    active,
+    planCode,
+    entitlementStatus,
   }: {
     valid: boolean;
+    status: "active" | "inactive";
     reason: string | null;
-    plan: string;
-    active: boolean;
+    planCode: string | null;
+    entitlementStatus: string | null;
   },
 ) {
-  return jsonResponse({
-    ok: true,
-    mode,
+  return buildLicenseContractBody({
     requestId,
-    license: {
-      valid,
-      reason,
-    },
-    entitlement: {
-      active,
-      plan,
-      token: null,
-      tokenExpiresAt: new Date(now + 15 * 60 * 1000).toISOString(),
-      graceExpiresAt: new Date(now + 6 * 60 * 60 * 1000).toISOString(),
-      featureFlags: buildFeatureFlags(active),
-    },
-    echo: {
-      installationId: parsed.installationId,
-      clientVersion: parsed.clientVersion,
-    },
+    mode,
+    installationId: parsed.installationId,
+    clientVersion: parsed.clientVersion,
+    valid,
+    status,
+    reason,
+    plan: resolvePlanFromCode(planCode),
+    entitlementStatus,
+    sourcePlanCode: planCode,
   });
 }
 
@@ -125,36 +111,44 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const now = Date.now();
   if (getWebhookStoreMode() !== "database") {
     const allowAll = readBooleanEnv("LICENSE_STUB_ALLOW_ALL", false);
-    return buildValidateResponse(parsed, requestId, "stub", now, {
-      valid: allowAll,
-      reason: allowAll ? null : "stub_deny_by_default",
-      plan: allowAll ? "pro" : "none",
-      active: allowAll,
-    });
+    return jsonResponse(
+      buildValidateResponseBody(parsed, requestId, "stub", {
+        valid: allowAll,
+        status: allowAll ? "active" : "inactive",
+        reason: allowAll ? null : "stub_deny_by_default",
+        planCode: allowAll ? "premium" : "free_lite",
+        entitlementStatus: allowAll ? "active" : "inactive",
+      }),
+    );
   }
 
   try {
     const entitlement = await findWhopEntitlementByLicenseKey(parsed.licenseKey);
     if (!entitlement) {
-      return buildValidateResponse(parsed, requestId, "database", now, {
-        valid: false,
-        reason: "license_not_found",
-        plan: "none",
-        active: false,
-      });
+      return jsonResponse(
+        buildValidateResponseBody(parsed, requestId, "database", {
+          valid: false,
+          status: "inactive",
+          reason: "license_not_found",
+          planCode: "free_lite",
+          entitlementStatus: null,
+        }),
+      );
     }
 
     const active = isWhopEntitlementStatusActive(entitlement.status);
     if (!active) {
-      return buildValidateResponse(parsed, requestId, "database", now, {
-        valid: false,
-        reason: `membership_status_${entitlement.status}`,
-        plan: entitlement.planCode,
-        active: false,
-      });
+      return jsonResponse(
+        buildValidateResponseBody(parsed, requestId, "database", {
+          valid: false,
+          status: "inactive",
+          reason: `membership_status_${entitlement.status}`,
+          planCode: entitlement.planCode,
+          entitlementStatus: entitlement.status,
+        }),
+      );
     }
 
     const bindingResult = await claimLicenseBinding(
@@ -163,28 +157,37 @@ export async function POST(request: NextRequest) {
       parsed.deviceFingerprintHash,
     );
     if (!bindingResult.ok) {
-      return buildValidateResponse(parsed, requestId, "database", now, {
-        valid: false,
-        reason: bindingResult.reason,
-        plan: entitlement.planCode,
-        active: false,
-      });
+      return jsonResponse(
+        buildValidateResponseBody(parsed, requestId, "database", {
+          valid: false,
+          status: "inactive",
+          reason: bindingResult.reason,
+          planCode: entitlement.planCode,
+          entitlementStatus: entitlement.status,
+        }),
+      );
     }
 
-    return buildValidateResponse(parsed, requestId, "database", now, {
-      valid: true,
-      reason: null,
-      plan: entitlement.planCode,
-      active: true,
-    });
+    return jsonResponse(
+      buildValidateResponseBody(parsed, requestId, "database", {
+        valid: true,
+        status: "active",
+        reason: null,
+        planCode: entitlement.planCode,
+        entitlementStatus: entitlement.status,
+      }),
+    );
   } catch (error) {
     if (error instanceof EntitlementStoreConfigError) {
-      return buildValidateResponse(parsed, requestId, "database", now, {
-        valid: false,
-        reason: error.code,
-        plan: "none",
-        active: false,
-      });
+      return jsonResponse(
+        buildValidateResponseBody(parsed, requestId, "database", {
+          valid: false,
+          status: "inactive",
+          reason: error.code,
+          planCode: "free_lite",
+          entitlementStatus: null,
+        }),
+      );
     }
 
     return errorResponse(

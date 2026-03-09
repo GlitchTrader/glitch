@@ -567,6 +567,7 @@ export async function claimLicenseBinding(
 export async function verifyLicenseBinding(
   entitlementId: string,
   installationId: string,
+  deviceFingerprintHash: string,
 ): Promise<LicenseBindingResult> {
   const pool = await getDatabasePool();
   await ensureSchema(pool);
@@ -593,6 +594,13 @@ export async function verifyLicenseBinding(
     return {
       ok: false,
       reason: "bound_to_other_installation",
+    };
+  }
+
+  if (existing.device_fingerprint_hash !== deviceFingerprintHash) {
+    return {
+      ok: false,
+      reason: "device_fingerprint_mismatch",
     };
   }
 
