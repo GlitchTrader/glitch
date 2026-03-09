@@ -16,8 +16,8 @@ Next.js app serving backend endpoints for:
 
 Copy `.env.example` to `.env.local` and set:
 - `WHOP_WEBHOOK_SECRET`
-- `WHOP_WEBHOOK_KEY` (optional alias supported by Whop docs; `WHOP_WEBHOOK_SECRET` wins when both are set)
-- `WHOP_API_KEY` (optional for future direct Whop API operations)
+- `WHOP_WEBHOOK_KEY` (optional; if omitted, derived from `WHOP_WEBHOOK_SECRET`)
+- `WHOP_API_KEY` (required by SDK initialization)
 - `DATABASE_URL` (optional; enables Postgres-backed webhook idempotency)
 - `LICENSE_KEY_HASH_SECRET` (required for DB-backed `license/validate` lookups)
 - `LICENSE_STUB_ALLOW_ALL` (`true`/`false`)
@@ -34,4 +34,5 @@ npm run dev --workspace apps/api
 - Webhook idempotency uses Postgres when `DATABASE_URL` is set, otherwise in-memory fallback.
 - Membership webhook events project to `entitlements` only when `DATABASE_URL` is set.
 - DB-backed license validation uses hashed Whop license keys (`HMAC-SHA256`) via `LICENSE_KEY_HASH_SECRET`.
+- DB-backed license heartbeat also resolves entitlements from the same Whop-backed source of truth.
 - SQL scaffold for persistent idempotency and entitlements is in `db/schema.sql`.
