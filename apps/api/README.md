@@ -35,4 +35,5 @@ npm run dev --workspace apps/api
 - Membership webhook events project to `entitlements` only when `DATABASE_URL` is set.
 - DB-backed license validation uses hashed Whop license keys (`HMAC-SHA256`) via `LICENSE_KEY_HASH_SECRET`.
 - DB-backed license heartbeat also resolves entitlements from the same Whop-backed source of truth.
+- Entitlement projection now stores monetization context (`company_id`, `product_id`, `promo_code_id`, `membership_metadata`) for affiliate/promo attribution workflows.
 - SQL scaffold for persistent idempotency and entitlements is in `db/schema.sql`.

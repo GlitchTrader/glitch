@@ -21,6 +21,10 @@ CREATE TABLE IF NOT EXISTS entitlements (
   external_membership_id TEXT NOT NULL,
   license_key_hash TEXT,
   external_user_id TEXT,
+  company_id TEXT,
+  product_id TEXT,
+  promo_code_id TEXT,
+  membership_metadata JSONB,
   status TEXT NOT NULL,
   plan_code TEXT NOT NULL,
   current_period_end TIMESTAMPTZ,
@@ -30,6 +34,18 @@ CREATE TABLE IF NOT EXISTS entitlements (
 
 ALTER TABLE entitlements
   ADD COLUMN IF NOT EXISTS license_key_hash TEXT;
+
+ALTER TABLE entitlements
+  ADD COLUMN IF NOT EXISTS company_id TEXT;
+
+ALTER TABLE entitlements
+  ADD COLUMN IF NOT EXISTS product_id TEXT;
+
+ALTER TABLE entitlements
+  ADD COLUMN IF NOT EXISTS promo_code_id TEXT;
+
+ALTER TABLE entitlements
+  ADD COLUMN IF NOT EXISTS membership_metadata JSONB;
 
 CREATE UNIQUE INDEX IF NOT EXISTS entitlements_provider_membership_idx
   ON entitlements (provider, external_membership_id);

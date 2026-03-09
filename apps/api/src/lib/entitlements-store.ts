@@ -115,6 +115,10 @@ async function ensureSchema(pool: EntitlementStoreDbPool): Promise<void> {
       external_membership_id TEXT NOT NULL,
       license_key_hash TEXT,
       external_user_id TEXT,
+      company_id TEXT,
+      product_id TEXT,
+      promo_code_id TEXT,
+      membership_metadata JSONB,
       status TEXT NOT NULL,
       plan_code TEXT NOT NULL,
       current_period_end TIMESTAMPTZ,
@@ -126,6 +130,26 @@ async function ensureSchema(pool: EntitlementStoreDbPool): Promise<void> {
   await pool.query(`
     ALTER TABLE entitlements
     ADD COLUMN IF NOT EXISTS license_key_hash TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE entitlements
+    ADD COLUMN IF NOT EXISTS company_id TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE entitlements
+    ADD COLUMN IF NOT EXISTS product_id TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE entitlements
+    ADD COLUMN IF NOT EXISTS promo_code_id TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE entitlements
+    ADD COLUMN IF NOT EXISTS membership_metadata JSONB;
   `);
 
   await pool.query(`
@@ -199,17 +223,25 @@ export async function projectWhopMembershipEntitlement(
         external_membership_id,
         license_key_hash,
         external_user_id,
+        company_id,
+        product_id,
+        promo_code_id,
+        membership_metadata,
         status,
         plan_code,
         current_period_end,
         cancel_at_period_end,
         updated_at
       )
-      VALUES ($1, 'whop', $2, $3, $4, $5, $6, $7, $8, NOW())
+      VALUES ($1, 'whop', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
       ON CONFLICT (provider, external_membership_id)
       DO UPDATE SET
         license_key_hash = EXCLUDED.license_key_hash,
         external_user_id = EXCLUDED.external_user_id,
+        company_id = EXCLUDED.company_id,
+        product_id = EXCLUDED.product_id,
+        promo_code_id = EXCLUDED.promo_code_id,
+        membership_metadata = EXCLUDED.membership_metadata,
         status = EXCLUDED.status,
         plan_code = EXCLUDED.plan_code,
         current_period_end = EXCLUDED.current_period_end,
@@ -222,6 +254,10 @@ export async function projectWhopMembershipEntitlement(
       membership.id,
       licenseKeyHash,
       membership.user?.id ?? null,
+      membership.company?.id ?? null,
+      membership.product?.id ?? null,
+      membership.promo_code?.id ?? null,
+      membership.metadata ?? null,
       membership.status,
       membership.plan.id,
       toIsoOrNull(membership.renewal_period_end),
