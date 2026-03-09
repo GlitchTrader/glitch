@@ -12,9 +12,11 @@ Next.js app serving backend endpoints for:
 - `POST /api/license/validate`
 - `POST /api/license/heartbeat`
 - `POST /api/admin/license/revoke-binding` (admin token required)
+- `POST /api/admin/license/rebind` (admin token required)
 - `GET /api/admin/attribution/summary` (admin token required)
 - `GET /api/admin/license/status` (admin token required)
 - `GET /api/admin/license/bindings` (admin token required)
+- `GET /api/admin/metrics/funnel` (admin token required)
 
 ## Environment
 

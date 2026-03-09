@@ -45,6 +45,12 @@ interface AttributionSummaryRow {
   entitlement_count: number;
 }
 
+interface PromoSplitRow {
+  promo_code_id: string | null;
+  entitlement_count: number;
+  active_entitlement_count: number;
+}
+
 interface LicenseBindingRow {
   id: string;
   entitlement_id: string;
@@ -72,6 +78,12 @@ export interface EntitlementAttributionSummary {
   planCode: string;
   status: string;
   entitlementCount: number;
+}
+
+export interface PromoSplitSummary {
+  promoCodeId: string | null;
+  entitlementCount: number;
+  activeEntitlementCount: number;
 }
 
 export interface ActiveLicenseBinding {
@@ -663,5 +675,41 @@ export async function listEntitlementAttributionSummary(
     planCode: row.plan_code,
     status: row.status,
     entitlementCount: row.entitlement_count,
+  }));
+}
+
+export async function listPromoSplitSummary(
+  limit = 200,
+): Promise<PromoSplitSummary[]> {
+  if (!readDatabaseUrl()) {
+    throw new EntitlementStoreConfigError(
+      "database_not_configured",
+      "DATABASE_URL is not configured.",
+    );
+  }
+
+  const pool = await getDatabasePool();
+  await ensureSchema(pool);
+
+  const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(Math.floor(limit), 1000)) : 200;
+  const activeStatusArray = Array.from(activeStatuses);
+  const result = await pool.query<PromoSplitRow>(
+    `
+      SELECT
+        promo_code_id,
+        COUNT(*)::int AS entitlement_count,
+        COUNT(*) FILTER (WHERE status = ANY($1::text[]))::int AS active_entitlement_count
+      FROM entitlements
+      GROUP BY promo_code_id
+      ORDER BY entitlement_count DESC
+      LIMIT $2;
+    `,
+    [activeStatusArray, safeLimit],
+  );
+
+  return result.rows.map((row) => ({
+    promoCodeId: row.promo_code_id,
+    entitlementCount: row.entitlement_count,
+    activeEntitlementCount: row.active_entitlement_count,
   }));
 }

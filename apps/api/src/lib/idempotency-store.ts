@@ -39,6 +39,20 @@ interface DatabaseWebhookEventRow {
   failure_reason: string | null;
 }
 
+interface DatabaseMembershipDailyMetricsRow {
+  day: string | Date;
+  activated_count: number;
+  deactivated_count: number;
+  cancel_at_period_end_changed_count: number;
+}
+
+export interface MembershipDailyMetrics {
+  day: string;
+  activatedCount: number;
+  deactivatedCount: number;
+  cancelAtPeriodEndChangedCount: number;
+}
+
 function readDatabaseUrl(): string | null {
   return readOptionalEnv("DATABASE_URL");
 }
@@ -317,4 +331,43 @@ export async function markWebhookEventProcessed(
   }
 
   markWebhookEventProcessedInMemory(eventId, status, failureReason);
+}
+
+export async function listMembershipWebhookDailyMetrics(
+  days = 30,
+  limit = 90,
+): Promise<MembershipDailyMetrics[]> {
+  if (getWebhookStoreMode() !== "database") {
+    return [];
+  }
+
+  const pool = await getDatabasePool();
+  await ensureSchema(pool);
+
+  const safeDays = Number.isFinite(days) ? Math.max(1, Math.min(Math.floor(days), 365)) : 30;
+  const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(Math.floor(limit), 365)) : 90;
+
+  const result = await pool.query<DatabaseMembershipDailyMetricsRow>(
+    `
+      SELECT
+        date_trunc('day', received_at) AS day,
+        COUNT(*) FILTER (WHERE event_type = 'membership.activated')::int AS activated_count,
+        COUNT(*) FILTER (WHERE event_type = 'membership.deactivated')::int AS deactivated_count,
+        COUNT(*) FILTER (WHERE event_type = 'membership.cancel_at_period_end_changed')::int AS cancel_at_period_end_changed_count
+      FROM webhook_events
+      WHERE provider = 'whop'
+        AND received_at >= NOW() - ($1 * INTERVAL '1 day')
+      GROUP BY 1
+      ORDER BY 1 DESC
+      LIMIT $2;
+    `,
+    [safeDays, safeLimit],
+  );
+
+  return result.rows.map((row) => ({
+    day: toIsoString(row.day) ?? new Date().toISOString(),
+    activatedCount: row.activated_count,
+    deactivatedCount: row.deactivated_count,
+    cancelAtPeriodEndChangedCount: row.cancel_at_period_end_changed_count,
+  }));
 }
