@@ -19,14 +19,25 @@ function sha256(input: string): string {
   return createHash("sha256").update(input, "utf8").digest("hex");
 }
 
-async function handleWebhookEvent(event: WhopWebhookEvent): Promise<WebhookHandlingResult> {
-  switch (event.type) {
-    case "membership.activated":
+function normalizeWhopEventType(eventType: string): string {
+  switch (eventType) {
     case "membership_activated":
-    case "membership.deactivated":
+      return "membership.activated";
     case "membership_deactivated":
-    case "membership.cancel_at_period_end_changed":
-    case "membership_cancel_at_period_end_changed": {
+      return "membership.deactivated";
+    case "membership_cancel_at_period_end_changed":
+      return "membership.cancel_at_period_end_changed";
+    default:
+      return eventType;
+  }
+}
+
+async function handleWebhookEvent(event: WhopWebhookEvent): Promise<WebhookHandlingResult> {
+  const normalizedType = normalizeWhopEventType(String(event.type));
+  switch (normalizedType) {
+    case "membership.activated":
+    case "membership.deactivated":
+    case "membership.cancel_at_period_end_changed": {
       return projectWhopMembershipEntitlement(event.data);
     }
     default: {
