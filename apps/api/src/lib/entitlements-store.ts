@@ -20,6 +20,10 @@ interface EntitlementStoreDbPool {
   query<T = unknown>(text: string, params?: unknown[]): Promise<{ rowCount: number | null; rows: T[] }>;
 }
 
+interface PgErrorLike {
+  code?: string;
+}
+
 interface EntitlementRow {
   id: string;
 }
@@ -97,6 +101,11 @@ export interface ActiveLicenseBinding {
 
 function readDatabaseUrl(): string | null {
   return readOptionalEnv("DATABASE_URL");
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  const pgError = error as PgErrorLike | null | undefined;
+  return pgError?.code === "23505";
 }
 
 function toIsoOrNull(input: string | Date | null): string | null {
@@ -511,28 +520,48 @@ export async function claimLicenseBinding(
     [entitlementId],
   );
 
-  const existing = existingResult.rows[0];
+  let existing = existingResult.rows[0];
   if (!existing) {
-    await pool.query(
-      `
-        INSERT INTO license_bindings (
-          id,
-          entitlement_id,
-          installation_id,
-          device_fingerprint_hash,
-          first_seen_at,
-          last_seen_at,
-          revoked_at
-        )
-        VALUES ($1, $2, $3, $4, NOW(), NOW(), NULL);
-      `,
-      [`bind_${randomUUID()}`, entitlementId, installationId, deviceFingerprintHash],
-    );
+    try {
+      await pool.query(
+        `
+          INSERT INTO license_bindings (
+            id,
+            entitlement_id,
+            installation_id,
+            device_fingerprint_hash,
+            first_seen_at,
+            last_seen_at,
+            revoked_at
+          )
+          VALUES ($1, $2, $3, $4, NOW(), NOW(), NULL);
+        `,
+        [`bind_${randomUUID()}`, entitlementId, installationId, deviceFingerprintHash],
+      );
 
-    return {
-      ok: true,
-      reason: null,
-    };
+      return {
+        ok: true,
+        reason: null,
+      };
+    } catch (error) {
+      if (!isUniqueViolation(error)) {
+        throw error;
+      }
+
+      const concurrentRead = await pool.query<LicenseBindingRow>(
+        `
+          SELECT id, installation_id, device_fingerprint_hash
+          FROM license_bindings
+          WHERE entitlement_id = $1 AND revoked_at IS NULL
+          LIMIT 1;
+        `,
+        [entitlementId],
+      );
+      existing = concurrentRead.rows[0];
+      if (!existing) {
+        throw error;
+      }
+    }
   }
 
   if (existing.installation_id !== installationId) {

@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { createHash } from "crypto";
 import {
   EntitlementStoreConfigError,
   findWhopEntitlementByLicenseKey,
@@ -6,6 +7,7 @@ import {
   verifyLicenseBinding,
 } from "@/lib/entitlements-store";
 import { buildPolicy, resolvePlanFromCode } from "@/lib/license-policy";
+import { readOptionalEnv } from "@/lib/env";
 import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
 
 export const runtime = "nodejs";
@@ -13,6 +15,9 @@ export const runtime = "nodejs";
 const FINNHUB_BASE_URL = "https://api.finnhub.io/api/v1";
 const FRED_BASE_URL = "https://api.stlouisfed.org/fred";
 const REQUEST_TIMEOUT_MS = 12000;
+const PROVIDER_CACHE_STALE_FALLBACK_SECONDS = 900;
+const globalPoolKey = "__glitchProviderProxyCachePoolV1";
+const globalSchemaReadyKey = "__glitchProviderProxyCacheSchemaReadyV1";
 
 type ProviderName = "finnhub" | "fred";
 
@@ -26,8 +31,183 @@ interface ProviderProxyRequestPayload {
   clientVersion?: string;
 }
 
+interface ProviderCacheRow {
+  cache_key: string;
+  payload: string;
+  updated_at: string | Date;
+  expires_at: string | Date;
+}
+
+interface ProviderCacheDbPool {
+  query<T = unknown>(text: string, params?: unknown[]): Promise<{ rows: T[]; rowCount: number | null }>;
+}
+
 function isNonEmpty(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function readDatabaseUrl(): string | null {
+  return readOptionalEnv("DATABASE_URL");
+}
+
+function toMs(value: string | Date | null | undefined): number {
+  if (!value) {
+    return Number.NaN;
+  }
+
+  if (value instanceof Date) {
+    return value.valueOf();
+  }
+
+  const parsed = new Date(value);
+  return parsed.valueOf();
+}
+
+function readProviderProxyCacheTtlSeconds(provider: ProviderName, operation: string): number {
+  const envValue = readOptionalEnv("PROVIDER_PROXY_CACHE_TTL_SECONDS");
+  const parsedEnv = envValue ? Number.parseInt(envValue, 10) : Number.NaN;
+  if (Number.isFinite(parsedEnv) && parsedEnv > 0) {
+    return Math.max(15, Math.min(parsedEnv, 3600));
+  }
+
+  if (provider === "finnhub") {
+    switch (operation) {
+      case "quote":
+        return 20;
+      case "general_news":
+        return 90;
+      case "company_news":
+        return 120;
+      case "stock_metric":
+        return 3600;
+      case "calendar_earnings":
+        return 1800;
+      default:
+        return 120;
+    }
+  }
+
+  if (provider === "fred" && operation === "releases_dates") {
+    return 1800;
+  }
+
+  return 120;
+}
+
+function buildParamsHash(params: Record<string, string>): string {
+  const canonical = Object.entries(params)
+    .filter(([key, value]) => isNonEmpty(key) && isNonEmpty(value))
+    .map(([key, value]) => [key.trim(), value.trim()] as const)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("&");
+
+  return createHash("sha256").update(canonical, "utf8").digest("hex");
+}
+
+function buildCacheKey(provider: ProviderName, operation: string, params: Record<string, string>): string {
+  return `provider:${provider}:${operation}:${buildParamsHash(params)}`;
+}
+
+async function getProviderCachePool(): Promise<ProviderCacheDbPool | null> {
+  const globalScope = globalThis as typeof globalThis & {
+    [globalPoolKey]?: ProviderCacheDbPool;
+  };
+
+  if (globalScope[globalPoolKey]) {
+    return globalScope[globalPoolKey];
+  }
+
+  const connectionString = readDatabaseUrl();
+  if (!connectionString) {
+    return null;
+  }
+
+  const pgModule = (await import("pg")) as typeof import("pg");
+  const pool = new pgModule.Pool({
+    connectionString,
+    max: 4,
+    idleTimeoutMillis: 30_000,
+  });
+
+  globalScope[globalPoolKey] = pool;
+  return pool;
+}
+
+async function ensureProviderCacheSchema(pool: ProviderCacheDbPool): Promise<void> {
+  const globalScope = globalThis as typeof globalThis & {
+    [globalSchemaReadyKey]?: boolean;
+  };
+
+  if (globalScope[globalSchemaReadyKey]) {
+    return;
+  }
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS provider_proxy_cache (
+      cache_key TEXT PRIMARY KEY,
+      payload TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS provider_proxy_cache_expires_at_idx
+      ON provider_proxy_cache (expires_at);
+  `);
+
+  globalScope[globalSchemaReadyKey] = true;
+}
+
+async function readProviderCache(
+  pool: ProviderCacheDbPool,
+  cacheKey: string,
+): Promise<{
+  payload: string;
+  updatedAtMs: number;
+  expiresAtMs: number;
+} | null> {
+  const result = await pool.query<ProviderCacheRow>(
+    `
+      SELECT cache_key, payload, updated_at, expires_at
+      FROM provider_proxy_cache
+      WHERE cache_key = $1
+      LIMIT 1;
+    `,
+    [cacheKey],
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+
+  return {
+    payload: row.payload,
+    updatedAtMs: toMs(row.updated_at),
+    expiresAtMs: toMs(row.expires_at),
+  };
+}
+
+async function writeProviderCache(
+  pool: ProviderCacheDbPool,
+  cacheKey: string,
+  payload: string,
+  ttlSeconds: number,
+): Promise<void> {
+  await pool.query(
+    `
+      INSERT INTO provider_proxy_cache (cache_key, payload, updated_at, expires_at)
+      VALUES ($1, $2, NOW(), NOW() + ($3::int * INTERVAL '1 second'))
+      ON CONFLICT (cache_key)
+      DO UPDATE SET
+        payload = EXCLUDED.payload,
+        updated_at = NOW(),
+        expires_at = EXCLUDED.expires_at;
+    `,
+    [cacheKey, payload, ttlSeconds],
+  );
 }
 
 function parseParams(value: unknown): Record<string, string> {
@@ -264,15 +444,55 @@ export async function POST(request: NextRequest) {
     }
 
     const providerUrl = resolveProviderUrl(parsed);
-    const providerPayload = await fetchProviderJson(providerUrl);
+    const cacheKey = buildCacheKey(parsed.provider, parsed.operation, parsed.params);
+    const ttlSeconds = readProviderProxyCacheTtlSeconds(parsed.provider, parsed.operation);
 
-    return jsonResponse({
-      ok: true,
-      requestId,
-      provider: parsed.provider,
-      operation: parsed.operation,
-      data: providerPayload,
-    });
+    const cachePool = await getProviderCachePool();
+    let cached: { payload: string; updatedAtMs: number; expiresAtMs: number } | null = null;
+    if (cachePool) {
+      await ensureProviderCacheSchema(cachePool);
+      cached = await readProviderCache(cachePool, cacheKey);
+      if (cached && Number.isFinite(cached.expiresAtMs) && cached.expiresAtMs > Date.now()) {
+        return jsonResponse({
+          ok: true,
+          requestId,
+          provider: parsed.provider,
+          operation: parsed.operation,
+          data: cached.payload,
+        });
+      }
+    }
+
+    try {
+      const providerPayload = await fetchProviderJson(providerUrl);
+      if (cachePool) {
+        await writeProviderCache(cachePool, cacheKey, providerPayload, ttlSeconds);
+      }
+
+      return jsonResponse({
+        ok: true,
+        requestId,
+        provider: parsed.provider,
+        operation: parsed.operation,
+        data: providerPayload,
+      });
+    } catch (providerError) {
+      if (
+        cached &&
+        Number.isFinite(cached.updatedAtMs) &&
+        (Date.now() - cached.updatedAtMs) <= (PROVIDER_CACHE_STALE_FALLBACK_SECONDS * 1000)
+      ) {
+        return jsonResponse({
+          ok: true,
+          requestId,
+          provider: parsed.provider,
+          operation: parsed.operation,
+          data: cached.payload,
+        });
+      }
+
+      throw providerError;
+    }
   } catch (error) {
     if (error instanceof EntitlementStoreConfigError) {
       return errorResponse(
