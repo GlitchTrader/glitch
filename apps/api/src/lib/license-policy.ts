@@ -36,10 +36,16 @@ function parsePlanCodeSetFromEnv(envName: string): Set<string> {
   );
 }
 
+function readDefaultUnmappedPlan(): LicensePlan {
+  const raw = (readOptionalEnv("WHOP_DEFAULT_ACTIVE_PLAN") ?? "").trim().toLowerCase();
+  return raw === "free_lite" ? "free_lite" : "premium";
+}
+
 export function resolvePlanFromCode(planCode: string | null | undefined): LicensePlan {
   const normalized = (planCode ?? "").trim().toLowerCase();
   const explicitFreeLiteCodes = parsePlanCodeSetFromEnv("WHOP_FREE_LITE_PLAN_CODES");
   const explicitPremiumCodes = parsePlanCodeSetFromEnv("WHOP_PREMIUM_PLAN_CODES");
+  const defaultUnmappedPlan = readDefaultUnmappedPlan();
 
   if (normalized && explicitFreeLiteCodes.has(normalized)) {
     return "free_lite";
@@ -61,12 +67,7 @@ export function resolvePlanFromCode(planCode: string | null | undefined): Licens
   if (!normalized) {
     return "free_lite";
   }
-
-  if (normalized.includes("lite") || normalized.includes("free")) {
-    return "free_lite";
-  }
-
-  return "premium";
+  return defaultUnmappedPlan;
 }
 
 export function buildPolicy(plan: LicensePlan): LicensePolicy {

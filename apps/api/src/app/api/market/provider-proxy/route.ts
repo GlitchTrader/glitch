@@ -16,8 +16,11 @@ const FINNHUB_BASE_URL = "https://api.finnhub.io/api/v1";
 const FRED_BASE_URL = "https://api.stlouisfed.org/fred";
 const REQUEST_TIMEOUT_MS = 12000;
 const PROVIDER_CACHE_STALE_FALLBACK_SECONDS = 900;
+const PROVIDER_CACHE_RETENTION_SECONDS_DEFAULT = 86400;
+const PROVIDER_CACHE_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 const globalPoolKey = "__glitchProviderProxyCachePoolV1";
 const globalSchemaReadyKey = "__glitchProviderProxyCacheSchemaReadyV1";
+const globalCleanupTsKey = "__glitchProviderProxyCacheLastCleanupAtV1";
 
 type ProviderName = "finnhub" | "fred";
 
@@ -92,6 +95,16 @@ function readProviderProxyCacheTtlSeconds(provider: ProviderName, operation: str
   }
 
   return 120;
+}
+
+function readProviderProxyCacheRetentionSeconds(): number {
+  const envValue = readOptionalEnv("PROVIDER_PROXY_CACHE_RETENTION_SECONDS");
+  const parsedEnv = envValue ? Number.parseInt(envValue, 10) : Number.NaN;
+  if (Number.isFinite(parsedEnv) && parsedEnv > 0) {
+    return Math.max(900, Math.min(parsedEnv, 604800));
+  }
+
+  return PROVIDER_CACHE_RETENTION_SECONDS_DEFAULT;
 }
 
 function buildParamsHash(params: Record<string, string>): string {
@@ -208,6 +221,33 @@ async function writeProviderCache(
     `,
     [cacheKey, payload, ttlSeconds],
   );
+}
+
+async function maybeCleanupProviderCache(pool: ProviderCacheDbPool): Promise<void> {
+  const globalScope = globalThis as typeof globalThis & {
+    [globalCleanupTsKey]?: number;
+  };
+
+  const now = Date.now();
+  const lastCleanupTs = globalScope[globalCleanupTsKey] ?? 0;
+  if ((now - lastCleanupTs) < PROVIDER_CACHE_CLEANUP_INTERVAL_MS) {
+    return;
+  }
+
+  globalScope[globalCleanupTsKey] = now;
+  const retentionSeconds = readProviderProxyCacheRetentionSeconds();
+
+  try {
+    await pool.query(
+      `
+        DELETE FROM provider_proxy_cache
+        WHERE expires_at < NOW() - ($1::int * INTERVAL '1 second');
+      `,
+      [retentionSeconds],
+    );
+  } catch {
+    // Cleanup is best-effort only; main request path must remain available.
+  }
 }
 
 function parseParams(value: unknown): Record<string, string> {
@@ -451,6 +491,7 @@ export async function POST(request: NextRequest) {
     let cached: { payload: string; updatedAtMs: number; expiresAtMs: number } | null = null;
     if (cachePool) {
       await ensureProviderCacheSchema(cachePool);
+      await maybeCleanupProviderCache(cachePool);
       cached = await readProviderCache(cachePool, cacheKey);
       if (cached && Number.isFinite(cached.expiresAtMs) && cached.expiresAtMs > Date.now()) {
         return jsonResponse({
