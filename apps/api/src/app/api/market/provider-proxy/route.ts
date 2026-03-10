@@ -7,6 +7,7 @@ import {
   verifyLicenseBinding,
 } from "@/lib/entitlements-store";
 import { buildPolicy, resolvePlanFromCode } from "@/lib/license-policy";
+import type { LicensePlan } from "@/lib/license-policy";
 import { readOptionalEnv } from "@/lib/env";
 import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
 
@@ -18,6 +19,8 @@ const REQUEST_TIMEOUT_MS = 12000;
 const PROVIDER_CACHE_STALE_FALLBACK_SECONDS = 900;
 const PROVIDER_CACHE_RETENTION_SECONDS_DEFAULT = 86400;
 const PROVIDER_CACHE_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
+const PROVIDER_ACCESS_CACHE_SECONDS_DEFAULT = 30;
+const globalAccessCacheKey = "__glitchProviderProxyAccessCacheV1";
 const globalPoolKey = "__glitchProviderProxyCachePoolV1";
 const globalSchemaReadyKey = "__glitchProviderProxyCacheSchemaReadyV1";
 const globalCleanupTsKey = "__glitchProviderProxyCacheLastCleanupAtV1";
@@ -43,6 +46,11 @@ interface ProviderCacheRow {
 
 interface ProviderCacheDbPool {
   query<T = unknown>(text: string, params?: unknown[]): Promise<{ rows: T[]; rowCount: number | null }>;
+}
+
+interface ProviderAccessCacheEntry {
+  expiresAtMs: number;
+  plan: LicensePlan;
 }
 
 function isNonEmpty(value: unknown): value is string {
@@ -107,6 +115,16 @@ function readProviderProxyCacheRetentionSeconds(): number {
   return PROVIDER_CACHE_RETENTION_SECONDS_DEFAULT;
 }
 
+function readProviderProxyAccessCacheSeconds(): number {
+  const envValue = readOptionalEnv("PROVIDER_PROXY_ACCESS_CACHE_SECONDS");
+  const parsedEnv = envValue ? Number.parseInt(envValue, 10) : Number.NaN;
+  if (Number.isFinite(parsedEnv) && parsedEnv > 0) {
+    return Math.max(5, Math.min(parsedEnv, 120));
+  }
+
+  return PROVIDER_ACCESS_CACHE_SECONDS_DEFAULT;
+}
+
 function buildParamsHash(params: Record<string, string>): string {
   const canonical = Object.entries(params)
     .filter(([key, value]) => isNonEmpty(key) && isNonEmpty(value))
@@ -120,6 +138,54 @@ function buildParamsHash(params: Record<string, string>): string {
 
 function buildCacheKey(provider: ProviderName, operation: string, params: Record<string, string>): string {
   return `provider:${provider}:${operation}:${buildParamsHash(params)}`;
+}
+
+function buildProviderAccessCacheKey(
+  licenseKey: string,
+  installationId: string,
+  deviceFingerprintHash: string,
+): string {
+  return createHash("sha256")
+    .update(`${licenseKey}|${installationId}|${deviceFingerprintHash}`, "utf8")
+    .digest("hex");
+}
+
+function getProviderAccessCacheStore(): Map<string, ProviderAccessCacheEntry> {
+  const globalScope = globalThis as typeof globalThis & {
+    [globalAccessCacheKey]?: Map<string, ProviderAccessCacheEntry>;
+  };
+
+  if (!globalScope[globalAccessCacheKey]) {
+    globalScope[globalAccessCacheKey] = new Map<string, ProviderAccessCacheEntry>();
+  }
+
+  return globalScope[globalAccessCacheKey]!;
+}
+
+function readCachedProviderAccess(
+  cacheKey: string,
+): ProviderAccessCacheEntry | null {
+  const store = getProviderAccessCacheStore();
+  const entry = store.get(cacheKey);
+  if (!entry) {
+    return null;
+  }
+
+  if (entry.expiresAtMs <= Date.now()) {
+    store.delete(cacheKey);
+    return null;
+  }
+
+  return entry;
+}
+
+function writeCachedProviderAccess(cacheKey: string, plan: LicensePlan): void {
+  const ttlSeconds = readProviderProxyAccessCacheSeconds();
+  const expiresAtMs = Date.now() + (ttlSeconds * 1000);
+  getProviderAccessCacheStore().set(cacheKey, {
+    expiresAtMs,
+    plan,
+  });
 }
 
 async function getProviderCachePool(): Promise<ProviderCacheDbPool | null> {
@@ -441,36 +507,48 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const entitlement = await findWhopEntitlementByLicenseKey(parsed.licenseKey);
-    if (!entitlement) {
-      return errorResponse(requestId, 401, "license_not_found", "License key was not found.");
-    }
-
-    if (!isWhopEntitlementStatusActive(entitlement.status)) {
-      return errorResponse(
-        requestId,
-        401,
-        "license_inactive",
-        `Membership is not active (${entitlement.status}).`,
-      );
-    }
-
-    const bindingResult = await verifyLicenseBinding(
-      entitlement.id,
+    const providerAccessCacheKey = buildProviderAccessCacheKey(
+      parsed.licenseKey,
       parsed.installationId,
       parsed.deviceFingerprintHash,
     );
-    if (!bindingResult.ok) {
-      return errorResponse(
-        requestId,
-        401,
-        "license_binding_invalid",
-        "License binding validation failed.",
-        bindingResult.reason,
+    const cachedAccess = readCachedProviderAccess(providerAccessCacheKey);
+    let plan: LicensePlan | null = cachedAccess?.plan ?? null;
+    if (!plan) {
+      const entitlement = await findWhopEntitlementByLicenseKey(parsed.licenseKey);
+      if (!entitlement) {
+        return errorResponse(requestId, 401, "license_not_found", "License key was not found.");
+      }
+
+      if (!isWhopEntitlementStatusActive(entitlement.status)) {
+        return errorResponse(
+          requestId,
+          401,
+          "license_inactive",
+          `Membership is not active (${entitlement.status}).`,
+        );
+      }
+
+      const bindingResult = await verifyLicenseBinding(
+        entitlement.id,
+        parsed.installationId,
+        parsed.deviceFingerprintHash,
       );
+      if (!bindingResult.ok) {
+        return errorResponse(
+          requestId,
+          401,
+          "license_binding_invalid",
+          "License binding validation failed.",
+          bindingResult.reason,
+        );
+      }
+
+      plan = resolvePlanFromCode(entitlement.planCode);
+      writeCachedProviderAccess(providerAccessCacheKey, plan);
     }
 
-    const policy = buildPolicy(resolvePlanFromCode(entitlement.planCode));
+    const policy = buildPolicy(plan);
     if (!policy.features.fundamental) {
       return errorResponse(
         requestId,
