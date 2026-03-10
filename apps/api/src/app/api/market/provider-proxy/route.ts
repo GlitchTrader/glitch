@@ -75,6 +75,11 @@ function toMs(value: string | Date | null | undefined): number {
 }
 
 function readProviderProxyCacheTtlSeconds(provider: ProviderName, operation: string): number {
+  const operationEnvTtl = readProviderProxyOperationCacheTtlSeconds(provider, operation);
+  if (operationEnvTtl !== null) {
+    return operationEnvTtl;
+  }
+
   const envValue = readOptionalEnv("PROVIDER_PROXY_CACHE_TTL_SECONDS");
   const parsedEnv = envValue ? Number.parseInt(envValue, 10) : Number.NaN;
   if (Number.isFinite(parsedEnv) && parsedEnv > 0) {
@@ -84,25 +89,25 @@ function readProviderProxyCacheTtlSeconds(provider: ProviderName, operation: str
   if (provider === "finnhub") {
     switch (operation) {
       case "quote":
-        return 20;
-      case "general_news":
         return 90;
+      case "general_news":
+        return 300;
       case "company_news":
-        return 120;
+        return 300;
       case "stock_metric":
-        return 3600;
+        return 21600;
       case "calendar_earnings":
-        return 1800;
+        return 7200;
       default:
-        return 120;
+        return 300;
     }
   }
 
   if (provider === "fred" && operation === "releases_dates") {
-    return 1800;
+    return 7200;
   }
 
-  return 120;
+  return 300;
 }
 
 function readProviderProxyCacheRetentionSeconds(): number {
@@ -123,6 +128,57 @@ function readProviderProxyAccessCacheSeconds(): number {
   }
 
   return PROVIDER_ACCESS_CACHE_SECONDS_DEFAULT;
+}
+
+function readBoundedSecondsEnv(
+  envName: string,
+  minSeconds: number,
+  maxSeconds: number,
+): number | null {
+  const envValue = readOptionalEnv(envName);
+  const parsed = envValue ? Number.parseInt(envValue, 10) : Number.NaN;
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return Math.max(minSeconds, Math.min(parsed, maxSeconds));
+}
+
+function readProviderProxyOperationCacheTtlSeconds(
+  provider: ProviderName,
+  operation: string,
+): number | null {
+  const envName = provider === "finnhub"
+    ? (() => {
+        switch (operation) {
+          case "quote":
+            return "PROVIDER_PROXY_TTL_FINNHUB_QUOTE_SECONDS";
+          case "company_news":
+            return "PROVIDER_PROXY_TTL_FINNHUB_COMPANY_NEWS_SECONDS";
+          case "general_news":
+            return "PROVIDER_PROXY_TTL_FINNHUB_GENERAL_NEWS_SECONDS";
+          case "stock_metric":
+            return "PROVIDER_PROXY_TTL_FINNHUB_STOCK_METRIC_SECONDS";
+          case "calendar_earnings":
+            return "PROVIDER_PROXY_TTL_FINNHUB_CALENDAR_EARNINGS_SECONDS";
+          default:
+            return null;
+        }
+      })()
+    : (() => {
+        switch (operation) {
+          case "releases_dates":
+            return "PROVIDER_PROXY_TTL_FRED_RELEASES_DATES_SECONDS";
+          default:
+            return null;
+        }
+      })();
+
+  if (!envName) {
+    return null;
+  }
+
+  return readBoundedSecondsEnv(envName, 15, 86400);
 }
 
 function buildParamsHash(params: Record<string, string>): string {
