@@ -319,7 +319,7 @@ export async function projectWhopMembershipEntitlement(
       VALUES ($1, 'whop', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
       ON CONFLICT (provider, external_membership_id)
       DO UPDATE SET
-        license_key_hash = EXCLUDED.license_key_hash,
+        license_key_hash = COALESCE(EXCLUDED.license_key_hash, entitlements.license_key_hash),
         external_user_id = EXCLUDED.external_user_id,
         company_id = EXCLUDED.company_id,
         product_id = EXCLUDED.product_id,
