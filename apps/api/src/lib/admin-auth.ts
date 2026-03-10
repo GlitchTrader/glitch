@@ -34,17 +34,17 @@ export type AdminAuthResult =
     }
   | {
       ok: false;
-      code: "admin_token_not_configured" | "unauthorized";
+      code: "admin_token_not_configured" | "cron_token_not_configured" | "unauthorized";
       message: string;
     };
 
-export function requireAdminToken(request: NextRequest): AdminAuthResult {
-  const configuredToken = readOptionalEnv("ADMIN_API_TOKEN");
+function requireBearerToken(request: NextRequest, envName: "ADMIN_API_TOKEN" | "CRON_SECRET"): AdminAuthResult {
+  const configuredToken = readOptionalEnv(envName);
   if (!configuredToken) {
     return {
       ok: false,
-      code: "admin_token_not_configured",
-      message: "ADMIN_API_TOKEN is not configured.",
+      code: envName === "ADMIN_API_TOKEN" ? "admin_token_not_configured" : "cron_token_not_configured",
+      message: `${envName} is not configured.`,
     };
   }
 
@@ -53,10 +53,17 @@ export function requireAdminToken(request: NextRequest): AdminAuthResult {
     return {
       ok: false,
       code: "unauthorized",
-      message: "Missing or invalid admin token.",
+      message: "Missing or invalid bearer token.",
     };
   }
 
   return { ok: true };
 }
 
+export function requireAdminToken(request: NextRequest): AdminAuthResult {
+  return requireBearerToken(request, "ADMIN_API_TOKEN");
+}
+
+export function requireCronToken(request: NextRequest): AdminAuthResult {
+  return requireBearerToken(request, "CRON_SECRET");
+}

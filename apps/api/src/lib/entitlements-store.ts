@@ -750,3 +750,34 @@ export async function listPromoSplitSummary(
     activeEntitlementCount: row.active_entitlement_count,
   }));
 }
+
+export async function pruneRevokedLicenseBindings(
+  retentionDays = 60,
+): Promise<{ deletedCount: number }> {
+  if (!readDatabaseUrl()) {
+    throw new EntitlementStoreConfigError(
+      "database_not_configured",
+      "DATABASE_URL is not configured.",
+    );
+  }
+
+  const pool = await getDatabasePool();
+  await ensureSchema(pool);
+
+  const safeRetentionDays = Number.isFinite(retentionDays)
+    ? Math.max(1, Math.min(Math.floor(retentionDays), 3650))
+    : 60;
+
+  const result = await pool.query(
+    `
+      DELETE FROM license_bindings
+      WHERE revoked_at IS NOT NULL
+        AND revoked_at < NOW() - ($1::int * INTERVAL '1 day');
+    `,
+    [safeRetentionDays],
+  );
+
+  return {
+    deletedCount: result.rowCount ?? 0,
+  };
+}

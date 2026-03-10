@@ -443,3 +443,45 @@ export async function listMembershipWebhookDailyMetrics(
     cancelAtPeriodEndChangedCount: row.cancel_at_period_end_changed_count,
   }));
 }
+
+export async function pruneWebhookEvents(
+  retentionDays = 45,
+  provider: string | null = "whop",
+): Promise<{ deletedCount: number; skipped: boolean }> {
+  if (getWebhookStoreMode() !== "database") {
+    return {
+      deletedCount: 0,
+      skipped: true,
+    };
+  }
+
+  const pool = await getDatabasePool();
+  await ensureSchema(pool);
+
+  const safeRetentionDays = Number.isFinite(retentionDays)
+    ? Math.max(1, Math.min(Math.floor(retentionDays), 3650))
+    : 45;
+
+  const safeProvider = (provider ?? "").trim();
+  const result = safeProvider
+    ? await pool.query(
+        `
+          DELETE FROM webhook_events
+          WHERE provider = $1
+            AND received_at < NOW() - ($2::int * INTERVAL '1 day');
+        `,
+        [safeProvider, safeRetentionDays],
+      )
+    : await pool.query(
+        `
+          DELETE FROM webhook_events
+          WHERE received_at < NOW() - ($1::int * INTERVAL '1 day');
+        `,
+        [safeRetentionDays],
+      );
+
+  return {
+    deletedCount: result.rowCount ?? 0,
+    skipped: false,
+  };
+}

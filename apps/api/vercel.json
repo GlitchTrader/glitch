@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/internal/maintenance/prewarm/fundamentals",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/internal/maintenance/cleanup",
+      "schedule": "17 3 * * *"
+    }
+  ]
+}
