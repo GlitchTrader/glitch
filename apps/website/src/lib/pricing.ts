@@ -102,7 +102,7 @@ export const pricingPlans: PricingPlan[] = [
     title: "Own the operating layer",
     description:
       "Get the same premium Glitch stack without recurring billing when you already know this is core infrastructure.",
-    price: "$4,995",
+    price: "$2,450",
     priceSuffix: "one time",
     secondaryPrice: "No recurring bill",
     note: "One payment. Full premium access. Best fit for traders building a long-term operating stack.",

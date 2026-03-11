@@ -5,12 +5,14 @@ import { PricingCards } from "@/components/pricing-cards";
 import { SiteFooter } from "@/components/site-footer";
 import { marketingLinks } from "@/lib/marketing-links";
 import { freeTierPricingFeatures, paidAccessComparisonFeatures } from "@/lib/pricing";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = {
-  title: "Glitch Pricing - Free, Monthly or Annual, and Lifetime access",
+export const metadata = buildPageMetadata({
+  title: "Glitch Pricing - Free, Monthly or Annual, and Lifetime Access",
   description:
-    "Glitch pricing for prop traders: start free, choose monthly or yearly premium billing, or lock in lifetime access.",
-};
+    "Compare Glitch pricing for prop traders: start free, upgrade to monthly or annual premium access, or lock in lifetime access.",
+  path: "/pricing",
+});
 
 const faqItems = [
   {
@@ -70,7 +72,7 @@ export default function PricingPage() {
           <PricingCards className="mt-10" useAnchors />
           <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
             After checkout,{" "}
-            <Link href={marketingLinks.memberHubUrl} className="font-medium text-glitch-teal hover:underline">
+            <Link href={marketingLinks.memberHubUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-glitch-teal hover:underline">
               Member Hub
             </Link>{" "}
             is where downloads, onboarding, updates, and activation steps live.

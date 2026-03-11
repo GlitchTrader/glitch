@@ -766,3 +766,14 @@ To help make Turbopack better, report this error by clicking here: https://githu
  GET /affiliate 200 in 204ms (compile: 6ms, render: 198ms)
  GET /affiliate 200 in 141ms (compile: 16ms, render: 125ms)
  GET /affiliate 200 in 66ms (compile: 9ms, render: 57ms)
+✓ Compiled in 42ms
+✓ Compiled in 45ms
+✓ Compiled in 57ms
+✓ Compiled in 50ms
+✓ Compiled in 50ms
+✓ Compiled in 45ms
+✓ Compiled in 39ms
+✓ Compiled in 41ms
+✓ Compiled in 51ms
+✓ Compiled in 58ms
+✓ Compiled in 125ms

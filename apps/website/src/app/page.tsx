@@ -8,6 +8,14 @@ import { PricingCards } from "@/components/pricing-cards";
 import { SiteFooter } from "@/components/site-footer";
 import { marketingLinks } from "@/lib/marketing-links";
 import { freeTierFeatures, paidAccessFeatures } from "@/lib/pricing";
+import { buildPageMetadata } from "@/lib/seo";
+
+export const metadata = buildPageMetadata({
+  title: "Glitch - Prop Trading Assistant for NinjaTrader",
+  description:
+    "Glitch helps prop traders protect accounts, scale replication, and trade with Glitch Score, compliance controls, and performance insight.",
+  path: "/",
+});
 
 const faqItems = [
   {
@@ -163,13 +171,15 @@ export default function Home() {
               <div className="mt-6 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
                 <span className="rounded-full border border-zinc-200 px-3 py-1 dark:border-zinc-700">$95 / month</span>
                 <span className="rounded-full border border-zinc-200 px-3 py-1 dark:border-zinc-700">$995 / year</span>
-                <span className="rounded-full border border-zinc-200 px-3 py-1 dark:border-zinc-700">$4,995 one time</span>
+                <span className="rounded-full border border-zinc-200 px-3 py-1 dark:border-zinc-700">$2,450 one time</span>
               </div>
               <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
                 Choose monthly, annual, or lifetime at checkout.
               </p>
               <Link
                 href={marketingLinks.goProCheckoutUrl}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="mt-5 inline-flex h-11 items-center justify-center rounded-full bg-glitch-orange px-5 text-sm font-medium text-white hover:opacity-90"
               >
                 Go Pro
@@ -189,7 +199,7 @@ export default function Home() {
           <PricingCards className="mt-10" />
           <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
             Already joined?{" "}
-            <Link href={marketingLinks.memberHubUrl} className="font-medium text-glitch-teal hover:underline">
+            <Link href={marketingLinks.memberHubUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-glitch-teal hover:underline">
               Member Hub
             </Link>{" "}
             is where downloads, updates, and activation steps live.

@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = {
+export const metadata = buildPageMetadata({
   title: "Privacy Policy - Glitch",
-  description: "How Glitch collects, uses, and protects data across website, checkout, and member services.",
-};
+  description:
+    "Read how Glitch collects, uses, stores, and protects data across the website, checkout, member hub, and related services.",
+  path: "/privacy",
+});
 
 const LAST_UPDATED = "2026-03-11";
 

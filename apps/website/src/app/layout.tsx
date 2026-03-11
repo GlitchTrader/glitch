@@ -4,6 +4,20 @@ import Link from "next/link";
 import { marketingLinks } from "@/lib/marketing-links";
 import "./globals.css";
 
+const socialImagePath = "/images/Glitch%20Banner.png";
+
+function resolveMetadataBase(fallback: string) {
+  const value =
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+    process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+
+  if (!value) {
+    return new URL(fallback);
+  }
+
+  return new URL(value.startsWith("http") ? value : `https://${value}`);
+}
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -15,14 +29,35 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: resolveMetadataBase("https://www.glitchtrader.com"),
+  applicationName: "Glitch",
   title: "Glitch - Risk-First NinjaTrader AddOn for Prop Traders",
   description:
     "Glitch helps prop traders protect eval and funded accounts with compliance enforcement, replication guardrails, Glitch Score analytics, and macro context.",
+  keywords: [
+    "Glitch",
+    "NinjaTrader AddOn",
+    "prop trading assistant",
+    "trade replication",
+    "prop firm compliance",
+    "Glitch Score",
+  ],
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
+    siteName: "Glitch",
     title: "Glitch - Risk-First NinjaTrader AddOn for Prop Traders",
     description:
       "Protect accounts with compliance enforcement, replication guardrails, and multi-timeframe Glitch Score context.",
-    images: ["/images/Glitch Banner 4-1 .jpg"],
+    url: "/",
+    locale: "en_US",
+    images: [
+      {
+        url: socialImagePath,
+        alt: "Glitch trading assistant banner",
+      },
+    ],
     type: "website",
   },
   twitter: {
@@ -30,7 +65,7 @@ export const metadata: Metadata = {
     title: "Glitch - Risk-First NinjaTrader AddOn for Prop Traders",
     description:
       "Protect accounts with compliance enforcement, replication guardrails, and multi-timeframe Glitch Score context.",
-    images: ["/images/Glitch Banner 4-1 .jpg"],
+    images: [socialImagePath],
   },
   icons: {
     icon: "/images/Glitch%20Favicon.png",
@@ -52,12 +87,16 @@ function SiteHeader() {
         <nav className="flex items-center gap-4 text-sm md:hidden">
           <Link
             href={marketingLinks.goProCheckoutUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
           >
             Go Pro
           </Link>
           <Link
             href={marketingLinks.memberHubUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
           >
             Member Hub
@@ -90,12 +129,16 @@ function SiteHeader() {
           </Link>
           <Link
             href={marketingLinks.goProCheckoutUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
           >
             Go Pro
           </Link>
           <Link
             href={marketingLinks.memberHubUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
           >
             Member Hub

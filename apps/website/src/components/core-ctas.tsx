@@ -21,12 +21,16 @@ export function CoreCtas({ className, centered = false, compact = false }: CoreC
       </Link>
       <Link
         href={marketingLinks.goProCheckoutUrl}
+        target="_blank"
+        rel="noopener noreferrer"
         className={`inline-flex ${buttonHeight} items-center justify-center rounded-full bg-glitch-orange px-6 font-medium text-white transition-colors hover:opacity-90`}
       >
         Go Pro
       </Link>
       <Link
         href={marketingLinks.memberHubUrl}
+        target="_blank"
+        rel="noopener noreferrer"
         className={`inline-flex ${buttonHeight} items-center justify-center rounded-full border-2 border-glitch-teal bg-transparent px-6 font-medium text-glitch-teal transition-colors hover:bg-glitch-teal/10 dark:hover:bg-glitch-teal/20`}
       >
         Member Hub

@@ -4,7 +4,7 @@ export const marketingCopy = {
   freePriceLabel: "Free",
   monthlyPriceLabel: "$95/mo",
   annualPriceLabel: "$995/yr",
-  lifetimePriceLabel: "$4,995 lifetime",
+  lifetimePriceLabel: "$2,450 lifetime",
 };
 
 function readPublicUrl(name: string, fallback: string): string {

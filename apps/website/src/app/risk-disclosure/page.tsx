@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = {
+export const metadata = buildPageMetadata({
   title: "Risk Disclosure - Glitch",
-  description: "Important trading risk disclosure for futures, options, and prop firm trading environments.",
-};
+  description:
+    "Important trading risk disclosure for futures, options, NinjaTrader workflows, and prop firm trading environments.",
+  path: "/risk-disclosure",
+});
 
 const LAST_UPDATED = "2026-03-11";
 

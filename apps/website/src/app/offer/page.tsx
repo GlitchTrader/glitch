@@ -5,6 +5,7 @@ import { FaqList } from "@/components/faq-list";
 import { PricingCards } from "@/components/pricing-cards";
 import { SiteFooter } from "@/components/site-footer";
 import { marketingLinks } from "@/lib/marketing-links";
+import { buildPageMetadata } from "@/lib/seo";
 
 const offerFreeHighlights = [
   "Manual + auto replication",
@@ -24,11 +25,12 @@ const offerPaidHighlights = [
   "Bring your own indicators + bots",
 ];
 
-export const metadata = {
+export const metadata = buildPageMetadata({
   title: "Glitch Offer - Risk-First Trading Assistant for NinjaTrader",
   description:
-    "Explore the full Glitch offer: compliance enforcement, replication control, Glitch Score analytics, and Go Pro scale.",
-};
+    "Explore the Glitch offer: compliance enforcement, replication control, Glitch Score analytics, and premium scaling for prop traders.",
+  path: "/offer",
+});
 
 const faqItems = [
   {
@@ -188,7 +190,7 @@ export default function OfferPage() {
           <PricingCards className="mt-10" />
           <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
             Already joined?{" "}
-            <Link href={marketingLinks.memberHubUrl} className="font-medium text-glitch-teal hover:underline">
+            <Link href={marketingLinks.memberHubUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-glitch-teal hover:underline">
               Member Hub
             </Link>{" "}
             is where your downloads, updates, and onboarding steps live.

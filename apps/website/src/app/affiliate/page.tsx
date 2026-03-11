@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
 import { marketingLinks } from "@/lib/marketing-links";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = {
+export const metadata = buildPageMetadata({
   title: "Glitch Affiliate Program - Creator and Partner Commissions",
-  description: "Join the Glitch affiliate program: 20% commission, promo tiers, attribution rules, and payout governance.",
-};
+  description:
+    "Apply for the Glitch affiliate program and get commission details, promo rules, attribution terms, and access to affiliate links.",
+  path: "/affiliate",
+});
 
 export default function AffiliatePage() {
   return (

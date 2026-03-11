@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = {
+export const metadata = buildPageMetadata({
   title: "Terms of Service - Glitch",
-  description: "Glitch terms of service, billing policy, acceptable use, and liability disclaimers.",
-};
+  description:
+    "Review Glitch terms of service, billing policies, acceptable use rules, disclaimers, and liability limits.",
+  path: "/terms",
+});
 
 const LAST_UPDATED = "2026-03-11";
 

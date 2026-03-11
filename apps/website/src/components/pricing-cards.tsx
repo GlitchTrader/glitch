@@ -105,6 +105,7 @@ export function PricingCards({ className, useAnchors = false }: PricingCardsProp
             <p className={`text-sm leading-6 ${bodyToneClass[plan.tone]}`}>{plan.note}</p>
             <Link
               href={plan.ctaHref}
+              {...(plan.ctaHref.startsWith("http") ? { target: "_blank", rel: "noopener noreferrer" } : {})}
               className={`mt-6 inline-flex h-12 w-full items-center justify-center rounded-full px-6 text-center font-medium transition-colors ${buttonToneClass[plan.tone]}`}
             >
               {plan.ctaLabel}
