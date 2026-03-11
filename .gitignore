@@ -9,3 +9,4 @@ out/
 !.env.example
 .license_signing_private.pem
 .vercel/
+ninjatrader/Glitch/Strategies/
