@@ -15,6 +15,8 @@ export function CoreCtas({ className, centered = false, compact = false }: CoreC
     <div className={rowClass}>
       <Link
         href={marketingLinks.freeAccessUrl}
+        target="_blank"
+        rel="noopener noreferrer"
         className={`inline-flex ${buttonHeight} items-center justify-center rounded-full border border-zinc-300 px-6 font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900`}
       >
         Start Free

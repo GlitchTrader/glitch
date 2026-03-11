@@ -62,16 +62,18 @@ export default function AffiliatePage() {
             <a
               href={marketingLinks.affiliateDashboardUrl}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               className="inline-flex h-12 items-center justify-center rounded-full bg-glitch-orange px-6 font-medium text-white hover:opacity-90"
             >
-              Apply to become an affiliate
+              Affiliate Dashboard
             </a>
             <Link
-              href="/pricing"
+              href={marketingLinks.goProCheckoutUrl}
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex h-12 items-center justify-center rounded-full border border-zinc-300 px-6 font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
             >
-              Review pricing plans
+              Go Pro Product
             </Link>
           </div>
           <p className="mt-6 text-sm text-zinc-500 dark:text-zinc-400">
