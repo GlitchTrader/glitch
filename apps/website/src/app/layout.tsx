@@ -18,6 +18,11 @@ export const metadata: Metadata = {
   title: "Glitch - Risk-First NinjaTrader AddOn for Prop Traders",
   description:
     "Glitch helps prop traders protect eval and funded accounts with compliance controls, replication safety, and clearer multi-timeframe execution.",
+  icons: {
+    icon: "/images/Glitch%20Favicon.png",
+    shortcut: "/images/Glitch%20Favicon.png",
+    apple: "/images/Glitch%20Favicon.png",
+  },
 };
 
 function SiteHeader() {

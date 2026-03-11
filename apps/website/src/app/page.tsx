@@ -1,11 +1,25 @@
 import Link from "next/link";
+import Image from "next/image";
 import { marketingCopy, marketingLinks } from "@/lib/marketing-links";
+import { HeroScreenshotsCarousel } from "@/components/hero-screenshots-carousel";
 
 export default function Home() {
   return (
     <div className="min-h-screen bg-white font-sans text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+      <section aria-label="Glitch banner">
+        <Image
+          src="/images/Glitch Banner 4-1 .jpg"
+          alt="Glitch banner"
+          width={3438}
+          height={860}
+          priority
+          className="h-auto w-full"
+          sizes="100vw"
+        />
+      </section>
+
       <section className="border-b border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-4xl px-4 py-16 sm:px-6 sm:py-24">
+        <div className="mx-auto max-w-4xl px-4 pb-0 pt-16 sm:px-6 sm:pt-24">
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
             The Risk-First {marketingCopy.productName} Built for Prop Traders
           </h1>
@@ -13,6 +27,8 @@ export default function Home() {
             Glitch helps you reduce preventable rule breaches, control replication risk, and execute with cleaner
             multi-timeframe context.
           </p>
+        </div>
+        <div className="mx-auto max-w-4xl px-4 pb-0 pt-8 sm:px-6">
           <ul className="mt-8 space-y-2 text-zinc-700 dark:text-zinc-300">
             <li className="flex items-center gap-2">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-glitch-teal" />
@@ -47,6 +63,9 @@ export default function Home() {
               Already a member? Open Member Hub
             </Link>
           </div>
+        </div>
+        <div className="mt-16 pb-16 sm:pb-24">
+          <HeroScreenshotsCarousel />
         </div>
       </section>
 
