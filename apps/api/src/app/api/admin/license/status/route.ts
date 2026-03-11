@@ -12,7 +12,26 @@ import { buildPolicy, resolvePlanFromCode } from "@/lib/license-policy";
 
 export const runtime = "nodejs";
 
-export async function GET(request: NextRequest) {
+interface LicenseStatusPayload {
+  licenseKey: string;
+}
+
+function parsePayload(payload: unknown): LicenseStatusPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  if (typeof record.licenseKey !== "string" || record.licenseKey.trim().length === 0) {
+    return null;
+  }
+
+  return {
+    licenseKey: record.licenseKey.trim(),
+  };
+}
+
+export async function POST(request: NextRequest) {
   const requestId = getRequestId(request);
   const auth = requireAdminToken(request);
   if (!auth.ok) {
@@ -33,18 +52,31 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const licenseKey = request.nextUrl.searchParams.get("licenseKey")?.trim() ?? "";
-  if (!licenseKey) {
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch (error) {
     return errorResponse(
       requestId,
       400,
-      "invalid_query",
-      "Missing required query parameter: licenseKey.",
+      "invalid_json",
+      "Request body must be valid JSON.",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
+  const parsed = parsePayload(payload);
+  if (!parsed) {
+    return errorResponse(
+      requestId,
+      400,
+      "invalid_payload",
+      "Missing required field: licenseKey.",
     );
   }
 
   try {
-    const entitlement = await findWhopEntitlementByLicenseKey(licenseKey);
+    const entitlement = await findWhopEntitlementByLicenseKey(parsed.licenseKey);
     if (!entitlement) {
       return jsonResponse({
         ok: true,

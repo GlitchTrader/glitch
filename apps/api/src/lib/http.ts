@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { isProductionRuntime } from "@/lib/security-context";
 
 const noStoreHeaders = {
   "Cache-Control": "no-store, max-age=0",
@@ -47,14 +48,20 @@ export function errorResponse(
   code: string,
   message: string,
   details?: unknown,
+  {
+    includeDetails,
+  }: {
+    includeDetails?: boolean;
+  } = {},
 ): NextResponse {
+  const shouldIncludeDetails = includeDetails ?? !isProductionRuntime();
   return jsonResponse(
     {
       ok: false,
       error: {
         code,
         message,
-        details: details ?? null,
+        details: shouldIncludeDetails ? (details ?? null) : null,
       },
       requestId,
     },
@@ -64,4 +71,3 @@ export function errorResponse(
     },
   );
 }
-

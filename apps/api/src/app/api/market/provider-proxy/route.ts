@@ -10,6 +10,7 @@ import { buildPolicy, resolvePlanFromCode } from "@/lib/license-policy";
 import type { LicensePlan } from "@/lib/license-policy";
 import { readOptionalEnv } from "@/lib/env";
 import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -59,6 +60,28 @@ function isNonEmpty(value: unknown): value is string {
 
 function readDatabaseUrl(): string | null {
   return readOptionalEnv("DATABASE_URL");
+}
+
+function readRateLimitPerMinute(envName: string, fallback: number): number {
+  const raw = readOptionalEnv(envName);
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.max(1, Math.min(parsed, 20_000));
+}
+
+function getClientIp(request: NextRequest): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first) {
+      return first;
+    }
+  }
+
+  return "unknown";
 }
 
 function toMs(value: string | Date | null | undefined): number {
@@ -562,6 +585,31 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const ipLimit = readRateLimitPerMinute("PROVIDER_PROXY_RATE_LIMIT_PER_MINUTE_IP", 1800);
+  const ipRate = checkRateLimit(`provider_proxy:ip:${getClientIp(request)}`, ipLimit, 60_000);
+  if (!ipRate.allowed) {
+    return errorResponse(
+      requestId,
+      429,
+      "rate_limited",
+      "Too many requests. Please retry shortly.",
+      { retryAfterSeconds: ipRate.retryAfterSeconds },
+    );
+  }
+
+  const licenseLimit = readRateLimitPerMinute("PROVIDER_PROXY_RATE_LIMIT_PER_MINUTE_LICENSE", 900);
+  const licenseHash = createHash("sha256").update(parsed.licenseKey, "utf8").digest("hex");
+  const licenseRate = checkRateLimit(`provider_proxy:license:${licenseHash}`, licenseLimit, 60_000);
+  if (!licenseRate.allowed) {
+    return errorResponse(
+      requestId,
+      429,
+      "rate_limited",
+      "Too many requests. Please retry shortly.",
+      { retryAfterSeconds: licenseRate.retryAfterSeconds },
+    );
+  }
+
   try {
     const providerAccessCacheKey = buildProviderAccessCacheKey(
       parsed.licenseKey,
@@ -573,15 +621,15 @@ export async function POST(request: NextRequest) {
     if (!plan) {
       const entitlement = await findWhopEntitlementByLicenseKey(parsed.licenseKey);
       if (!entitlement) {
-        return errorResponse(requestId, 401, "license_not_found", "License key was not found.");
+        return errorResponse(requestId, 401, "unauthorized", "License validation failed.");
       }
 
       if (!isWhopEntitlementStatusActive(entitlement.status)) {
         return errorResponse(
           requestId,
           401,
-          "license_inactive",
-          `Membership is not active (${entitlement.status}).`,
+          "unauthorized",
+          "License validation failed.",
         );
       }
 
@@ -594,9 +642,8 @@ export async function POST(request: NextRequest) {
         return errorResponse(
           requestId,
           401,
-          "license_binding_invalid",
-          "License binding validation failed.",
-          bindingResult.reason,
+          "unauthorized",
+          "License validation failed.",
         );
       }
 

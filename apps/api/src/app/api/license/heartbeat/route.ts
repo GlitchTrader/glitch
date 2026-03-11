@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { NextRequest } from "next/server";
 import {
   EntitlementStoreConfigError,
@@ -5,11 +6,15 @@ import {
   isWhopEntitlementStatusActive,
   verifyLicenseBinding,
 } from "@/lib/entitlements-store";
-import { readBooleanEnv } from "@/lib/env";
+import { readBooleanEnv, readOptionalEnv } from "@/lib/env";
 import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
 import { getWebhookStoreMode } from "@/lib/idempotency-store";
 import { buildLicenseContractBody } from "@/lib/license-contract";
-import { resolvePlanFromCode } from "@/lib/license-policy";
+import { resolvePlanFromCode, buildPolicy, LICENSE_GRACE_WINDOW_SECONDS } from "@/lib/license-policy";
+import { validateAndConsumeLicenseNonce } from "@/lib/license-nonce-store";
+import { issueLicenseToken, isLicenseTokenSigningConfigured } from "@/lib/license-token";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { isProductionRuntime } from "@/lib/security-context";
 
 export const runtime = "nodejs";
 
@@ -19,11 +24,33 @@ interface LicenseHeartbeatRequest {
   installationId: string;
   clientVersion: string | null;
   nonce: string;
-  timestamp: string;
+  timestampMs: number;
 }
 
 function isNonEmpty(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function parseTimestampMs(timestampMs: unknown, timestampIso: unknown): number | null {
+  if (typeof timestampMs === "number" && Number.isFinite(timestampMs) && timestampMs > 0) {
+    return Math.floor(timestampMs);
+  }
+
+  if (isNonEmpty(timestampMs)) {
+    const parsed = Number.parseInt(timestampMs.trim(), 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  if (isNonEmpty(timestampIso)) {
+    const parsed = Date.parse(timestampIso.trim());
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  return null;
 }
 
 function parseLicenseHeartbeatPayload(payload: unknown): LicenseHeartbeatRequest | null {
@@ -32,10 +59,11 @@ function parseLicenseHeartbeatPayload(payload: unknown): LicenseHeartbeatRequest
   }
 
   const record = payload as Record<string, unknown>;
+  const parsedTimestampMs = parseTimestampMs(record.timestampMs, record.timestamp);
   if (
     !isNonEmpty(record.installationId) ||
     !isNonEmpty(record.nonce) ||
-    !isNonEmpty(record.timestamp)
+    !parsedTimestampMs
   ) {
     return null;
   }
@@ -48,8 +76,36 @@ function parseLicenseHeartbeatPayload(payload: unknown): LicenseHeartbeatRequest
     installationId: record.installationId.trim(),
     clientVersion: isNonEmpty(record.clientVersion) ? record.clientVersion.trim() : null,
     nonce: record.nonce.trim(),
-    timestamp: record.timestamp.trim(),
+    timestampMs: parsedTimestampMs,
   };
+}
+
+function readRateLimitPerMinute(envName: string, fallback: number): number {
+  const raw = readOptionalEnv(envName);
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.max(1, Math.min(parsed, 5000));
+}
+
+function getClientIp(request: NextRequest): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first) {
+      return first;
+    }
+  }
+
+  return "unknown";
+}
+
+function hashLicenseKey(licenseKey: string): string {
+  return createHash("sha256")
+    .update(licenseKey, "utf8")
+    .digest("hex");
 }
 
 function buildHeartbeatResponseBody(
@@ -70,17 +126,34 @@ function buildHeartbeatResponseBody(
     entitlementStatus: string | null;
   },
 ) {
+  const plan = resolvePlanFromCode(planCode);
+  const policy = buildPolicy(plan);
+  const graceUntil = Math.floor(Date.now() / 1000) + LICENSE_GRACE_WINDOW_SECONDS;
+  const licenseToken = issueLicenseToken({
+    installationId: parsed.installationId,
+    deviceFingerprintHash: parsed.deviceFingerprintHash ?? "",
+    plan: policy.plan,
+    features: policy.features,
+    limits: policy.limits,
+    policyVersion: policy.policyVersion,
+    sourcePlanCode: planCode,
+    entitlementStatus,
+    graceUntil,
+  });
+
   return buildLicenseContractBody({
     requestId,
     mode,
     installationId: parsed.installationId,
+    deviceFingerprintHash: parsed.deviceFingerprintHash ?? "",
     clientVersion: parsed.clientVersion,
     valid,
     status,
     reason,
-    plan: resolvePlanFromCode(planCode),
+    plan,
     entitlementStatus,
     sourcePlanCode: planCode,
+    licenseToken,
   });
 }
 
@@ -106,11 +179,77 @@ export async function POST(request: NextRequest) {
       requestId,
       400,
       "invalid_payload",
-      "Missing one or more required fields: installationId, nonce, timestamp. licenseKey and deviceFingerprintHash are optional in stub mode and required in database mode.",
+      "Missing one or more required fields: installationId, nonce, timestampMs.",
+    );
+  }
+
+  const ipLimit = readRateLimitPerMinute("LICENSE_HEARTBEAT_RATE_LIMIT_PER_MINUTE_IP", 360);
+  const ipRateCheck = checkRateLimit(`license_heartbeat:ip:${getClientIp(request)}`, ipLimit, 60_000);
+  if (!ipRateCheck.allowed) {
+    return errorResponse(
+      requestId,
+      429,
+      "rate_limited",
+      "Too many requests. Please retry shortly.",
+      { retryAfterSeconds: ipRateCheck.retryAfterSeconds },
+    );
+  }
+
+  if (parsed.licenseKey) {
+    const licenseLimit = readRateLimitPerMinute("LICENSE_HEARTBEAT_RATE_LIMIT_PER_MINUTE_LICENSE", 120);
+    const licenseRateCheck = checkRateLimit(
+      `license_heartbeat:license:${hashLicenseKey(parsed.licenseKey)}`,
+      licenseLimit,
+      60_000,
+    );
+    if (!licenseRateCheck.allowed) {
+      return errorResponse(
+        requestId,
+        429,
+        "rate_limited",
+        "Too many requests. Please retry shortly.",
+        { retryAfterSeconds: licenseRateCheck.retryAfterSeconds },
+      );
+    }
+  }
+
+  const nonceValidation = await validateAndConsumeLicenseNonce({
+    nonce: parsed.nonce,
+    installationId: parsed.installationId,
+    route: "license_heartbeat",
+    timestampMs: parsed.timestampMs,
+    maxClockSkewMs: 120_000,
+    replayTtlSeconds: 600,
+  });
+  if (!nonceValidation.ok) {
+    return errorResponse(
+      requestId,
+      401,
+      nonceValidation.reason,
+      "Request signature validation failed.",
+    );
+  }
+
+  const production = isProductionRuntime();
+  if (production && !isLicenseTokenSigningConfigured()) {
+    return errorResponse(
+      requestId,
+      503,
+      "service_misconfigured",
+      "License token signing is not configured.",
     );
   }
 
   if (getWebhookStoreMode() !== "database") {
+    if (production) {
+      return errorResponse(
+        requestId,
+        503,
+        "service_misconfigured",
+        "License service requires database mode in production.",
+      );
+    }
+
     const allowAll = readBooleanEnv("LICENSE_STUB_ALLOW_ALL", false);
     return jsonResponse(
       buildHeartbeatResponseBody(parsed, requestId, "stub", {
@@ -191,14 +330,11 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     if (error instanceof EntitlementStoreConfigError) {
-      return jsonResponse(
-        buildHeartbeatResponseBody(parsed, requestId, "database", {
-          valid: false,
-          status: "inactive",
-          reason: error.code,
-          planCode: "free_lite",
-          entitlementStatus: null,
-        }),
+      return errorResponse(
+        requestId,
+        503,
+        "service_misconfigured",
+        "License service is misconfigured.",
       );
     }
 
@@ -211,3 +347,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

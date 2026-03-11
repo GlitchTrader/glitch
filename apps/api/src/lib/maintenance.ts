@@ -1,6 +1,7 @@
 import { readOptionalEnv } from "@/lib/env";
 import { pruneRevokedLicenseBindings } from "@/lib/entitlements-store";
 import { pruneWebhookEvents } from "@/lib/idempotency-store";
+import { pruneLicenseNonces } from "@/lib/license-nonce-store";
 
 const globalMaintenancePoolKey = "__glitchMaintenanceDbPoolV1";
 
@@ -15,6 +16,7 @@ interface PgErrorLike {
 export interface MaintenanceCleanupSummary {
   webhookEventsDeleted: number;
   revokedBindingsDeleted: number;
+  licenseNoncesDeleted: number;
   providerCacheDeleted: number;
   marketCacheDeleted: number;
   providerCacheSkipped: boolean;
@@ -22,6 +24,7 @@ export interface MaintenanceCleanupSummary {
   retention: {
     webhookDays: number;
     revokedBindingDays: number;
+    licenseNonceSeconds: number;
     providerCacheSeconds: number;
     marketCacheSeconds: number;
   };
@@ -150,9 +153,17 @@ export async function runMaintenanceCleanup(): Promise<MaintenanceCleanupSummary
     604_800,
   );
 
-  const [webhookPrune, revokedBindingPrune] = await Promise.all([
+  const licenseNonceRetentionSeconds = readBoundedIntEnv(
+    "LICENSE_NONCE_RETENTION_SECONDS",
+    1200,
+    60,
+    86_400,
+  );
+
+  const [webhookPrune, revokedBindingPrune, noncePrune] = await Promise.all([
     pruneWebhookEvents(webhookRetentionDays, "whop"),
     pruneRevokedLicenseBindings(revokedBindingRetentionDays),
+    pruneLicenseNonces(licenseNonceRetentionSeconds),
   ]);
 
   const pool = await getMaintenancePool();
@@ -164,6 +175,7 @@ export async function runMaintenanceCleanup(): Promise<MaintenanceCleanupSummary
   return {
     webhookEventsDeleted: webhookPrune.deletedCount,
     revokedBindingsDeleted: revokedBindingPrune.deletedCount,
+    licenseNoncesDeleted: noncePrune.deletedCount,
     providerCacheDeleted: providerCachePrune.deletedCount,
     marketCacheDeleted: marketCachePrune.deletedCount,
     providerCacheSkipped: providerCachePrune.skipped,
@@ -171,6 +183,7 @@ export async function runMaintenanceCleanup(): Promise<MaintenanceCleanupSummary
     retention: {
       webhookDays: webhookRetentionDays,
       revokedBindingDays: revokedBindingRetentionDays,
+      licenseNonceSeconds: licenseNonceRetentionSeconds,
       providerCacheSeconds: providerCacheRetentionSeconds,
       marketCacheSeconds: marketCacheRetentionSeconds,
     },

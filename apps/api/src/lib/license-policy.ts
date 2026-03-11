@@ -1,4 +1,5 @@
 import { readBooleanEnv, readOptionalEnv } from "@/lib/env";
+import { isProductionRuntime } from "@/lib/security-context";
 
 export type LicensePlan = "free_lite" | "premium";
 
@@ -38,7 +39,11 @@ function parsePlanCodeSetFromEnv(envName: string): Set<string> {
 
 function readDefaultUnmappedPlan(): LicensePlan {
   const raw = (readOptionalEnv("WHOP_DEFAULT_ACTIVE_PLAN") ?? "").trim().toLowerCase();
-  return raw === "free_lite" ? "free_lite" : "premium";
+  if (raw === "premium") {
+    return "premium";
+  }
+
+  return "free_lite";
 }
 
 export function resolvePlanFromCode(planCode: string | null | undefined): LicensePlan {
@@ -57,7 +62,7 @@ export function resolvePlanFromCode(planCode: string | null | undefined): Licens
 
   const strictPlanMapping = readBooleanEnv(
     "WHOP_STRICT_PLAN_MAPPING",
-    explicitFreeLiteCodes.size > 0 || explicitPremiumCodes.size > 0,
+    isProductionRuntime() || explicitFreeLiteCodes.size > 0 || explicitPremiumCodes.size > 0,
   );
 
   if (strictPlanMapping) {

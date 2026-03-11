@@ -14,13 +14,14 @@ Next.js app serving backend endpoints for:
 - `POST /api/admin/license/revoke-binding` (admin token required)
 - `POST /api/admin/license/rebind` (admin token required)
 - `GET /api/admin/attribution/summary` (admin token required)
-- `GET /api/admin/license/status` (admin token required)
+- `POST /api/admin/license/status` (admin token required)
 - `GET /api/admin/license/bindings` (admin token required)
 - `GET /api/admin/metrics/funnel` (admin token required)
-- `GET /api/admin/dashboard/overview` (admin token required)
+- `GET /api/admin/dashboard/overview` (admin token required, metrics only)
+- `POST /api/admin/dashboard/overview` (admin token required, metrics + optional license lookup)
 
 Example:
-- `GET /api/admin/dashboard/overview?days=30&eventLimit=25&licenseKey=...`
+- `POST /api/admin/dashboard/overview` with `{ "days": 30, "eventLimit": 25, "licenseKey": "..." }`
 
 Admin auth header:
 - `Authorization: Bearer <ADMIN_API_TOKEN>`
@@ -59,12 +60,16 @@ Status lookup (admin):
 
 ```bash
 curl -H "Authorization: Bearer $ADMIN_API_TOKEN" \
-  "https://api.glitchtrader.com/api/admin/license/status?licenseKey=<LICENSE_KEY>"
+  -H "Content-Type: application/json" \
+  -d '{"licenseKey":"<LICENSE_KEY>"}' \
+  "https://api.glitchtrader.com/api/admin/license/status"
 ```
 
 Dashboard snapshot (admin):
 
 ```bash
 curl -H "Authorization: Bearer $ADMIN_API_TOKEN" \
-  "https://api.glitchtrader.com/api/admin/dashboard/overview?days=30&eventLimit=25&licenseKey=<LICENSE_KEY>"
+  -H "Content-Type: application/json" \
+  -d '{"days":30,"eventLimit":25,"licenseKey":"<LICENSE_KEY>"}' \
+  "https://api.glitchtrader.com/api/admin/dashboard/overview"
 ```

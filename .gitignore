@@ -7,4 +7,5 @@ out/
 .env
 .env.*
 !.env.example
+.license_signing_private.pem
 .vercel/

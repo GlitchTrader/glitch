@@ -12,6 +12,7 @@ interface BuildLicenseContractBodyInput {
   requestId: string;
   mode: LicenseMode;
   installationId: string;
+  deviceFingerprintHash: string;
   clientVersion?: string | null;
   valid: boolean;
   status: LicenseStatus;
@@ -20,6 +21,7 @@ interface BuildLicenseContractBodyInput {
   entitlementStatus?: string | null;
   sourcePlanCode?: string | null;
   nextCheckInSeconds?: number;
+  licenseToken?: string | null;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -55,8 +57,10 @@ export function buildLicenseContractBody(input: BuildLicenseContractBodyInput) {
       sourcePlanCode: input.sourcePlanCode ?? null,
       status: input.entitlementStatus ?? null,
     },
+    licenseToken: input.licenseToken ?? null,
     echo: {
       installationId: input.installationId,
+      deviceFingerprintHash: input.deviceFingerprintHash,
       clientVersion: input.clientVersion ?? null,
     },
   };

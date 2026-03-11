@@ -1,9 +1,18 @@
 import { jsonResponse } from "@/lib/http";
 import { getWebhookStoreMode } from "@/lib/idempotency-store";
+import { isProductionRuntime } from "@/lib/security-context";
 
 export const runtime = "nodejs";
 
 export async function GET() {
+  if (isProductionRuntime()) {
+    return jsonResponse({
+      ok: true,
+      service: "glitch-api",
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   return jsonResponse({
     ok: true,
     service: "glitch-api",
