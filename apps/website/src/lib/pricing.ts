@@ -19,20 +19,42 @@ export type PricingPlan = {
 };
 
 export const freeTierFeatures = [
-  "Manual and automated replication",
+  "Manual replication controls",
+  "Automated replication controls",
   "Compliance enforcement",
-  "1 master group with up to 2 followers",
+  "1 master group included",
+  "Up to 2 follower accounts",
   "Risk control indicators",
   "Preloaded prop firm rules",
+  "Chart Trader Replicate and Flatten All controls",
+  "Core assistant layer for disciplined prop trading",
+];
+
+export const freeTierPricingFeatures = [
+  "Manual + auto replication",
+  "Compliance + firm rules",
+  "1 master + 2 followers",
+  "Risk control indicators",
+  "Replicate + Flatten All",
+  "Core assistant layer",
+];
+
+export const paidAccessComparisonFeatures = [
+  "10 groups + 100 followers each",
+  "Glitch Score across 1m, 5m, 15m, and 60m",
+  "Journal, Metrics + Insights",
+  "Technical, macro + sentiment context",
+  "Nasdaq + Mag7 enriched data",
+  "Bring your own indicators + bots",
 ];
 
 export const paidAccessFeatures = [
   "Up to 10 groups / masters",
   "Up to 100 followers per group",
-  "GlitchScore with 1m, 5m, 15m, and 60m dials",
+  "Glitch Score across 1m, 5m, 15m, and 60m timeframes",
   "Journal, Metrics, and Insights performance engine",
   "Regime, technical, order-flow, fundamental, and macro context",
-  "Nasdaq and Mag7 enriched data plus news sentiment overlays",
+  "Nasdaq + Mag7 enriched data + news sentiment overlays",
   "Bring your own indicators, strategies, and bots",
 ];
 
@@ -45,12 +67,12 @@ export const pricingPlans: PricingPlan[] = [
       "Protect accounts, validate the workflow, and get the core assistant layer running before you pay.",
     price: "$0",
     priceSuffix: "to start",
-    secondaryPrice: "No credit card required",
+    secondaryPrice: "Fast onboarding",
     note: "Install quickly, learn the workflow, and upgrade only when the operation is ready for more scale.",
     ctaLabel: "Start Free",
     ctaHref: marketingLinks.freeAccessUrl,
     tone: "neutral",
-    features: freeTierFeatures,
+    features: freeTierPricingFeatures,
   },
   {
     id: "go-pro",
@@ -62,21 +84,21 @@ export const pricingPlans: PricingPlan[] = [
     priceSuffix: "/ month",
     secondaryPrice: "or $995 / year",
     note: "Choose monthly or yearly in checkout. Same premium toolset either way.",
-    ctaLabel: "Choose Monthly or Annual",
+    ctaLabel: "Go Pro",
     ctaHref: marketingLinks.goProCheckoutUrl,
     tone: "featured",
     badge: "Most popular",
     features: [
       "Up to 10 groups / masters",
       "Up to 100 followers per group",
-      "GlitchScore with 1m, 5m, 15m, and 60m dials",
+      "Glitch Score across 1m, 5m, 15m, and 60m timeframes",
       "Journal, Metrics, and Insights engine",
       "Nasdaq, Mag7, macro, and news sentiment context",
     ],
   },
   {
-    id: "life-time-access",
-    eyebrow: "Life time access",
+    id: "lifetime-access",
+    eyebrow: "Lifetime access",
     title: "Own the operating layer",
     description:
       "Get the same premium Glitch stack without recurring billing when you already know this is core infrastructure.",
@@ -84,7 +106,7 @@ export const pricingPlans: PricingPlan[] = [
     priceSuffix: "one time",
     secondaryPrice: "No recurring bill",
     note: "One payment. Full premium access. Best fit for traders building a long-term operating stack.",
-    ctaLabel: "Get Life time access",
+    ctaLabel: "Get Lifetime Access",
     ctaHref: marketingLinks.lifetimeCheckoutUrl,
     tone: "premium",
     features: [

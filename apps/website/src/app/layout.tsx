@@ -17,11 +17,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Glitch - Risk-First NinjaTrader AddOn for Prop Traders",
   description:
-    "Glitch helps prop traders protect eval and funded accounts with compliance enforcement, replication guardrails, GlitchScore analytics, and macro context.",
+    "Glitch helps prop traders protect eval and funded accounts with compliance enforcement, replication guardrails, Glitch Score analytics, and macro context.",
   openGraph: {
     title: "Glitch - Risk-First NinjaTrader AddOn for Prop Traders",
     description:
-      "Protect accounts with compliance enforcement, replication guardrails, and multi-timeframe GlitchScore context.",
+      "Protect accounts with compliance enforcement, replication guardrails, and multi-timeframe Glitch Score context.",
     images: ["/images/Glitch Banner 4-1 .jpg"],
     type: "website",
   },
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Glitch - Risk-First NinjaTrader AddOn for Prop Traders",
     description:
-      "Protect accounts with compliance enforcement, replication guardrails, and multi-timeframe GlitchScore context.",
+      "Protect accounts with compliance enforcement, replication guardrails, and multi-timeframe Glitch Score context.",
     images: ["/images/Glitch Banner 4-1 .jpg"],
   },
   icons: {

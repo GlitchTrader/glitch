@@ -21,6 +21,7 @@ export const marketingLinks = {
   goProCheckoutUrl: readPublicUrl("NEXT_PUBLIC_WHOP_GO_PRO_CHECKOUT_URL", "/pricing#go-pro"),
   monthlyCheckoutUrl: readPublicUrl("NEXT_PUBLIC_WHOP_CHECKOUT_MONTHLY_URL", "/pricing"),
   annualCheckoutUrl: readPublicUrl("NEXT_PUBLIC_WHOP_CHECKOUT_ANNUAL_URL", "/pricing?plan=annual"),
-  lifetimeCheckoutUrl: readPublicUrl("NEXT_PUBLIC_WHOP_CHECKOUT_LIFETIME_URL", "/pricing#life-time-access"),
+  lifetimeCheckoutUrl: readPublicUrl("NEXT_PUBLIC_WHOP_CHECKOUT_LIFETIME_URL", "/pricing#lifetime-access"),
+  affiliateDashboardUrl: readPublicUrl("NEXT_PUBLIC_WHOP_AFFILIATE_URL", "https://whop.com/affiliates/dashboard/"),
   memberHubUrl: readPublicUrl("NEXT_PUBLIC_WHOP_MEMBER_HUB_URL", "https://whop.com/joined/glitchtrader/"),
 };

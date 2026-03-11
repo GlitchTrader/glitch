@@ -4,19 +4,19 @@ import { FaqList } from "@/components/faq-list";
 import { PricingCards } from "@/components/pricing-cards";
 import { SiteFooter } from "@/components/site-footer";
 import { marketingLinks } from "@/lib/marketing-links";
-import { freeTierFeatures, paidAccessFeatures } from "@/lib/pricing";
+import { freeTierPricingFeatures, paidAccessComparisonFeatures } from "@/lib/pricing";
 
 export const metadata = {
-  title: "Glitch Pricing - Free, Monthly or Annual, and Life time access",
+  title: "Glitch Pricing - Free, Monthly or Annual, and Lifetime access",
   description:
-    "Glitch pricing for prop traders: start free, choose monthly or yearly premium billing, or lock in life time access.",
+    "Glitch pricing for prop traders: start free, choose monthly or yearly premium billing, or lock in lifetime access.",
 };
 
 const faqItems = [
   {
-    question: "What is the difference between Monthly / Annual and Life time access?",
+    question: "What is the difference between Monthly / Annual and Lifetime access?",
     answer:
-      "The premium product is the same. Monthly / Annual gives you flexible billing. Life time access gives you the same premium stack with one payment and no recurring charge.",
+      "The premium product is the same. Monthly / Annual gives you flexible billing. Lifetime access gives you the same premium stack with one payment and no recurring charge.",
   },
   {
     question: "Can I start free and upgrade later?",
@@ -26,7 +26,7 @@ const faqItems = [
   {
     question: "Do all paid plans include the full premium toolset?",
     answer:
-      "Yes. Monthly, yearly, and life time access all unlock the same premium compliance, replication, analytics, and insight stack.",
+      "Yes. Monthly, yearly, and lifetime access all unlock the same premium compliance, replication, analytics, and insight stack.",
   },
   {
     question: "Can I use my own indicators and automation stack?",
@@ -65,7 +65,7 @@ export default function PricingPage() {
           <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">Straight pricing for serious operators.</h1>
           <p className="mt-4 max-w-3xl text-zinc-600 dark:text-zinc-400">
             Three plans. Clear trade-offs. Free gets you the guardrails. Monthly / Annual gives you the full premium
-            stack with flexible billing. Life time access gives you the same premium stack without recurring charges.
+            stack with flexible billing. Lifetime access gives you the same premium stack without recurring charges.
           </p>
           <PricingCards className="mt-10" useAnchors />
           <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
@@ -86,22 +86,33 @@ export default function PricingPage() {
             serious multi-account trading.
           </p>
           <div className="mt-8 grid gap-8 lg:grid-cols-2">
-            <div className="rounded-[1.75rem] border border-zinc-200 bg-white p-6 sm:p-8 dark:border-zinc-800 dark:bg-zinc-900/80">
+            <div className="flex h-full flex-col rounded-[1.75rem] border border-zinc-200 bg-white p-6 sm:p-8 dark:border-zinc-800 dark:bg-zinc-900/80">
               <h3 className="text-lg font-semibold">Free foundation</h3>
               <div className="mt-4">
-                <CheckList items={freeTierFeatures} />
+                <CheckList items={freeTierPricingFeatures} />
+              </div>
+              <div className="mt-8 border-t border-zinc-200 pt-5 dark:border-zinc-800">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Best for</p>
+                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                  Traders validating the workflow, building discipline, and protecting accounts before scaling.
+                </p>
               </div>
             </div>
-            <div className="rounded-[1.75rem] border border-glitch-teal/50 bg-glitch-teal/5 p-6 sm:p-8 dark:bg-glitch-teal/10">
+            <div className="flex h-full flex-col rounded-[1.75rem] border border-glitch-teal/50 bg-glitch-teal/5 p-6 sm:p-8 dark:bg-glitch-teal/10">
               <h3 className="text-lg font-semibold">Every paid plan unlocks</h3>
               <div className="mt-4">
-                <CheckList items={paidAccessFeatures} />
+                <CheckList items={paidAccessComparisonFeatures} />
+              </div>
+              <div className="mt-8 border-t border-glitch-teal/20 pt-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-glitch-teal">Best for</p>
+                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                  Traders running larger account stacks, deeper analysis, and faster review loops.
+                </p>
               </div>
             </div>
           </div>
           <div className="mt-8 rounded-[1.75rem] border border-zinc-200 bg-zinc-50 p-6 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-400">
-            Monthly, yearly, and life time access all unlock the premium toolset. The only difference is how you want
-            to pay for it.
+            Monthly, yearly, and lifetime access all unlock the same premium stack. Only the billing model changes.
           </div>
         </div>
       </section>
@@ -110,10 +121,10 @@ export default function PricingPage() {
         <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-20">
           <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">How access works</h2>
           <div className="mt-8 grid gap-8 lg:grid-cols-2">
-            <div className="rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
+            <div className="rounded-[1.75rem] border border-zinc-200 p-6 dark:border-zinc-800">
               <h3 className="font-semibold">Upgrade flow</h3>
               <ol className="mt-4 list-inside list-decimal space-y-2 text-zinc-600 dark:text-zinc-400">
-                <li>Choose Free, Monthly / Annual, or Life time access.</li>
+                <li>Choose Free, Monthly / Annual, or Lifetime access.</li>
                 <li>Complete checkout, then open Member Hub.</li>
                 <li>Download the latest build and activate your license.</li>
                 <li>Launch Glitch and configure your workflow.</li>
@@ -121,7 +132,7 @@ export default function PricingPage() {
               </ol>
             </div>
 
-            <div className="rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
+            <div className="rounded-[1.75rem] border border-zinc-200 p-6 dark:border-zinc-800">
               <h3 className="font-semibold">Roadmap</h3>
               <CheckList
                 className="mt-4"

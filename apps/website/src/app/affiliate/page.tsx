@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
+import { marketingLinks } from "@/lib/marketing-links";
 
 export const metadata = {
   title: "Glitch Affiliate Program - Creator and Partner Commissions",
@@ -56,7 +57,9 @@ export default function AffiliatePage() {
 
           <div className="glitch-cta-row mt-10">
             <a
-              href="#apply"
+              href={marketingLinks.affiliateDashboardUrl}
+              target="_blank"
+              rel="noreferrer"
               className="inline-flex h-12 items-center justify-center rounded-full bg-glitch-orange px-6 font-medium text-white hover:opacity-90"
             >
               Apply to become an affiliate
@@ -69,8 +72,7 @@ export default function AffiliatePage() {
             </Link>
           </div>
           <p className="mt-6 text-sm text-zinc-500 dark:text-zinc-400">
-            Application form is being finalized. For early access, contact us with your channel, audience profile, and
-            promotion style.
+            This opens Whop&apos;s affiliate dashboard, where approved offers expose your unique referral link and assets.
           </p>
           <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
             Participation in the affiliate program is subject to our{" "}

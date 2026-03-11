@@ -36,14 +36,14 @@ const faqItems = [
       "Paid access supports up to 10 masters/groups and up to 100 followers per group, designed for serious multi-account operations.",
   },
   {
-    question: "What is GlitchScore?",
+    question: "What is Glitch Score?",
     answer:
-      "GlitchScore is Glitch's composite signal layer that consolidates multi-timeframe context so you can read conditions faster and with more structure.",
+      "Glitch Score is Glitch's composite signal layer that consolidates multi-timeframe context so you can read conditions faster and with more structure.",
   },
   {
     question: "How do the paid plans work?",
     answer:
-      "Choose Monthly / Annual if you want flexible billing, or choose Life time access if you want one payment. After checkout, Member Hub handles download, updates, and activation.",
+      "Choose Monthly / Annual for flexible billing, or Lifetime access for one payment. After checkout, Member Hub handles download, updates, and activation.",
   },
   {
     question: "Is there a marketplace coming?",
@@ -75,7 +75,7 @@ export default function Home() {
       <section className="border-b border-zinc-200 dark:border-zinc-800">
         <div className="mx-auto max-w-6xl px-4 pb-0 pt-12 sm:px-6 sm:pt-24">
           <p className="inline-flex rounded-full border border-glitch-teal/40 bg-glitch-teal/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-glitch-teal">
-            Category-Defining Prop Trading Assistant
+            Prop Trading Assistant for NinjaTrader
           </p>
           <h1 className="mt-4 max-w-4xl text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
             The Risk-First Operating System for Prop Traders
@@ -89,10 +89,11 @@ export default function Home() {
             replication, analytics, and performance intelligence in one assistant layer.
           </p>
           <div className="mt-5 flex flex-wrap gap-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            <span className="rounded-full border border-zinc-200 px-3 py-1 dark:border-zinc-700">GlitchScore Dials</span>
-            <span className="rounded-full border border-zinc-200 px-3 py-1 dark:border-zinc-700">Compliance System</span>
+            <span className="rounded-full border border-zinc-200 px-3 py-1 dark:border-zinc-700">Glitch Score</span>
+            <span className="rounded-full border border-zinc-200 px-3 py-1 dark:border-zinc-700">Compliance Layer</span>
             <span className="rounded-full border border-zinc-200 px-3 py-1 dark:border-zinc-700">Replication Control</span>
-            <span className="rounded-full border border-zinc-200 px-3 py-1 dark:border-zinc-700">Journal + Insights</span>
+            <span className="rounded-full border border-zinc-200 px-3 py-1 dark:border-zinc-700">Real-Time Analysis</span>
+            <span className="rounded-full border border-zinc-200 px-3 py-1 dark:border-zinc-700">Performance + Insights</span>
           </div>
           <CoreCtas className="mt-10" />
         </div>
@@ -132,7 +133,7 @@ export default function Home() {
 
       <section className="border-b border-zinc-200 dark:border-zinc-800">
         <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-20">
-          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Feature tiers built for real growth</h2>
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Glitch helps you grow faster</h2>
           <p className="mt-3 max-w-3xl text-zinc-600 dark:text-zinc-400">
             Start with protection. Upgrade to paid access when you want scale, deeper signal context, and
             higher-account-count operations.
@@ -165,7 +166,7 @@ export default function Home() {
                 <span className="rounded-full border border-zinc-200 px-3 py-1 dark:border-zinc-700">$4,995 one time</span>
               </div>
               <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-                Choose Monthly / Annual or Life time access in the pricing section below.
+                Choose monthly, annual, or lifetime at checkout.
               </p>
               <Link
                 href={marketingLinks.goProCheckoutUrl}
@@ -182,7 +183,7 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-20">
           <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Pricing that respects how traders actually buy</h2>
           <p className="mt-3 max-w-3xl text-zinc-600 dark:text-zinc-400">
-            Free for proof. Flexible billing when you want premium power. Life time access when Glitch becomes part of
+            Free for proof. Flexible billing when you want premium power. Lifetime access when Glitch becomes part of
             the business.
           </p>
           <PricingCards className="mt-10" />
@@ -203,7 +204,7 @@ export default function Home() {
             <div className="rounded-2xl border border-zinc-200 p-6 dark:border-zinc-800">
               <h3 className="font-semibold">Activation flow</h3>
               <ol className="mt-4 list-inside list-decimal space-y-2 text-zinc-600 dark:text-zinc-400">
-                <li>Choose Free, Monthly / Annual, or Life time access.</li>
+                <li>Choose Free, Monthly / Annual, or Lifetime access.</li>
                 <li>Open Member Hub and follow Start Here.</li>
                 <li>Download and install the latest Glitch build.</li>
                 <li>Open New &gt; Glitch in NinjaTrader.</li>
@@ -215,7 +216,7 @@ export default function Home() {
               <ol className="mt-4 list-inside list-decimal space-y-2 text-zinc-600 dark:text-zinc-400">
                 <li>Review risk status, warning count, and account posture.</li>
                 <li>Validate replication and compliance before session open.</li>
-                <li>Read GlitchScore dials and macro context before execution.</li>
+                <li>Read Glitch Score and macro context before execution.</li>
                 <li>Journal outcomes and review metrics after the close.</li>
                 <li>Iterate process weekly. Professionals review, amateurs react.</li>
               </ol>
@@ -232,22 +233,6 @@ export default function Home() {
           </p>
           <div className="mt-6">
             <FaqList items={faqItems} />
-          </div>
-        </div>
-      </section>
-
-      <section className="border-b border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-20">
-          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Roadmap: where this category goes next</h2>
-          <div className="mt-6 rounded-2xl border border-zinc-200 p-6 dark:border-zinc-800">
-            <CheckList
-              items={[
-                "Marketplace for third-party indicators",
-                "Marketplace for third-party strategies",
-                "Integrated partner prop firm offers",
-                "Unified trading assistant workflows from setup to scale",
-              ]}
-            />
           </div>
         </div>
       </section>

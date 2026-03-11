@@ -71,7 +71,7 @@ export function PricingCards({ className, useAnchors = false }: PricingCardsProp
                 {plan.eyebrow}
               </p>
               {plan.badge ? (
-                <span className="inline-flex rounded-full border border-glitch-orange/40 bg-glitch-orange/10 px-3 py-1 text-xs font-semibold text-glitch-orange">
+                <span className="relative -top-[5px] -mb-[7px] inline-flex rounded-full border border-glitch-orange/40 bg-glitch-orange/10 px-3 py-1 text-xs font-semibold text-glitch-orange">
                   {plan.badge}
                 </span>
               ) : null}

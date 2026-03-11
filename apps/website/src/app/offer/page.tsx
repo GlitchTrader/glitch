@@ -5,12 +5,29 @@ import { FaqList } from "@/components/faq-list";
 import { PricingCards } from "@/components/pricing-cards";
 import { SiteFooter } from "@/components/site-footer";
 import { marketingLinks } from "@/lib/marketing-links";
-import { freeTierFeatures, paidAccessFeatures } from "@/lib/pricing";
+
+const offerFreeHighlights = [
+  "Manual + auto replication",
+  "Compliance + firm rules",
+  "1 master + 2 followers",
+  "Risk control indicators",
+  "Replicate + Flatten All",
+  "Core assistant layer",
+];
+
+const offerPaidHighlights = [
+  "10 groups + 100 followers each",
+  "Glitch Score across 1m, 5m, 15m, and 60m",
+  "Journal, Metrics + Insights",
+  "Technical, macro + sentiment context",
+  "Nasdaq + Mag7 enriched data",
+  "Bring your own indicators + bots",
+];
 
 export const metadata = {
   title: "Glitch Offer - Risk-First Trading Assistant for NinjaTrader",
   description:
-    "Explore the full Glitch offer: compliance enforcement, replication control, GlitchScore analytics, and Go Pro scale.",
+    "Explore the full Glitch offer: compliance enforcement, replication control, Glitch Score analytics, and Go Pro scale.",
 };
 
 const faqItems = [
@@ -35,9 +52,9 @@ const faqItems = [
       "Scale, depth, and speed: higher account limits, stronger context layers, and a serious feedback loop through Journal, Metrics, and Insights.",
   },
   {
-    question: "How do monthly, yearly, and life time access work?",
+    question: "How do monthly, yearly, and lifetime access work?",
     answer:
-      "Monthly and yearly sit inside the flexible paid plan. Life time access is the one-payment option. Both unlock the same premium Glitch stack.",
+      "Monthly and yearly sit inside the flexible paid plan. Lifetime access is the one-payment option. Both unlock the same premium Glitch stack.",
   },
   {
     question: "Do you promise payouts or profits?",
@@ -87,18 +104,30 @@ export default function OfferPage() {
         <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-20">
           <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Start free. Upgrade when the business case is clear.</h2>
           <div className="mt-8 grid gap-8 lg:grid-cols-2">
-            <div id="free-tier" className="rounded-2xl border-2 border-zinc-200 p-6 sm:p-8 dark:border-zinc-700">
+            <div id="free-tier" className="flex h-full flex-col rounded-2xl border-2 border-zinc-200 p-6 sm:p-8 dark:border-zinc-700">
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Start Free</p>
               <h3 className="mt-2 text-xl font-semibold">Core account protection</h3>
               <div className="mt-4">
-                <CheckList items={freeTierFeatures} />
+                <CheckList items={offerFreeHighlights} />
+              </div>
+              <div className="mt-8 border-t border-zinc-200 pt-5 dark:border-zinc-800">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">Best for</p>
+                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                  Traders validating the workflow, building discipline, and protecting accounts before scaling.
+                </p>
               </div>
             </div>
-            <div id="go-pro" className="rounded-2xl border-2 border-glitch-teal bg-glitch-teal/5 p-6 sm:p-8 dark:bg-glitch-teal/10">
+            <div id="go-pro" className="flex h-full flex-col rounded-2xl border-2 border-glitch-teal bg-glitch-teal/5 p-6 sm:p-8 dark:bg-glitch-teal/10">
               <p className="text-xs font-semibold uppercase tracking-wide text-glitch-teal">Go Pro</p>
               <h3 className="mt-2 text-xl font-semibold">Scale, depth, and precision</h3>
               <div className="mt-4">
-                <CheckList items={paidAccessFeatures} />
+                <CheckList items={offerPaidHighlights} />
+              </div>
+              <div className="mt-8 border-t border-glitch-teal/20 pt-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-glitch-teal">Best for</p>
+                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                  Traders running larger account stacks, deeper analysis, and faster review loops.
+                </p>
               </div>
             </div>
           </div>
@@ -107,7 +136,7 @@ export default function OfferPage() {
 
       <section className="border-b border-zinc-200 dark:border-zinc-800">
         <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-20">
-          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">What makes Glitch category-defining</h2>
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">What makes Glitch tick</h2>
           <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
               <h3 className="font-semibold text-glitch-teal">Compliance enforcement</h3>
@@ -122,7 +151,7 @@ export default function OfferPage() {
               </p>
             </div>
             <div className="rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
-              <h3 className="font-semibold text-glitch-teal">GlitchScore dials</h3>
+              <h3 className="font-semibold text-glitch-teal">Glitch Score</h3>
               <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
                 Structured directional context across multiple timeframes, reducing signal noise and emotional entries.
               </p>
@@ -153,7 +182,7 @@ export default function OfferPage() {
         <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-20">
           <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Pricing in one clean view</h2>
           <p className="mt-3 max-w-3xl text-zinc-600 dark:text-zinc-400">
-            Free gets you started. Monthly / Annual gives you flexible premium access. Life time access is the permanent
+            Free gets you started. Monthly / Annual gives you flexible premium access. Lifetime access is the permanent
             seat for traders who already know Glitch belongs in the stack.
           </p>
           <PricingCards className="mt-10" />
