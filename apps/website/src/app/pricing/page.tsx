@@ -1,111 +1,156 @@
 import Link from "next/link";
-import { marketingCopy, marketingLinks } from "@/lib/marketing-links";
+import { CheckList } from "@/components/check-list";
+import { FaqList } from "@/components/faq-list";
+import { PricingCards } from "@/components/pricing-cards";
+import { SiteFooter } from "@/components/site-footer";
+import { marketingLinks } from "@/lib/marketing-links";
+import { freeTierFeatures, paidAccessFeatures } from "@/lib/pricing";
 
 export const metadata = {
-  title: "Pricing - Glitch",
-  description: "Glitch membership: $95/mo or $995/yr. One plan, full access. Cancel anytime.",
+  title: "Glitch Pricing - Free, Monthly or Annual, and Life time access",
+  description:
+    "Glitch pricing for prop traders: start free, choose monthly or yearly premium billing, or lock in life time access.",
 };
+
+const faqItems = [
+  {
+    question: "What is the difference between Monthly / Annual and Life time access?",
+    answer:
+      "The premium product is the same. Monthly / Annual gives you flexible billing. Life time access gives you the same premium stack with one payment and no recurring charge.",
+  },
+  {
+    question: "Can I start free and upgrade later?",
+    answer:
+      "Yes. Start free, validate fit, and upgrade when the workflow has earned a bigger role in your operation.",
+  },
+  {
+    question: "Do all paid plans include the full premium toolset?",
+    answer:
+      "Yes. Monthly, yearly, and life time access all unlock the same premium compliance, replication, analytics, and insight stack.",
+  },
+  {
+    question: "Can I use my own indicators and automation stack?",
+    answer:
+      "Yes. Glitch is designed to sit on top of your existing setup as the risk and execution assistant layer.",
+  },
+  {
+    question: "Is Glitch suitable for high account-count operations?",
+    answer:
+      "Yes. Paid access supports up to 10 masters/groups and up to 100 followers per group for serious scaling.",
+  },
+  {
+    question: "Where do download and activation happen?",
+    answer:
+      "Inside Member Hub. That is where you access the latest build, onboarding steps, updates, and activation guidance after joining.",
+  },
+  {
+    question: "Do promo codes stack?",
+    answer: "No. One promo code per order.",
+  },
+  {
+    question: "Is marketplace support coming?",
+    answer:
+      "Yes. The roadmap includes third-party indicators, strategies, and partner prop firm offers in a unified marketplace.",
+  },
+];
 
 export default function PricingPage() {
   return (
     <div className="min-h-screen bg-white font-sans text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
       <section className="border-b border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-4xl px-4 py-16 sm:px-6 sm:py-24">
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Pricing</h1>
-          <p className="mt-4 text-zinc-600 dark:text-zinc-400">
-            One membership. Full access to the {marketingCopy.productName}, analytics module, macro context, firm rules,
-            and support. Cancel anytime.
+        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-24">
+          <p className="inline-flex rounded-full border border-glitch-teal/40 bg-glitch-teal/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-glitch-teal">
+            Pricing
           </p>
-
-          <div className="mt-12 grid gap-8 sm:grid-cols-2">
-            <div className="rounded-2xl border-2 border-zinc-200 bg-white p-8 dark:border-zinc-700 dark:bg-zinc-900">
-              <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Monthly</p>
-              <p className="mt-2 text-4xl font-bold">
-                $95<span className="text-xl font-normal text-zinc-500">/mo</span>
-              </p>
-              <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">Billed monthly. Cancel anytime.</p>
-              <Link
-                href={marketingLinks.monthlyCheckoutUrl}
-                className="mt-6 inline-block w-full rounded-full bg-glitch-orange py-3 text-center font-medium text-white hover:opacity-90"
-              >
-                Start at {marketingCopy.monthlyPriceLabel}
-              </Link>
-            </div>
-
-            <div className="rounded-2xl border-2 border-glitch-teal bg-glitch-teal/5 p-8 dark:bg-glitch-teal/10">
-              <p className="text-sm font-medium text-glitch-teal">Best value</p>
-              <p className="mt-2 text-4xl font-bold">
-                $995<span className="text-xl font-normal text-zinc-500 dark:text-zinc-400">/yr</span>
-              </p>
-              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">Save $145/yr vs monthly. Billed annually.</p>
-              <Link
-                href={marketingLinks.annualCheckoutUrl}
-                className="mt-6 inline-block w-full rounded-full border-2 border-glitch-teal bg-transparent py-3 text-center font-medium text-glitch-teal hover:bg-glitch-teal/20"
-              >
-                Get Annual ({marketingCopy.annualPriceLabel})
-              </Link>
-            </div>
-          </div>
-
-          <div className="mt-12 rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
-            <h2 className="font-semibold">What is included</h2>
-            <ul className="mt-4 list-inside list-disc space-y-2 text-zinc-600 dark:text-zinc-400">
-              <li>Glitch AddOn dashboard, compliance, replication, and journal</li>
-              <li>Analytics module with multi-timeframe signal framework</li>
-              <li>Macro and news context window</li>
-              <li>Firm rules framework and ongoing updates</li>
-              <li>Localization support and member updates</li>
-              <li>Ongoing support channel access</li>
-            </ul>
-          </div>
-
-          <div className="mt-8 rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
-            <h2 className="font-semibold">How access works</h2>
-            <ol className="mt-4 list-inside list-decimal space-y-2 text-zinc-600 dark:text-zinc-400">
-              <li>Buy your plan through Whop checkout.</li>
-              <li>Open Member Hub and follow Start Here.</li>
-              <li>Download and install the latest AddOn build.</li>
-              <li>Open Settings in Glitch and validate your license key.</li>
-            </ol>
-          </div>
-
-          <div className="mt-8 flex flex-wrap gap-4">
-            <Link
-              href={marketingLinks.memberHubUrl}
-              className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-300 px-5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-            >
-              Already a member? Open Member Hub
-            </Link>
-            <Link
-              href="/offer"
-              className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-300 px-5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-            >
-              View full offer
-            </Link>
-          </div>
-
-          <p className="mt-8 text-sm text-zinc-500 dark:text-zinc-400">
-            Promo code? Enter it at checkout. One promo per order. Billing and cancel policy are available in Terms.
-            Affiliate attribution details are on the Affiliate page.
+          <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">Straight pricing for serious operators.</h1>
+          <p className="mt-4 max-w-3xl text-zinc-600 dark:text-zinc-400">
+            Three plans. Clear trade-offs. Free gets you the guardrails. Monthly / Annual gives you the full premium
+            stack with flexible billing. Life time access gives you the same premium stack without recurring charges.
+          </p>
+          <PricingCards className="mt-10" useAnchors />
+          <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
+            After checkout,{" "}
+            <Link href={marketingLinks.memberHubUrl} className="font-medium text-glitch-teal hover:underline">
+              Member Hub
+            </Link>{" "}
+            is where downloads, onboarding, updates, and activation steps live.
           </p>
         </div>
       </section>
 
-      <footer className="border-t border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-          <div className="flex flex-wrap gap-6 text-sm text-zinc-500 dark:text-zinc-400">
-            <Link href="/risk-disclosure" className="hover:text-zinc-700 dark:hover:text-zinc-300">
-              Risk disclosure
-            </Link>
-            <Link href="/terms" className="hover:text-zinc-700 dark:hover:text-zinc-300">
-              Terms
-            </Link>
-            <Link href="/privacy" className="hover:text-zinc-700 dark:hover:text-zinc-300">
-              Privacy
-            </Link>
+      <section className="border-b border-zinc-200 dark:border-zinc-800">
+        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-20">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">What changes when you upgrade</h2>
+          <p className="mt-3 max-w-3xl text-zinc-600 dark:text-zinc-400">
+            The jump from Free to paid is not a cosmetic upgrade. It is where Glitch becomes a full operating layer for
+            serious multi-account trading.
+          </p>
+          <div className="mt-8 grid gap-8 lg:grid-cols-2">
+            <div className="rounded-[1.75rem] border border-zinc-200 bg-white p-6 sm:p-8 dark:border-zinc-800 dark:bg-zinc-900/80">
+              <h3 className="text-lg font-semibold">Free foundation</h3>
+              <div className="mt-4">
+                <CheckList items={freeTierFeatures} />
+              </div>
+            </div>
+            <div className="rounded-[1.75rem] border border-glitch-teal/50 bg-glitch-teal/5 p-6 sm:p-8 dark:bg-glitch-teal/10">
+              <h3 className="text-lg font-semibold">Every paid plan unlocks</h3>
+              <div className="mt-4">
+                <CheckList items={paidAccessFeatures} />
+              </div>
+            </div>
+          </div>
+          <div className="mt-8 rounded-[1.75rem] border border-zinc-200 bg-zinc-50 p-6 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-400">
+            Monthly, yearly, and life time access all unlock the premium toolset. The only difference is how you want
+            to pay for it.
           </div>
         </div>
-      </footer>
+      </section>
+
+      <section id="how-access-works" className="border-b border-zinc-200 dark:border-zinc-800">
+        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-20">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">How access works</h2>
+          <div className="mt-8 grid gap-8 lg:grid-cols-2">
+            <div className="rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
+              <h3 className="font-semibold">Upgrade flow</h3>
+              <ol className="mt-4 list-inside list-decimal space-y-2 text-zinc-600 dark:text-zinc-400">
+                <li>Choose Free, Monthly / Annual, or Life time access.</li>
+                <li>Complete checkout, then open Member Hub.</li>
+                <li>Download the latest build and activate your license.</li>
+                <li>Launch Glitch and configure your workflow.</li>
+                <li>Review your rules, replication, and daily operating setup.</li>
+              </ol>
+            </div>
+
+            <div className="rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
+              <h3 className="font-semibold">Roadmap</h3>
+              <CheckList
+                className="mt-4"
+                items={[
+                  "Marketplace for third-party indicators",
+                  "Marketplace for third-party strategies",
+                  "Integrated partner prop firm offers",
+                  "Expanded trading assistant automations and workflows",
+                ]}
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b border-zinc-200 dark:border-zinc-800">
+        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-20">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">FAQ</h2>
+          <div className="mt-6">
+            <FaqList items={faqItems} />
+          </div>
+
+          <p className="mt-8 text-sm text-zinc-500 dark:text-zinc-400">
+            Promo code policy: one promo per order. Attribution details are on Affiliate and Terms pages.
+          </p>
+        </div>
+      </section>
+
+      <SiteFooter />
     </div>
   );
 }

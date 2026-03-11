@@ -57,11 +57,12 @@ Implemented in `GlitchAddOn.ChartTrader.partial.cs`.
 ## Services (AddOn)
 
 - **GlitchStateStore** — Default paths under `GlitchData` (user data dir or fallback); load/save for overrides, account groups, peaks, window placement, journal, critical warnings; legacy migration and template sanitization.
-- **ReplicationEngine** — Contract rounding, instrument root resolution, net quantity, working orders, flatten/wait logic, protective OCO ID building, sync instrument roots from master/follower positions and orders.
-- **ComplianceEngine** — Max contracts/micros resolution, account status and prop firm inference from account/connection, execution provider hint, max loss tracking normalization, peak state key, native liquidation threshold, tier matching.
-- **GlitchApiKeyStore** — Path from StateStore; template for ApiKeys.tsv; load/save keys; DPAPI optional encryption for sensitive keys (e.g. FINNHUB, FMP, FRED, TRADINGECONOMICS, proxy token); env fallback in `ResolveKey`.
+- **GlitchRuntimePolicyStore** — Runtime policy settings and license cache paths (`RuntimePolicy.tsv`, `LicenseCache.tsv`); load/save settings (compliance toggles, license key, API base URL, installation ID); license cache state (signed token, plan, feature flags, grace window).
+- **GlitchReplicationEngine** — Contract rounding, instrument root resolution, net quantity, working orders, flatten/wait logic, protective OCO ID building, sync instrument roots from master/follower positions and orders.
+- **GlitchComplianceEngine** — Max contracts/micros resolution, account status and prop firm inference from account/connection, execution provider hint, max loss tracking normalization, peak state key, native liquidation threshold, tier matching.
+- **GlitchLicenseService** — License validation and heartbeat against the Glitch API; ES256 token verification; policy and token claims; canonical API base URL and allowed hosts.
 - **GlitchLocalizationService** — Localization and UI settings paths; bundled + runtime TSV merge; supported languages (en-US, pt-BR, es-ES, zh-CN, fr-FR, ru-RU); `Translate(key, fallback)`, `SetLanguage`, `CurrentLanguageCode`.
-- **GlitchFundamentalAnalysisService** — See [Fundamental analysis](#fundamental-analysis) below.
+- **GlitchFundamentalAnalysisService** — See [Fundamental analysis](#fundamental-analysis) below. Uses API base URL and license context (from Glitch API) for fundamentals/market data when supplied via `GetSnapshot` overload.
 - **GlitchTradeLedgerService / GlitchTradeInsightsService / GlitchRiskLockLedgerService** — Trade round-trip ledger (merge, flush), insights, risk lock events; file-backed with throttled writes. Types: TradeRoundTrip, TradeInsightsSnapshot, TradeStats, TradeCloseReasonSummary (Insights); RiskLockSnapshot (RiskLockLedger).
 
 ### Fundamental analysis
@@ -72,7 +73,7 @@ Implemented in `GlitchAddOn.ChartTrader.partial.cs`.
 - **Mag7:** AAPL, MSFT, NVDA, AMZN, GOOGL, META, TSLA with NDX-style weights. News and quote composites use Mag7QuoteBlendWeight 0.80 and Mag7NewsBlendWeight 0.20.
 - **Instrument profiles:** `ResolveInstrumentProfile(instrumentRoot)` returns symbol weights per instrument (e.g. Mag7 for index, GLD for gold, IBIT for bitcoin, SPY/DIA/IWM, USO, SLV). Used to scope news and valuation.
 - **News lockout:** LockoutMinutesBefore 5, LockoutMinutesAfter 5; lockout state (IsActive, Message) can disable trading around events. Sentiment rules (phrase → score/confidence/reason) and rumor qualifiers applied to headlines.
-- **Public API:** `GetSnapshot(string instrumentRoot, DateTime nowUtc)` → GlitchFundamentalAnalysisSnapshot. `Dispose()`, `ReloadPersistedKeys(IReadOnlyDictionary<string, string>)`. Constructor takes persisted keys (e.g. from GlitchApiKeyStore).
+- **Public API:** `GetSnapshot(string instrumentRoot, DateTime nowUtc)` → GlitchFundamentalAnalysisSnapshot; overload with `apiBaseUrl`, `licenseKey`, `installationId`, `deviceFingerprintHash`, `clientVersion` for license-gated API calls. `Dispose()`, `ReloadPersistedKeys(IReadOnlyDictionary<string, string>)`.
 
 ### Macro analysis window
 

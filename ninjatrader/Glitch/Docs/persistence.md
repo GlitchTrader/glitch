@@ -5,7 +5,8 @@ All paths are provided by **Glitch.Services.GlitchStateStore** unless noted. Def
 ## Paths
 
 - **GlitchStateStore.GetDefaultPath(fileName)** — Returns `{userDataDir}\GlitchData\{fileName}` or fallback path. Used for all files below.
-- **GlitchApiKeyStore.GetDefaultPath()** — Same as `GetDefaultPath("ApiKeys.tsv")`.
+- **GlitchRuntimePolicyStore.GetDefaultSettingsPath()** — `GetDefaultPath("RuntimePolicy.tsv")`.
+- **GlitchRuntimePolicyStore.GetDefaultLicenseCachePath()** — `GetDefaultPath("LicenseCache.tsv")`.
 - **GlitchLocalizationService.GetDefaultLocalizationPath()** — `GetDefaultPath("Localization.tsv")`.
 - **GlitchLocalizationService.GetDefaultSettingsPath()** — `GetDefaultPath("UiSettings.tsv")`.
 
@@ -79,9 +80,17 @@ All paths are provided by **Glitch.Services.GlitchStateStore** unless noted. Def
 - **Template line:** `# key\tvalue`
 - Used for UI preferences (e.g. preferred language code).
 
+### RuntimePolicy.tsv
+
+- **Purpose:** Runtime policy settings (compliance toggles, license key storage, API base URL, installation ID). **GlitchRuntimePolicyStore** load/save.
+
+### LicenseCache.tsv
+
+- **Purpose:** Cached license state (signed token, plan, feature flags, grace window). **GlitchRuntimePolicyStore** load/save.
+
 ### ApiKeys.tsv
 
-- **Template:** Comment lines plus `# key\tvalue`; keys include FINNHUB_API_KEY, FMP_API_KEY, FRED_API_KEY, TRADINGECONOMICS_API_KEY, GLITCH_PROXY_BASE_URL, GLITCH_PROXY_TOKEN. Values may be plain or `dpapi:<base64>` for encrypted-at-rest. **GlitchApiKeyStore** loads/saves and optionally protects sensitive keys with DPAPI.
+- **Path:** `GetDefaultPath("ApiKeys.tsv")`. Template: comment lines plus `# key\tvalue`. Current AddOn uses license-gated Glitch API for fundamentals; local API keys for external providers are not loaded from this file in the current codebase.
 
 ## Helpers
 

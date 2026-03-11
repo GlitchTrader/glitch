@@ -85,6 +85,29 @@ Key types and members as they appear in the code. Not exhaustive; covers contrac
 
 ---
 
+## Licensing and runtime policy (Services)
+
+### GlitchLicenseService (static)
+
+- **ValidateAsync(apiBaseUrl, licenseKey, installationId, deviceFingerprintHash, clientVersion)** → Task&lt;GlitchLicenseSnapshot&gt;
+- **HeartbeatAsync(...)** — same parameter shape. Canonical API base URL and allowed hosts defined in code.
+- **GlitchLicenseSnapshot:** RequestSucceeded, LicenseValid, LicenseStatus, Reason, NextCheckInSeconds, GraceWindowSeconds, ReceivedAtUtc, Policy, LicenseToken, HasVerifiedToken, TokenClaims.
+- **GlitchLicensePolicy:** Plan, Analytics, Macro, Fundamental, Strategies, AdvancedReplication, MaxGroups, MaxFollowersPerGroup.
+- **GlitchLicenseTokenClaims:** Plan, Policy, IssuedAtUtc, ExpiresAtUtc, GraceUntilUtc, PolicyVersion, SourcePlanCode, EntitlementStatus.
+
+### GlitchRuntimePolicyStore (static)
+
+- **GetDefaultSettingsPath()**, **GetDefaultLicenseCachePath()**
+- **EnsureTemplatesExist(settingsPath, cachePath)**
+- **LoadSettings(settingsPath)** → GlitchRuntimePolicySettings
+- **SaveSettings(settingsPath, settings)**
+- **LoadLicenseCache(cachePath)** → GlitchLicenseCacheState
+- **SaveLicenseCache(cachePath, state)**
+- **GlitchRuntimePolicySettings:** EnforceAccountLevelCompliance, EnforceBufferFreeze15Percent, EnforceBufferOneContract30Percent, EnforceUnrealizedFlatten70Percent, EnforceEvalProfitTargetLock, FlattenOnCriticalBufferLock, LicenseKey, LicenseApiBaseUrl, InstallationId, LicenseKeyDecodeFailed, LicenseKeyRawStorage.
+- **GlitchLicenseCacheState:** SignedLicenseToken, SignedTokenExpiresUtc, Plan, FeatureAnalytics, FeatureMacro, FeatureFundamental, FeatureStrategies, FeatureAdvancedReplication, MaxGroups, MaxFollowersPerGroup, LastSuccessUtc, LastCheckedUtc, GraceUntilUtc, LastReason, LastStatus.
+
+---
+
 ## State Store (Services)
 
 ### GlitchStateStore (static)
@@ -132,7 +155,7 @@ Key types and members as they appear in the code. Not exhaustive; covers contrac
 
 ## Replication and Compliance (Services)
 
-### ReplicationEngine (static)
+### GlitchReplicationEngine (static)
 
 - **RoundConservativeContracts(double rawQuantity)** → int (step-up 0.8 threshold, max 10000)
 - **GetSyncInstrumentRoots(Account master, Account follower)** → List<string>
@@ -148,7 +171,7 @@ Key types and members as they appear in the code. Not exhaustive; covers contrac
 - **BuildProtectiveOcoId(string accountName, string instrumentRoot)** → string
 - **ComputeStablePositiveHash(string)** → int
 
-### ComplianceEngine (static)
+### GlitchComplianceEngine (static)
 
 - **ResolveMaxContractsLimit(maxContracts, maxMicros [, microMultiplier])** → double
 - **ResolveMaxMicrosLimit(maxMicros, maxContracts [, microMultiplier])** → double

@@ -12,7 +12,7 @@ The Indicator runs inside NinjaTrader’s script host (potentially in a differen
 ## Namespaces and Assemblies
 
 - **NinjaTrader.NinjaScript.AddOns** — `GlitchAddOn` (partials: `GlitchAddOn.cs`, `GlitchAddOn.ChartTrader.partial.cs`).
-- **Glitch.Services** — State store, shell bridge, replication engine, compliance engine, API key store, localization, fundamental analysis, trade ledger, risk lock ledger.
+- **Glitch.Services** — State store, runtime policy store, shell bridge, replication engine, compliance engine, licensing, localization, fundamental analysis, trade ledger, risk lock ledger.
 - **Glitch.UI** — Main window (`GlitchMainWindow` and partials), analytics feed bus, analytics logic (engine, snapshot, timeframe reading, signal scale).
 
 The Indicator is in **NinjaTrader.NinjaScript.Indicators** (`GlitchAnalyticsBridge`). It does not reference the AddOn assembly directly; it discovers the AddOn’s feed bus type by name at runtime (`BridgeBusCompat`).
@@ -50,14 +50,15 @@ AddOns/GlitchAddOn/
   Services/
     GlitchShellBridge.cs
     Persistence/GlitchStateStore.cs
-    Trading/ReplicationEngine.cs
-    Risk/ComplianceEngine.cs
-    Security/GlitchApiKeyStore.cs
+    Persistence/GlitchRuntimePolicyStore.cs
+    Trading/GlitchReplicationEngine.cs
+    Risk/GlitchComplianceEngine.cs
+    Licensing/GlitchLicenseService.cs
     Localization/GlitchLocalizationService.cs
     FundamentalAnalysis/GlitchFundamentalAnalysisService.cs, *.partial.cs
     Insights/GlitchTradeLedgerService.cs, GlitchTradeInsightsService.cs, GlitchRiskLockLedgerService.cs
   UI/
-    MainWindow/GlitchMainWindow.cs, *.partial.cs (Header, Dashboard, Summary, Replication, FirmRules, Journal, Analytics, Localization, Models)
+    MainWindow/GlitchMainWindow.cs, *.partial.cs (Header, Dashboard, Summary, Replication, FirmRules, Journal, Analytics, Localization, Models, SettingsTab)
     Analytics/GlitchAnalyticsFeedBus.cs, GlitchAnalyticsLogic.cs
     MacroAnalysisWindow/*.cs
 

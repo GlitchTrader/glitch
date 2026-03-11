@@ -97,7 +97,7 @@ export function HeroScreenshotsCarousel() {
           loop
           speed={900}
           slidesPerView="auto"
-          spaceBetween={-140}
+          spaceBetween={-200}
           breakpoints={{
             768: {
               spaceBetween: -220,

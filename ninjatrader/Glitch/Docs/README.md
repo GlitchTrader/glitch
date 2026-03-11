@@ -22,7 +22,8 @@ Documentation for the Glitch AddOn and GlitchAnalyticsBridge Indicator (NinjaTra
 
 ## Where to find
 
-- **Fundamental analysis (Mag7, news, lockout, FRED/Finnhub):** [AddOn](addon.md#fundamental-analysis), [API Reference](api-reference.md#fundamental-analysis-services).
+- **Licensing and runtime policy:** [AddOn](addon.md#services-addon) (GlitchLicenseService, GlitchRuntimePolicyStore), [API Reference](api-reference.md#licensing-and-runtime-policy-services).
+- **Fundamental analysis (Mag7, news, lockout, API-backed):** [AddOn](addon.md#fundamental-analysis), [API Reference](api-reference.md#fundamental-analysis-services).
 - **Insights (trade ledger, round-trips, stats):** [AddOn](addon.md#services-addon), [API Reference](api-reference.md#insights-services).
 - **Session (NYC/London/Asia):** [Indicator](indicator.md#session-and-sessiontracker), [Data Flow](data-flow-and-bridge.md#session-addon-vs-indicator).
 - **Macro window (Nasdaq Macro):** [AddOn](addon.md#macro-analysis-window).

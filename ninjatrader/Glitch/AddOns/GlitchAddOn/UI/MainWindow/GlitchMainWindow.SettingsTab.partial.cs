@@ -9,7 +9,6 @@ namespace Glitch.UI
 {
     public partial class GlitchMainWindow
     {
-        private const string SettingsLicensePlaceholderText = "Paste your license here";
         private Grid _settingsRootGrid;
         private CheckBox _settingsBufferFreeze15CheckBox;
         private CheckBox _settingsBufferOneContract20CheckBox;
@@ -40,6 +39,7 @@ namespace Glitch.UI
                 FontWeight = FontWeights.Medium,
                 Margin = new Thickness(0, 0, 0, 10)
             };
+            BindLocalizedText(title, "settings.title", "Settings");
             ApplySkinResource(title, TextBlock.ForegroundProperty, "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
             Grid.SetRow(title, 0);
             root.Children.Add(title);
@@ -414,7 +414,7 @@ namespace Glitch.UI
             _settingsSaveFeedbackActive = true;
             try
             {
-                await ShowTransientTealButtonFeedbackAsync(_settingsSaveButton, "Saving!", 3000);
+                await ShowTransientTealButtonFeedbackAsync(_settingsSaveButton, L("settings.feedback.saving", "Saving!"), 3000);
             }
             finally
             {
@@ -431,7 +431,7 @@ namespace Glitch.UI
             try
             {
                 Task validateTask = RefreshLicenseStateAsync(useValidateEndpoint: true, force: true);
-                await ShowTransientTealButtonFeedbackAsync(_settingsValidateButton, "Validating, please wait...", 3000);
+                await ShowTransientTealButtonFeedbackAsync(_settingsValidateButton, L("settings.feedback.validating", "Validating, please wait..."), 3000);
                 await validateTask;
             }
             finally
@@ -528,7 +528,7 @@ namespace Glitch.UI
                 return;
 
             _settingsLicensePlaceholderActive = true;
-            _settingsLicenseKeyTextBox.Text = SettingsLicensePlaceholderText;
+            _settingsLicenseKeyTextBox.Text = L("settings.license.paste_placeholder", "Paste your license here");
             FrameworkElement skinContext = (FrameworkElement)_settingsRootGrid ?? _settingsLicenseKeyTextBox;
             Brush placeholderBrush = FindSkinBrush(skinContext, "FontTableBrush", "FontControlBrush") ?? Brushes.Gray;
             _settingsLicenseKeyTextBox.Foreground = placeholderBrush;
@@ -553,7 +553,7 @@ namespace Glitch.UI
                 return string.Empty;
 
             string value = (_settingsLicenseKeyTextBox.Text ?? string.Empty).Trim();
-            if (value.Equals(SettingsLicensePlaceholderText, StringComparison.Ordinal))
+            if (value.Equals(L("settings.license.paste_placeholder", "Paste your license here"), StringComparison.Ordinal))
                 return string.Empty;
 
             return value;
@@ -576,15 +576,15 @@ namespace Glitch.UI
             bool isPremiumPlan = plan.Equals("premium", StringComparison.OrdinalIgnoreCase);
             string statusLabel;
             if (status.Equals("active", StringComparison.OrdinalIgnoreCase))
-                statusLabel = isPremiumPlan ? "Active Premium" : "Free Lite";
+                statusLabel = isPremiumPlan ? L("settings.license.status.active_premium", "Active Premium") : L("settings.license.status.free_lite", "Free Lite");
             else if (status.Equals("grace", StringComparison.OrdinalIgnoreCase))
-                statusLabel = isPremiumPlan ? "Grace Premium" : "Grace Free Lite";
+                statusLabel = isPremiumPlan ? L("settings.license.status.grace_premium", "Grace Premium") : L("settings.license.status.grace_free_lite", "Grace Free Lite");
             else if (isPremiumPlan)
-                statusLabel = "Inactive Premium";
+                statusLabel = L("settings.license.status.inactive_premium", "Inactive Premium");
             else
-                statusLabel = "Free Lite";
+                statusLabel = L("settings.license.status.free_lite", "Free Lite");
 
-            _settingsPlanBadgeText.Text = $"License Status: {statusLabel}, Valid until {validUntilText}";
+            _settingsPlanBadgeText.Text = Lf("settings.license.status_format", "License Status: {0}, Valid until {1}", statusLabel, validUntilText);
             if (status.Equals("active", StringComparison.OrdinalIgnoreCase) && isPremiumPlan)
             {
                 _settingsPlanBadgeText.Foreground = TealAccentBrush;

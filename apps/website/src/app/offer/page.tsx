@@ -1,82 +1,148 @@
 import Link from "next/link";
-import { marketingCopy, marketingLinks } from "@/lib/marketing-links";
+import { CheckList } from "@/components/check-list";
+import { CoreCtas } from "@/components/core-ctas";
+import { FaqList } from "@/components/faq-list";
+import { PricingCards } from "@/components/pricing-cards";
+import { SiteFooter } from "@/components/site-footer";
+import { marketingLinks } from "@/lib/marketing-links";
+import { freeTierFeatures, paidAccessFeatures } from "@/lib/pricing";
 
 export const metadata = {
-  title: "The Glitch Offer - Risk-First NinjaTrader AddOn",
+  title: "Glitch Offer - Risk-First Trading Assistant for NinjaTrader",
   description:
-    "Full offer: compliance engine, replication control, analytics, macro context, and journal visibility. $95/mo or $995/yr.",
+    "Explore the full Glitch offer: compliance enforcement, replication control, GlitchScore analytics, and Go Pro scale.",
 };
+
+const faqItems = [
+  {
+    question: "Why call Glitch a trading assistant?",
+    answer:
+      "Because it assists every step of your operating process: risk controls, replication discipline, context analysis, and performance review.",
+  },
+  {
+    question: "Does Glitch replace my strategy?",
+    answer:
+      "No. Your strategy remains yours. Glitch improves execution quality and risk discipline around that strategy.",
+  },
+  {
+    question: "Can I run Glitch with automated systems?",
+    answer:
+      "Yes. Glitch is built to work alongside manual and automated workflows so you keep flexibility while enforcing guardrails.",
+  },
+  {
+    question: "What makes paid access worth it?",
+    answer:
+      "Scale, depth, and speed: higher account limits, stronger context layers, and a serious feedback loop through Journal, Metrics, and Insights.",
+  },
+  {
+    question: "How do monthly, yearly, and life time access work?",
+    answer:
+      "Monthly and yearly sit inside the flexible paid plan. Life time access is the one-payment option. Both unlock the same premium Glitch stack.",
+  },
+  {
+    question: "Do you promise payouts or profits?",
+    answer:
+      "No. We promise professional-grade tooling for risk and execution discipline. Outcomes depend on the trader and market.",
+  },
+];
 
 export default function OfferPage() {
   return (
     <div className="min-h-screen bg-white font-sans text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
       <section className="border-b border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6 sm:py-24">
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
-            Stop failing from preventable violations
+        <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 sm:py-24">
+          <p className="inline-flex rounded-full border border-glitch-teal/40 bg-glitch-teal/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-glitch-teal">
+            The Glitch Offer
+          </p>
+          <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
+            Built for traders who treat this like a business
           </h1>
-          <p className="mt-6 text-lg text-zinc-600 dark:text-zinc-400">
-            The risk-first {marketingCopy.productName} that helps prop traders protect eval and funded accounts with
-            compliance controls, replication safety, and cleaner execution context.
+          <p className="mx-auto mt-6 max-w-3xl text-lg text-zinc-600 dark:text-zinc-400">
+            If you are done with avoidable rule breaks, replication chaos, and context-blind execution, this is the
+            operating layer you were missing.
           </p>
-          <div className="mt-10 flex flex-wrap justify-center gap-4">
-            <Link
-              href={marketingLinks.monthlyCheckoutUrl}
-              className="inline-flex h-12 items-center justify-center rounded-full bg-glitch-orange px-6 font-medium text-white hover:opacity-90"
-            >
-              Start at {marketingCopy.monthlyPriceLabel}
-            </Link>
-            <Link
-              href={marketingLinks.annualCheckoutUrl}
-              className="inline-flex h-12 items-center justify-center rounded-full border-2 border-glitch-teal px-6 font-medium text-glitch-teal hover:bg-glitch-teal/10 dark:hover:bg-glitch-teal/20"
-            >
-              Get Annual ({marketingCopy.annualPriceLabel}) - Save $145
-            </Link>
-          </div>
+          <p className="mx-auto mt-3 max-w-3xl text-zinc-600 dark:text-zinc-400">
+            Glitch is defining a new category: the risk-first trading assistant for prop traders who run real
+            operations, not toy setups.
+          </p>
+          <CoreCtas className="mt-10" centered />
         </div>
       </section>
 
       <section className="border-b border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20">
-          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">What one breach can cost you</h2>
+        <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-20">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">The cost of preventable errors is brutal</h2>
           <p className="mt-4 text-zinc-600 dark:text-zinc-400">
-            A single rule violation can reset an eval, lock a funded account, or kill a payout you have been building
-            toward. Most of those breaches are preventable: over-sizing, wrong session, missed daily loss limits, or
-            replication drift.
+            One broken process can reset an eval, pause a payout account, or burn confidence for weeks. Most of that is
+            avoidable if the operating layer is strong enough.
           </p>
           <p className="mt-4 text-zinc-600 dark:text-zinc-400">
-            Glitch does not promise profits. It is built to help you stay within the rules and execution discipline you
-            already know you need.
+            Glitch is designed to make the right actions easier and the wrong actions harder. That is how durable
+            trading operations are built.
           </p>
         </div>
       </section>
 
       <section className="border-b border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-4xl px-4 py-16 sm:px-6 sm:py-20">
-          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">What you get</h2>
-          <div className="mt-10 grid gap-8 sm:grid-cols-2">
+        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-20">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Start free. Upgrade when the business case is clear.</h2>
+          <div className="mt-8 grid gap-8 lg:grid-cols-2">
+            <div id="free-tier" className="rounded-2xl border-2 border-zinc-200 p-6 sm:p-8 dark:border-zinc-700">
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Start Free</p>
+              <h3 className="mt-2 text-xl font-semibold">Core account protection</h3>
+              <div className="mt-4">
+                <CheckList items={freeTierFeatures} />
+              </div>
+            </div>
+            <div id="go-pro" className="rounded-2xl border-2 border-glitch-teal bg-glitch-teal/5 p-6 sm:p-8 dark:bg-glitch-teal/10">
+              <p className="text-xs font-semibold uppercase tracking-wide text-glitch-teal">Go Pro</p>
+              <h3 className="mt-2 text-xl font-semibold">Scale, depth, and precision</h3>
+              <div className="mt-4">
+                <CheckList items={paidAccessFeatures} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b border-zinc-200 dark:border-zinc-800">
+        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-20">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">What makes Glitch category-defining</h2>
+          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
-              <h3 className="font-semibold text-glitch-teal">Compliance and lock controls</h3>
-              <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-                Firm-aware limits, risk buffers, and lock logic so you stay inside rules before a breach happens.
+              <h3 className="font-semibold text-glitch-teal">Compliance enforcement</h3>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                Rule-aware operating logic to keep your accounts inside firm constraints before breaches happen.
               </p>
             </div>
             <div className="rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
-              <h3 className="font-semibold text-glitch-teal">Replication control layer</h3>
-              <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-                Master/follower sync, contract scaling, and protective stops so funded and eval accounts stay aligned.
+              <h3 className="font-semibold text-glitch-teal">Replication system</h3>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                Multi-account synchronization, follower scaling, and control surfaces designed for serious account stacks.
               </p>
             </div>
             <div className="rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
-              <h3 className="font-semibold text-glitch-teal">Analytics command center</h3>
-              <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-                Multi-timeframe signal framework and regime context in one workspace.
+              <h3 className="font-semibold text-glitch-teal">GlitchScore dials</h3>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                Structured directional context across multiple timeframes, reducing signal noise and emotional entries.
               </p>
             </div>
             <div className="rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
-              <h3 className="font-semibold text-glitch-teal">Journal and warning ledger</h3>
-              <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-                Visibility into what happened, where warnings fired, and what to fix fast.
+              <h3 className="font-semibold text-glitch-teal">Journal + Insights engine</h3>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                Performance feedback loops that transform random outcomes into measurable process improvement.
+              </p>
+            </div>
+            <div className="rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
+              <h3 className="font-semibold text-glitch-teal">Macro and sentiment stack</h3>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                Nasdaq, Mag7, macro and news layers in one view so context is no longer an afterthought.
+              </p>
+            </div>
+            <div className="rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
+              <h3 className="font-semibold text-glitch-teal">Open workflow philosophy</h3>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                Bring your own indicators, automation, and strategy stack. Glitch centralizes and hardens the operation.
               </p>
             </div>
           </div>
@@ -84,78 +150,33 @@ export default function OfferPage() {
       </section>
 
       <section className="border-b border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20">
-          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Choose your plan</h2>
-          <div className="mt-10 flex flex-wrap justify-center gap-8">
-            <div className="rounded-2xl border-2 border-zinc-200 p-8 dark:border-zinc-700">
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">Monthly</p>
-              <p className="mt-2 text-3xl font-bold">
-                $95<span className="text-lg font-normal text-zinc-500">/mo</span>
-              </p>
-              <Link
-                href={marketingLinks.monthlyCheckoutUrl}
-                className="mt-6 inline-block rounded-full bg-zinc-900 px-6 py-3 text-center font-medium text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90"
-              >
-                Start at {marketingCopy.monthlyPriceLabel}
-              </Link>
-            </div>
-            <div className="rounded-2xl border-2 border-glitch-teal bg-glitch-teal/5 p-8 dark:bg-glitch-teal/10">
-              <p className="text-sm font-medium text-glitch-teal">Best value</p>
-              <p className="mt-2 text-3xl font-bold">
-                $995<span className="text-lg font-normal text-zinc-500 dark:text-zinc-400">/yr</span>
-              </p>
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Save $145/yr</p>
-              <Link
-                href={marketingLinks.annualCheckoutUrl}
-                className="mt-6 inline-block rounded-full bg-glitch-teal px-6 py-3 text-center font-medium text-white hover:opacity-90"
-              >
-                Get Annual ({marketingCopy.annualPriceLabel})
-              </Link>
-            </div>
-          </div>
+        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-20">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Pricing in one clean view</h2>
+          <p className="mt-3 max-w-3xl text-zinc-600 dark:text-zinc-400">
+            Free gets you started. Monthly / Annual gives you flexible premium access. Life time access is the permanent
+            seat for traders who already know Glitch belongs in the stack.
+          </p>
+          <PricingCards className="mt-10" />
+          <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
+            Already joined?{" "}
+            <Link href={marketingLinks.memberHubUrl} className="font-medium text-glitch-teal hover:underline">
+              Member Hub
+            </Link>{" "}
+            is where your downloads, updates, and onboarding steps live.
+          </p>
         </div>
       </section>
 
       <section className="border-b border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6 sm:py-20">
-          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            Already a member? Go straight to setup and downloads
-          </h2>
-          <div className="mt-10 flex flex-wrap justify-center gap-4">
-            <Link
-              href={marketingLinks.memberHubUrl}
-              className="inline-flex h-12 items-center justify-center rounded-full border-2 border-glitch-teal px-6 font-medium text-glitch-teal hover:bg-glitch-teal/10 dark:hover:bg-glitch-teal/20"
-            >
-              Open Member Hub
-            </Link>
-            <Link
-              href="/pricing"
-              className="inline-flex h-12 items-center justify-center rounded-full border border-zinc-300 px-6 font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-            >
-              Compare plans
-            </Link>
+        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-20">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">FAQ</h2>
+          <div className="mt-6">
+            <FaqList items={faqItems} />
           </div>
         </div>
       </section>
 
-      <footer className="border-t border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-          <div className="flex flex-wrap items-center justify-between gap-4 text-sm text-zinc-500 dark:text-zinc-400">
-            <span>Copyright Glitch. Risk-first NinjaTrader AddOn for prop traders.</span>
-            <div className="flex gap-6">
-              <Link href="/risk-disclosure" className="hover:text-zinc-700 dark:hover:text-zinc-300">
-                Risk disclosure
-              </Link>
-              <Link href="/terms" className="hover:text-zinc-700 dark:hover:text-zinc-300">
-                Terms
-              </Link>
-              <Link href="/privacy" className="hover:text-zinc-700 dark:hover:text-zinc-300">
-                Privacy
-              </Link>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

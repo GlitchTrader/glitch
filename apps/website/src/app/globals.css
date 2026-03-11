@@ -25,9 +25,12 @@
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(1200px 600px at 90% -10%, rgba(26, 188, 156, 0.1), transparent 60%),
+    radial-gradient(900px 500px at -10% 30%, rgba(255, 66, 0, 0.08), transparent 55%),
+    var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
 .glitch-screenshots-stage {
@@ -99,8 +102,24 @@ body {
   backface-visibility: hidden;
 }
 
+.glitch-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.glitch-cta-row > a {
+  width: 100%;
+}
+
 @media (min-width: 768px) {
   .glitch-screenshots-swiper .glitch-screenshot-shell {
     height: clamp(520px, 56vw, 820px);
+  }
+}
+
+@media (min-width: 640px) {
+  .glitch-cta-row > a {
+    width: auto;
   }
 }

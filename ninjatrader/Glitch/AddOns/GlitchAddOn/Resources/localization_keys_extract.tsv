@@ -1,5 +1,6 @@
-﻿key	default
+key	default
 analytics.adx_atr_label	ADX(14) | ATR(14): 
+analytics.adx_atr_row	ADX(14) | ATR(14)
 analytics.avg_prefix	Avg.
 analytics.awaiting_live_samples	Awaiting live samples
 analytics.block.instrument_overview	Instrument Overview
@@ -10,13 +11,6 @@ analytics.factor.ema	EMA
 analytics.factor.order_flow	OF
 analytics.factor.rsi	RSI
 analytics.factor.stoch	Stoch
-analytics.factor.tooltip.bar_scale	Bar scale
-analytics.factor.tooltip.ema	Combined EMA contribution to the current score. Includes EMA slope and EMA alignment after regime/blend adjustments.
-analytics.factor.tooltip.order_flow	Net order-flow contribution to the current score after blending with the technical base.
-analytics.factor.tooltip.raw_alignment	Raw alignment
-analytics.factor.tooltip.raw_signal	Raw signal
-analytics.factor.tooltip.raw_technical	Technical base
-analytics.factor.tooltip.weighted	Weighted contribution to the current score after regime/blend adjustments.
 analytics.factor.z_score	Z-Score
 analytics.fundamental.error	Fundamental feed error
 analytics.instrument	Instrument
@@ -79,7 +73,6 @@ dialog.add_follower.title	Add Follower Account
 dialog.common.cancel	Cancel
 dialog.common.ok	OK
 dialog.common.proceed	Proceed
-dialog.common.save	Save
 dialog.create_group.prompt	Pick a master account:
 dialog.create_group.title	Create Account Group
 header.banner.news_event_in_progress	News Event in Progress
@@ -150,3 +143,85 @@ summary.title	Trading Summary
 summary.total_trades	Total Trades
 summary.updated	Updated
 summary.win_rate	Win Rate
+tab.analytics	Analytics
+tab.dashboard	Dashboard
+tab.journal	Journal
+tab.settings	Settings
+summary.card.accounts	Accounts Traded
+summary.card.fleet_trades	Fleet Trades
+summary.card.net_pnl	Net PnL
+summary.card.profit_factor	Profit Factor
+summary.card.trades	Closed Trades
+summary.card.win_rate	Win Rate
+summary.accounts_count_format	{0} accounts
+summary.exit.manual	Manual
+summary.exit.news_event	News
+summary.exit.replication_sync	Sync
+summary.exit.risk_management	RM
+summary.exit.session_end	Close
+summary.exit.signal_flip	Flip
+summary.exit.stop_loss	SL
+summary.exit.take_profit	TP
+summary.exit.unknown	UNK
+journal.card.avg_loss	Avg Loss
+journal.card.avg_win	Avg Win
+journal.card.total_trades	Total Trades
+analytics.block.earnings_analysis	Earnings Analysis
+analytics.block.latest_headlines	Latest Headlines
+analytics.block.upcoming_news_calendar	Upcoming News Calendar
+analytics.button.open_window	Open Nasdaq Macro
+analytics.button.opened_macro	Opened Nasdaq Macro
+analytics.factor.agreement	Agree
+analytics.factor.ma	MA
+analytics.factor.osc	Osc
+analytics.factor.raw	Raw
+analytics.metric.avg_price	Avg Price
+analytics.metric.composite	Glitch Score
+analytics.metric.current_price	Current Price
+analytics.metric.session	Session
+analytics.regime	Regime
+analytics.technical.bridge_missing_cta	To enable Technical Analysis, add GlitchAnalyticsBridgeIndicator to a NinjaTrader chart. Data is available during market hours. If refresh is needed, re-apply the indicator on the chart.
+analytics.timeframe.avg_price_title	{0} min Avg Price
+analytics.unified.action	Action
+analytics.unified.action.execute	Execute
+analytics.unified.action.execute_long	Execute Long
+analytics.unified.action.execute_short	Execute Short
+analytics.unified.action.no_trade	No Trade
+analytics.unified.action.wait	Wait
+analytics.unified.bias	Bias
+analytics.unified.exec_signal	Glitch TF Score
+analytics.unified.quality	Quality
+analytics.unified.setup	Setup
+analytics.window.secondary_title	Nasdaq Macro
+header.banner.news_event_in_progress_prefix	News Event in Progress:
+header.metric.daily_pnl	Daily PnL
+header.metric.eval_pnl	Eval PnL
+header.metric.eval_risk	Eval Risk
+header.metric.global_risk	Global Risk
+header.metric.pa_pnl	PA PnL
+header.metric.pa_risk	PA Risk
+header.metric.warnings	Warnings
+settings.title	Settings
+settings.risk.title	Risk Management Rules
+settings.risk.enforce_15_flatten_freeze	Flatten and freeze account when buffer falls below 15% of maximum drawdown.
+settings.risk.enforce_20_one_contract	Force one-contract replication when buffer falls below 20% of maximum drawdown (release at 25%).
+settings.risk.enforce_80_flatten	Flatten account when unrealized loss exceeds 80% of maximum intratrade loss (max loss limit).
+settings.risk.enforce_eval_lock_flatten	Flatten and lock evaluation account when equity reaches the evaluation target lock balance.
+settings.license.title	License
+settings.license.key	License Key
+settings.license.key_placeholder	Enter license key
+settings.license.paste_placeholder	Paste your license here
+settings.button.save	Save Settings
+settings.button.validate	Validate License Now
+settings.feedback.saving	Saving!
+settings.feedback.validating	Validating, please wait...
+settings.license.status_format	License Status: {0}, Valid until {1}
+settings.license.status.active_premium	Active Premium
+settings.license.status.free_lite	Free Lite
+settings.license.status.grace_premium	Grace Premium
+settings.license.status.grace_free_lite	Grace Free Lite
+settings.license.status.inactive_premium	Inactive Premium
+overlay.license_required	License Required
+overlay.premium_gate_message	To enable premium features purchase your license below and validate it in the Settings tab.
+overlay.button.get_license	Get License
+overlay.button.manage_membership	Manage Membership

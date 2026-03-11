@@ -368,19 +368,21 @@ namespace Glitch.UI
                     var stack = new StackPanel { Orientation = Orientation.Vertical };
                     var title = new TextBlock
                     {
-                        Text = "License Required",
+                        Text = L("overlay.license_required", "License Required"),
                         FontWeight = FontWeights.SemiBold,
                         Margin = new Thickness(0, 0, 0, 8)
                     };
+                    RegisterLocalizationBinding(() => title.Text = L("overlay.license_required", "License Required"));
                     ApplySkinResource(title, TextBlock.ForegroundProperty, "FontHeaderLevel3Brush", "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
                     stack.Children.Add(title);
 
                     _journalLicenseGateMessageText = new TextBlock
                     {
-                        Text = "To enable premium features purchase your license below and validate it in the Settings tab.",
+                        Text = L("overlay.premium_gate_message", "To enable premium features purchase your license below and validate it in the Settings tab."),
                         TextWrapping = TextWrapping.Wrap,
                         Margin = new Thickness(0, 0, 0, 12)
                     };
+                    RegisterLocalizationBinding(() => _journalLicenseGateMessageText.Text = L("overlay.premium_gate_message", "To enable premium features purchase your license below and validate it in the Settings tab."));
                     ApplySkinResource(_journalLicenseGateMessageText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
                     stack.Children.Add(_journalLicenseGateMessageText);
 
@@ -392,22 +394,24 @@ namespace Glitch.UI
 
                     var checkoutButton = new Button
                     {
-                        Content = "Get License",
+                        Content = L("overlay.button.get_license", "Get License"),
                         HorizontalAlignment = HorizontalAlignment.Left,
                         MinWidth = 172,
                         Style = CreateGroupAddButtonStyle(context)
                     };
+                    RegisterLocalizationBinding(() => checkoutButton.Content = L("overlay.button.get_license", "Get License"));
                     checkoutButton.Click += (_, __) => OpenAnalyticsExternalUrl("https://whop.com/checkout/plan_W6nOCfXPm7pka");
                     buttonRow.Children.Add(checkoutButton);
 
                     var memberAppButton = new Button
                     {
-                        Content = "Manage Membership",
+                        Content = L("overlay.button.manage_membership", "Manage Membership"),
                         HorizontalAlignment = HorizontalAlignment.Left,
                         MinWidth = 172,
                         Margin = new Thickness(8, 0, 0, 0),
                         Style = CreateGroupActionButtonStyle(context)
                     };
+                    RegisterLocalizationBinding(() => memberAppButton.Content = L("overlay.button.manage_membership", "Manage Membership"));
                     memberAppButton.Click += (_, __) => OpenAnalyticsExternalUrl("https://whop.com/joined/glitchtrader/glitch-download-h1FPM8xSe5zaYs/app/");
                     buttonRow.Children.Add(memberAppButton);
                     stack.Children.Add(buttonRow);
@@ -443,7 +447,7 @@ namespace Glitch.UI
                     if (ShouldGateJournalByLicense(out string message))
                     {
                         if (_journalLicenseGateMessageText != null)
-                            _journalLicenseGateMessageText.Text = "To enable premium features purchase your license below and validate it in the Settings tab.";
+                            _journalLicenseGateMessageText.Text = L("overlay.premium_gate_message", "To enable premium features purchase your license below and validate it in the Settings tab.");
                         _journalLicenseGateOverlay.Visibility = Visibility.Visible;
                         return;
                     }
