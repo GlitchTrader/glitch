@@ -1,0 +1,59 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © chervolino
+
+//@version=5
+indicator('Clean ADX with bidirectional Breakout Volume', 'CAWDBV [CHE]', overlay=false)
+//--------------------------------------------------------------------
+//                               Inputs
+//--------------------------------------------------------------------
+string  GRP1                    = 'Clean ADX Settings :'
+string  GRP2                    = 'Bidirectional Breakout Volume Settings:'
+int length                      = input(99, "Lookback Period for Clean ADX", group = GRP1)
+src                             = input.source(hlc3, "Source for Clean ADX", group = GRP1)
+bool show                       = input(true, "Display Breakout Volume", group = GRP2)
+int n                           = input(50, 'Breakout Volume Length', group = GRP2)
+//--------------------------------------------------------------------
+//                              Functions 
+//--------------------------------------------------------------------
+super(float src, int len) =>
+    f = (1.414 * math.pi)/len
+    a = math.exp(-f)
+    c2 = 2 * a * math.cos(f)
+    c3 = -a*a
+    c1 = 1-c2-c3
+    smooth = 0.0
+    smooth := c1*(src+src[1])*0.5+c2*nz(smooth[1])+c3*nz(smooth[2])
+    [smooth]
+//--------------------------------------------------------------------
+//                                Logic 1
+//--------------------------------------------------------------------
+hh = math.max(math.sign(ta.change(ta.highest(length))), 0)
+ll = math.max(math.sign(ta.change(ta.lowest(length)) * -1), 0)
+[mmh]=super(hh, length)
+[mml]=super(ll, length)
+tch = math.pow(mmh, 2)
+tcl = math.pow(mml, 2)
+//--------------------------------------------------------------------
+//                                Logic 2
+//--------------------------------------------------------------------
+Volume_Direction    = close > close[1] ? volume : -volume
+hi = ta.highest(Volume_Direction, n)
+hp = hi[1]
+co = Volume_Direction> 0 and ta.rsi(close,14) <=50 and Volume_Direction > hp ? color.green : na
+co1 = Volume_Direction> 0 and ta.rsi(close,14) <=50 and Volume_Direction > hp ? true : false
+LO = ta.lowest(Volume_Direction, n)
+Lp = LO[1]
+cp = Volume_Direction<0 and ta.rsi(close,14) >=50 and Volume_Direction< Lp ?  color.red : na
+cp1 = Volume_Direction<0 and ta.rsi(close,14) >=50 and Volume_Direction< Lp ?  true : false
+//--------------------------------------------------------------------
+//                                Plot 1
+//--------------------------------------------------------------------
+plot(-tch, color=color.red)
+plot(tcl, color=color.green)
+//--------------------------------------------------------------------
+//                                Plot 2
+//--------------------------------------------------------------------
+plot(show?tcl:na, style=plot.style_columns, color=co)
+plotshape(co1 and show?tcl:na, style=shape.triangleup, location=location.absolute, color=color.new(color.green, 0), size=size.small)
+plot(show?-tch:na, style=plot.style_columns, color=cp)
+plotshape(cp1 and show?-tch:na, style=shape.triangledown, location=location.absolute, color=color.new(color.red, 0), size=size.small)

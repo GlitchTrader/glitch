@@ -1,0 +1,152 @@
+﻿key	default
+analytics.adx_atr_label	ADX(14) | ATR(14): 
+analytics.avg_prefix	Avg.
+analytics.awaiting_live_samples	Awaiting live samples
+analytics.block.instrument_overview	Instrument Overview
+analytics.block.instrument_scoring	Instrument Scoring
+analytics.dial.buy	Buy
+analytics.dial.sell	Sell
+analytics.factor.ema	EMA
+analytics.factor.order_flow	OF
+analytics.factor.rsi	RSI
+analytics.factor.stoch	Stoch
+analytics.factor.tooltip.bar_scale	Bar scale
+analytics.factor.tooltip.ema	Combined EMA contribution to the current score. Includes EMA slope and EMA alignment after regime/blend adjustments.
+analytics.factor.tooltip.order_flow	Net order-flow contribution to the current score after blending with the technical base.
+analytics.factor.tooltip.raw_alignment	Raw alignment
+analytics.factor.tooltip.raw_signal	Raw signal
+analytics.factor.tooltip.raw_technical	Technical base
+analytics.factor.tooltip.weighted	Weighted contribution to the current score after regime/blend adjustments.
+analytics.factor.z_score	Z-Score
+analytics.fundamental.error	Fundamental feed error
+analytics.instrument	Instrument
+analytics.no_recent_headlines	No recent instrument headlines.
+analytics.order_flow.confidence	Conf
+analytics.order_flow.prefix	OrderFlow
+analytics.order_flow.unavailable	Order flow unavailable
+analytics.regime.choppy	Choppy
+analytics.regime.transitional	Transitional
+analytics.regime.trending	Trending
+analytics.regime.with	with
+analytics.session_range.avg	Avg
+analytics.session_range.current	Current
+analytics.session_range.high	Session High
+analytics.session_range.low	Session Low
+analytics.signal.neutral	Neutral
+analytics.timeframe.min_format	{0} min
+analytics.unified.bias.long	Long
+analytics.unified.bias.neutral	Neutral
+analytics.unified.bias.short	Short
+analytics.unified.execution_tf	Execution TF
+analytics.unified.gate.go	Go
+analytics.unified.gate.pass	Pass
+analytics.unified.gate.watch	Watch
+analytics.unified.setup.continue	Continue
+analytics.unified.setup.flat	Flat
+analytics.unified.setup.pullback	Pullback
+analytics.unified.setup.reversal	Reversal
+analytics.volatility.high	High volatility
+analytics.volatility.low	Low volatility
+analytics.volatility.moderate	Moderate volatility
+dashboard.column.account_name	Account Name
+dashboard.column.buffer	Buffer
+dashboard.column.equity	Equity
+dashboard.column.firm	Firm
+dashboard.column.netliq	NetLiq
+dashboard.column.pnl	PnL
+dashboard.column.realized_pnl	R PnL
+dashboard.column.risk	Risk
+dashboard.column.size	Size
+dashboard.column.status	Status
+dashboard.column.unrealized_pnl	U PnL
+dashboard.connected_accounts	Connected Accounts
+dashboard.group.add_account	+ Add Account
+dashboard.group.column.enable	Enable
+dashboard.group.column.follower_account	Follower Account
+dashboard.group.column.master	Master
+dashboard.group.column.max_c	Max C
+dashboard.group.column.max_dd	Max DD
+dashboard.group.column.max_l	Max L
+dashboard.group.column.position	Position
+dashboard.group.column.ratio	Ratio
+dashboard.group.create_group	+ Create Group
+dashboard.group.master_label_format	Group {0} | Master:
+dashboard.group.remove	Remove
+dashboard.group.remove_group	Remove Group
+dashboard.group.select_all_tooltip	Select all followers
+dialog.add_follower.prompt	Pick a follower account:
+dialog.add_follower.title	Add Follower Account
+dialog.common.cancel	Cancel
+dialog.common.ok	OK
+dialog.common.proceed	Proceed
+dialog.common.save	Save
+dialog.create_group.prompt	Pick a master account:
+dialog.create_group.title	Create Account Group
+header.banner.news_event_in_progress	News Event in Progress
+header.button.flatten_all	Flatten All
+header.button.flattened	Flattened!
+header.button.replicate	Replicate
+header.button.replicating	Replicating
+header.button.start	Start
+header.button.stop	Stop
+journal.column.account	Account
+journal.column.dismiss	Dismiss
+journal.column.message	Message
+journal.column.time	Time
+journal.column.type	Type
+journal.column.warning	Warning
+journal.critical_warnings	Critical Warnings
+journal.title	Journal
+journal.trade_feed	Live Feed
+journal.trader_performance	Trader Performance
+summary.account_trades	Account Trades
+summary.accounts	Accounts
+summary.all	All
+summary.avg_contracts_trade	Avg Contracts / Trade
+summary.avg_duration	Avg Duration
+summary.avg_loss	Avg Loss
+summary.avg_trade	Avg Trade
+summary.avg_win	Avg Win
+summary.close_reasons	Close Reasons
+summary.close_time	Close Time
+summary.contracts	Contracts
+summary.duration	Duration
+summary.exit	Exit
+summary.gross_loss	Gross Loss
+summary.gross_profit	Gross Profit
+summary.instrument	Instrument
+summary.largest_loss	Largest Loss
+summary.largest_win	Largest Win
+summary.long	Long
+summary.max_loss_streak	Max Loss Streak
+summary.max_win_streak	Max Win Streak
+summary.metrics_column	Metrics
+summary.net_pnl	Net PnL
+summary.open_reason.manual_entry	Manual Entry
+summary.open_reason.protective_followup	Protective Follow-up
+summary.open_reason.replication_sync	Replication Sync
+summary.open_reason.unknown	Manual / Unknown
+summary.open_time	Open Time
+summary.pnl_short	PnL
+summary.profit_factor	Profit Factor
+summary.reason.manual_other	Manual / Other
+summary.reason.news_event	News Event
+summary.reason.replication_sync	Replication Sync
+summary.reason.risk_management	Risk Management
+summary.reason.session_end	Session End
+summary.reason.signal_flip	Signal Flip
+summary.reason.stop_loss	Stop Loss
+summary.reason.take_profit	Take Profit
+summary.reason.unknown	Unknown
+summary.reset_data	Reset Data
+summary.reset_data.details	This clears Journal, Critical Warnings, and all Summary trade statistics so you can start over.
+summary.reset_data.prompt	Your data will be reset including statistics about your trades and accounts. Confirm?
+summary.reset_data.title	Reset Data
+summary.short	Short
+summary.side	Side
+summary.side.long	Long
+summary.side.short	Short
+summary.title	Trading Summary
+summary.total_trades	Total Trades
+summary.updated	Updated
+summary.win_rate	Win Rate

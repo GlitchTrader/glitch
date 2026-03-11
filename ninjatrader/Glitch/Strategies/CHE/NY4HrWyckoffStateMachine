@@ -1,0 +1,681 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+//  _______           _______  _______           _______  _       _________ _        _______ 
+// (  ____ \|\     /|(  ____ \(  ____ )|\     /|(  ___  )( \      \__   __/( (    /|(  ___  )
+// | (    \/| )   ( || (    \/| (    )|| )   ( || (   ) || (         ) (   |  \  ( || (   ) |
+// | |      | (___) || (__    | (____)|| |   | || |   | || |         | |   |   \ | || |   | |
+// | |      |  ___  ||  __)   |     __)( (   ) )| |   | || |         | |   | (\ \) || |   | |
+// | |      | (   ) || (      | (\ (    \ \_/ / | |   | || |         | |   | | \   || |   | |
+// | (____/\| )   ( || (____/\| ) \ \__  \   /  | (___) || (____/\___) (___| )  \  || (___) |
+// (_______/|/     \|(_______/|/   \__/   \_/   (_______)(_______/\_______/|/    )_)(_______)
+// © chervolino
+//@version=6
+indicator(title="NY 4H Wyckoff State Machine [CHE]", shorttitle="NY4H WSM", overlay=true, scale=scale.right, max_bars_back=5000, max_lines_count=500, max_labels_count=500, max_boxes_count=50)
+
+// --- SECTION: Constants & Enums
+int L_RANGE = 0
+int L_ACCUM = 1
+int L_MANIP = 2
+int L_REENTRY = 3
+int L_DISTRIB = 4
+int S_RANGE = 0
+int S_ACCUM = 1
+int S_MANIP = 2
+int S_REENTRY = 3
+int S_DISTRIB = 4
+
+string GROUP_SESSION = "Session (NY 4h window)"
+string GROUP_LOGIC = "State machine logic"
+string GROUP_FILTERS = "Filters (optional)"
+string GROUP_TARGETS = "Targets/SL/Management"
+string GROUP_VIZ = "Visualization & Alerts"
+
+// --- SECTION: Inputs
+session_win = input.session("0100-0500", "4h window (NY)", group=GROUP_SESSION, tooltip="First 4h window of the NY day.")
+tz_input = input.string("America/New_York", "Time zone", group=GROUP_SESSION, tooltip="DST-safe time zone.")
+atr_length = input.int(14, "ATR length", minval=1, group=GROUP_LOGIC, tooltip="ATR period length.")
+atr_factor = input.float(0.15, "ATR buffer factor", minval=0.0, step=0.01, group=GROUP_LOGIC, tooltip="ATR buffer at range edges.")
+min_break_frac = input.float(0.10, "Min overshoot (range frac)", minval=0.0, maxval=2.0, step=0.01, group=GROUP_LOGIC, tooltip="Minimum overshoot as a fraction of range.")
+min_break_abs = input.float(0.0, "Min overshoot (abs)", minval=0.0, step=0.0001, group=GROUP_LOGIC, tooltip="Minimum absolute overshoot.")
+use_close_break = input.bool(true, "Break via close", group=GROUP_LOGIC, tooltip="Use close break instead of wick.")
+n_accept_break = input.int(2, "Accept break (bars)", minval=1, maxval=10, group=GROUP_LOGIC, tooltip="Consecutive bars to accept a break.")
+n_accept_reentry = input.int(2, "Accept re-entry (bars)", minval=1, maxval=10, group=GROUP_LOGIC, tooltip="Consecutive bars to accept re-entry.")
+n_accept_opposite = input.int(2, "Accept opposite BO (bars)", minval=1, maxval=10, group=GROUP_LOGIC, tooltip="Consecutive bars to accept opposite breakout.")
+min_out_bars = input.int(3, "Min bars in manipulation", minval=1, maxval=50, group=GROUP_LOGIC, tooltip="Minimum outside bars during manipulation.")
+enable_short_manip = input.bool(true, "Allow short wick manipulation", group=GROUP_LOGIC, tooltip="Enable short-lived wick manipulation trigger.")
+use_wick_detect = input.bool(true, "Enable wick detection", group=GROUP_FILTERS, tooltip="Wick-based detection for manipulation.")
+wick_dom_frac = input.float(0.60, "Wick ≥ x% of bar", minval=0.0, maxval=1.0, step=0.05, group=GROUP_FILTERS, tooltip="Lower/upper wick share of bar range.")
+wick_body_ratio_min = input.float(1.50, "Wick ≥ x × body", minval=0.0, step=0.1, group=GROUP_FILTERS, tooltip="Wick-to-body dominance ratio.")
+wick_atr_mult_min = input.float(0.80, "Bar range ≥ x × ATR", minval=0.0, step=0.1, group=GROUP_FILTERS, tooltip="Significance threshold vs ATR.")
+wick_cluster_n = input.int(1, "Wick cluster size", minval=1, maxval=10, group=GROUP_FILTERS, tooltip="Minimum wick hits in the cluster window.")
+wick_cluster_window = input.int(3, "Wick cluster window", minval=1, maxval=50, group=GROUP_FILTERS, tooltip="Window size (bars) for wick clusters.")
+use_wick_filter = input.bool(false, "Wick rejection filter", group=GROUP_FILTERS, tooltip="Optional quality filter in manipulation.")
+wick_ratio_min = input.float(0.40, "Min wick ratio", minval=0.0, maxval=1.0, step=0.05, group=GROUP_FILTERS, tooltip="Minimum wick share of full bar.")
+use_volume_filter = input.bool(false, "Use volume filter", group=GROUP_FILTERS, tooltip="Require high volume condition.")
+vol_length = input.int(20, "Volume SMA length", minval=1, group=GROUP_FILTERS, tooltip="SMA length for volume.")
+vol_multiplier = input.float(1.2, "Volume > SMA × k", minval=1.0, step=0.1, group=GROUP_FILTERS, tooltip="Volume multiplier vs SMA.")
+use_rsi_filter = input.bool(false, "Use RSI filter", group=GROUP_FILTERS, tooltip="Require RSI condition.")
+rsi_length = input.int(14, "RSI length", minval=1, group=GROUP_FILTERS, tooltip="RSI calculation length.")
+rsi_long_thresh = input.float(40, "Min RSI for long", minval=0, maxval=100, step=1, group=GROUP_FILTERS, tooltip="Lower bound for long entries.")
+rsi_short_thresh = input.float(60, "Max RSI for short", minval=0, maxval=100, step=1, group=GROUP_FILTERS, tooltip="Upper bound for short entries.")
+use_retest = input.bool(true, "Require retest", group=GROUP_FILTERS, tooltip="Re-entry requires retest condition.")
+use_retest_filter = input.bool(false, "Enable retest filter", group=GROUP_FILTERS, tooltip="Gate retest by proximity to range edge.")
+retest_tolerance = input.float(0.5, "Retest tolerance (ATR frac)", minval=0.0, step=0.1, group=GROUP_FILTERS, tooltip="Tolerance around buffered edge (×ATR).")
+tp_mode = input.string("Opposite Range", "TP mode", options=["Opposite Range","RRx"], group=GROUP_TARGETS, tooltip="Take-profit mode.")
+rr_multiple = input.float(2.0, "R multiple", minval=0.1, step=0.1, group=GROUP_TARGETS, tooltip="Reward multiple if TP mode = RRx.")
+draw_sl_tp = input.bool(true, "Draw entry/SL/TP lines", group=GROUP_TARGETS, tooltip="Draw helper lines for entries, SL, TP.")
+cooldown_bars = input.int(10, "Cooldown (bars)", minval=0, maxval=500, group=GROUP_TARGETS, tooltip="Bars to wait after a signal.")
+distrib_timeout = input.int(50, "Distribution timeout", minval=5, maxval=5000, group=GROUP_TARGETS, tooltip="Max bars in distribution before reset.")
+show_bg_phase = input.bool(true, "Background phases", group=GROUP_VIZ, tooltip="Tint background by phase.")
+show_labels = input.bool(false, "Show info labels", group=GROUP_VIZ, tooltip="Draw text labels for signals.")
+label_offset = input.float(0.3, "Label offset (ATR frac)", minval=0.0, step=0.1, group=GROUP_VIZ, tooltip="Offset from bar using ATR fraction.")
+enable_alerts = input.bool(true, "Enable alerts", group=GROUP_VIZ, tooltip="Enable alertconditions.")
+enable_alerts_breakout = input.bool(true, "Enable breakout alerts", group=GROUP_VIZ, tooltip="Alerts for direct/opposite breakouts.")
+trend_sma_length = input.int(50, "Trend SMA length", minval=1, group=GROUP_LOGIC, tooltip="SMA length for trend context.")
+momentum_length = input.int(5, "Momentum length", minval=1, group=GROUP_FILTERS, tooltip="Momentum length for Spring/UTAD.")
+show_dynamic_table = input.bool(true, "Show Wyckoff table", group=GROUP_VIZ, tooltip="Show dynamic Wyckoff structure table.")
+
+// --- SECTION: Persistent Vars (Session/Range)
+var float session_high = na
+var float session_low = na
+var bool range_ready = false
+var float range1_high = na
+var float range1_low = na
+var float range1_high_buffered = na
+var float range1_low_buffered = na
+var array<float> accum_ranges_high = array.new<float>()
+var array<float> accum_ranges_low = array.new<float>()
+var array<float> distrib_ranges_high = array.new<float>()
+var array<float> distrib_ranges_low = array.new<float>()
+var int session_start_bar = na
+var array<box> session_boxes = array.new<box>()
+
+// --- SECTION: Persistent Vars (States/Management)
+var int state_long = L_RANGE
+var int state_short = S_RANGE
+var int break_cnt_long = 0
+var int break_cnt_short = 0
+var int reentry_cnt_long = 0
+var int reentry_cnt_short = 0
+var int out_count_long = 0
+var int out_count_short = 0
+var int distrib_age_long = 0
+var int distrib_age_short = 0
+var int next_bar_ok_long = 0
+var int next_bar_ok_short = 0
+var int opp_cnt_long = 0
+var int opp_cnt_short = 0
+var bool had_long_manip = false
+var bool had_short_manip = false
+var float side_extreme_long = na
+var float side_extreme_short = na
+var float entry_price_long = na
+var float sl_price_long = na
+var float tp_price_long = na
+var float risk_long = na
+var float entry_price_short = na
+var float sl_price_short = na
+var float tp_price_short = na
+var float risk_short = na
+var float entry_price_long_bo = na
+var float sl_price_long_bo = na
+var float tp_price_long_bo = na
+var float risk_long_bo = na
+var float entry_price_short_bo = na
+var float sl_price_short_bo = na
+var float tp_price_short_bo = na
+var float risk_short_bo = na
+var float trend_context = na
+
+// --- SECTION: Lines
+var array<line> range_lines = array.new<line>()
+var array<line> signal_lines = array.new<line>()
+
+// --- SECTION: One-Bar Event Flags
+var bool fire_long = false
+var bool fire_short = false
+var bool fire_long_bo = false
+var bool fire_short_bo = false
+fire_long := false
+fire_short := false
+fire_long_bo := false
+fire_short_bo := false
+
+// --- SECTION: Helpers (pure)
+wick_metrics(o, h, l, c) =>
+    float body_top = math.max(o, c)
+    float body_bot = math.min(o, c)
+    float upper = h - body_top
+    float lower = body_top - l
+    float body = body_top - body_bot
+    float rng = math.max(h - l, syminfo.mintick)
+    [upper, lower, body, rng]
+
+// --- SECTION: Indicators & Window
+in_window = not na(time(timeframe.period, session_win, tz_input))
+window_started = in_window and not in_window[1]
+window_ended = not in_window and in_window[1]
+atr = ta.atr(atr_length)
+rsi = ta.rsi(close, rsi_length)
+vol_sma = ta.sma(volume, vol_length)
+high_volume = volume > vol_sma * vol_multiplier
+sma_trend = ta.sma(close, trend_sma_length)
+momentum = ta.mom(close, momentum_length)
+
+// --- SECTION: Session Reset
+if window_started
+    state_long := L_RANGE
+    state_short := S_RANGE
+    session_high := high
+    session_low := low
+    range_ready := false
+    range1_high := na
+    range1_low := na
+    range1_high_buffered := na
+    range1_low_buffered := na
+    session_start_bar := bar_index
+    break_cnt_long := 0
+    break_cnt_short := 0
+    reentry_cnt_long := 0
+    reentry_cnt_short := 0
+    out_count_long := 0
+    out_count_short := 0
+    distrib_age_long := 0
+    distrib_age_short := 0
+    next_bar_ok_long := bar_index
+    next_bar_ok_short := bar_index
+    opp_cnt_long := 0
+    opp_cnt_short := 0
+    had_long_manip := false
+    had_short_manip := false
+    side_extreme_long := na
+    side_extreme_short := na
+    entry_price_long := na
+    sl_price_long := na
+    tp_price_long := na
+    risk_long := na
+    entry_price_short := na
+    sl_price_short := na
+    tp_price_short := na
+    risk_short := na
+    entry_price_long_bo := na
+    sl_price_long_bo := na
+    tp_price_long_bo := na
+    risk_long_bo := na
+    entry_price_short_bo := na
+    sl_price_short_bo := na
+    tp_price_short_bo := na
+    risk_short_bo := na
+    trend_context := close > sma_trend ? 1 : -1
+    int n_rl = array.size(range_lines)
+    if n_rl > 0
+        for i = 0 to n_rl - 1
+            line.delete(array.get(range_lines, i))
+    array.clear(range_lines)
+    int n_sl = array.size(signal_lines)
+    if n_sl > 0
+        for i = 0 to n_sl - 1
+            line.delete(array.get(signal_lines, i))
+    array.clear(signal_lines)
+
+// --- SECTION: Range Build Inside Window
+if in_window
+    session_high := na(session_high) ? high : math.max(session_high, high)
+    session_low := na(session_low) ? low : math.min(session_low, low)
+    state_long := L_RANGE
+    state_short := S_RANGE
+    if show_labels
+        label.new(bar_index, high, "Phase A: Stopping Action", style=label.style_label_down, color=color.new(color.gray, 50), textcolor=color.white, size=size.tiny)
+
+// --- SECTION: Fix Range on Window End -> ACCUM
+if window_ended and not na(session_high) and not na(session_low)
+    range1_high := session_high
+    range1_low := session_low
+    range1_high_buffered := range1_high + atr * atr_factor
+    range1_low_buffered := range1_low - atr * atr_factor
+    range_ready := true
+    state_long := L_ACCUM
+    state_short := S_ACCUM
+    opp_cnt_long := 0
+    opp_cnt_short := 0
+    had_long_manip := false
+    had_short_manip := false
+    array.push(accum_ranges_high, range1_high)
+    array.push(accum_ranges_low, range1_low)
+    array.push(distrib_ranges_high, range1_high)
+    array.push(distrib_ranges_low, range1_low)
+    line hl = line.new(bar_index, range1_high, bar_index + 1, range1_high, color=color.new(color.red, 0), width=2, extend=extend.right)
+    line ll = line.new(bar_index, range1_low, bar_index + 1, range1_low, color=color.new(color.green, 0), width=2, extend=extend.right)
+    line hbl = line.new(bar_index, range1_high_buffered, bar_index + 1, range1_high_buffered, color=color.new(color.red, 50), width=1, style=line.style_dashed, extend=extend.right)
+    line lbl = line.new(bar_index, range1_low_buffered, bar_index + 1, range1_low_buffered, color=color.new(color.green, 50), width=1, style=line.style_dashed, extend=extend.right)
+    array.push(range_lines, hl)
+    array.push(range_lines, ll)
+    array.push(range_lines, hbl)
+    array.push(range_lines, lbl)
+    if show_labels
+        label.new(bar_index, high, "Phase B: Consolidation", style=label.style_label_down, color=color.new(color.gray, 50), textcolor=color.white, size=size.tiny)
+    if not na(session_start_bar)
+        session_box = box.new(left=session_start_bar, top=session_high, right=bar_index + 1, bottom=session_low, border_color=color.yellow, bgcolor=color.new(color.yellow, 90), extend=extend.none)
+        array.push(session_boxes, session_box)
+        if array.size(session_boxes) > 40
+            old_box = array.shift(session_boxes)
+            box.delete(old_box)
+    session_start_bar := na
+
+// --- SECTION: Derived Conditions
+range_width = range_ready ? (range1_high - range1_low) : na
+min_overshoot = range_ready ? math.max(min_break_abs, min_break_frac * nz(range_width, 0.0)) : na
+is_inside = range_ready and close <= range1_high_buffered and close >= range1_low_buffered
+is_above_close = range_ready and close > range1_high_buffered
+is_below_close = range_ready and close < range1_low_buffered
+is_above_wick = range_ready and high > range1_high_buffered
+is_below_wick = range_ready and low < range1_low_buffered
+is_above = range_ready and (use_close_break ? is_above_close : is_above_wick)
+is_below = range_ready and (use_close_break ? is_below_close : is_below_wick)
+
+if enable_short_manip and range_ready
+    bool wick_above_short = high > range1_high_buffered and close <= range1_high_buffered and (high - range1_high_buffered) >= nz(min_overshoot, 0.0)
+    bool wick_below_short = low < range1_low_buffered and close >= range1_low_buffered and (range1_low_buffered - low) >= nz(min_overshoot, 0.0)
+    is_above := is_above or wick_above_short
+    is_below := is_below or wick_below_short
+
+[wu, wl, body, rng] = wick_metrics(open, high, low, close)
+bool wick_dom_lower = wl / rng >= wick_dom_frac and wl / math.max(body, syminfo.mintick) >= wick_body_ratio_min
+bool wick_dom_upper = wu / rng >= wick_dom_frac and wu / math.max(body, syminfo.mintick) >= wick_body_ratio_min
+bool wick_size_ok = rng >= atr * wick_atr_mult_min
+bool wick_penetrate_down = range_ready and low < (range1_low_buffered + 0.0 - nz(min_overshoot, 0.0))
+bool wick_penetrate_up = range_ready and high > (range1_high_buffered - 0.0 + nz(min_overshoot, 0.0))
+bool wick_rejects_down = close >= range1_low_buffered
+bool wick_rejects_up = close <= range1_high_buffered
+bool wick_down_bar = use_wick_detect and wick_dom_lower and wick_size_ok and wick_penetrate_down and wick_rejects_down
+bool wick_up_bar = use_wick_detect and wick_dom_upper and wick_size_ok and wick_penetrate_up and wick_rejects_up
+float wick_down_hits = math.sum(wick_down_bar ? 1.0 : 0.0, wick_cluster_window)
+float wick_up_hits = math.sum(wick_up_bar ? 1.0 : 0.0, wick_cluster_window)
+bool wick_down_cluster = wick_down_hits >= wick_cluster_n
+bool wick_up_cluster = wick_up_hits >= wick_cluster_n
+bool strong_spring = wick_down_cluster and momentum > 0
+bool strong_utad = wick_up_cluster and momentum < 0
+
+retest_tol_val = atr * retest_tolerance
+retest_down = use_retest_filter and use_retest and range_ready and math.abs(close - range1_low_buffered) <= retest_tol_val
+retest_up = use_retest_filter and use_retest and range_ready and math.abs(close - range1_high_buffered) <= retest_tol_val
+
+// --- SECTION: Re-Accum/Re-Distrib Check (independent)
+bool is_re_accum = range_ready and state_long == L_ACCUM and array.size(accum_ranges_high) > 0 and close <= array.get(accum_ranges_high, array.size(accum_ranges_high) - 1) and close >= array.get(accum_ranges_low, array.size(accum_ranges_low) - 1)
+bool is_re_distrib = range_ready and state_short == S_ACCUM and array.size(distrib_ranges_high) > 0 and close <= array.get(distrib_ranges_high, array.size(distrib_ranges_high) - 1) and close >= array.get(distrib_ranges_low, array.size(distrib_ranges_low) - 1)
+if is_re_accum and show_labels
+    label.new(bar_index, high, "Re-Accumulation detected", style=label.style_label_down, color=color.new(color.blue, 50), textcolor=color.white, size=size.tiny)
+if is_re_distrib and show_labels
+    label.new(bar_index, low, "Re-Distribution detected", style=label.style_label_up, color=color.new(color.orange, 50), textcolor=color.white, size=size.tiny)
+
+// --- SECTION: Long 5-State Machine
+if range_ready
+    bool is_accum_context = trend_context == -1
+    if state_long == L_ACCUM
+        break_cnt_long := is_below ? break_cnt_long + 1 : 0
+        bool long_break_accept = is_below and break_cnt_long >= n_accept_break and (range1_low_buffered - low) >= nz(min_overshoot, 0.0)
+        bool long_wick_accept = strong_spring
+        bool direct_breakout = is_accum_context and close > range1_high_buffered and (close - range1_high_buffered) >= nz(min_overshoot, 0.0) and (use_volume_filter ? high_volume : true) and (use_rsi_filter ? rsi > rsi_long_thresh : true)
+        if direct_breakout
+            entry_price_long_bo := close
+            sl_price_long_bo := range1_low
+            risk_long_bo := entry_price_long_bo - sl_price_long_bo
+            risk_long_bo := risk_long_bo <= 0 ? syminfo.mintick : risk_long_bo
+            tp_price_long_bo := tp_mode == "Opposite Range" ? na : entry_price_long_bo + rr_multiple * risk_long_bo
+            fire_long_bo := true
+            next_bar_ok_long := bar_index + cooldown_bars
+            state_long := L_DISTRIB
+            distrib_age_long := 0
+            had_long_manip := false
+            if draw_sl_tp
+                line ln_e = line.new(bar_index, entry_price_long_bo, bar_index + 1, entry_price_long_bo, color=color.new(color.blue, 0), width=1, extend=extend.right)
+                line ln_sl = line.new(bar_index, sl_price_long_bo, bar_index + 1, sl_price_long_bo, color=color.new(color.red, 0), width=1, extend=extend.right)
+                line ln_tp = line.new(bar_index, tp_price_long_bo, bar_index + 1, tp_price_long_bo, color=color.new(color.green, 0), width=1, extend=extend.right)
+                array.push(signal_lines, ln_e)
+                array.push(signal_lines, ln_sl)
+                array.push(signal_lines, ln_tp)
+            if show_labels
+                label.new(bar_index, high, "Phase D: Direct Breakout", style=label.style_label_down, color=color.new(color.green, 50), textcolor=color.white, size=size.tiny)
+        else if is_accum_context and (use_volume_filter ? high_volume : true) and (use_rsi_filter ? rsi < rsi_short_thresh : true) and (long_break_accept or long_wick_accept)
+            state_long := L_MANIP
+            out_count_long := 1
+            side_extreme_long := low
+            had_long_manip := true
+            if show_labels
+                label.new(bar_index, low, "Phase C: Spring", style=label.style_label_up, color=color.new(color.orange, 50), textcolor=color.white, size=size.tiny)
+    else if state_long == L_MANIP
+        bool below_or_wick = is_below or wick_down_bar
+        if below_or_wick
+            out_count_long += 1
+            side_extreme_long := math.min(side_extreme_long, low)
+        if is_inside
+            bool overshoot_ok = (range1_low_buffered - side_extreme_long) >= nz(min_overshoot, 0.0)
+            if out_count_long >= min_out_bars and overshoot_ok and (use_rsi_filter ? rsi > rsi_long_thresh : true) and (use_retest ? retest_down : true)
+                state_long := L_REENTRY
+                reentry_cnt_long := 1
+                if show_labels
+                    label.new(bar_index, low, "Phase C: Test", style=label.style_label_up, color=color.new(color.blue, 50), textcolor=color.white, size=size.tiny)
+    else if state_long == L_REENTRY
+        // TODO: Confirm stricter re-entry acceptance if needed
+        reentry_cnt_long := is_inside ? reentry_cnt_long + 1 : 0
+        if reentry_cnt_long >= n_accept_reentry and bar_index >= next_bar_ok_long
+            entry_price_long := close
+            sl_price_long := side_extreme_long
+            risk_long := entry_price_long - sl_price_long
+            risk_long := risk_long <= 0 ? syminfo.mintick : risk_long
+            tp_price_long := tp_mode == "Opposite Range" ? range1_high : entry_price_long + rr_multiple * risk_long
+            if draw_sl_tp
+                line ln_e = line.new(bar_index, entry_price_long, bar_index + 1, entry_price_long, color=color.new(color.blue, 0), width=1, extend=extend.right)
+                line ln_sl = line.new(bar_index, sl_price_long, bar_index + 1, sl_price_long, color=color.new(color.red, 0), width=1, extend=extend.right)
+                line ln_tp = line.new(bar_index, tp_price_long, bar_index + 1, tp_price_long, color=color.new(color.green, 0), width=1, extend=extend.right)
+                array.push(signal_lines, ln_e)
+                array.push(signal_lines, ln_sl)
+                array.push(signal_lines, ln_tp)
+            fire_long := true
+            next_bar_ok_long := bar_index + cooldown_bars
+            state_long := L_DISTRIB
+            distrib_age_long := 0
+            reentry_cnt_long := 0
+            out_count_long := 0
+            if show_labels
+                label.new(bar_index, high, "Phase D: Breakout -> E: Markup", style=label.style_label_down, color=color.new(color.green, 50), textcolor=color.white, size=size.tiny)
+    if had_long_manip and range_ready
+        bool opp_now = close > range1_high_buffered
+        opp_cnt_long := opp_now ? opp_cnt_long + 1 : 0
+        if opp_cnt_long >= n_accept_opposite and bar_index >= next_bar_ok_long
+            entry_price_long_bo := close
+            sl_price_long_bo := range1_low
+            risk_long_bo := entry_price_long_bo - sl_price_long_bo
+            risk_long_bo := risk_long_bo <= 0 ? syminfo.mintick : risk_long_bo
+            tp_price_long_bo := tp_mode == "Opposite Range" ? na : entry_price_long_bo + rr_multiple * risk_long_bo
+            fire_long_bo := true
+            next_bar_ok_long := bar_index + cooldown_bars
+            state_long := L_DISTRIB
+            distrib_age_long := 0
+            reentry_cnt_long := 0
+            out_count_long := 0
+            had_long_manip := false
+            if show_labels
+                label.new(bar_index, high, "Phase D: Opposite Breakout -> E: Markup", style=label.style_label_down, color=color.new(color.green, 50), textcolor=color.white, size=size.tiny)
+    if (fire_long or fire_long_bo) and state_long != L_DISTRIB
+        state_long := L_DISTRIB
+        distrib_age_long := 0
+    if state_long == L_DISTRIB
+        distrib_age_long += 1
+        bool hit_tp = high >= nz(tp_price_long, -10e10) or high >= nz(tp_price_long_bo, -10e10)
+        bool hit_sl = low <= nz(sl_price_long, 10e10) or low <= nz(sl_price_long_bo, 10e10)
+        bool exit_accept = close > range1_high
+        bool timeout = distrib_age_long >= distrib_timeout
+        if hit_tp or hit_sl or exit_accept or timeout
+            state_long := L_ACCUM
+            break_cnt_long := 0
+            opp_cnt_long := 0
+            distrib_age_long := 0
+            if show_labels and not is_re_accum
+                label.new(bar_index, high, "Phase E: Markup finished", style=label.style_label_down, color=color.new(color.teal, 50), textcolor=color.white, size=size.tiny)
+
+// --- SECTION: Short 5-State Machine
+if range_ready
+    bool is_distrib_context = trend_context == 1
+    if state_short == S_ACCUM
+        break_cnt_short := is_above ? break_cnt_short + 1 : 0
+        bool short_break_accept = is_above and break_cnt_short >= n_accept_break and (high - range1_high_buffered) >= nz(min_overshoot, 0.0)
+        bool short_wick_accept = strong_utad
+        bool direct_breakout_short = is_distrib_context and close < range1_low_buffered and (range1_low_buffered - close) >= nz(min_overshoot, 0.0) and (use_volume_filter ? high_volume : true) and (use_rsi_filter ? rsi < rsi_short_thresh : true)
+        if direct_breakout_short
+            entry_price_short_bo := close
+            sl_price_short_bo := range1_high
+            risk_short_bo := sl_price_short_bo - entry_price_short_bo
+            risk_short_bo := risk_short_bo <= 0 ? syminfo.mintick : risk_short_bo
+            tp_price_short_bo := tp_mode == "Opposite Range" ? na : entry_price_short_bo - rr_multiple * risk_short_bo
+            fire_short_bo := true
+            next_bar_ok_short := bar_index + cooldown_bars
+            state_short := S_DISTRIB
+            distrib_age_short := 0
+            had_short_manip := false
+            if draw_sl_tp
+                line ln_e2 = line.new(bar_index, entry_price_short_bo, bar_index + 1, entry_price_short_bo, color=color.new(color.blue, 0), width=1, extend=extend.right)
+                line ln_sl2 = line.new(bar_index, sl_price_short_bo, bar_index + 1, sl_price_short_bo, color=color.new(color.red, 0), width=1, extend=extend.right)
+                line ln_tp2 = line.new(bar_index, tp_price_short_bo, bar_index + 1, tp_price_short_bo, color=color.new(color.green, 0), width=1, extend=extend.right)
+                array.push(signal_lines, ln_e2)
+                array.push(signal_lines, ln_sl2)
+                array.push(signal_lines, ln_tp2)
+            if show_labels
+                label.new(bar_index, low, "Phase D: Direct Breakout", style=label.style_label_up, color=color.new(color.red, 50), textcolor=color.white, size=size.tiny)
+        else if is_distrib_context and (use_volume_filter ? high_volume : true) and (use_rsi_filter ? rsi > rsi_long_thresh : true) and (short_break_accept or short_wick_accept)
+            state_short := S_MANIP
+            out_count_short := 1
+            side_extreme_short := high
+            had_short_manip := true
+            if show_labels
+                label.new(bar_index, high, "Phase C: UTAD", style=label.style_label_down, color=color.new(color.maroon, 50), textcolor=color.white, size=size.tiny)
+    else if state_short == S_MANIP
+        bool above_or_wick = is_above or wick_up_bar
+        if above_or_wick
+            out_count_short += 1
+            side_extreme_short := math.max(side_extreme_short, high)
+        if is_inside
+            bool overshoot_ok2 = (side_extreme_short - range1_high_buffered) >= nz(min_overshoot, 0.0)
+            if out_count_short >= min_out_bars and overshoot_ok2 and (use_rsi_filter ? rsi < rsi_short_thresh : true) and (use_retest ? retest_up : true)
+                state_short := S_REENTRY
+                reentry_cnt_short := 1
+                if show_labels
+                    label.new(bar_index, high, "Phase C: Test", style=label.style_label_down, color=color.new(color.blue, 50), textcolor=color.white, size=size.tiny)
+    else if state_short == S_REENTRY
+        // TODO: Confirm stricter re-entry acceptance if needed
+        reentry_cnt_short := is_inside ? reentry_cnt_short + 1 : 0
+        if reentry_cnt_short >= n_accept_reentry and bar_index >= next_bar_ok_short
+            entry_price_short := close
+            sl_price_short := side_extreme_short
+            risk_short := sl_price_short - entry_price_short
+            risk_short := risk_short <= 0 ? syminfo.mintick : risk_short
+            tp_price_short := tp_mode == "Opposite Range" ? range1_low : entry_price_short - rr_multiple * risk_short
+            if draw_sl_tp
+                line ln_e2 = line.new(bar_index, entry_price_short, bar_index + 1, entry_price_short, color=color.new(color.blue, 0), width=1, extend=extend.right)
+                line ln_sl2 = line.new(bar_index, sl_price_short, bar_index + 1, sl_price_short, color=color.new(color.red, 0), width=1, extend=extend.right)
+                line ln_tp2 = line.new(bar_index, tp_price_short, bar_index + 1, tp_price_short, color=color.new(color.green, 0), width=1, extend=extend.right)
+                array.push(signal_lines, ln_e2)
+                array.push(signal_lines, ln_sl2)
+                array.push(signal_lines, ln_tp2)
+            fire_short := true
+            next_bar_ok_short := bar_index + cooldown_bars
+            state_short := S_DISTRIB
+            distrib_age_short := 0
+            reentry_cnt_short := 0
+            out_count_short := 0
+            if show_labels
+                label.new(bar_index, low, "Phase D: Breakout -> E: Markdown", style=label.style_label_up, color=color.new(color.red, 50), textcolor=color.white, size=size.tiny)
+    if had_short_manip and range_ready
+        bool opp_now2 = close < range1_low_buffered
+        opp_cnt_short := opp_now2 ? opp_cnt_short + 1 : 0
+        if opp_cnt_short >= n_accept_opposite and bar_index >= next_bar_ok_short
+            entry_price_short_bo := close
+            sl_price_short_bo := range1_high
+            risk_short_bo := sl_price_short_bo - entry_price_short_bo
+            risk_short_bo := risk_short_bo <= 0 ? syminfo.mintick : risk_short_bo
+            tp_price_short_bo := tp_mode == "Opposite Range" ? na : entry_price_short_bo - rr_multiple * risk_short_bo
+            fire_short_bo := true
+            next_bar_ok_short := bar_index + cooldown_bars
+            state_short := S_DISTRIB
+            distrib_age_short := 0
+            reentry_cnt_short := 0
+            out_count_short := 0
+            had_short_manip := false
+            if show_labels
+                label.new(bar_index, low, "Phase D: Opposite Breakout -> E: Markdown", style=label.style_label_up, color=color.new(color.red, 50), textcolor=color.white, size=size.tiny)
+    if (fire_short or fire_short_bo) and state_short != S_DISTRIB
+        state_short := S_DISTRIB
+        distrib_age_short := 0
+    if state_short == S_DISTRIB
+        distrib_age_short += 1
+        bool hit_tp2 = low <= nz(tp_price_short, 10e10) or low <= nz(tp_price_short_bo, 10e10)
+        bool hit_sl2 = high >= nz(sl_price_short, -10e10) or high >= nz(sl_price_short_bo, -10e10)
+        bool exit_accept2 = close < range1_low
+        bool timeout2 = distrib_age_short >= distrib_timeout
+        if hit_tp2 or hit_sl2 or exit_accept2 or timeout2
+            state_short := S_ACCUM
+            break_cnt_short := 0
+            opp_cnt_short := 0
+            distrib_age_short := 0
+            if show_labels and not is_re_distrib
+                label.new(bar_index, low, "Phase E: Markdown finished", style=label.style_label_up, color=color.new(color.purple, 50), textcolor=color.white, size=size.tiny)
+
+// --- SECTION: Wick Quality Filter (optional, acts in MANIP)
+if use_wick_filter and (state_long == L_MANIP or state_short == S_MANIP)
+    float bar_len = math.max(high - low, syminfo.mintick)
+    float lower_w = math.max(open, close) - low
+    float upper_w = high - math.min(open, close)
+    bool pass_long = state_long != L_MANIP or (bar_len > 0 and lower_w / bar_len >= wick_ratio_min)
+    bool pass_short = state_short != S_MANIP or (bar_len > 0 and upper_w / bar_len >= wick_ratio_min)
+    if not pass_long
+        state_long := L_ACCUM
+        out_count_long := 0
+        break_cnt_long := 0
+    if not pass_short
+        state_short := S_ACCUM
+        out_count_short := 0
+        break_cnt_short := 0
+
+// --- SECTION: Rendering/UI (GLOBAL ONLY)
+bool bg_accum = show_bg_phase and (state_long == L_ACCUM and state_short == S_ACCUM)
+bool bg_manip_down = show_bg_phase and state_long == L_MANIP
+bool bg_manip_up = show_bg_phase and state_short == S_MANIP
+bool bg_distrib = show_bg_phase and (state_long == L_DISTRIB or state_short == S_DISTRIB)
+bgcolor(bg_accum ? color.new(color.silver, 92) : na, title="Accumulation")
+bgcolor(bg_manip_down ? color.new(color.orange, 90) : na, title="Manipulation Down")
+bgcolor(bg_manip_up ? color.new(color.maroon, 90) : na, title="Manipulation Up")
+bgcolor(bg_distrib ? color.new(color.teal, 90) : na, title="Distribution")
+
+plotshape(fire_long, title="Arrow Long Re-Entry", style=shape.arrowup, location=location.belowbar, size=size.tiny, color=color.new(color.lime, 0))
+plotshape(fire_short, title="Arrow Short Re-Entry", style=shape.arrowdown, location=location.abovebar, size=size.tiny, color=color.new(color.red, 0))
+plotshape(fire_long_bo, title="Breakout Long (Direct/Opp-High)", style=shape.triangleup, location=location.abovebar, size=size.tiny, color=color.new(color.lime, 0), text="BO↑")
+plotshape(fire_short_bo, title="Breakout Short (Direct/Opp-Low)", style=shape.triangledown, location=location.belowbar, size=size.tiny, color=color.new(color.red, 0), text="BO↓")
+
+float label_offset_val = atr * label_offset
+if show_labels and fire_long
+    string txt_l = "Long Re-Entry\nEntry: " + str.tostring(entry_price_long, "#.####") + "\nSL: " + str.tostring(sl_price_long, "#.####") + "\nTP: " + str.tostring(tp_price_long, "#.####") + "\nRisk: " + str.tostring(risk_long, "#.####")
+    label.new(bar_index, low - label_offset_val, txt_l, style=label.style_label_up, color=color.new(color.lime, 0), textcolor=color.white, size=size.normal)
+if show_labels and fire_short
+    string txt_s = "Short Re-Entry\nEntry: " + str.tostring(entry_price_short, "#.####") + "\nSL: " + str.tostring(sl_price_short, "#.####") + "\nTP: " + str.tostring(tp_price_short, "#.####") + "\nRisk: " + str.tostring(risk_short, "#.####")
+    label.new(bar_index, high + label_offset_val, txt_s, style=label.style_label_down, color=color.new(color.red, 0), textcolor=color.white, size=size.normal)
+if show_labels and fire_long_bo
+    string txt_lb = had_long_manip ? "Breakout LONG above Opp-High\nEntry: " + str.tostring(entry_price_long_bo, "#.####") : "Direct Breakout LONG\nEntry: " + str.tostring(entry_price_long_bo, "#.####")
+    label.new(bar_index, high + label_offset_val, txt_lb, style=label.style_label_down, color=color.new(color.green, 40), textcolor=color.white, size=size.small)
+if show_labels and fire_short_bo
+    string txt_sb = had_short_manip ? "Breakout SHORT below Opp-Low\nEntry: " + str.tostring(entry_price_short_bo, "#.####") : "Direct Breakout SHORT\nEntry: " + str.tostring(entry_price_short_bo, "#.####")
+    label.new(bar_index, low - label_offset_val, txt_sb, style=label.style_label_up, color=color.new(color.red, 40), textcolor=color.white, size=size.small)
+
+// Hidden plots for alerts — Re-Entry (plot_0..5)
+plot(fire_long ? sl_price_long : na, "SL Long", color=na, display=display.none)
+plot(fire_long ? tp_price_long : na, "TP Long", color=na, display=display.none)
+plot(fire_long ? risk_long : na, "Risk Long", color=na, display=display.none)
+plot(fire_short ? sl_price_short : na, "SL Short", color=na, display=display.none)
+plot(fire_short ? tp_price_short : na, "TP Short", color=na, display=display.none)
+plot(fire_short ? risk_short : na, "Risk Short", color=na, display=display.none)
+
+// Hidden plots for alerts — Breakout (plot_6..11)
+plot(fire_long_bo ? sl_price_long_bo : na, "SL Long BO", color=na, display=display.none)
+plot(fire_long_bo ? tp_price_long_bo : na, "TP Long BO", color=na, display=display.none)
+plot(fire_long_bo ? risk_long_bo : na, "Risk Long BO", color=na, display=display.none)
+plot(fire_short_bo ? sl_price_short_bo : na, "SL Short BO", color=na, display=display.none)
+plot(fire_short_bo ? tp_price_short_bo : na, "TP Short BO", color=na, display=display.none)
+plot(fire_short_bo ? risk_short_bo : na, "Risk Short BO", color=na, display=display.none)
+
+// Alert messages (short lines)
+string al_msg_l = "Long Re-Entry: Entry={{close}} SL={{plot_0}} TP={{plot_1}} Risk={{plot_2}} ({{ticker}} {{interval}})"
+string al_msg_s = "Short Re-Entry: Entry={{close}} SL={{plot_3}} TP={{plot_4}} Risk={{plot_5}} ({{ticker}} {{interval}})"
+string al_msg_lbo = "Long Breakout: Entry={{close}} SL={{plot_6}} TP={{plot_7}} Risk={{plot_8}} ({{ticker}} {{interval}})"
+string al_msg_sbo = "Short Breakout: Entry={{close}} SL={{plot_9}} TP={{plot_10}} Risk={{plot_11}} ({{ticker}} {{interval}})"
+alertcondition(enable_alerts and fire_long, "Long Re-Entry", al_msg_l)
+alertcondition(enable_alerts and fire_short, "Short Re-Entry", al_msg_s)
+alertcondition(enable_alerts_breakout and fire_long_bo, "Long Breakout", al_msg_lbo)
+alertcondition(enable_alerts_breakout and fire_short_bo, "Short Breakout", al_msg_sbo)
+
+// --- SECTION: Dynamic Table (fixed, performant, readable)
+state_name_long(id) =>
+    id == L_RANGE ? "L_RANGE" : id == L_ACCUM ? "L_ACCUM" : id == L_MANIP ? "L_MANIP" : id == L_REENTRY ? "L_REENTRY" : id == L_DISTRIB ? "L_DISTRIB" : "L_?"
+
+state_name_short(id) =>
+    id == S_RANGE ? "S_RANGE" : id == S_ACCUM ? "S_ACCUM" : id == S_MANIP ? "S_MANIP" : id == S_REENTRY ? "S_REENTRY" : id == S_DISTRIB ? "S_DISTRIB" : "S_?"
+
+set_row_bg(tb, row, bg) =>
+    table.cell_set_bgcolor(tb, 0, row, bg)
+    table.cell_set_bgcolor(tb, 1, row, bg)
+    table.cell_set_bgcolor(tb, 2, row, bg)
+    table.cell_set_bgcolor(tb, 3, row, bg)
+
+var table wyckoff_table = na
+
+if barstate.islast
+    if show_dynamic_table and na(wyckoff_table)
+        wyckoff_table := table.new(position.top_right, 4, 12, bgcolor=color.new(color.white, 0), border_width=1)
+        table.cell(wyckoff_table, 0, 0, "Wyckoff Structure", text_color=color.white, bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 1, 0, "Description", text_color=color.white, bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 2, 0, "Active State (L/S)", text_color=color.white, bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 3, 0, "Phases A-E", text_color=color.white, bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 0, 1, "Start: Market structure", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 1, 1, "Range building", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 2, 1, "-", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 3, 1, "A: Stopping Action", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 0, 2, "- Accumulation (downtrend)", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 1, 2, "After downtrend", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 2, 2, "L_ACCUM", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 3, 2, "B: Consolidation", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 0, 3, "  -> Spring? Yes -> #1", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 1, 3, "With Spring & Test", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 2, 3, "L_MANIP -> L_REENTRY", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 3, 3, "C: Test (Spring)", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 0, 4, "  -> No -> #2", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 1, 4, "Direct breakout", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 2, 4, "Direct BO", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 3, 4, "D: Breakout", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 0, 5, "       -> Markup", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 1, 5, "Uptrend", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 2, 5, "L_DISTRIB", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 3, 5, "E: Trend", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 0, 6, "           -> Re-Accumulation", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 1, 6, "Trend pause", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 2, 6, "Re-Accum check", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 3, 6, "A-B repeat", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 0, 7, "- Distribution (uptrend)", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 1, 7, "After uptrend", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 2, 7, "S_ACCUM", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 3, 7, "B: Consolidation", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 0, 8, "  -> UTAD? Yes -> #1", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 1, 8, "With UTAD & Test", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 2, 8, "S_MANIP -> S_REENTRY", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 3, 8, "C: Test (UTAD)", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 0, 9, "  -> No -> #2", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 1, 9, "Direct breakout", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 2, 9, "Direct BO Short", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 3, 9, "D: Breakout", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 0, 10, "       -> Markdown", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 1, 10, "Downtrend", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 2, 10, "S_DISTRIB", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 3, 10, "E: Trend", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 0, 11, "           -> Re-Distribution", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 1, 11, "Trend pause", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 2, 11, "Re-Distrib check", bgcolor=color.black, text_halign=text.align_left)
+        table.cell(wyckoff_table, 3, 11, "A-B repeat", bgcolor=color.black, text_halign=text.align_left)
+
+if show_dynamic_table and barstate.islast and not na(wyckoff_table)
+    table.cell_set_text(wyckoff_table, 2, 1, state_name_long(state_long) + "/" + state_name_short(state_short))
+    color c_acc = trend_context == -1 ? color.new(color.green, 80) : color.new(color.white, 0)
+    color c_spring = (state_long == L_MANIP or state_long == L_REENTRY) ? color.new(color.orange, 80) : color.new(color.white, 0)
+    color c_bo_l = fire_long_bo ? color.new(color.lime, 80) : color.new(color.white, 0)
+    color c_markup = state_long == L_DISTRIB ? color.new(color.teal, 80) : color.new(color.white, 0)
+    color c_reacc = is_re_accum ? color.new(color.blue, 80) : color.new(color.white, 0)
+    color c_dist = trend_context == 1 ? color.new(color.red, 80) : color.new(color.white, 0)
+    color c_utad = (state_short == S_MANIP or state_short == S_REENTRY) ? color.new(color.maroon, 80) : color.new(color.white, 0)
+    color c_bo_s = fire_short_bo ? color.new(color.fuchsia, 80) : color.new(color.white, 0)
+    color c_mdown = state_short == S_DISTRIB ? color.new(color.purple, 80) : color.new(color.white, 0)
+    color c_redst = is_re_distrib ? color.new(color.orange, 80) : color.new(color.white, 0)
+    set_row_bg(wyckoff_table, 2, c_acc)
+    set_row_bg(wyckoff_table, 3, c_spring)
+    set_row_bg(wyckoff_table, 4, c_bo_l)
+    set_row_bg(wyckoff_table, 5, c_markup)
+    set_row_bg(wyckoff_table, 6, c_reacc)
+    set_row_bg(wyckoff_table, 7, c_dist)
+    set_row_bg(wyckoff_table, 8, c_utad)
+    set_row_bg(wyckoff_table, 9, c_bo_s)
+    set_row_bg(wyckoff_table, 10, c_mdown)
+    set_row_bg(wyckoff_table, 11, c_redst)

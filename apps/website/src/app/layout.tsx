@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { marketingLinks } from "@/lib/marketing-links";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Glitch — Risk-First Prop Trading OS for NinjaTrader",
+  title: "Glitch - Risk-First NinjaTrader AddOn for Prop Traders",
   description:
     "Glitch helps prop traders protect eval and funded accounts with compliance controls, replication safety, and clearer multi-timeframe execution.",
 };
@@ -53,6 +54,12 @@ function SiteHeader() {
             className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
           >
             Affiliate
+          </Link>
+          <Link
+            href={marketingLinks.memberHubUrl}
+            className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+          >
+            Member Hub
           </Link>
         </nav>
       </div>

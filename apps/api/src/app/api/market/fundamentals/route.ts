@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { NextRequest } from "next/server";
 import {
   EntitlementStoreConfigError,
@@ -5,9 +6,13 @@ import {
   isWhopEntitlementStatusActive,
   verifyLicenseBinding,
 } from "@/lib/entitlements-store";
+import { getTrustedClientIp } from "@/lib/client-ip";
+import { readOptionalEnv } from "@/lib/env";
 import { buildPolicy, resolvePlanFromCode } from "@/lib/license-policy";
 import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
+import { validateAndConsumeLicenseNonce } from "@/lib/license-nonce-store";
 import { getMarketFundamentalSnapshot } from "@/lib/market-fundamentals";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -18,11 +23,47 @@ interface FundamentalRequestPayload {
   clientVersion?: string;
   instrument?: string;
   nonce?: string;
-  timestamp?: string;
+  timestampMs?: number;
 }
 
 function isNonEmpty(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function parseTimestampMs(timestampMs: unknown, timestampIso: unknown): number | null {
+  if (typeof timestampMs === "number" && Number.isFinite(timestampMs) && timestampMs > 0) {
+    return Math.floor(timestampMs);
+  }
+
+  if (isNonEmpty(timestampMs)) {
+    const parsed = Number.parseInt(timestampMs.trim(), 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  if (isNonEmpty(timestampIso)) {
+    const parsed = Date.parse(timestampIso.trim());
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function readRateLimitPerMinute(envName: string, fallback: number): number {
+  const raw = readOptionalEnv(envName);
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.max(1, Math.min(parsed, 5000));
+}
+
+function hashLicenseKey(licenseKey: string): string {
+  return createHash("sha256").update(licenseKey, "utf8").digest("hex");
 }
 
 function parsePayload(payload: unknown): FundamentalRequestPayload | null {
@@ -39,6 +80,7 @@ function parsePayload(payload: unknown): FundamentalRequestPayload | null {
     return null;
   }
 
+  const parsedTimestampMs = parseTimestampMs(record.timestampMs, record.timestamp);
   return {
     licenseKey: record.licenseKey.trim(),
     installationId: record.installationId.trim(),
@@ -46,7 +88,7 @@ function parsePayload(payload: unknown): FundamentalRequestPayload | null {
     clientVersion: isNonEmpty(record.clientVersion) ? record.clientVersion.trim() : undefined,
     instrument: isNonEmpty(record.instrument) ? record.instrument.trim() : undefined,
     nonce: isNonEmpty(record.nonce) ? record.nonce.trim() : undefined,
-    timestamp: isNonEmpty(record.timestamp) ? record.timestamp.trim() : undefined,
+    timestampMs: parsedTimestampMs ?? undefined,
   };
 }
 
@@ -74,6 +116,57 @@ export async function POST(request: NextRequest) {
       "invalid_payload",
       "Missing one or more required fields: licenseKey, installationId, deviceFingerprintHash.",
     );
+  }
+
+  const ipLimit = readRateLimitPerMinute("FUNDAMENTALS_RATE_LIMIT_PER_MINUTE_IP", 600);
+  const ipRate = checkRateLimit(
+    `market_fundamentals:ip:${getTrustedClientIp(request)}`,
+    ipLimit,
+    60_000,
+  );
+  if (!ipRate.allowed) {
+    return errorResponse(
+      requestId,
+      429,
+      "rate_limited",
+      "Too many requests. Please retry shortly.",
+      { retryAfterSeconds: ipRate.retryAfterSeconds },
+    );
+  }
+
+  const licenseLimit = readRateLimitPerMinute("FUNDAMENTALS_RATE_LIMIT_PER_MINUTE_LICENSE", 300);
+  const licenseRate = checkRateLimit(
+    `market_fundamentals:license:${hashLicenseKey(parsed.licenseKey)}`,
+    licenseLimit,
+    60_000,
+  );
+  if (!licenseRate.allowed) {
+    return errorResponse(
+      requestId,
+      429,
+      "rate_limited",
+      "Too many requests. Please retry shortly.",
+      { retryAfterSeconds: licenseRate.retryAfterSeconds },
+    );
+  }
+
+  if (parsed.nonce && parsed.timestampMs) {
+    const nonceValidation = await validateAndConsumeLicenseNonce({
+      nonce: parsed.nonce,
+      installationId: parsed.installationId,
+      route: "market_fundamentals",
+      timestampMs: parsed.timestampMs,
+      maxClockSkewMs: 120_000,
+      replayTtlSeconds: 600,
+    });
+    if (!nonceValidation.ok) {
+      return errorResponse(
+        requestId,
+        401,
+        nonceValidation.reason,
+        "Request signature validation failed.",
+      );
+    }
   }
 
   try {
@@ -153,4 +246,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

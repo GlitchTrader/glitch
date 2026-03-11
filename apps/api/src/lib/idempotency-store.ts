@@ -13,6 +13,13 @@ export interface WebhookEventRecord {
   failureReason: string | null;
 }
 
+export interface RegisterWebhookEventResult {
+  inserted: boolean;
+  record: WebhookEventRecord;
+  payloadMatches: boolean;
+  revivedFromFailed: boolean;
+}
+
 interface InMemoryWebhookEventStore {
   events: Map<string, WebhookEventRecord>;
 }
@@ -157,10 +164,7 @@ async function registerWebhookEventInDatabase(input: {
   provider: string;
   eventType: string;
   payloadSha256: string;
-}): Promise<{
-  inserted: boolean;
-  record: WebhookEventRecord;
-}> {
+}): Promise<RegisterWebhookEventResult> {
   const pool = await getDatabasePool();
   await ensureSchema(pool);
 
@@ -192,6 +196,8 @@ async function registerWebhookEventInDatabase(input: {
     return {
       inserted: true,
       record: mapDatabaseRow(insertResult.rows[0]),
+      payloadMatches: true,
+      revivedFromFailed: false,
     };
   }
 
@@ -217,9 +223,55 @@ async function registerWebhookEventInDatabase(input: {
     throw new Error(`Webhook event read failed after conflict for event_id=${input.eventId}`);
   }
 
+  const existingRecord = mapDatabaseRow(existingResult.rows[0]);
+  if (existingRecord.payloadSha256 !== input.payloadSha256) {
+    return {
+      inserted: false,
+      record: existingRecord,
+      payloadMatches: false,
+      revivedFromFailed: false,
+    };
+  }
+
+  if (existingRecord.status === "failed") {
+    const reviveResult = await pool.query<DatabaseWebhookEventRow>(
+      `
+        UPDATE webhook_events
+        SET
+          status = 'received',
+          processed_at = NULL,
+          failure_reason = NULL
+        WHERE event_id = $1
+          AND status = 'failed'
+          AND payload_sha256 = $2
+        RETURNING
+          event_id,
+          provider,
+          event_type,
+          payload_sha256,
+          status,
+          received_at,
+          processed_at,
+          failure_reason;
+      `,
+      [input.eventId, input.payloadSha256],
+    );
+
+    if ((reviveResult.rowCount ?? 0) > 0) {
+      return {
+        inserted: true,
+        record: mapDatabaseRow(reviveResult.rows[0]),
+        payloadMatches: true,
+        revivedFromFailed: true,
+      };
+    }
+  }
+
   return {
     inserted: false,
-    record: mapDatabaseRow(existingResult.rows[0]),
+    record: existingRecord,
+    payloadMatches: true,
+    revivedFromFailed: false,
   };
 }
 
@@ -263,16 +315,36 @@ function registerWebhookEventInMemory(input: {
   provider: string;
   eventType: string;
   payloadSha256: string;
-}): {
-  inserted: boolean;
-  record: WebhookEventRecord;
-} {
+}): RegisterWebhookEventResult {
   const store = getStore();
   const existing = store.events.get(input.eventId);
   if (existing) {
+    if (existing.payloadSha256 !== input.payloadSha256) {
+      return {
+        inserted: false,
+        record: existing,
+        payloadMatches: false,
+        revivedFromFailed: false,
+      };
+    }
+
+    if (existing.status === "failed") {
+      existing.status = "received";
+      existing.processedAt = null;
+      existing.failureReason = null;
+      return {
+        inserted: true,
+        record: existing,
+        payloadMatches: true,
+        revivedFromFailed: true,
+      };
+    }
+
     return {
       inserted: false,
       record: existing,
+      payloadMatches: true,
+      revivedFromFailed: false,
     };
   }
 
@@ -291,6 +363,8 @@ function registerWebhookEventInMemory(input: {
   return {
     inserted: true,
     record,
+    payloadMatches: true,
+    revivedFromFailed: false,
   };
 }
 
@@ -319,10 +393,7 @@ export async function registerWebhookEvent(input: {
   provider: string;
   eventType: string;
   payloadSha256: string;
-}): Promise<{
-  inserted: boolean;
-  record: WebhookEventRecord;
-}> {
+}): Promise<RegisterWebhookEventResult> {
   if (getWebhookStoreMode() === "database") {
     return registerWebhookEventInDatabase(input);
   }

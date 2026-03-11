@@ -6,6 +6,7 @@ import {
   isWhopEntitlementStatusActive,
   verifyLicenseBinding,
 } from "@/lib/entitlements-store";
+import { getTrustedClientIp } from "@/lib/client-ip";
 import { buildPolicy, resolvePlanFromCode } from "@/lib/license-policy";
 import type { LicensePlan } from "@/lib/license-policy";
 import { readOptionalEnv } from "@/lib/env";
@@ -54,6 +55,26 @@ interface ProviderAccessCacheEntry {
   plan: LicensePlan;
 }
 
+const providerOperationParamAllowList: Record<ProviderName, Record<string, readonly string[]>> = {
+  finnhub: {
+    company_news: ["symbol", "from", "to"],
+    general_news: ["category"],
+    quote: ["symbol"],
+    stock_metric: ["symbol", "metric"],
+    calendar_earnings: ["symbol", "from", "to"],
+  },
+  fred: {
+    releases_dates: [
+      "realtime_start",
+      "realtime_end",
+      "include_release_dates_with_no_data",
+      "sort_order",
+      "limit",
+      "file_type",
+    ],
+  },
+};
+
 function isNonEmpty(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
@@ -70,18 +91,6 @@ function readRateLimitPerMinute(envName: string, fallback: number): number {
   }
 
   return Math.max(1, Math.min(parsed, 20_000));
-}
-
-function getClientIp(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) {
-      return first;
-    }
-  }
-
-  return "unknown";
 }
 
 function toMs(value: string | Date | null | undefined): number {
@@ -207,7 +216,7 @@ function readProviderProxyOperationCacheTtlSeconds(
 function buildParamsHash(params: Record<string, string>): string {
   const canonical = Object.entries(params)
     .filter(([key, value]) => isNonEmpty(key) && isNonEmpty(value))
-    .map(([key, value]) => [key.trim(), value.trim()] as const)
+    .map(([key, value]) => [key.trim().slice(0, 64), value.trim().slice(0, 1024)] as const)
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([key, value]) => `${key}=${value}`)
     .join("&");
@@ -413,6 +422,29 @@ function parseParams(value: unknown): Record<string, string> {
   return parsed;
 }
 
+function selectAllowedParams(
+  provider: ProviderName,
+  operation: string,
+  params: Record<string, string>,
+): Record<string, string> {
+  const allowedKeys = providerOperationParamAllowList[provider]?.[operation];
+  if (!allowedKeys || allowedKeys.length === 0) {
+    return {};
+  }
+
+  const result: Record<string, string> = {};
+  for (const key of allowedKeys) {
+    const value = params[key];
+    if (!isNonEmpty(value)) {
+      continue;
+    }
+
+    result[key] = value.trim().slice(0, 1024);
+  }
+
+  return result;
+}
+
 function parsePayload(payload: unknown): ProviderProxyRequestPayload | null {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -586,7 +618,7 @@ export async function POST(request: NextRequest) {
   }
 
   const ipLimit = readRateLimitPerMinute("PROVIDER_PROXY_RATE_LIMIT_PER_MINUTE_IP", 1800);
-  const ipRate = checkRateLimit(`provider_proxy:ip:${getClientIp(request)}`, ipLimit, 60_000);
+  const ipRate = checkRateLimit(`provider_proxy:ip:${getTrustedClientIp(request)}`, ipLimit, 60_000);
   if (!ipRate.allowed) {
     return errorResponse(
       requestId,
@@ -611,6 +643,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const effectiveParams = selectAllowedParams(parsed.provider, parsed.operation, parsed.params);
     const providerAccessCacheKey = buildProviderAccessCacheKey(
       parsed.licenseKey,
       parsed.installationId,
@@ -664,8 +697,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const providerUrl = resolveProviderUrl(parsed);
-    const cacheKey = buildCacheKey(parsed.provider, parsed.operation, parsed.params);
+    const providerPayloadInput: ProviderProxyRequestPayload = {
+      ...parsed,
+      params: effectiveParams,
+    };
+    const providerUrl = resolveProviderUrl(providerPayloadInput);
+    const cacheKey = buildCacheKey(parsed.provider, parsed.operation, effectiveParams);
     const ttlSeconds = readProviderProxyCacheTtlSeconds(parsed.provider, parsed.operation);
 
     const cachePool = await getProviderCachePool();

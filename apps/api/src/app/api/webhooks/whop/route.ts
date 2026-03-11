@@ -107,6 +107,8 @@ export async function POST(request: NextRequest) {
   let insertResult:
     | {
         inserted: boolean;
+        payloadMatches: boolean;
+        revivedFromFailed: boolean;
       }
     | undefined;
   try {
@@ -127,6 +129,19 @@ export async function POST(request: NextRequest) {
   }
 
   if (!insertResult.inserted) {
+    if (!insertResult.payloadMatches) {
+      return errorResponse(
+        requestId,
+        409,
+        "webhook_payload_conflict",
+        "Duplicate webhook event ID with different payload hash.",
+        {
+          eventId,
+          eventType: webhookEvent.type,
+        },
+      );
+    }
+
     return jsonResponse({
       ok: true,
       duplicate: true,
@@ -143,6 +158,7 @@ export async function POST(request: NextRequest) {
     return jsonResponse({
       ok: true,
       duplicate: false,
+      retriedFromFailed: insertResult.revivedFromFailed,
       eventId,
       eventType: webhookEvent.type,
       handled: handlingResult.handled,

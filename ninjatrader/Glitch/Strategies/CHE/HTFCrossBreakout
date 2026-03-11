@@ -1,0 +1,319 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+//  _______           _______  _______           _______  _       _________ _        _______ 
+// (  ____ \|\     /|(  ____ \(  ____ )|\     /|(  ___  )( \      \__   __/( (    /|(  ___  )
+// | (    \/| )   ( || (    \/| (    )|| )   ( || (   ) || (         ) (   |  \  ( || (   ) |
+// | |      | (___) || (__    | (____)|| |   | || |   | || |         | |   |   \ | || |   | |
+// | |      |  ___  ||  __)   |     __)( (   ) )| |   | || |         | |   | (\ \) || |   | |
+// | |      | (   ) || (      | (\ (    \ \_/ / | |   | || |         | |   | | \   || |   | |
+// | (____/\| )   ( || (____/\| ) \ \__  \   /  | (___) || (____/\___) (___| )  \  || (___) |
+// (_______/|/     \|(_______/|/   \__/   \_/   (_______)(_______/\_______/|/    )_)(_______)
+// © chervolino
+//@version=6
+indicator(title="HTF Cross Breakout [CHE]", shorttitle="HTFBreak", overlay=true, max_bars_back=1000, max_lines_count=50, max_labels_count=50)
+
+// ——— SECTION: Constants & Enums
+string GROUP_PARAMS = "Parameters"
+int MS_IN_MINUTE = 60 * 1000
+int MS_IN_HOUR = MS_IN_MINUTE * 60
+int MS_IN_DAY = MS_IN_HOUR * 24
+string GROUP_EXT1 = "Extension 1 — Label↕Close Δ%"
+string GROUP_EXT2 = "Extension 2 — VWAP End Stop-Loss"
+string GROUP_ALERTS = "Alerts"
+
+// ——— SECTION: Inputs (grouped; inline)
+len_plateau_input = input.int(3, "Plateau Length (reserved for future, currently unused)", minval=1, group=GROUP_PARAMS, tooltip="Reserved for future extensions")
+line_w_input = input.int(2, "Line Width", minval=1, maxval=5, group=GROUP_PARAMS, tooltip="Width for lines")
+extend_after_bars_input = input.int(20, "+Bars after next HTF event (finalize old, then delete)", minval=0, group=GROUP_PARAMS, tooltip="Bars to extend line after event")
+strict_htf_eval_input = input.bool(true, "Evaluate label only on HTF close (prevents gray traps intrabar)", group=GROUP_PARAMS, tooltip="Strict evaluation on HTF close")
+allow_repainting_input = input.bool(false, "Allow Repainting", group=GROUP_PARAMS, tooltip="Allows repainting for real-time data (false = stable, no repainting)")
+timeframe_type_input = input.string("Auto Timeframe", options=["Auto Timeframe", "Multiplier", "Manual"], title="Timeframe Type", group=GROUP_PARAMS, tooltip="Selection for HTF: Auto (dynamic), Multiplier (e.g. 1:1 or 5x), Manual (fixed)")
+timeframe_multiplier_input = input.int(5, title="Multiplier for Alternate Resolution", minval=1, group=GROUP_PARAMS, tooltip="E.g. 1 for 1:1 (same resolution as chart)")
+manual_resolution_input = input.timeframe("60", "Manual Resolution", group=GROUP_PARAMS, tooltip="Manual HTF input, e.g. '60' for 1H")
+show_ext1_input = input.bool(true, "Show Extension 1", group=GROUP_EXT1, tooltip="Draw dotted line between label and close incl. Δ%")
+ext1_line_width_input = input.int(2, "Dotted Line Width", minval=1, maxval=5, group=GROUP_EXT1, tooltip="Width for dotted line")
+ext1_txt_size_input = input.string("normal", "Text Size", options=["tiny","small","normal","large"], group=GROUP_EXT1, tooltip="Size for delta text")
+ext1_decimals_input = input.int(2, "Decimals for Δ%", minval=0, maxval=6, group=GROUP_EXT1, tooltip="Decimals in delta percent")
+ext1_color_pos_input = input.color(color.lime, "Positive Δ Color", group=GROUP_EXT1, tooltip="Color for positive delta")
+ext1_color_neg_input = input.color(color.red, "Negative Δ Color", group=GROUP_EXT1, tooltip="Color for negative delta")
+ext1_color_line_input = input.color(color.new(color.gray, 0), "Dotted Line Color", group=GROUP_EXT1, tooltip="Color for dotted line")
+ext1_bg_alpha_input = input.int(90, "Background Transparency (0..100)", minval=0, maxval=100, group=GROUP_EXT1, tooltip="Label background alpha")
+show_ext2_input = input.bool(true, "Show Extension 2", group=GROUP_EXT2, tooltip="Stop-Loss at end of VWAP line")
+ext2_method_input = input.string("Percent", "Stop Method", options=["Percent","Ticks"], group=GROUP_EXT2, tooltip="Calculation relative to VWAP end")
+ext2_stop_pct_input = input.float(1.0, "Stop %", step=0.05, minval=0.0, group=GROUP_EXT2, tooltip="Percent from VWAP")
+ext2_stop_ticks_input = input.int(20, "Stop Ticks", minval=0, group=GROUP_EXT2, tooltip="Ticks * mintick from VWAP")
+ext2_decimals_input = input.int(4, "Price Decimals", minval=0, maxval=10, group=GROUP_EXT2, tooltip="Decimals for stop price")
+ext2_txt_size_input = input.string("normal", "Text Size", options=["tiny","small","normal","large"], group=GROUP_EXT2, tooltip="Size for stop text")
+ext2_txt_color_input = input.color(color.white, "Text Color", group=GROUP_EXT2, tooltip="Color for stop text")
+ext2_bg_inherit_input = input.bool(true, "Inherit VWAP Color (BG tint)", group=GROUP_EXT2, tooltip="Inherit color from VWAP")
+ext2_bg_alpha_input = input.int(0, "BG Transparency (0..100)", minval=0, maxval=100, group=GROUP_EXT2, tooltip="Background alpha for stop label")
+
+// Alert Inputs
+alert_bull_break_enable = input.bool(true, "Alert: Bull Breakout", group=GROUP_ALERTS, tooltip="Alert on new HTF bull breakout")
+alert_bear_break_enable = input.bool(true, "Alert: Bear Breakout", group=GROUP_ALERTS, tooltip="Alert on new HTF bear breakout")
+alert_cont_enable = input.bool(true, "Alert: Continuation", group=GROUP_ALERTS, tooltip="Alert on bull/bear continuation")
+alert_trap_enable = input.bool(true, "Alert: Trap", group=GROUP_ALERTS, tooltip="Alert on bull/bear trap")
+alert_warning_enable = input.bool(true, "Alert: VWAP Warning", group=GROUP_ALERTS, tooltip="Alert when price crosses VWAP adversely")
+
+// ——— SECTION: Persistent Vars → Runtime Vars
+var line last_line = na
+var label last_lbl = na
+var float break_price = na
+var bool last_is_bull = true
+var bool is_active = false
+var line last_vwap_line = na
+var int vwap_anchor_bar = na
+var float sum_pv = 0.0
+var float sum_v = 0.0
+var line ext1_line = na
+var label ext1_midlb = na
+var label ext2_sl_lbl = na
+var string last_status = ""
+var bool was_warning = false
+
+// ——— SECTION: Helpers (pure, no side effects)
+calculated_resolution_string = 
+ timeframe.ismonthly ? str.tostring(timeframe.multiplier * timeframe_multiplier_input, "###M") : 
+ timeframe.isweekly  ? str.tostring(timeframe.multiplier * timeframe_multiplier_input, "###W") : 
+ timeframe.isdaily   ? str.tostring(timeframe.multiplier * timeframe_multiplier_input, "###D") : 
+ timeframe.isintraday ? str.tostring(timeframe.multiplier * timeframe_multiplier_input, "####") : "60"
+
+auto_timeframe_function() =>
+    int time_frame_in_ms = timeframe.in_seconds() * 1000
+    string time_frame_step =
+      switch
+        time_frame_in_ms <= MS_IN_MINUTE => "60"
+        time_frame_in_ms <= MS_IN_MINUTE * 5 => "240"
+        time_frame_in_ms <= MS_IN_HOUR => "1D"
+        time_frame_in_ms <= MS_IN_HOUR * 4 => "3D"
+        time_frame_in_ms <= MS_IN_HOUR * 12 => "7D"
+        time_frame_in_ms <= MS_IN_DAY => "1M"
+        time_frame_in_ms <= MS_IN_DAY * 7 => "3M"
+        => "12M"
+    time_frame_step
+
+active_timeframe = 
+  timeframe_type_input == "Auto Timeframe" ? auto_timeframe_function() : 
+  timeframe_type_input == "Multiplier"     ? calculated_resolution_string : 
+  manual_resolution_input
+
+get_security_data(src, resolution, allow_repainting_local) =>
+    data = request.security(syminfo.tickerid, resolution, src[allow_repainting_local ? 0 : barstate.isrealtime ? 1 : 0])[allow_repainting_local ? 0 : barstate.isrealtime ? 0 : 1]
+    data
+
+fmt_mask(decimals) =>
+ decimals <= 0 ? "0" :
+ decimals == 1 ? "0.0" :
+ decimals == 2 ? "0.00" :
+ decimals == 3 ? "0.000" :
+ decimals == 4 ? "0.0000" :
+ decimals == 5 ? "0.00000" : "0.000000"
+
+text_size_from_string(sz) =>
+ sz == "tiny"  ? size.tiny  :
+ sz == "small" ? size.small :
+ sz == "large" ? size.large : size.normal
+
+fmt_mask_ext2(decimals) =>
+ decimals <= 0 ? "0" :
+ decimals == 1 ? "0.0" :
+ decimals == 2 ? "0.00" :
+ decimals == 3 ? "0.000" :
+ decimals == 4 ? "0.0000" :
+ decimals == 5 ? "0.00000" :
+ decimals == 6 ? "0.000000" :
+ decimals == 7 ? "0.0000000" :
+ decimals == 8 ? "0.00000000" :
+ decimals == 9 ? "0.000000000" : "0.0000000000"
+
+text_size_from_string_ext2(sz) =>
+ sz == "tiny"  ? size.tiny  :
+ sz == "small" ? size.small :
+ sz == "large" ? size.large : size.normal
+
+// ——— SECTION: Core Calculations
+htf_close_live = get_security_data(close, active_timeframe, allow_repainting_input)
+htf_conf_live = get_security_data(barstate.isconfirmed ? 1 : 0, active_timeframe, allow_repainting_input) > 0
+
+detect_break(len_plateau_local) =>
+    h_close = get_security_data(close, active_timeframe, allow_repainting_input)
+    h_conf  = get_security_data(barstate.isconfirmed ? 1 : 0, active_timeframe, allow_repainting_input) > 0
+    cron = ta.crossover(close, h_close)
+    crun = ta.crossunder(close, h_close)
+    bull_event = h_conf and open < close and cron
+    bear_event = h_conf and open > close and crun
+    [bull_event, bear_event]
+
+create_break_elements(is_bull, price) =>
+    new_line = line.new(bar_index, price, bar_index, price, color = is_bull ? color.new(color.lime, 0) : color.new(color.red, 0), width = line_w_input)
+    new_lbl = label.new(bar_index, price, "", textcolor = color.white, color = is_bull ? color.new(color.lime, 0) : color.new(color.red, 0), style = is_bull ? label.style_label_up : label.style_label_down)
+    [new_line, new_lbl]
+
+create_vwap_element(is_bull, anchor_bar, initial_price) =>
+    new_vwap_line = line.new(anchor_bar, initial_price, anchor_bar, initial_price, color = is_bull ? color.new(color.yellow, 0) : color.new(color.orange, 0), width = line_w_input, style = line.style_dashed)
+    new_vwap_line
+
+update_break_label(lbl, is_bull, price) =>
+    bool do_eval = strict_htf_eval_input ? htf_conf_live : true
+    string new_txt = ""
+    if do_eval
+        continuation_bull = is_bull and close >= price
+        continuation_bear = (not is_bull) and close <= price
+        new_txt := continuation_bull ? "Bull Cont." : continuation_bear ? "Bear Cont." : is_bull ? "Bull Trap" : "Bear Trap"
+        color c = continuation_bull ? color.new(color.lime, 0) : continuation_bear ? color.new(color.red, 0) : color.new(color.gray, 0)
+        label.set_text(lbl, new_txt)
+        label.set_color(lbl, c)
+        label.set_textcolor(lbl, color.white)
+    new_txt
+
+[bull_event, bear_event] = detect_break(len_plateau_input)
+new_break = bull_event or bear_event
+
+if is_active and not na(last_line)
+    line.set_x2(last_line, bar_index)
+    if not na(last_lbl)
+        label.set_x(last_lbl, bar_index)
+        label.set_y(last_lbl, break_price)
+        string current_status = update_break_label(last_lbl, last_is_bull, break_price)
+        if current_status != last_status
+            if alert_cont_enable and (str.contains(current_status, "Cont.") or str.contains(current_status, "Cont."))
+                alert_msg = str.replace(current_status, ".", "") + " at " + str.tostring(break_price, "#.####")
+                alert(alert_msg, alert.freq_once_per_bar)
+            if alert_trap_enable and (str.contains(current_status, "Trap"))
+                alert_msg = str.replace(current_status, ".", "") + " at " + str.tostring(break_price, "#.####")
+                alert(alert_msg, alert.freq_once_per_bar)
+            last_status := current_status
+    if not na(last_vwap_line) and not na(vwap_anchor_bar)
+        typical_price = hlc3
+        if bar_index == vwap_anchor_bar
+            sum_pv := typical_price * volume
+            sum_v := volume
+        else if bar_index > vwap_anchor_bar
+            sum_pv += typical_price * volume
+            sum_v += volume
+        current_vwap = sum_v > 0 ? sum_pv / sum_v : na
+        if not na(current_vwap)
+            line.set_x2(last_vwap_line, bar_index)
+            line.set_y2(last_vwap_line, current_vwap)
+
+current_vwap = sum_v > 0 ? sum_pv / sum_v : na
+
+bool warning_condition = false
+if not na(current_vwap)
+    if last_is_bull
+        warning_condition := close < current_vwap
+    else
+        warning_condition := close > current_vwap
+
+// Alert for VWAP warning
+if alert_warning_enable and warning_condition and not was_warning
+    alert_msg = (last_is_bull ? "Bull: Price below VWAP Warning" : "Bear: Price above VWAP Warning") + " | VWAP: " + str.tostring(current_vwap, "#.####")
+    alert(alert_msg, alert.freq_once_per_bar)
+    was_warning := true
+
+bgcolor(warning_condition ? color.new(color.red, 90) : na)
+
+if new_break
+    if is_active and not na(last_line)
+        final_x = bar_index + extend_after_bars_input
+        line.set_x2(last_line, final_x)
+        if not na(last_lbl)
+            label.set_x(last_lbl, final_x)
+            label.set_y(last_lbl, break_price)
+            string final_status = update_break_label(last_lbl, last_is_bull, break_price)
+            label.delete(last_lbl)
+        line.delete(last_line)
+        if not na(last_vwap_line)
+            line.set_x2(last_vwap_line, final_x)
+            line.delete(last_vwap_line)
+        last_lbl := na
+        last_line := na
+        last_vwap_line := na
+        vwap_anchor_bar := na
+        sum_pv := 0.0
+        sum_v := 0.0
+        was_warning := false  // Reset warning on new break
+        last_status := ""
+    break_price := htf_close_live
+    last_is_bull := bull_event
+    [new_line, new_lbl] = create_break_elements(last_is_bull, break_price)
+    last_line := new_line
+    last_lbl := new_lbl
+    last_vwap_line := create_vwap_element(last_is_bull, bar_index, break_price)
+    vwap_anchor_bar := bar_index
+    sum_pv := 0.0
+    sum_v := 0.0
+    is_active := true
+    last_status := ""
+    // Alerts for new breakouts
+    if bull_event and alert_bull_break_enable
+        alert("HTF Bull Breakout at " + str.tostring(break_price, "#.####"), alert.freq_once_per_bar)
+    if bear_event and alert_bear_break_enable
+        alert("HTF Bear Breakout at " + str.tostring(break_price, "#.####"), alert.freq_once_per_bar)
+
+can_draw = show_ext1_input and is_active and not na(last_lbl) and not na(break_price)
+cur_x = bar_index
+lbl_x = not na(last_lbl) ? label.get_x(last_lbl) : na
+lbl_y = not na(last_lbl) ? label.get_y(last_lbl) : na
+cl_y = close
+delta_pct = not na(lbl_y) and lbl_y != 0.0 ? (cl_y / lbl_y - 1.0) * 100.0 : na
+fmt = fmt_mask(ext1_decimals_input)
+txt_delta = na(delta_pct) ? "" : (delta_pct > 0 ? "+" : "") + str.tostring(delta_pct, fmt) + "%"
+mid_y = not na(lbl_y) ? (lbl_y + cl_y) * 0.5 : na
+
+has_vwap_line = not na(last_vwap_line)
+vwap_x2 = has_vwap_line ? line.get_x2(last_vwap_line) : na
+vwap_y2 = has_vwap_line ? line.get_y2(last_vwap_line) : na
+pct = math.max(ext2_stop_pct_input, 0.0) * 0.01
+tick_offs = math.max(ext2_stop_ticks_input, 0) * syminfo.mintick
+sl_price_pct = not na(vwap_y2) ? (last_is_bull ? vwap_y2 * (1.0 - pct) : vwap_y2 * (1.0 + pct)) : na
+sl_price_ticks = not na(vwap_y2) ? (last_is_bull ? vwap_y2 - tick_offs : vwap_y2 + tick_offs) : na
+stop_price = ext2_method_input == "Percent" ? sl_price_pct : sl_price_ticks
+fmt_ext2 = fmt_mask_ext2(ext2_decimals_input)
+sl_txt = na(stop_price) ? "" : "SL: " + str.tostring(stop_price, fmt_ext2) + (ext2_method_input == "Percent" ? " (" + (last_is_bull ? "−" : "+") + str.tostring(ext2_stop_pct_input, "0.##") + "%)" : " (" + str.tostring(ext2_stop_ticks_input) + "t)")
+vwap_col = ext1_color_line_input
+bg_col = ext2_bg_inherit_input ? color.new(vwap_col, ext2_bg_alpha_input) : color.new(color.black, ext2_bg_alpha_input)
+can_draw_ext2 = show_ext2_input and has_vwap_line and not na(vwap_x2) and not na(vwap_y2) and not na(stop_price)
+
+// ——— SECTION: Rendering/UI (GLOBAL ONLY; single-line calls)
+if barstate.islast
+    if can_draw
+        if na(ext1_line) or line.get_x1(ext1_line) != cur_x
+            line.delete(ext1_line)
+            ext1_line := line.new(cur_x, lbl_y, cur_x, cl_y, xloc=xloc.bar_index, extend=extend.none, style=line.style_dotted, width=ext1_line_width_input, color=ext1_color_line_input)
+        else
+            line.set_xy1(ext1_line, cur_x, lbl_y)
+            line.set_xy2(ext1_line, cur_x, cl_y)
+        pos_color = delta_pct >= 0 ? ext1_color_pos_input : ext1_color_neg_input
+        bg_col_ext1 = color.new(pos_color, ext1_bg_alpha_input)
+        if na(ext1_midlb) or label.get_x(ext1_midlb) != cur_x
+            label.delete(ext1_midlb)
+            ext1_midlb := label.new(cur_x, mid_y, txt_delta, xloc=xloc.bar_index, style=label.style_label_center, textcolor=color.white, color=bg_col_ext1, size=text_size_from_string(ext1_txt_size_input))
+        else
+            label.set_x(ext1_midlb, cur_x)
+            label.set_y(ext1_midlb, mid_y)
+            label.set_text(ext1_midlb, txt_delta)
+            label.set_textcolor(ext1_midlb, color.white)
+            label.set_color(ext1_midlb, bg_col_ext1)
+            label.set_size(ext1_midlb, text_size_from_string(ext1_txt_size_input))
+    else
+        if not na(ext1_line)
+            line.delete(ext1_line)
+            ext1_line := na
+        if not na(ext1_midlb)
+            label.delete(ext1_midlb)
+            ext1_midlb := na
+    if can_draw_ext2
+        if na(ext2_sl_lbl) or label.get_x(ext2_sl_lbl) != vwap_x2
+            label.delete(ext2_sl_lbl)
+            ext2_sl_lbl := label.new(vwap_x2, vwap_y2, sl_txt, xloc=xloc.bar_index, style=label.style_label_left, textcolor=ext2_txt_color_input, color=bg_col, size=text_size_from_string_ext2(ext2_txt_size_input))
+        else
+            label.set_x(ext2_sl_lbl, vwap_x2)
+            label.set_y(ext2_sl_lbl, vwap_y2)
+            label.set_text(ext2_sl_lbl, sl_txt)
+            label.set_textcolor(ext2_sl_lbl, ext2_txt_color_input)
+            label.set_color(ext2_sl_lbl, bg_col)
+            label.set_size(ext2_sl_lbl, text_size_from_string_ext2(ext2_txt_size_input))
+    else
+        if not na(ext2_sl_lbl)
+            label.delete(ext2_sl_lbl)
+            ext2_sl_lbl := na

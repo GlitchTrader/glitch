@@ -1,0 +1,190 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+//  _______           _______  _______           _______  _       _________ _        _______ 
+// (  ____ \|\     /|(  ____ \(  ____ )|\     /|(  ___  )( \      \__   __/( (    /|(  ___  )
+// | (    \/| )   ( || (    \/| (    )|| )   ( || (   ) || (         ) (   |  \  ( || (   ) |
+// | |      | (___) || (__    | (____)|| |   | || |   | || |         | |   |   \ | || |   | |
+// | |      |  ___  ||  __)   |     __)( (   ) )| |   | || |         | |   | (\ \) || |   | |
+// | |      | (   ) || (      | (\ (    \ \_/ / | |   | || |         | |   | | \   || |   | |
+// | (____/\| )   ( || (____/\| ) \ \__  \   /  | (___) || (____/\___) (___| )  \  || (___) |
+// (_______/|/     \|(_______/|/   \__/   \_/   (_______)(_______/\_______/|/    )_)(_______)
+// © chervolino
+//@version=6
+strategy(title="Trendshift [CHE] Strategy", shorttitle="TrShStr", overlay=true, max_bars_back=5000, max_lines_count=500, max_labels_count=500, scale=scale.right, initial_capital=25000, commission_type=strategy.commission.percent, commission_value=0.05, slippage=1, process_orders_on_close=true)
+
+// ——— SECTION: Constants & Enums
+string GROUP_MARKET_STRUCTURE = "Market Structure"
+string GROUP_FRAMEWORK = "Premium/Discount Framework"
+string GROUP_VISUAL = "Visuals"
+string GROUP_RISK = "Execution and Risk"
+
+// ——— SECTION: Inputs (grouped; tooltips; one-row via inline)
+swing_len_input = input.int(5, "Swing length", minval=1, group=GROUP_MARKET_STRUCTURE, inline="msw", tooltip="Bars left and right for major swing highs and lows.")
+is_use_atr_filter_input = input.bool(true, "Use ATR filter", group=GROUP_MARKET_STRUCTURE, inline="msw", tooltip="Require breakout to exceed swing level by an ATR multiple.")
+atr_len_input = input.int(14, "ATR length", minval=1, group=GROUP_MARKET_STRUCTURE, inline="atr", tooltip="ATR length for conviction and band checks.")
+atr_mult_break_input = input.float(1.0, "Break ATR mult", minval=0.0, step=0.1, group=GROUP_MARKET_STRUCTURE, inline="atr", tooltip="Distance beyond swing, in ATR units, to confirm a structure shift.")
+
+is_enable_framework_input = input.bool(true, "Enable framework", group=GROUP_FRAMEWORK, inline="fw", tooltip="Enable premium and discount band logic.")
+is_persist_last_band_input = input.bool(true, "Persist band on timeout", group=GROUP_FRAMEWORK, inline="fw", tooltip="Keep last band after regime timeout.")
+min_band_atr_mult_input = input.float(0.5, "Min band ATR mult", minval=0.0, step=0.1, group=GROUP_FRAMEWORK, inline="band", tooltip="Minimum band height relative to ATR.")
+regime_timeout_bars_input = input.int(500, "Regime timeout bars", minval=0, group=GROUP_FRAMEWORK, inline="band", tooltip="Bars since last shift before regime reset. Zero disables timeout.")
+is_invert_colors_input = input.bool(false, "Invert colors", group=GROUP_FRAMEWORK, inline="col", tooltip="Swap premium and discount colors.")
+
+show_zone_tint_input = input.bool(true, "Show zone tint", group=GROUP_VISUAL, inline="vis", tooltip="Tint background in discount or premium bands.")
+show_structure_marks_input = input.bool(true, "Show shift markers", group=GROUP_VISUAL, inline="vis", tooltip="Show first bullish and first bearish structure shift markers.")
+
+risk_percent_input = input.float(1.0, "Risk per trade percent", minval=0.0, maxval=5.0, step=0.1, group=GROUP_RISK, inline="risk", tooltip="Account percent used to size position.")
+is_use_band_for_size_input = input.bool(false, "Use band for size", group=GROUP_RISK, inline="risk", tooltip="If enabled, band height is used to scale position size.")
+is_close_on_opposite_input = input.bool(true, "Flat on opposite shift", group=GROUP_RISK, inline="exit", tooltip="Close and reverse on opposite first shift.")
+is_use_stop_band_input = input.bool(false, "Use stop at band", group=GROUP_RISK, inline="exit", tooltip="If enabled, band edge is used as stop distance.")
+stop_band_side_input = input.string("Opposite band edge", "Stop band side", options=["Opposite band edge", "Same band edge"], group=GROUP_RISK, inline="exit", tooltip="Defines which band edge is used as stop reference.")
+
+// ——— SECTION: Types
+// (no custom types)
+
+// ——— SECTION: Persistent Vars → Runtime Vars
+var float last_swing_high = na
+var float last_swing_low = na
+var int last_swing_high_bar = na
+var int last_swing_low_bar = na
+
+var int regime = 0
+var float band_low = na
+var float band_high = na
+var float struct_level = na
+
+var int last_shift_bar = na
+var bool is_last_shift_bullish = false
+
+// ——— SECTION: Helpers (pure, no side effects)
+stop_from_band(is_long, band_low_value, band_high_value, stop_side) =>
+    float stop_price = na
+    if is_long
+        stop_price := stop_side == "Opposite band edge" ? band_low_value : band_high_value
+    else
+        stop_price := stop_side == "Opposite band edge" ? band_high_value : band_low_value
+    stop_price
+
+// ——— SECTION: Core Calculations
+
+// Swings and ATR
+pivot_high_value = ta.pivothigh(high, swing_len_input, swing_len_input)
+pivot_low_value = ta.pivotlow(low, swing_len_input, swing_len_input)
+
+if not na(pivot_high_value)
+    last_swing_high := pivot_high_value
+    last_swing_high_bar := bar_index - swing_len_input
+
+if not na(pivot_low_value)
+    last_swing_low := pivot_low_value
+    last_swing_low_bar := bar_index - swing_len_input
+
+atr_value = ta.atr(atr_len_input)
+
+// Structure shifts
+has_major_high = not na(last_swing_high)
+has_major_low = not na(last_swing_low)
+
+is_bullish_break_base = has_major_high and close > last_swing_high
+is_bearish_break_base = has_major_low and close < last_swing_low
+
+is_bullish_break = is_bullish_break_base
+is_bearish_break = is_bearish_break_base
+
+if is_use_atr_filter_input and atr_value > 0.0
+    is_bullish_break := is_bullish_break_base and (close - last_swing_high) >= atr_mult_break_input * atr_value
+    is_bearish_break := is_bearish_break_base and (last_swing_low - close) >= atr_mult_break_input * atr_value
+
+is_bullish_shift = is_bullish_break and has_major_low
+is_bearish_shift = is_bearish_break and has_major_high
+
+if is_bullish_shift and is_bearish_shift
+    is_bullish_shift := close >= open
+    is_bearish_shift := not is_bullish_shift
+
+is_bullish_shift_first = is_bullish_shift and (na(last_shift_bar) or not is_last_shift_bullish)
+is_bearish_shift_first = is_bearish_shift and (na(last_shift_bar) or is_last_shift_bullish)
+
+// Regime and band update
+if is_bullish_shift
+    regime := 1
+    band_low := last_swing_low
+    band_high := high
+    struct_level := last_swing_high
+    last_shift_bar := bar_index
+    is_last_shift_bullish := true
+
+if is_bearish_shift
+    regime := -1
+    band_low := low
+    band_high := last_swing_high
+    struct_level := last_swing_low
+    last_shift_bar := bar_index
+    is_last_shift_bullish := false
+
+// Regime timeout and band clear
+if regime_timeout_bars_input > 0 and regime != 0 and not is_bullish_shift and not is_bearish_shift and not na(last_shift_bar) and bar_index - last_shift_bar > regime_timeout_bars_input
+    regime := 0
+    if not is_persist_last_band_input
+        band_low := na
+        band_high := na
+        struct_level := na
+
+// Premium and discount band
+is_base_valid_band = is_enable_framework_input and not na(band_low) and not na(band_high) and band_high > band_low
+price_span = is_base_valid_band ? band_high - band_low : na
+is_band_not_tiny = is_base_valid_band and atr_value > 0.0 and min_band_atr_mult_input > 0.0 and price_span >= min_band_atr_mult_input * atr_value or is_base_valid_band and (min_band_atr_mult_input == 0.0 or atr_value <= 0.0)
+is_valid_band = is_base_valid_band and is_band_not_tiny
+
+discount_threshold = is_valid_band ? band_low + 0.25 * price_span : na
+premium_threshold = is_valid_band ? band_low + 0.75 * price_span : na
+
+is_in_discount = is_valid_band and close <= discount_threshold
+is_in_premium = is_valid_band and close >= premium_threshold
+
+// Execution sizing and stops
+acc_value = strategy.equity
+base_qty = risk_percent_input > 0.0 ? acc_value * risk_percent_input * 0.01 / nz(close, 1.0) : 0.0
+band_qty_factor = is_use_band_for_size_input and is_valid_band and atr_value > 0.0 ? math.min(2.0, math.max(0.25, price_span / atr_value)) : 1.0
+trade_qty = base_qty * band_qty_factor
+
+is_long_entry = is_bullish_shift_first
+is_short_entry = is_bearish_shift_first
+
+float long_stop = na
+float short_stop = na
+
+if is_use_stop_band_input and is_valid_band
+    long_stop := stop_from_band(true, band_low, band_high, stop_band_side_input)
+    short_stop := stop_from_band(false, band_low, band_high, stop_band_side_input)
+
+// Strategy entries and exits
+if is_long_entry and trade_qty > 0.0
+    if is_close_on_opposite_input and strategy.position_size < 0
+        strategy.close("Short")
+    if is_use_stop_band_input and not na(long_stop)
+        strategy.entry("Long", strategy.long, qty=trade_qty, stop=na, limit=na)
+        strategy.exit("Long SL", "Long", stop=long_stop)
+    else
+        strategy.entry("Long", strategy.long, qty=trade_qty)
+
+if is_short_entry and trade_qty > 0.0
+    if is_close_on_opposite_input and strategy.position_size > 0
+        strategy.close("Long")
+    if is_use_stop_band_input and not na(short_stop)
+        strategy.entry("Short", strategy.short, qty=trade_qty, stop=na, limit=na)
+        strategy.exit("Short SL", "Short", stop=short_stop)
+    else
+        strategy.entry("Short", strategy.short, qty=trade_qty)
+
+// ——— SECTION: Rendering/UI (GLOBAL ONLY; single-line calls)
+discount_zone_color = is_invert_colors_input ? color.new(color.red, 30) : color.new(color.green, 30)
+premium_zone_color = is_invert_colors_input ? color.new(color.green, 30) : color.new(color.red, 30)
+
+discount_bg_color = show_zone_tint_input and is_in_discount ? color.new(discount_zone_color, 85) : na
+premium_bg_color = show_zone_tint_input and is_in_premium ? color.new(premium_zone_color, 85) : na
+
+bgcolor(discount_bg_color, title="Discount zone tint")
+bgcolor(premium_bg_color, title="Premium zone tint")
+
+plotshape(show_structure_marks_input and is_bullish_shift_first ? low : na, title="Bullish structure shift first", style=shape.triangleup, location=location.belowbar, size=size.small, color=color.new(color.lime, 0), text="Shift Up", textcolor=color.white)
+plotshape(show_structure_marks_input and is_bearish_shift_first ? high : na, title="Bearish structure shift first", style=shape.triangledown, location=location.abovebar, size=size.small, color=color.new(color.red, 0), text="Shift Down", textcolor=color.white)

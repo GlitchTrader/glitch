@@ -1,0 +1,236 @@
+﻿#
+#
+#   /$$$$$$  /$$ /$$   /$$               /$$      
+#  /$$__  $$| $$|__/  | $$              | $$      
+# | $$  \__/| $$ /$$ /$$$$$$    /$$$$$$$| $$$$$$$ 
+# | $$ /$$$$| $$| $$|_  $$_/   /$$_____/| $$__  $$
+# | $$|_  $$| $$| $$  | $$    | $$      | $$  \ $$
+# | $$  \ $$| $$| $$  | $$ /$$| $$      | $$  | $$
+# |  $$$$$$/| $$| $$  |  $$$$/|  $$$$$$$| $$  | $$
+#  \______/ |__/|__/   \___/   \_______/|__/  |__/
+#
+# __________________________________________________
+# __________________________________________________
+#
+#
+# Glitch AddOn
+#
+# v.0.1.0.
+# March 03, 2026
+# by GlitchTrader.com
+#
+# __________________________________________________
+# __________________________________________________
+#
+#
+# key	en-US	pt-BR	es-ES	zh-CN	fr-FR	ru-RU
+analytics.adx_atr_label	ADX(14) | ATR(14): 	ADX(14) | ATR(14): 	ADX(14) | ATR(14): 	ADX(14) | ATR(14): 	ADX(14) | ATR(14): 	ADX(14) | ATR(14): 
+analytics.adx_atr_row	ADX(14) | ATR(14)	ADX(14) | ATR(14)	ADX(14) | ATR(14)	ADX(14) | ATR(14)	ADX(14) | ATR(14)	ADX(14) | ATR(14) 
+analytics.avg_prefix	Avg.	MÃ©dia.	Prom.	å‡å€¼.	Moy.	Ð¡Ñ€ÐµÐ´.
+analytics.awaiting_live_samples	Awaiting live samples	Aguardando amostras ao vivo	Esperando muestras en vivo	ç­‰å¾…å®žæ—¶æ ·æœ¬	En attente d'Ã©chantillons live	ÐžÐ¶Ð¸Ð´Ð°Ð½Ð¸Ðµ Ð¶Ð¸Ð²Ñ‹Ñ… Ð´Ð°Ð½Ð½Ñ‹Ñ…
+analytics.button.open_window	Open Nasdaq Macro	Abrir Nasdaq Macro	Abrir Nasdaq Macro	æ‰“å¼€ Nasdaq Macro	Ouvrir Nasdaq Macro	ÐžÑ‚ÐºÑ€Ñ‹Ñ‚ÑŒ Nasdaq Macro
+analytics.block.earnings_analysis	Earnings Analysis	AnÃ¡lise de Resultados	AnÃ¡lisis de Resultados	è´¢æŠ¥åˆ†æž	Analyse des RÃ©sultats	ÐÐ½Ð°Ð»Ð¸Ð· ÐžÑ‚Ñ‡ÐµÑ‚Ð½Ð¾ÑÑ‚Ð¸
+analytics.block.instrument_overview	Instrument Overview	VisÃ£o Geral do Instrumento	VisiÃ³n General del Instrumento	å“ç§æ¦‚è§ˆ	Vue d'Ensemble de l'Instrument	ÐžÐ±Ð·Ð¾Ñ€ Ð˜Ð½ÑÑ‚Ñ€ÑƒÐ¼ÐµÐ½Ñ‚Ð°
+analytics.block.instrument_scoring	Instrument Scoring	Score do Instrumento	PuntuaciÃ³n del Instrumento	å“ç§è¯„åˆ†	Score de l'Instrument	ÐžÑ†ÐµÐ½ÐºÐ° Ð˜Ð½ÑÑ‚Ñ€ÑƒÐ¼ÐµÐ½Ñ‚Ð°
+analytics.block.latest_headlines	Latest Headlines	Ãšltimas Manchetes	Ãšltimos Titulares	æœ€æ–°å¤´æ¡	Derniers Titres	ÐŸÐ¾ÑÐ»ÐµÐ´Ð½Ð¸Ðµ Ð—Ð°Ð³Ð¾Ð»Ð¾Ð²ÐºÐ¸
+analytics.block.upcoming_news_calendar	Upcoming News Calendar	PrÃ³ximos Eventos do CalendÃ¡rio	PrÃ³ximos Eventos del Calendario	å³å°†åˆ°æ¥çš„è´¢ç»æ—¥åŽ†	Calendrier des News Ã  Venir	Ð‘Ð»Ð¸Ð¶Ð°Ð¹ÑˆÐ¸Ð¹ ÐšÐ°Ð»ÐµÐ½Ð´Ð°Ñ€ÑŒ ÐÐ¾Ð²Ð¾ÑÑ‚ÐµÐ¹
+analytics.dial.buy	Buy	Compra	Compra	ä¹°å…¥	Achat	ÐŸÐ¾ÐºÑƒÐ¿ÐºÐ°
+analytics.dial.sell	Sell	Venda	Venta	å–å‡º	Vente	ÐŸÑ€Ð¾Ð´Ð°Ð¶Ð°
+analytics.factor.agreement	Agree	ConcordÃ¢ncia	Concordancia	ä¸€è‡´	Accord	Ð¡Ð¾Ð³Ð»Ð°ÑÐ¸Ðµ
+analytics.factor.ema	EMA	EMA	EMA	EMA	EMA	EMA
+analytics.factor.ma	MA	MA	MA	MA	MA	MA
+analytics.factor.order_flow	OF	OF	OF	OF	OF	OF
+analytics.factor.rsi	RSI	RSI	RSI	RSI	RSI	RSI
+analytics.factor.stoch	Stoch	Stoch	Stoch	Stoch	Stoch	Stoch
+analytics.factor.osc	Osc	Osc	Osc	Osc	Osc	Osc
+analytics.factor.raw	Raw	Bruto	Bruto	åŽŸå§‹	Brut	Ð¡Ñ‹Ñ€Ð¾Ð¹
+analytics.factor.tooltip.bar_scale	Bar scale	Escala da barra	Escala de barra	æ¡å½¢åˆ»åº¦	Ã‰chelle de barre	Ð¨ÐºÐ°Ð»Ð° Ð±Ð°Ñ€Ð°
+analytics.factor.tooltip.ema	Combined EMA contribution to the current score. Includes EMA slope and EMA alignment after regime/blend adjustments.	ContribuiÃ§Ã£o combinada das EMAs para o score atual. Inclui inclinaÃ§Ã£o das EMAs e alinhamento das EMAs apÃ³s ajustes de regime/blend.	ContribuciÃ³n combinada de las EMA al score actual. Incluye pendiente y alineaciÃ³n de las EMA tras los ajustes de rÃ©gimen/blend.	EMA å¯¹å½“å‰åˆ†æ•°çš„ç»¼åˆè´¡çŒ®ã€‚åŒ…å« EMA æ–œçŽ‡å’Œ EMA æŽ’åˆ—ï¼Œå¹¶å·²è®¡å…¥çŠ¶æ€/æ··åˆè°ƒæ•´ã€‚	Contribution combinÃ©e des EMA au score actuel. Inclut la pente et l'alignement des EMA aprÃ¨s les ajustements de rÃ©gime/blend.	Ð¡ÑƒÐ¼Ð¼Ð°Ñ€Ð½Ñ‹Ð¹ Ð²ÐºÐ»Ð°Ð´ EMA Ð² Ñ‚ÐµÐºÑƒÑ‰Ð¸Ð¹ score. Ð’ÐºÐ»ÑŽÑ‡Ð°ÐµÑ‚ Ð½Ð°ÐºÐ»Ð¾Ð½ EMA Ð¸ Ð²Ñ‹Ñ€Ð°Ð²Ð½Ð¸Ð²Ð°Ð½Ð¸Ðµ EMA Ð¿Ð¾ÑÐ»Ðµ ÐºÐ¾Ñ€Ñ€ÐµÐºÑ‚Ð¸Ñ€Ð¾Ð²Ð¾Ðº Ñ€ÐµÐ¶Ð¸Ð¼Ð° Ð¸ blending.
+analytics.factor.tooltip.order_flow	Net order-flow contribution to the current score after blending with the technical base.	ContribuiÃ§Ã£o lÃ­quida do order flow para o score atual apÃ³s o blend com a base tÃ©cnica.	ContribuciÃ³n neta del order flow al score actual tras mezclarse con la base tÃ©cnica.	è®¢å•æµåœ¨ä¸ŽæŠ€æœ¯åŸºçº¿æ··åˆåŽå¯¹å½“å‰åˆ†æ•°çš„å‡€è´¡çŒ®ã€‚	Contribution nette de l'order flow au score actuel aprÃ¨s mÃ©lange avec la base technique.	Ð§Ð¸ÑÑ‚Ñ‹Ð¹ Ð²ÐºÐ»Ð°Ð´ order flow Ð² Ñ‚ÐµÐºÑƒÑ‰Ð¸Ð¹ score Ð¿Ð¾ÑÐ»Ðµ ÑÐ¼ÐµÑˆÐ¸Ð²Ð°Ð½Ð¸Ñ Ñ Ñ‚ÐµÑ…Ð½Ð¸Ñ‡ÐµÑÐºÐ¾Ð¹ Ð±Ð°Ð·Ð¾Ð¹.
+analytics.factor.tooltip.raw_alignment	Raw alignment	Alinhamento bruto	AlineaciÃ³n bruta	åŽŸå§‹æŽ’åˆ—	Alignement brut	Ð¡Ñ‹Ñ€Ð¾Ðµ Ð²Ñ‹Ñ€Ð°Ð²Ð½Ð¸Ð²Ð°Ð½Ð¸Ðµ
+analytics.factor.tooltip.raw_signal	Raw signal	Sinal bruto	SeÃ±al bruta	åŽŸå§‹ä¿¡å·	Signal brut	Ð¡Ñ‹Ñ€Ð¾Ð¹ ÑÐ¸Ð³Ð½Ð°Ð»
+analytics.factor.tooltip.raw_technical	Technical base	Base tÃ©cnica	Base tÃ©cnica	æŠ€æœ¯åŸºçº¿	Base technique	Ð¢ÐµÑ…Ð½Ð¸Ñ‡ÐµÑÐºÐ°Ñ Ð±Ð°Ð·Ð°
+analytics.factor.tooltip.weighted	Weighted contribution to the current score after regime/blend adjustments.	ContribuiÃ§Ã£o ponderada para o score atual apÃ³s ajustes de regime/blend.	ContribuciÃ³n ponderada al score actual tras los ajustes de rÃ©gimen/blend.	åœ¨çŠ¶æ€/æ··åˆè°ƒæ•´åŽå¯¹å½“å‰åˆ†æ•°çš„åŠ æƒè´¡çŒ®ã€‚	Contribution pondÃ©rÃ©e au score actuel aprÃ¨s ajustements de rÃ©gime/blend.	Ð’Ð·Ð²ÐµÑˆÐµÐ½Ð½Ñ‹Ð¹ Ð²ÐºÐ»Ð°Ð´ Ð² Ñ‚ÐµÐºÑƒÑ‰Ð¸Ð¹ score Ð¿Ð¾ÑÐ»Ðµ ÐºÐ¾Ñ€Ñ€ÐµÐºÑ‚Ð¸Ñ€Ð¾Ð²Ð¾Ðº Ñ€ÐµÐ¶Ð¸Ð¼Ð° Ð¸ blending.
+analytics.factor.z_score	Z-Score	Z-Score	Z-Score	Z-Score	Z-Score	Z-Score
+analytics.fundamental.error	Fundamental feed error	Erro no feed fundamental	Error del feed fundamental	åŸºæœ¬é¢æ•°æ®æºé”™è¯¯	Erreur du flux fondamental	ÐžÑˆÐ¸Ð±ÐºÐ° Ñ„ÑƒÐ½Ð´Ð°Ð¼ÐµÐ½Ñ‚Ð°Ð»ÑŒÐ½Ð¾Ð³Ð¾ Ð¿Ð¾Ñ‚Ð¾ÐºÐ°
+analytics.fundamental.keys_missing_cta	To enable the Fundamental Analysis section, configure your API keys below.	Para habilitar a seÃ§Ã£o de AnÃ¡lise Fundamental, configure suas chaves de API abaixo.	Para habilitar la secciÃ³n de AnÃ¡lisis Fundamental, configura tus claves API abajo.	è¦å¯ç”¨åŸºæœ¬é¢åˆ†æžæ¨¡å—ï¼Œè¯·åœ¨ä¸‹æ–¹é…ç½® API å¯†é’¥ã€‚	Pour activer la section Analyse Fondamentale, configurez vos clÃ©s API ci-dessous.	Ð§Ñ‚Ð¾Ð±Ñ‹ Ð²ÐºÐ»ÑŽÑ‡Ð¸Ñ‚ÑŒ Ñ€Ð°Ð·Ð´ÐµÐ» Ñ„ÑƒÐ½Ð´Ð°Ð¼ÐµÐ½Ñ‚Ð°Ð»ÑŒÐ½Ð¾Ð³Ð¾ Ð°Ð½Ð°Ð»Ð¸Ð·Ð°, Ð½Ð°ÑÑ‚Ñ€Ð¾Ð¹Ñ‚Ðµ API-ÐºÐ»ÑŽÑ‡Ð¸ Ð½Ð¸Ð¶Ðµ.
+analytics.instrument	Instrument	Instrumento	Instrumento	å“ç§	Instrument	Ð˜Ð½ÑÑ‚Ñ€ÑƒÐ¼ÐµÐ½Ñ‚
+analytics.metric.avg_price	Avg Price	PreÃ§o MÃ©dio	Precio Prom.	å¹³å‡ä»·	Prix Moy.	Ð¡Ñ€ÐµÐ´Ð½. Ð¦ÐµÐ½Ð°
+analytics.metric.composite	Glitch Score	Glitch Score	Glitch Score	Glitch Score	Glitch Score	Glitch Score
+analytics.metric.current_price	Current Price	PreÃ§o Atual	Precio Actual	å½“å‰ä»·æ ¼	Prix Actuel	Ð¢ÐµÐºÑƒÑ‰Ð°Ñ Ð¦ÐµÐ½Ð°
+analytics.metric.session	Session	SessÃ£o	SesiÃ³n	æ—¶æ®µ	Session	Ð¡ÐµÑÑÐ¸Ñ
+analytics.no_recent_headlines	No recent instrument headlines.	Sem manchetes recentes do instrumento.	No hay titulares recientes del instrumento.	è¯¥å“ç§æš‚æ— æœ€æ–°å¤´æ¡ã€‚	Aucun titre rÃ©cent pour cet instrument.	ÐÐµÑ‚ ÑÐ²ÐµÐ¶Ð¸Ñ… Ð·Ð°Ð³Ð¾Ð»Ð¾Ð²ÐºÐ¾Ð² Ð¿Ð¾ Ð¸Ð½ÑÑ‚Ñ€ÑƒÐ¼ÐµÐ½Ñ‚Ñƒ.
+analytics.order_flow.confidence	Conf	Conf	Conf	ç½®ä¿¡åº¦	Conf	Ð£Ð²ÐµÑ€.
+analytics.order_flow.prefix	OrderFlow	OrderFlow	OrderFlow	è®¢å•æµ	OrderFlow	OrderFlow
+analytics.order_flow.unavailable	Order flow unavailable	Order flow indisponÃ­vel	Order flow no disponible	è®¢å•æµä¸å¯ç”¨	Order flow indisponible	Order flow Ð½ÐµÐ´Ð¾ÑÑ‚ÑƒÐ¿ÐµÐ½
+analytics.regime	Regime	Regime	RÃ©gimen	çŠ¶æ€	RÃ©gime	Ð ÐµÐ¶Ð¸Ð¼
+analytics.regime.choppy	Choppy	Lateral	Lateral	éœ‡è¡	HachÃ©	ÐŸÐ¸Ð»Ð°
+analytics.regime.trending	Trending	TendÃªncia	Tendencia	è¶‹åŠ¿	Tendance	Ð¢Ñ€ÐµÐ½Ð´
+analytics.regime.transitional	Transitional	TransiÃ§Ã£o	TransiciÃ³n	è¿‡æ¸¡	Transition	ÐŸÐµÑ€ÐµÑ…Ð¾Ð´
+analytics.regime.with	with	com	con	ä¼´éš	avec	Ñ
+analytics.session_range.avg	Avg	MÃ©dia	Prom.	å‡å€¼	Moy.	Ð¡Ñ€ÐµÐ´.
+analytics.session_range.current	Current	Atual	Actual	å½“å‰	Actuel	Ð¢ÐµÐºÑƒÑ‰Ð¸Ð¹
+analytics.session_range.high	Session High	MÃ¡x. SessÃ£o	MÃ¡x. SesiÃ³n	æœ¬æ—¶æ®µé«˜ç‚¹	Plus Haut SÃ©ance	ÐœÐ°ÐºÑ. Ð¡ÐµÑÑÐ¸Ð¸
+analytics.session_range.low	Session Low	MÃ­n. SessÃ£o	MÃ­n. SesiÃ³n	æœ¬æ—¶æ®µä½Žç‚¹	Plus Bas SÃ©ance	ÐœÐ¸Ð½. Ð¡ÐµÑÑÐ¸Ð¸
+analytics.signal.neutral	Neutral	Neutro	Neutral	ä¸­æ€§	Neutre	ÐÐµÐ¹Ñ‚Ñ€Ð°Ð»ÑŒÐ½Ð¾
+analytics.technical.bridge_missing_cta	To enable Technical Analysis, add GlitchAnalyticsBridgeIndicator to a NinjaTrader chart. Data is available during market hours. If refresh is needed, re-apply the indicator on the chart.	Para habilitar a AnÃ¡lise TÃ©cnica, adicione o GlitchAnalyticsBridgeIndicator a um grÃ¡fico do NinjaTrader. Os dados ficam disponÃ­veis durante o horÃ¡rio de mercado. Se precisar atualizar, reaplique o indicador no grÃ¡fico.	Para habilitar el AnÃ¡lisis TÃ©cnico, aÃ±ade GlitchAnalyticsBridgeIndicator a un grÃ¡fico de NinjaTrader. Los datos estÃ¡n disponibles durante el horario de mercado. Si necesitas actualizar, vuelve a aplicar el indicador en el grÃ¡fico.	è¦å¯ç”¨æŠ€æœ¯åˆ†æžï¼Œè¯·å°† GlitchAnalyticsBridgeIndicator æ·»åŠ åˆ° NinjaTrader å›¾è¡¨ã€‚æ•°æ®ä»…åœ¨å¸‚åœºæ—¶æ®µå¯ç”¨ï¼›å¦‚éœ€åˆ·æ–°ï¼Œè¯·é‡æ–°åŠ è½½è¯¥æŒ‡æ ‡ã€‚	Pour activer l'Analyse Technique, ajoutez GlitchAnalyticsBridgeIndicator sur un graphique NinjaTrader. Les donnÃ©es sont disponibles pendant les heures de marchÃ©. Si un rafraÃ®chissement est nÃ©cessaire, rÃ©appliquez l'indicateur sur le graphique.	Ð§Ñ‚Ð¾Ð±Ñ‹ Ð²ÐºÐ»ÑŽÑ‡Ð¸Ñ‚ÑŒ Ñ‚ÐµÑ…Ð½Ð¸Ñ‡ÐµÑÐºÐ¸Ð¹ Ð°Ð½Ð°Ð»Ð¸Ð·, Ð´Ð¾Ð±Ð°Ð²ÑŒÑ‚Ðµ GlitchAnalyticsBridgeIndicator Ð½Ð° Ð³Ñ€Ð°Ñ„Ð¸Ðº NinjaTrader. Ð”Ð°Ð½Ð½Ñ‹Ðµ Ð´Ð¾ÑÑ‚ÑƒÐ¿Ð½Ñ‹ Ð² Ñ‚Ð¾Ñ€Ð³Ð¾Ð²Ñ‹Ðµ Ñ‡Ð°ÑÑ‹. Ð•ÑÐ»Ð¸ Ð½ÑƒÐ¶Ð½Ð¾ Ð¾Ð±Ð½Ð¾Ð²Ð»ÐµÐ½Ð¸Ðµ, Ð·Ð°Ð½Ð¾Ð²Ð¾ Ð¿Ñ€Ð¸Ð¼ÐµÐ½Ð¸Ñ‚Ðµ Ð¸Ð½Ð´Ð¸ÐºÐ°Ñ‚Ð¾Ñ€ Ðº Ð³Ñ€Ð°Ñ„Ð¸ÐºÑƒ.
+analytics.timeframe.min_format	{0} min	{0} min	{0} min	{0} åˆ†é’Ÿ	{0} min	{0} Ð¼Ð¸Ð½
+analytics.timeframe.avg_price_title	{0} min Avg Price	{0} min PreÃ§o MÃ©dio	{0} min Precio Prom.	{0} åˆ†é’Ÿå¹³å‡ä»·	{0} min Prix Moy.	{0} Ð¼Ð¸Ð½ Ð¡Ñ€ÐµÐ´Ð½. Ð¦ÐµÐ½Ð°
+analytics.unified.bias	Bias	ViÃ©s	Sesgo	åå‘	Biais	Ð£ÐºÐ»Ð¾Ð½
+analytics.unified.bias.long	Long	Long	Long	å¤šå¤´	Long	Ð›Ð¾Ð½Ð³
+analytics.unified.bias.neutral	Neutral	Neutro	Neutral	ä¸­æ€§	Neutre	ÐÐµÐ¹Ñ‚Ñ€Ð°Ð»ÑŒÐ½Ð¾
+analytics.unified.bias.short	Short	Short	Short	ç©ºå¤´	Short	Ð¨Ð¾Ñ€Ñ‚
+analytics.unified.exec_signal	Glitch TF Score	Glitch TF Score	Glitch TF Score	Glitch TF Score	Glitch TF Score	Glitch TF Score
+analytics.unified.execution_tf	Execution TF	TF de ExecuÃ§Ã£o	TF de EjecuciÃ³n	æ‰§è¡Œå‘¨æœŸ	TF d'ExÃ©cution	TF Ð˜ÑÐ¿Ð¾Ð»Ð½ÐµÐ½Ð¸Ñ
+analytics.unified.gate	Gate	Filtro	Filtro	è¿‡æ»¤	Filtre	Ð¤Ð¸Ð»ÑŒÑ‚Ñ€
+analytics.unified.gate.go	Go	Entrar	Entrar	æ‰§è¡Œ	EntrÃ©e	Ð’Ñ…Ð¾Ð´
+analytics.unified.gate.pass	Pass	Passar	Pasar	è·³è¿‡	Passer	ÐŸÑ€Ð¾Ð¿ÑƒÑÐº
+analytics.unified.gate.watch	Watch	Observar	Vigilar	è§‚å¯Ÿ	Surveiller	ÐÐ°Ð±Ð»ÑŽÐ´Ð°Ñ‚ÑŒ
+analytics.unified.action	Action	AÃ§Ã£o	AcciÃ³n	æ“ä½œ	Action	Ð”ÐµÐ¹ÑÑ‚Ð²Ð¸Ðµ
+analytics.unified.action.execute	Execute	Executar	Ejecutar	æ‰§è¡Œ	ExÃ©cuter	Ð˜ÑÐ¿Ð¾Ð»Ð½Ð¸Ñ‚ÑŒ
+analytics.unified.action.execute_long	Execute Long	Executar Long	Ejecutar Long	æ‰§è¡Œå¤š	ExÃ©cuter Long	Ð˜ÑÐ¿Ð¾Ð»Ð½Ð¸Ñ‚ÑŒ Ð›Ð¾Ð½Ð³
+analytics.unified.action.execute_short	Execute Short	Executar Short	Ejecutar Short	æ‰§è¡Œç©º	ExÃ©cuter Short	Ð˜ÑÐ¿Ð¾Ð»Ð½Ð¸Ñ‚ÑŒ Ð¨Ð¾Ñ€Ñ‚
+analytics.unified.action.no_trade	No Trade	Sem OperaÃ§Ã£o	Sin OperaciÃ³n	æ— äº¤æ˜“	Pas de Trade	ÐÐµÑ‚ Ð¡Ð´ÐµÐ»ÐºÐ¸
+analytics.unified.action.wait	Wait	Aguardar	Esperar	ç­‰å¾…	Attendre	ÐžÐ¶Ð¸Ð´Ð°Ñ‚ÑŒ
+analytics.unified.quality	Quality	Qualidade	Calidad	è´¨é‡	QualitÃ©	ÐšÐ°Ñ‡ÐµÑÑ‚Ð²Ð¾
+analytics.unified.setup	Setup	Setup	Setup	Setup	Setup	Setup
+analytics.unified.setup.continue	Continue	ContinuaÃ§Ã£o	ContinuaciÃ³n	å»¶ç»­	Continuation	ÐŸÑ€Ð¾Ð´Ð¾Ð»Ð¶ÐµÐ½Ð¸Ðµ
+analytics.unified.setup.flat	Flat	Flat	Flat	Flat	Flat	Ð¤Ð»ÑÑ‚
+analytics.unified.setup.pullback	Pullback	Pullback	Pullback	å›žæ’¤	Pullback	ÐžÑ‚ÐºÐ°Ñ‚
+analytics.unified.setup.reversal	Reversal	ReversÃ£o	ReversiÃ³n	åè½¬	Retournement	Ð Ð°Ð·Ð²Ð¾Ñ€Ð¾Ñ‚
+analytics.volatility.high	High volatility	Alta volatilidade	Alta volatilidad	é«˜æ³¢åŠ¨	Haute volatilitÃ©	Ð’Ñ‹ÑÐ¾ÐºÐ°Ñ Ð²Ð¾Ð»Ð°Ñ‚Ð¸Ð»ÑŒÐ½Ð¾ÑÑ‚ÑŒ
+analytics.volatility.low	Low volatility	Baixa volatilidade	Baja volatilidad	ä½Žæ³¢åŠ¨	Faible volatilitÃ©	ÐÐ¸Ð·ÐºÐ°Ñ Ð²Ð¾Ð»Ð°Ñ‚Ð¸Ð»ÑŒÐ½Ð¾ÑÑ‚ÑŒ
+analytics.volatility.moderate	Moderate volatility	Volatilidade moderada	Volatilidad moderada	ä¸­ç­‰æ³¢åŠ¨	VolatilitÃ© modÃ©rÃ©e	Ð£Ð¼ÐµÑ€ÐµÐ½Ð½Ð°Ñ Ð²Ð¾Ð»Ð°Ñ‚Ð¸Ð»ÑŒÐ½Ð¾ÑÑ‚ÑŒ
+analytics.window.secondary_title	Nasdaq Macro	Nasdaq Macro	Nasdaq Macro	Nasdaq Macro	Nasdaq Macro	Nasdaq Macro
+dashboard.column.account_name	Account Name	Nome da Conta	Nombre de la Cuenta	è´¦æˆ·åç§°	Nom du Compte	Ð˜Ð¼Ñ Ð¡Ñ‡ÐµÑ‚Ð°
+dashboard.column.buffer	Buffer	Buffer	Buffer	ç¼“å†²	Buffer	Ð‘ÑƒÑ„ÐµÑ€
+dashboard.column.equity	Equity	Equity	Equity	æƒç›Š	Equity	Equity
+dashboard.column.firm	Firm	Mesa	Firma	èµ„æ–¹	Firm	Ð¤Ð¸Ñ€Ð¼Ð°
+dashboard.column.netliq	NetLiq	NetLiq	NetLiq	NetLiq	NetLiq	NetLiq
+dashboard.column.pnl	PnL	PnL	PnL	PnL	PnL	PnL
+dashboard.column.realized_pnl	R PnL	R PnL	R PnL	R PnL	R PnL	R PnL
+dashboard.column.risk	Risk	Risco	Riesgo	é£Žé™©	Risque	Ð Ð¸ÑÐº
+dashboard.column.size	Size	Tamanho	TamaÃ±o	è§„æ¨¡	Taille	Ð Ð°Ð·Ð¼ÐµÑ€
+dashboard.column.status	Status	Status	Estado	çŠ¶æ€	Statut	Ð¡Ñ‚Ð°Ñ‚ÑƒÑ
+dashboard.column.unrealized_pnl	U PnL	U PnL	U PnL	U PnL	U PnL	U PnL
+dashboard.connected_accounts	Connected Accounts	Contas Conectadas	Cuentas Conectadas	å·²è¿žæŽ¥è´¦æˆ·	Comptes ConnectÃ©s	ÐŸÐ¾Ð´ÐºÐ»ÑŽÑ‡ÐµÐ½Ð½Ñ‹Ðµ Ð¡Ñ‡ÐµÑ‚Ð°
+dashboard.group.add_account	+ Add Account	+ Adicionar Conta	+ AÃ±adir Cuenta	+ æ·»åŠ è´¦æˆ·	+ Ajouter un Compte	+ Ð”Ð¾Ð±Ð°Ð²Ð¸Ñ‚ÑŒ Ð¡Ñ‡ÐµÑ‚
+dashboard.group.column.enable	Enable	Ativar	Activar	å¯ç”¨	Activer	Ð’ÐºÐ»
+dashboard.group.column.follower_account	Follower Account	Conta Follower	Cuenta Follower	è·Ÿéšè´¦æˆ·	Compte Follower	Ð¡Ñ‡ÐµÑ‚ Follower
+dashboard.group.column.master	Master	Master	Master	ä¸»è´¦æˆ·	Master	Master
+dashboard.group.column.max_c	Max C	Max C	Max C	æœ€å¤§æ‰‹æ•°	Max C	ÐœÐ°ÐºÑ C
+dashboard.group.column.max_dd	Max DD	Max DD	Max DD	æœ€å¤§å›žæ’¤	Max DD	ÐœÐ°ÐºÑ DD
+dashboard.group.column.max_l	Max L	Max L	Max L	æœ€å¤§äºæŸ	Max L	ÐœÐ°ÐºÑ L
+dashboard.group.column.position	Position	PosiÃ§Ã£o	PosiciÃ³n	æŒä»“	Position	ÐŸÐ¾Ð·Ð¸Ñ†Ð¸Ñ
+dashboard.group.column.ratio	Ratio	Ratio	Ratio	æ¯”ä¾‹	Ratio	ÐšÐ¾ÑÑ„.
+dashboard.group.create_group	+ Create Group	+ Criar Grupo	+ Crear Grupo	+ åˆ›å»ºåˆ†ç»„	+ CrÃ©er un Groupe	+ Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ð“Ñ€ÑƒÐ¿Ð¿Ñƒ
+dashboard.group.master_label_format	Group {0} | Master:	Grupo {0} | Master:	Grupo {0} | Master:	ç»„ {0} | Master:	Groupe {0} | Master :	Ð“Ñ€ÑƒÐ¿Ð¿Ð° {0} | Master:
+dashboard.group.remove	Remove	Remover	Quitar	ç§»é™¤	Supprimer	Ð£Ð´Ð°Ð»Ð¸Ñ‚ÑŒ
+dashboard.group.remove_group	Remove Group	Remover Grupo	Quitar Grupo	ç§»é™¤åˆ†ç»„	Supprimer le Groupe	Ð£Ð´Ð°Ð»Ð¸Ñ‚ÑŒ Ð“Ñ€ÑƒÐ¿Ð¿Ñƒ
+dashboard.group.select_all_tooltip	Select all followers	Selecionar todos os followers	Seleccionar todos los followers	é€‰æ‹©æ‰€æœ‰è·Ÿéšè´¦æˆ·	SÃ©lectionner tous les followers	Ð’Ñ‹Ð±Ñ€Ð°Ñ‚ÑŒ Ð²ÑÐµÑ… followers
+dialog.add_follower.prompt	Pick a follower account:	Escolha uma conta follower:	Elige una cuenta follower:	é€‰æ‹©ä¸€ä¸ªè·Ÿéšè´¦æˆ·ï¼š	Choisissez un compte follower :	Ð’Ñ‹Ð±ÐµÑ€Ð¸Ñ‚Ðµ ÑÑ‡ÐµÑ‚ follower:
+dialog.add_follower.title	Add Follower Account	Adicionar Conta Follower	AÃ±adir Cuenta Follower	æ·»åŠ è·Ÿéšè´¦æˆ·	Ajouter un Compte Follower	Ð”Ð¾Ð±Ð°Ð²Ð¸Ñ‚ÑŒ Ð¡Ñ‡ÐµÑ‚ Follower
+dialog.common.cancel	Cancel	Cancelar	Cancelar	å–æ¶ˆ	Annuler	ÐžÑ‚Ð¼ÐµÐ½Ð°
+dialog.common.ok	OK	OK	OK	ç¡®å®š	OK	OK
+dialog.common.proceed	Proceed	Prosseguir	Continuar	ç»§ç»­	Continuer	ÐŸÑ€Ð¾Ð´Ð¾Ð»Ð¶Ð¸Ñ‚ÑŒ
+dialog.common.save	Save	Salvar	Guardar	ä¿å­˜	Enregistrer	Ð¡Ð¾Ñ…Ñ€Ð°Ð½Ð¸Ñ‚ÑŒ
+dialog.create_group.prompt	Pick a master account:	Escolha uma conta master:	Elige una cuenta master:	é€‰æ‹©ä¸€ä¸ªä¸»è´¦æˆ·ï¼š	Choisissez un compte master :	Ð’Ñ‹Ð±ÐµÑ€Ð¸Ñ‚Ðµ master-ÑÑ‡ÐµÑ‚:
+dialog.create_group.title	Create Account Group	Criar Grupo de Contas	Crear Grupo de Cuentas	åˆ›å»ºè´¦æˆ·åˆ†ç»„	CrÃ©er un Groupe de Comptes	Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ð“Ñ€ÑƒÐ¿Ð¿Ñƒ Ð¡Ñ‡ÐµÑ‚Ð¾Ð²
+header.banner.news_event_in_progress	News Event in Progress	Evento de NotÃ­cia em Andamento	Evento de Noticias en Curso	æ–°é—»äº‹ä»¶è¿›è¡Œä¸­	Ã‰vÃ©nement News en Cours	ÐÐ¾Ð²Ð¾ÑÑ‚Ð½Ð¾Ðµ Ð¡Ð¾Ð±Ñ‹Ñ‚Ð¸Ðµ Ð˜Ð´ÐµÑ‚
+header.banner.news_event_in_progress_prefix	News Event in Progress:	Evento de NotÃ­cia em Andamento:	Evento de Noticias en Curso:	æ–°é—»äº‹ä»¶è¿›è¡Œä¸­ï¼š	Ã‰vÃ©nement News en Cours :	ÐÐ¾Ð²Ð¾ÑÑ‚Ð½Ð¾Ðµ Ð¡Ð¾Ð±Ñ‹Ñ‚Ð¸Ðµ Ð˜Ð´ÐµÑ‚:
+header.button.flatten_all	Flatten All	Zerar Tudo	Cerrar Todo	å…¨éƒ¨å¹³ä»“	Tout Aplatir	Ð—Ð°ÐºÑ€Ñ‹Ñ‚ÑŒ Ð’ÑÐµ
+header.button.flattened	Flattened!	Zerado!	Cerrado!	å·²å¹³ä»“ï¼	Aplati !	Ð—Ð°ÐºÑ€Ñ‹Ñ‚Ð¾!
+header.button.replicate	Replicate	Replicar	Replicar	å¤åˆ¶è·Ÿå•	RÃ©pliquer	Ð ÐµÐ¿Ð»Ð¸Ñ†Ð¸Ñ€Ð¾Ð²Ð°Ñ‚ÑŒ
+header.button.replicating	Replicating	Replicando	Replicando	å¤åˆ¶ä¸­	RÃ©plication	Ð ÐµÐ¿Ð»Ð¸ÐºÐ°Ñ†Ð¸Ñ
+header.button.start	Start	Iniciar	Iniciar	å¼€å§‹	DÃ©marrer	Ð¡Ñ‚Ð°Ñ€Ñ‚
+header.button.stop	Stop	Parar	Detener	åœæ­¢	ArrÃªter	Ð¡Ñ‚Ð¾Ð¿
+header.metric.daily_pnl	Daily PnL	PnL DiÃ¡rio	PnL Diario	å½“æ—¥ PnL	PnL Jour	Ð”Ð½ÐµÐ²Ð½Ð¾Ð¹ PnL
+header.metric.eval_pnl	Eval PnL	Eval PnL	Eval PnL	Eval PnL	Eval PnL	Eval PnL
+header.metric.eval_risk	Eval Risk	Risco Eval	Riesgo Eval	Eval é£Žé™©	Risque Eval	Eval Ð Ð¸ÑÐº
+header.metric.global_risk	Global Risk	Risco Global	Riesgo Global	å…¨å±€é£Žé™©	Risque Global	Ð“Ð»Ð¾Ð±Ð°Ð»ÑŒÐ½Ñ‹Ð¹ Ð Ð¸ÑÐº
+header.metric.pa_pnl	PA PnL	PA PnL	PA PnL	PA PnL	PA PnL	PA PnL
+header.metric.pa_risk	PA Risk	Risco PA	Riesgo PA	PA é£Žé™©	Risque PA	PA Ð Ð¸ÑÐº
+header.metric.warnings	Warnings	Alertas	Alertas	é¢„è­¦	Alertes	ÐŸÑ€ÐµÐ´ÑƒÐ¿Ñ€.
+journal.card.avg_loss	Avg Loss	Avg Loss	PÃ©rd. Prom.	å¹³å‡äºæŸ	Perte Moy.	Ð¡Ñ€ÐµÐ´Ð½. Ð£Ð±Ñ‹Ñ‚Ð¾Ðº
+journal.card.avg_win	Avg Win	Avg Win	Gan. Prom.	å¹³å‡ç›ˆåˆ©	Gain Moy.	Ð¡Ñ€ÐµÐ´Ð½. ÐŸÑ€Ð¸Ð±Ñ‹Ð»ÑŒ
+journal.card.total_trades	Total Trades	Total de Trades	Total Trades	æ€»äº¤æ˜“æ•°	Trades Totaux	Ð’ÑÐµÐ³Ð¾ Ð¡Ð´ÐµÐ»Ð¾Ðº
+journal.column.account	Account	Conta	Cuenta	è´¦æˆ·	Compte	Ð¡Ñ‡ÐµÑ‚
+journal.column.dismiss	Dismiss	Fechar	Descartar	å¿½ç•¥	Masquer	Ð¡ÐºÑ€Ñ‹Ñ‚ÑŒ
+journal.column.message	Message	Mensagem	Mensaje	æ¶ˆæ¯	Message	Ð¡Ð¾Ð¾Ð±Ñ‰ÐµÐ½Ð¸Ðµ
+journal.column.time	Time	Hora	Hora	æ—¶é—´	Heure	Ð’Ñ€ÐµÐ¼Ñ
+journal.column.type	Type	Tipo	Tipo	ç±»åž‹	Type	Ð¢Ð¸Ð¿
+journal.column.warning	Warning	Alerta	Alerta	é¢„è­¦	Alerte	ÐŸÑ€ÐµÐ´ÑƒÐ¿Ñ€ÐµÐ¶Ð´ÐµÐ½Ð¸Ðµ
+journal.critical_warnings	Critical Warnings	Alertas CrÃ­ticos	Alertas CrÃ­ticas	å…³é”®é¢„è­¦	Alertes Critiques	ÐšÑ€Ð¸Ñ‚Ð¸Ñ‡ÐµÑÐºÐ¸Ðµ ÐŸÑ€ÐµÐ´ÑƒÐ¿Ñ€ÐµÐ¶Ð´ÐµÐ½Ð¸Ñ
+journal.title	Journal	Journal	Diario	æ—¥å¿—	Journal	Ð–ÑƒÑ€Ð½Ð°Ð»
+journal.trade_feed	Live Feed	Feed ao Vivo	Feed en Vivo	å®žæ—¶æµ	Flux Live	Ð›ÐµÐ½Ñ‚Ð° Live
+journal.trader_performance	Trader Performance	Performance do Trader	Rendimiento del Trader	äº¤æ˜“è¡¨çŽ°	Performance du Trader	Ð ÐµÐ·ÑƒÐ»ÑŒÑ‚Ð°Ñ‚Ñ‹ Ð¢Ñ€ÐµÐ¹Ð´ÐµÑ€Ð°
+summary.account_trades	Account Trades	Trades por Conta	Trades por Cuenta	è´¦æˆ·çº§äº¤æ˜“	Trades Compte	Ð¡Ð´ÐµÐ»ÐºÐ¸ Ð¿Ð¾ Ð¡Ñ‡ÐµÑ‚Ð°Ð¼
+summary.accounts	Accounts	Contas	Cuentas	è´¦æˆ·	Comptes	Ð¡Ñ‡ÐµÑ‚Ð°
+summary.accounts_count_format	{0} accounts	{0} contas	{0} cuentas	{0} ä¸ªè´¦æˆ·	{0} comptes	{0} ÑÑ‡ÐµÑ‚Ð¾Ð²
+summary.all	All	Geral	Total	å…¨éƒ¨	Tous	Ð’ÑÐµ
+summary.avg_contracts_trade	Avg Contracts / Trade	Contratos MÃ©dios / Trade	Contratos Prom. / Trade	æ¯ç¬”å¹³å‡åˆçº¦	Contrats Moy. / Trade	Ð¡Ñ€ÐµÐ´Ð½. ÐšÐ¾Ð½Ñ‚Ñ€Ð°ÐºÑ‚Ñ‹ / Ð¡Ð´ÐµÐ»ÐºÐ°
+summary.avg_duration	Avg Duration	DuraÃ§Ã£o MÃ©dia	DuraciÃ³n Prom.	å¹³å‡æŒä»“æ—¶é•¿	DurÃ©e Moy.	Ð¡Ñ€ÐµÐ´Ð½. Ð”Ð»Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ð¾ÑÑ‚ÑŒ
+summary.avg_loss	Avg Loss	Avg Loss	PÃ©rd. Prom.	å¹³å‡äºæŸ	Perte Moy.	Ð¡Ñ€ÐµÐ´Ð½. Ð£Ð±Ñ‹Ñ‚Ð¾Ðº
+summary.avg_trade	Avg Trade	Trade MÃ©dio	Trade Prom.	å¹³å‡æ¯ç¬”	Trade Moy.	Ð¡Ñ€ÐµÐ´Ð½. Ð¡Ð´ÐµÐ»ÐºÐ°
+summary.avg_win	Avg Win	Avg Win	Gan. Prom.	å¹³å‡ç›ˆåˆ©	Gain Moy.	Ð¡Ñ€ÐµÐ´Ð½. ÐŸÑ€Ð¸Ð±Ñ‹Ð»ÑŒ
+summary.card.accounts	Accounts Traded	Contas Operadas	Cuentas Operadas	å‚ä¸Žè´¦æˆ·	Comptes TradÃ©s	Ð¢Ð¾Ñ€Ð³ÑƒÑŽÑ‰Ð¸Ñ… Ð¡Ñ‡ÐµÑ‚Ð¾Ð²
+summary.card.fleet_trades	Fleet Trades	Trades da Frota	Trades de la Flota	ç¼–ç»„äº¤æ˜“æ•°	Trades Flotte	Ð¡Ð´ÐµÐ»ÐºÐ¸ Ð¤Ð»Ð¾Ñ‚Ð°
+summary.card.net_pnl	Net PnL	Net PnL	Net PnL	å‡€ PnL	Net PnL	Net PnL
+summary.card.profit_factor	Profit Factor	Fator de Lucro	Factor de Beneficio	ç›ˆåˆ©å› å­	Profit Factor	Ð¤Ð°ÐºÑ‚Ð¾Ñ€ ÐŸÑ€Ð¸Ð±Ñ‹Ð»Ð¸
+summary.card.trades	Closed Trades	Trades Fechados	Trades Cerrados	å·²å¹³ä»“äº¤æ˜“	Trades ClÃ´turÃ©s	Ð—Ð°ÐºÑ€Ñ‹Ñ‚Ñ‹Ðµ Ð¡Ð´ÐµÐ»ÐºÐ¸
+summary.card.win_rate	Win Rate	Taxa de Acerto	Tasa de Acierto	èƒœçŽ‡	Taux de RÃ©ussite	ÐŸÑ€Ð¾Ñ†ÐµÐ½Ñ‚ ÐŸÐ¾Ð±ÐµÐ´
+summary.close_reasons	Close Reasons	Motivos de SaÃ­da	Motivos de Salida	å¹³ä»“åŽŸå› 	Motifs de Sortie	ÐŸÑ€Ð¸Ñ‡Ð¸Ð½Ñ‹ Ð’Ñ‹Ñ…Ð¾Ð´Ð°
+summary.close_time	Close Time	Hora de Fechamento	Hora de Cierre	å¹³ä»“æ—¶é—´	Heure de Sortie	Ð’Ñ€ÐµÐ¼Ñ Ð—Ð°ÐºÑ€Ñ‹Ñ‚Ð¸Ñ
+summary.contracts	Contracts	Contratos	Contratos	åˆçº¦æ•°	Contrats	ÐšÐ¾Ð½Ñ‚Ñ€Ð°ÐºÑ‚Ñ‹
+summary.duration	Duration	DuraÃ§Ã£o	DuraciÃ³n	æŒç»­æ—¶é—´	DurÃ©e	Ð”Ð»Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ð¾ÑÑ‚ÑŒ
+summary.exit	Exit	SaÃ­da	Salida	é€€å‡º	Sortie	Ð’Ñ‹Ñ…Ð¾Ð´
+summary.exit.manual	Manual	Manual	Manual	æ‰‹åŠ¨	Manuel	Ð ÑƒÑ‡Ð½.
+summary.exit.news_event	News	News	News	æ–°é—»	News	News
+summary.exit.replication_sync	Sync	Sync	Sync	åŒæ­¥	Sync	Sync
+summary.exit.risk_management	RM	RM	RM	RM	RM	RM
+summary.exit.session_end	Close	Sess.	Cierre	æ”¶ç›˜	ClÃ´t.	Ð¡ÐµÑÑ.
+summary.exit.signal_flip	Flip	Flip	Flip	ç¿»è½¬	Flip	Flip
+summary.exit.stop_loss	SL	SL	SL	SL	SL	SL
+summary.exit.take_profit	TP	TP	TP	TP	TP	TP
+summary.exit.unknown	UNK	UNK	UNK	UNK	UNK	UNK
+summary.gross_loss	Gross Loss	Perda Bruta	PÃ©rdida Bruta	æ€»äºæŸ	Perte Brute	Ð’Ð°Ð»Ð¾Ð²Ñ‹Ð¹ Ð£Ð±Ñ‹Ñ‚Ð¾Ðº
+summary.gross_profit	Gross Profit	Lucro Bruto	Beneficio Bruto	æ€»ç›ˆåˆ©	Profit Brut	Ð’Ð°Ð»Ð¾Ð²Ð°Ñ ÐŸÑ€Ð¸Ð±Ñ‹Ð»ÑŒ
+summary.instrument	Instrument	Instrumento	Instrumento	å“ç§	Instrument	Ð˜Ð½ÑÑ‚Ñ€ÑƒÐ¼ÐµÐ½Ñ‚
+summary.largest_loss	Largest Loss	Maior Perda	Mayor PÃ©rdida	æœ€å¤§äºæŸ	Plus Grande Perte	Ð¡Ð°Ð¼Ñ‹Ð¹ Ð‘Ð¾Ð»ÑŒÑˆÐ¾Ð¹ Ð£Ð±Ñ‹Ñ‚Ð¾Ðº
+summary.largest_win	Largest Win	Maior Ganho	Mayor Ganancia	æœ€å¤§ç›ˆåˆ©	Plus Grand Gain	Ð¡Ð°Ð¼Ð°Ñ Ð‘Ð¾Ð»ÑŒÑˆÐ°Ñ ÐŸÑ€Ð¸Ð±Ñ‹Ð»ÑŒ
+summary.long	Long	Long	Long	å¤šå¤´	Long	Ð›Ð¾Ð½Ð³
+summary.max_loss_streak	Max Loss Streak	MÃ¡x. SequÃªncia de Perdas	MÃ¡x. Racha de PÃ©rdidas	æœ€å¤§è¿žäº	Max SÃ©rie de Pertes	ÐœÐ°ÐºÑ. Ð¡ÐµÑ€Ð¸Ñ Ð£Ð±Ñ‹Ñ‚ÐºÐ¾Ð²
+summary.max_win_streak	Max Win Streak	MÃ¡x. SequÃªncia de Ganhos	MÃ¡x. Racha de Ganancias	æœ€å¤§è¿žèµ¢	Max SÃ©rie de Gains	ÐœÐ°ÐºÑ. Ð¡ÐµÑ€Ð¸Ñ ÐŸÐ¾Ð±ÐµÐ´
+summary.metrics_column	Metrics	MÃ©tricas	MÃ©tricas	æŒ‡æ ‡	MÃ©triques	ÐœÐµÑ‚Ñ€Ð¸ÐºÐ¸
+summary.net_pnl	Net PnL	Net PnL	Net PnL	å‡€ PnL	Net PnL	Net PnL
+summary.open_reason.manual_entry	Manual Entry	Entrada Manual	Entrada Manual	æ‰‹åŠ¨å¼€ä»“	EntrÃ©e Manuelle	Ð ÑƒÑ‡Ð½Ð¾Ð¹ Ð’Ñ…Ð¾Ð´
+summary.open_reason.protective_followup	Protective Follow-up	Follow-up Protetivo	Seguimiento Protector	ä¿æŠ¤æ€§è·Ÿè¿›	Suivi Protecteur	Ð—Ð°Ñ‰Ð¸Ñ‚Ð½Ð¾Ðµ Ð¡Ð¾Ð¿Ñ€Ð¾Ð²Ð¾Ð¶Ð´ÐµÐ½Ð¸Ðµ
+summary.open_reason.replication_sync	Replication Sync	Replication Sync	Replication Sync	å¤åˆ¶åŒæ­¥	Sync RÃ©plication	Ð¡Ð¸Ð½Ñ…Ñ€Ð¾Ð½Ð¸Ð·Ð°Ñ†Ð¸Ñ Ð ÐµÐ¿Ð»Ð¸ÐºÐ°Ñ†Ð¸Ð¸
+summary.open_reason.unknown	Manual / Unknown	Manual / Desconhecido	Manual / Desconocido	æ‰‹åŠ¨ / æœªçŸ¥	Manuel / Inconnu	Ð ÑƒÑ‡Ð½Ð¾Ð¹ / ÐÐµÐ¸Ð·Ð²ÐµÑÑ‚Ð½Ð¾
+summary.open_time	Open Time	Hora de Abertura	Hora de Apertura	å¼€ä»“æ—¶é—´	Heure d'EntrÃ©e	Ð’Ñ€ÐµÐ¼Ñ ÐžÑ‚ÐºÑ€Ñ‹Ñ‚Ð¸Ñ
+summary.pnl_short	PnL	PnL	PnL	PnL	PnL	PnL
+summary.profit_factor	Profit Factor	Fator de Lucro	Factor de Beneficio	ç›ˆåˆ©å› å­	Profit Factor	Ð¤Ð°ÐºÑ‚Ð¾Ñ€ ÐŸÑ€Ð¸Ð±Ñ‹Ð»Ð¸
+summary.reason.manual_other	Manual / Other	Manual / Outro	Manual / Otro	æ‰‹åŠ¨ / å…¶ä»–	Manuel / Autre	Ð ÑƒÑ‡Ð½Ð¾Ð¹ / Ð”Ñ€ÑƒÐ³Ð¾Ðµ
+summary.reason.news_event	News Event	Evento de NotÃ­cia	Evento de Noticias	æ–°é—»äº‹ä»¶	Ã‰vÃ©nement News	ÐÐ¾Ð²Ð¾ÑÑ‚Ð½Ð¾Ðµ Ð¡Ð¾Ð±Ñ‹Ñ‚Ð¸Ðµ
+summary.reason.replication_sync	Replication Sync	Replication Sync	Replication Sync	å¤åˆ¶åŒæ­¥	Sync RÃ©plication	Ð¡Ð¸Ð½Ñ…Ñ€Ð¾Ð½Ð¸Ð·Ð°Ñ†Ð¸Ñ Ð ÐµÐ¿Ð»Ð¸ÐºÐ°Ñ†Ð¸Ð¸
+summary.reason.risk_management	Risk Management	Gerenciamento de Risco	GestiÃ³n de Riesgo	é£Žé™©ç®¡ç†	Gestion du Risque	Ð Ð¸ÑÐº-ÐœÐµÐ½ÐµÐ´Ð¶Ð¼ÐµÐ½Ñ‚
+summary.reason.session_end	Session End	Fim de SessÃ£o	Fin de SesiÃ³n	æ—¶æ®µç»“æŸ	Fin de Session	ÐšÐ¾Ð½ÐµÑ† Ð¡ÐµÑÑÐ¸Ð¸
+summary.reason.signal_flip	Signal Flip	InversÃ£o de Sinal	Cambio de SeÃ±al	ä¿¡å·ç¿»è½¬	Flip de Signal	Ð¡Ð¼ÐµÐ½Ð° Ð¡Ð¸Ð³Ð½Ð°Ð»Ð°
+summary.reason.stop_loss	Stop Loss	Stop Loss	Stop Loss	æ­¢æŸ	Stop Loss	Stop Loss
+summary.reason.take_profit	Take Profit	Take Profit	Take Profit	æ­¢ç›ˆ	Take Profit	Take Profit
+summary.reason.unknown	Unknown	Desconhecido	Desconocido	æœªçŸ¥	Inconnu	ÐÐµÐ¸Ð·Ð²ÐµÑÑ‚Ð½Ð¾
+summary.reset_data	Reset Data	Resetar Dados	Restablecer Datos	é‡ç½®æ•°æ®	RÃ©initialiser les DonnÃ©es	Ð¡Ð±Ñ€Ð¾ÑÐ¸Ñ‚ÑŒ Ð”Ð°Ð½Ð½Ñ‹Ðµ
+summary.reset_data.details	This clears Journal, Critical Warnings, and all Summary trade statistics so you can start over.	Isso limpa o Journal, os Alertas CrÃ­ticos e todas as estatÃ­sticas de trade do Summary para vocÃª comeÃ§ar do zero.	Esto limpia el Diario, las Alertas CrÃ­ticas y todas las estadÃ­sticas del Summary para empezar de cero.	è¿™å°†æ¸…é™¤æ—¥å¿—ã€å…³é”®é¢„è­¦ä»¥åŠ Summary ä¸­çš„å…¨éƒ¨äº¤æ˜“ç»Ÿè®¡ï¼Œä»¥ä¾¿é‡æ–°å¼€å§‹ã€‚	Cela efface le Journal, les Alertes Critiques et toutes les statistiques de trade du Summary pour repartir de zÃ©ro.	Ð­Ñ‚Ð¾ Ð¾Ñ‡Ð¸ÑÑ‚Ð¸Ñ‚ Journal, ÐºÑ€Ð¸Ñ‚Ð¸Ñ‡ÐµÑÐºÐ¸Ðµ Ð¿Ñ€ÐµÐ´ÑƒÐ¿Ñ€ÐµÐ¶Ð´ÐµÐ½Ð¸Ñ Ð¸ Ð²ÑÑŽ Ñ‚Ð¾Ñ€Ð³Ð¾Ð²ÑƒÑŽ ÑÑ‚Ð°Ñ‚Ð¸ÑÑ‚Ð¸ÐºÑƒ Summary, Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð½Ð°Ñ‡Ð°Ñ‚ÑŒ Ð·Ð°Ð½Ð¾Ð²Ð¾.
+summary.reset_data.prompt	Your data will be reset including statistics about your trades and accounts. Confirm?	Seus dados serÃ£o resetados, incluindo estatÃ­sticas sobre seus trades e contas. Confirmar?	Tus datos se restablecerÃ¡n, incluidas las estadÃ­sticas de tus trades y cuentas. Â¿Confirmar?	ä½ çš„æ•°æ®å°†è¢«é‡ç½®ï¼ŒåŒ…æ‹¬äº¤æ˜“å’Œè´¦æˆ·ç»Ÿè®¡ã€‚ç¡®è®¤å—ï¼Ÿ	Vos donnÃ©es seront rÃ©initialisÃ©es, y compris les statistiques sur vos trades et vos comptes. Confirmer ?	Ð’Ð°ÑˆÐ¸ Ð´Ð°Ð½Ð½Ñ‹Ðµ Ð±ÑƒÐ´ÑƒÑ‚ ÑÐ±Ñ€Ð¾ÑˆÐµÐ½Ñ‹, Ð²ÐºÐ»ÑŽÑ‡Ð°Ñ ÑÑ‚Ð°Ñ‚Ð¸ÑÑ‚Ð¸ÐºÑƒ Ð¿Ð¾ ÑÐ´ÐµÐ»ÐºÐ°Ð¼ Ð¸ ÑÑ‡ÐµÑ‚Ð°Ð¼. ÐŸÐ¾Ð´Ñ‚Ð²ÐµÑ€Ð´Ð¸Ñ‚ÑŒ?
+summary.reset_data.title	Reset Data	Resetar Dados	Restablecer Datos	é‡ç½®æ•°æ®	RÃ©initialiser les DonnÃ©es	Ð¡Ð±Ñ€Ð¾ÑÐ¸Ñ‚ÑŒ Ð”Ð°Ð½Ð½Ñ‹Ðµ
+summary.short	Short	Short	Short	ç©ºå¤´	Short	Ð¨Ð¾Ñ€Ñ‚
+summary.side	Side	Lado	Lado	æ–¹å‘	Sens	Ð¡Ñ‚Ð¾Ñ€Ð¾Ð½Ð°
+summary.side.long	Long	Long	Long	å¤šå¤´	Long	Ð›Ð¾Ð½Ð³
+summary.side.short	Short	Short	Short	ç©ºå¤´	Short	Ð¨Ð¾Ñ€Ñ‚
+summary.title	Trading Summary	Resumo Operacional	Resumen Operativo	äº¤æ˜“æ‘˜è¦	RÃ©sumÃ© de Trading	Ð¡Ð²Ð¾Ð´ÐºÐ° Ð¿Ð¾ Ð¢Ð¾Ñ€Ð³Ð¾Ð²Ð»Ðµ
+summary.total_trades	Total Trades	Total de Trades	Total Trades	æ€»äº¤æ˜“æ•°	Trades Totaux	Ð’ÑÐµÐ³Ð¾ Ð¡Ð´ÐµÐ»Ð¾Ðº
+summary.updated	Updated	Atualizado	Actualizado	æ›´æ–°äºŽ	Mis Ã  Jour	ÐžÐ±Ð½Ð¾Ð²Ð»ÐµÐ½Ð¾
+summary.win_rate	Win Rate	Taxa de Acerto	Tasa de Acierto	èƒœçŽ‡	Taux de RÃ©ussite	ÐŸÑ€Ð¾Ñ†ÐµÐ½Ñ‚ ÐŸÐ¾Ð±ÐµÐ´
+tab.analytics	Analytics	Analytics	AnalÃ­tica	åˆ†æž	Analytique	ÐÐ½Ð°Ð»Ð¸Ñ‚Ð¸ÐºÐ°
+tab.dashboard	Dashboard	Dashboard	Panel	ä»ªè¡¨ç›˜	Tableau	ÐŸÐ°Ð½ÐµÐ»ÑŒ
+tab.journal	Journal	Journal	Diario	æ—¥å¿—	Journal	Ð–ÑƒÑ€Ð½Ð°Ð»

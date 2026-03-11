@@ -6,6 +6,7 @@ import {
   isWhopEntitlementStatusActive,
   verifyLicenseBinding,
 } from "@/lib/entitlements-store";
+import { getTrustedClientIp } from "@/lib/client-ip";
 import { readBooleanEnv, readOptionalEnv } from "@/lib/env";
 import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
 import { getWebhookStoreMode } from "@/lib/idempotency-store";
@@ -90,18 +91,6 @@ function readRateLimitPerMinute(envName: string, fallback: number): number {
   return Math.max(1, Math.min(parsed, 5000));
 }
 
-function getClientIp(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) {
-      return first;
-    }
-  }
-
-  return "unknown";
-}
-
 function hashLicenseKey(licenseKey: string): string {
   return createHash("sha256")
     .update(licenseKey, "utf8")
@@ -184,7 +173,7 @@ export async function POST(request: NextRequest) {
   }
 
   const ipLimit = readRateLimitPerMinute("LICENSE_HEARTBEAT_RATE_LIMIT_PER_MINUTE_IP", 360);
-  const ipRateCheck = checkRateLimit(`license_heartbeat:ip:${getClientIp(request)}`, ipLimit, 60_000);
+  const ipRateCheck = checkRateLimit(`license_heartbeat:ip:${getTrustedClientIp(request)}`, ipLimit, 60_000);
   if (!ipRateCheck.allowed) {
     return errorResponse(
       requestId,
@@ -347,4 +336,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

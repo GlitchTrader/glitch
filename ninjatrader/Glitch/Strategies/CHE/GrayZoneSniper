@@ -1,0 +1,304 @@
+//@version=6
+indicator("GrayZone Sniper [CHE] — Breakout Validation System", overlay=false)
+
+// ================== Inputs ==================
+grpCore   = "Core: TFRSI & MD"
+grpTrig   = "Triggers & Logic"
+grpBoxes  = "Gray-Zone Boxes"
+grpT3     = "Trendline (T3)"
+grpLevels = "Persistent Levels"
+grpDebug  = "Debug & Visuals"
+
+// --- Core: TFRSI & MD ---
+tfrsiLen       = input.int(6,  title="TFRSI Length",             minval=1,        tooltip="Length for TFRSI calculation. Higher = smoother but slower.", inline="tfrsi", group=grpCore)
+tfrsiSignalLen = input.int(2,  title="TFRSI Smoothing (Signal)", minval=1,        tooltip="Smoothing of the TFRSI signal (SMA on TFRSI).",               inline="tfrsi", group=grpCore)
+
+mdLen    = input.int(20, title="Mean Deviation Period", minval=2, tooltip="Period for Mean Deviation of Typical Price (TP). Used as reference threshold.", inline="md", group=grpCore)
+useTaDev = input.bool(false, "Use classical MD (ta.dev) instead of MD vs current SMA", tooltip="Use classical Mean Deviation (ta.dev). Disabled: uses MD vs current SMA (warning-free).", inline="md", group=grpCore)
+
+tfrsiDeadzone = input.float(1.0, "TFRSI deadzone ± around 50", minval=0.0, step=0.1, tooltip="Dead zone around 50. Values within ± are considered neutral.", group=grpCore)
+
+// --- Triggers & Logic ---
+fireOnCloseOnly             = input.bool(true,  "Trigger only on confirmed bars (bar close)", tooltip="Confirm signals only on bar close (no intrabar signals).", inline="trig1", group=grpTrig)
+resetGrayBoundsAfterTrigger = input.bool(true,  "Reset gray-zone bounds after trigger",      tooltip="After a validated trigger, clear the last gray zone (High/Low).", inline="trig1", group=grpTrig)
+autoDeactivateOnNeutral     = input.bool(false, "Close position when state turns neutral (strict)", tooltip="When state turns neutral: strictly disarm/close (stop arming is reset).", group=grpTrig)
+
+// --- Gray-Zone Boxes ---
+showGrayBoxes    = input.bool(true,  "Draw gray sequence box (Low/High)", tooltip="Draw a gray box during neutral phases (sequence Low/High).", group=grpBoxes)
+maxGrayBoxes     = input.int(10,     "Max gray boxes (most recent)",      minval=1, maxval=50, tooltip="Maximum number of gray boxes shown. Oldest are removed.", group=grpBoxes)
+boxFillTransp    = input.int(85,     "Box fill transparency (0–100)",     minval=0, maxval=100, tooltip="Box fill transparency (0 opaque, 100 invisible).", inline="boxalpha", group=grpBoxes)
+boxBorderTransp  = input.int(30,     "Box border transparency (0–100)",   minval=0, maxval=100, tooltip="Box border transparency (0 opaque, 100 invisible).", inline="boxalpha", group=grpBoxes)
+
+// --- Trendline (T3) ---
+t3Length        = input.int(3,     title="T3 Length",         minval=1, step=1,   tooltip="Length for T3 calculation.",                         inline="t3", group=grpT3)
+t3VolumeFactor  = input.float(0.7, title="T3 Volume Factor",  minval=0, maxval=1, step=0.1, tooltip="Volume factor (T3 smoothing weights).",    inline="t3", group=grpT3)
+
+// --- Persistent Levels ---
+saveGrayLevels    = input.bool(true,  "Persist gray min/max as lines (extend)", tooltip="Persist last gray-zone bounds as lines (extended to the right).", inline="lvl1", group=grpLevels)
+maxSavedGrayLvls  = input.int(1,      "Max saved gray levels", minval=1, maxval=100, tooltip="Maximum number of stored gray level pairs (High/Low).", inline="lvl1", group=grpLevels)
+resetLevelsOnTrig = input.bool(false, "Delete saved levels on new trigger",      tooltip="Automatically delete saved gray levels on a new trigger.", group=grpLevels)
+
+// --- Debug & Visuals ---
+showDebugMarkers = input.bool(true, "Debug: show trigger/stop markers (L/R/LS/SS) in pane", tooltip="Show debug labels for long/short triggers and stops in this pane.", group=grpDebug)
+
+// ================== TFRSI ==================
+calcTfrsi(src, len, signalLen) =>
+    var float hp = na
+    var float ag = na
+    var float sp = na
+    hp := 2500.0 * (src - 2.0 * nz(src[1]) + nz(src[2])) + 1.92 * nz(hp[1]) - 0.9216 * nz(hp[2])
+    a1 = math.exp(-math.sqrt(2.0) * math.pi / len)
+    b1 = 2.0 * a1 * math.cos(math.sqrt(2.0) * math.pi / len)
+    c2 = b1
+    c3 = -a1 * a1
+    c1 = 1.0 - c2 - c3
+    ag := c1 * (hp + nz(hp[1])) / 2.0 + c2 * nz(ag[1]) + c3 * nz(ag[2])
+    sp := 0.991 * nz(sp[1])
+    sp := math.abs(ag) > sp ? math.abs(ag) : sp
+    x  = sp != 0.0 ? ag / sp : 0.0
+    q1 = x * 60.0 + 50.0
+    ta.sma(q1, signalLen)
+
+// ================== Mean Deviation (reference) ==================
+calcMdVsCurrentSma(tp, len, smaNow) =>
+    float md_ = na
+    if bar_index >= len - 1 and not na(smaNow)
+        mdSum = 0.0
+        for i = 0 to len - 1
+            mdSum += math.abs(tp[i] - smaNow)
+        md_ := mdSum / len
+    md_
+
+typicalPrice = (high + low + close) / 3.0
+smaTp        = ta.sma(typicalPrice, mdLen)
+absDevNow    = not na(smaTp) ? math.abs(typicalPrice - smaTp) : na
+
+tfrsi        = calcTfrsi(close, tfrsiLen, tfrsiSignalLen)
+mdClassic    = ta.dev(typicalPrice, mdLen)
+
+// MD reference – warning-free
+mdFixedCandidate = calcMdVsCurrentSma(typicalPrice, mdLen, smaTp)
+smaReady         = bar_index >= mdLen - 1 and not na(smaTp)
+mdFixedSma       = smaReady ? mdFixedCandidate : na
+mdRef            = useTaDev ? mdClassic : mdFixedSma
+
+// ================== States ==================
+isAboveMd     = not na(mdRef) and not na(absDevNow) and absDevNow > mdRef
+bullCondTfrsi = not na(tfrsi) and tfrsi > 50 + tfrsiDeadzone 
+bearCondTfrsi = not na(tfrsi) and tfrsi < 50 - tfrsiDeadzone 
+
+isBull        = isAboveMd and bullCondTfrsi
+isBear        = isAboveMd and bearCondTfrsi
+
+// Classify only if inputs are valid
+canClassify   = smaReady and not na(tfrsi)
+isNeutral     = canClassify ? (not isBull and not isBear) : false
+
+// Pane colors
+barColor     = isBull ? color.new(color.lime, 30) : isBear ? color.new(color.red, 30) : color.new(color.gray, 30)
+paneBgColor  = bullCondTfrsi ? color.new(color.lime, 90) : bearCondTfrsi ? color.new(color.red, 90) : color.new(color.gray, 80)
+
+// ================== Visuals (pane) ==================
+plot(mdRef,     title="Mean Deviation (reference)", linewidth=2, color=color.new(color.teal, 50), display=display.pane)
+plot(absDevNow, title="|TP - SMA| (current)",       style=plot.style_columns, color=barColor, display=display.pane)
+plot(0,         title="Zero line",                  color=color.new(color.gray, 70), display=display.pane)
+bgcolor(paneBgColor)
+
+// ----- Gray bounds (low/high while neutral) -----
+var float grayLow  = na
+var float grayHigh = na
+var bool  inGray   = false
+
+var float seqLow   = na
+var float seqHigh  = na
+
+var float lastGrayLow  = na
+var float lastGrayHigh = na
+
+var box[] seqBoxes = array.new_box()
+var box   curSeqBox = na
+
+// Enter / update / exit gray sequences
+if isNeutral
+    grayLow  := low
+    grayHigh := high
+
+    if not inGray
+        inGray := true
+        seqLow  := low
+        seqHigh := high
+
+        if showGrayBoxes
+            curSeqBox := box.new(left=bar_index, top=high, right=bar_index + 1, bottom=low, border_color=color.new(color.gray, boxBorderTransp), bgcolor=color.new(color.gray, boxFillTransp), force_overlay = true)
+            array.push(seqBoxes, curSeqBox)
+            if array.size(seqBoxes) > maxGrayBoxes
+                old = array.shift(seqBoxes)
+                if not na(old)
+                    box.delete(old)
+    else
+        seqLow  := math.min(seqLow, low)
+        seqHigh := math.max(seqHigh, high)
+        if showGrayBoxes and not na(curSeqBox)
+            box.set_right(curSeqBox, bar_index + 1)
+            box.set_top(curSeqBox, seqHigh)
+            box.set_bottom(curSeqBox, seqLow)
+else
+    if inGray
+        inGray       := false
+        lastGrayLow  := seqLow
+        lastGrayHigh := seqHigh
+    grayLow  := na
+    grayHigh := na
+    curSeqBox := na
+
+// ================== Trigger logic (breakout after gray) ==================
+prevBull  = bar_index > 0 ? isBull[1] : false
+prevBear  = bar_index > 0 ? isBear[1] : false
+firstBull = isBull and not prevBull
+firstBear = isBear and not prevBear
+
+// Snapshot of last gray bounds
+refLow   = lastGrayLow
+refHigh  = lastGrayHigh
+refValid = not na(refLow) and not na(refHigh)
+
+// Raw triggers
+bullTrigger = firstBull and refValid and close > refHigh
+bearTrigger = firstBear  and refValid and close < refLow
+
+// Close filter
+canFire  = fireOnCloseOnly ? barstate.isconfirmed : true
+bullFire = canFire and bullTrigger
+bearFire = canFire and bearTrigger
+
+// Pane markers
+plotshape(showDebugMarkers and bullFire, title="LongTrigger",  style=shape.labelup,   size=size.tiny, location=location.bottom, text="L",  display=display.pane, color=color.lime, textcolor=color.black)
+plotshape(showDebugMarkers and bearFire, title="ShortTrigger", style=shape.labeldown, size=size.tiny, location=location.bottom, text="S",  display=display.pane, color=color.red,  textcolor=color.white)
+
+// Alerts
+alertcondition(bullFire, "Lime Trigger", "LIME: {{ticker}} {{interval}} @ bar {{time}}")
+alertcondition(bearFire, "Red Trigger",  "RED: {{ticker}} {{interval}} @ bar {{time}}")
+
+// --- One-shot arming for stop signals ---
+var bool longStopArmed  = false
+var bool shortStopArmed = false
+
+if bullFire
+    longStopArmed  := true
+    shortStopArmed := false
+if bearFire
+    shortStopArmed := true
+    longStopArmed  := false
+
+if autoDeactivateOnNeutral and isNeutral
+    longStopArmed  := false
+    shortStopArmed := false
+
+// ================== T3 & Stops ==================
+calcT3(src, length, volumeFactor) =>
+    xe1 = ta.ema(src, length)
+    xe2 = ta.ema(xe1, length)
+    xe3 = ta.ema(xe2, length)
+    xe4 = ta.ema(xe3, length)
+    xe5 = ta.ema(xe4, length)
+    xe6 = ta.ema(xe5, length)
+    c1 = volumeFactor
+    c2 = c1 * 3
+    c3 = c1 * 3
+    c4 = c1
+    t3 = xe6 * c4 + xe5 * -c3 + xe4 * c2 + xe3 * -c1 + xe2
+    t3
+
+t3Line = calcT3(typicalPrice, t3Length, t3VolumeFactor)
+t3LineColor = t3Line < typicalPrice ? color.green : color.red
+plot(0,        "", t3LineColor, 3)
+plot(t3Line,   "", t3LineColor, 3, force_overlay = true)
+
+// Stop logic
+condMdDown = not na(mdRef) and not na(mdRef[1]) and mdRef < mdRef[1]
+t3Down     = not na(t3Line) and not na(t3Line[1]) and t3Line < t3Line[1]
+t3Up       = not na(t3Line) and not na(t3Line[1]) and t3Line > t3Line[1]
+
+// exits
+longStop  = prevBull and condMdDown and t3Down
+shortStop = prevBear and condMdDown and t3Up
+
+// one-shot fire
+longStopFire  = canFire and longStop  and longStopArmed
+shortStopFire = canFire and shortStop and shortStopArmed
+
+if longStopFire
+    longStopArmed := false
+if shortStopFire
+    shortStopArmed := false
+
+plotshape(showDebugMarkers and longStopFire,  title="LongStop",  style=shape.labeldown, size=size.tiny, location=location.bottom, text="LS", display=display.pane, color=color.orange, textcolor=color.black)
+plotshape(showDebugMarkers and shortStopFire, title="ShortStop", style=shape.labelup,   size=size.tiny, location=location.bottom, text="SS", display=display.pane, color=color.purple, textcolor=color.white)
+
+alertcondition(longStopFire,  "Long Stop",  "LONG STOP: {{ticker}} {{interval}} @ bar {{time}}")
+alertcondition(shortStopFire, "Short Stop", "SHORT STOP: {{ticker}} {{interval}} @ bar {{time}}")
+// ================== /Stops ==================
+
+// ================== Persist gray min/max as levels ==================
+var line[] savedHighLines = array.new_line()
+var line[] savedLowLines  = array.new_line()
+
+justExitedGray   = (bar_index > 0 ? inGray[1] : false) and not inGray
+refValidForSave  = not na(lastGrayLow) and not na(lastGrayHigh)
+
+if saveGrayLevels and justExitedGray and refValidForSave
+    lHigh = line.new(bar_index, lastGrayHigh, bar_index + 1, lastGrayHigh, extend=extend.right, color=color.new(color.lime, 0), width=2, force_overlay = true)
+    lLow  = line.new(bar_index, lastGrayLow,  bar_index + 1, lastGrayLow,  extend=extend.right, color=color.new(color.red,  0), width=2, force_overlay = true)
+    array.push(savedHighLines, lHigh)
+    array.push(savedLowLines,  lLow)
+    while array.size(savedHighLines) > maxSavedGrayLvls
+        old = array.shift(savedHighLines)
+        if not na(old)
+            line.delete(old)
+    while array.size(savedLowLines) > maxSavedGrayLvls
+        old = array.shift(savedLowLines)
+        if not na(old)
+            line.delete(old)
+
+// Optional: clear saved levels on trigger
+if resetLevelsOnTrig and (bullFire or bearFire)
+    for i = 0 to array.size(savedHighLines) - 1
+        line.delete(array.get(savedHighLines, i))
+    for i = 0 to array.size(savedLowLines) - 1
+        line.delete(array.get(savedLowLines, i))
+    array.clear(savedHighLines)
+    array.clear(savedLowLines)
+
+// Optional: reset gray-bounds after trigger
+if resetGrayBoundsAfterTrigger and (bullFire or bearFire)
+    lastGrayLow  := na
+    lastGrayHigh := na
+
+showLegend = input.bool(true, "Show legend (L/S/LS/SS)", group="Debug & Visuals")
+
+var table legendTable = na
+legendFrame = color.new(color.red, 80)
+legendBg    = color.new(color.red, 50)
+
+if showLegend
+    if na(legendTable)
+        legendTable := table.new(position.top_right, 2, 5, frame_color=legendFrame, frame_width=1, border_color=legendFrame, border_width=1)
+    // Header
+    table.cell(legendTable, 0, 0, "Legend",  text_color=color.white, bgcolor=legendBg, text_halign=text.align_center, text_valign=text.align_center, text_size=size.small)
+    table.cell(legendTable, 1, 0, "Signals", text_color=color.white, bgcolor=legendBg, text_halign=text.align_center, text_valign=text.align_center, text_size=size.small)
+    // Rows
+    table.cell(legendTable, 0, 1, "L",  text_color=color.white, bgcolor=legendBg, text_halign=text.align_center, text_size=size.small)
+    table.cell(legendTable, 1, 1, "Long Trigger (breakout validated)",  text_color=color.white, bgcolor=legendBg, text_halign=text.align_left, text_size=size.small)
+
+    table.cell(legendTable, 0, 2, "S",  text_color=color.white, bgcolor=legendBg, text_halign=text.align_center, text_size=size.small)
+    table.cell(legendTable, 1, 2, "Short Trigger (breakout validated)", text_color=color.white, bgcolor=legendBg, text_halign=text.align_left, text_size=size.small)
+
+    table.cell(legendTable, 0, 3, "LS", text_color=color.white, bgcolor=legendBg, text_halign=text.align_center, text_size=size.small)
+    table.cell(legendTable, 1, 3, "Long Stop (exit prior long)",        text_color=color.white, bgcolor=legendBg, text_halign=text.align_left, text_size=size.small)
+
+    table.cell(legendTable, 0, 4, "SS", text_color=color.white, bgcolor=legendBg, text_halign=text.align_center, text_size=size.small)
+    table.cell(legendTable, 1, 4, "Short Stop (exit prior short)",       text_color=color.white, bgcolor=legendBg, text_halign=text.align_left, text_size=size.small)
+else
+    if not na(legendTable)
+        table.delete(legendTable)
+        legendTable := na
