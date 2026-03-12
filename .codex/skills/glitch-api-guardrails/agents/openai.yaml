@@ -1,0 +1,4 @@
+interface:
+  display_name: "Glitch API Guardrails"
+  short_description: "Handle critical API work safely"
+  default_prompt: "Use $glitch-api-guardrails to review or edit apps/api safely."

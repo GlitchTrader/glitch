@@ -1,0 +1,4 @@
+interface:
+  display_name: "Glitch AddOn Indicator Workflow"
+  short_description: "Work on AddOn and Indicator safely"
+  default_prompt: "Use $glitch-addon-indicator-workflow for NinjaTrader AddOn or Indicator tasks in Glitch."

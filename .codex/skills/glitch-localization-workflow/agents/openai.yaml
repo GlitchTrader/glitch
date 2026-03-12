@@ -1,0 +1,4 @@
+interface:
+  display_name: "Glitch Localization Workflow"
+  short_description: "Protect Glitch localization edits"
+  default_prompt: "Use $glitch-localization-workflow for Glitch localization work."

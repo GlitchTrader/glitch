@@ -1,0 +1,4 @@
+interface:
+  display_name: "Glitch Documentation Discipline"
+  short_description: "Write code-derived Glitch docs safely"
+  default_prompt: "Use $glitch-documentation-discipline for Glitch documentation work."

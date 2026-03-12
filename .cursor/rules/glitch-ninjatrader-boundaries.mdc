@@ -1,0 +1,24 @@
+---
+description: Keep NinjaTrader work aligned with the active AddOn and Indicator product, code-derived docs, runtime-state boundaries, and explicit strategy opt-in
+globs: ["ninjatrader/Glitch/AddOns/**", "ninjatrader/Glitch/Indicators/**", "ninjatrader/Glitch/Docs/**", "ninjatrader/Glitch/Strategies/**"]
+alwaysApply: true
+---
+
+# Glitch NinjaTrader boundaries
+
+## Product scope
+
+- The active product surface is AddOn plus Indicator.
+- `ninjatrader/Glitch/Strategies` is explicit opt-in work, not part of normal maintenance or deploy scope.
+
+## Source of truth
+
+- `D:\click-blue\trading\glitch-platform\ninjatrader\Glitch` is the only source of truth.
+- Never directly edit `C:\Users\alan\Documents\NinjaTrader 8\bin\Custom`.
+- Treat `GlitchData` files as runtime state or sparse overrides, not source templates.
+
+## Workflow
+
+- Read `ninjatrader/Glitch/Docs/README.md`, `architecture.md`, and `persistence.md` before changing bridge, persistence, or product behavior.
+- Keep AddOn and Indicator compatibility in mind when touching reflection-based bridge code.
+- Finish workspace edits first. If a live deployment is needed, validate first and deploy once with the approved script.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Glitch Deploy Workflow"
+  short_description: "Deploy Glitch NinjaTrader safely"
+  default_prompt: "Use $glitch-deploy-workflow when NinjaTrader workspace files must go live."

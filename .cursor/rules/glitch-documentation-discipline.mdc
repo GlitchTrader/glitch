@@ -1,0 +1,29 @@
+---
+description: Keep Glitch documentation code-derived, package-owned, and aligned with real behavior across README files, env docs, and NinjaTrader docs
+globs: ["AGENTS.md", "CLAUDE.md", "README.md", "**/README.md", "ninjatrader/Glitch/Docs/**", "apps/**/.env.example"]
+alwaysApply: true
+---
+
+# Glitch documentation discipline
+
+## Intent
+
+- Document the code and behavior that exist today.
+- Keep ownership clear so each package documents its own surface.
+
+## Guardrails
+
+- Do not present `apps/app` as a finished product.
+- Do not assume an `apps/docs` app exists.
+- Use exact route names, file paths, type names, and environment variable names.
+- Keep technical docs separate from marketing copy.
+
+## Ownership
+
+- `apps/api/README.md` owns API behavior and env requirements.
+- `apps/website/README.md` owns website-specific setup and behavior.
+- `ninjatrader/Glitch/Docs` owns AddOn and Indicator product docs.
+
+## Trigger for updates
+
+- When behavior, contracts, or env requirements change, update the owning docs in the same pass.

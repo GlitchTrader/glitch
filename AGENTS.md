@@ -1,0 +1,92 @@
+# Glitch Platform Agents
+
+This repo is shared between multiple agents. Work like a responsible teammate.
+
+- Read before coding.
+- Take ownership of the files you touch.
+- Prefer direct, elegant solutions over clever or overengineered ones.
+- Avoid arbitrary refactors, hidden scope creep, and cosmetic churn.
+- Clean up after yourself: keep docs, env examples, and guardrails aligned with behavior changes.
+- Keep secrets out of commits and out of terminal summaries.
+- Ask the user when something important is unclear or risky instead of guessing.
+
+## Project Map
+
+- `apps/api`: Critical backend for licensing, Whop webhooks, admin/internal endpoints, and market data. Highest safety bar in the repo.
+- `apps/website`: Public marketing site. Production-facing copy, pricing, affiliate, legal, and env-driven Whop links.
+- `apps/app`: Placeholder Next.js app. Keep it minimal unless the user explicitly wants product work there.
+- `ninjatrader/Glitch/AddOns/GlitchAddOn`: Active NinjaTrader AddOn source.
+- `ninjatrader/Glitch/Indicators/glitch`: Active NinjaTrader indicator source.
+- `ninjatrader/Glitch/Docs`: Current code-derived docs source. There is no `apps/docs` app yet.
+- `ninjatrader/Glitch/Strategies`: Research or legacy area. Ignore by default unless the user explicitly asks for strategy work.
+
+## Operating Rules
+
+- Workspace files are the only source of truth.
+- Never directly edit `C:\Users\alan\Documents\NinjaTrader 8\bin\Custom`.
+- Treat `GlitchData` runtime files as state or sparse overrides, not source templates.
+- Keep changes package-scoped. If a task crosses packages, identify the contract owner first.
+- API changes must preserve auth, licensing, rate limits, nonce validation, and documented env names unless the user explicitly wants a contract change.
+- Website changes must preserve env-driven Whop links and public-facing copy intent.
+- Docs must be derived from code that exists today. Do not document `apps/app` as a real product, and do not assume an `apps/docs` app exists until it actually does.
+- Strategies are not part of normal AddOn or Indicator maintenance and should never be bundled into deploys unless explicitly requested.
+
+## Vercel
+
+- Default deployment path: push to GitHub and let Vercel auto-deploy.
+- Direct Vercel operations are still valid when env vars, cron rollout, or urgent deployment control are needed.
+- Use credentials from `.env.codex.local`; never print or commit their values.
+- The repo root `.vercel/project.json` is currently linked to the API project.
+- On this Windows machine, prefer `cmd /c npx vercel ...` over raw `npx vercel ...` because PowerShell execution policy may block `npx.ps1`.
+- Cron definitions live in `apps/api/vercel.json`. To change cron behavior, edit that file and deploy the API project.
+
+## Localization
+
+- `ninjatrader/Glitch/AddOns/GlitchAddOn/Resources/Localization.tsv` is the only localization source of truth.
+- Preserve UTF-8. Do not use Excel or any ANSI or Windows-1252 round-trip.
+- `C:\Users\alan\Documents\NinjaTrader 8\GlitchData\Localization.tsv` is sparse runtime override only, never a second full catalog.
+- After localization edits, verify `zh-CN` still contains CJK and `ru-RU` still contains Cyrillic.
+
+## Shared Agent Set
+
+These are the same operating concepts expressed through different agent mechanisms: Codex skills for task-triggered workflows, Cursor rules for always-on or file-scoped guidance, and `CLAUDE.md` plus this file for Claude Code.
+
+### Codex skills
+
+- `glitch-route-work`: Route repo tasks to the right package and workflow.
+- `glitch-api-guardrails`: Guard critical `apps/api` work.
+- `glitch-web-workflow`: Handle `apps/website` and `apps/app` correctly.
+- `glitch-addon-indicator-workflow`: Handle AddOn, Indicator, and NinjaTrader product code.
+- `glitch-documentation-discipline`: Keep docs code-derived and scoped.
+- `glitch-localization-workflow`: Protect localization edits and validation.
+- `glitch-deploy-workflow`: Deploy NinjaTrader workspace files safely into live paths.
+- `glitch-vercel-operations`: Handle direct Vercel env, deploy, and cron rollout work.
+
+### Cursor rules
+
+- `.cursor/rules/glitch-working-style.mdc`
+- `.cursor/rules/glitch-monorepo-boundaries.mdc`
+- `.cursor/rules/glitch-api-critical.mdc`
+- `.cursor/rules/glitch-web-stack-boundaries.mdc`
+- `.cursor/rules/glitch-ninjatrader-boundaries.mdc`
+- `.cursor/rules/glitch-documentation-discipline.mdc`
+- `.cursor/rules/glitch-localization.mdc`
+- `.cursor/rules/glitch-deploy-safely.mdc`
+- `.cursor/rules/glitch-vercel-operations.mdc`
+
+### Claude
+
+- `CLAUDE.md` mirrors the operating contract for Claude Code.
+
+## Skill Routing
+
+- Start with `glitch-route-work` for any new, ambiguous, or cross-package task.
+- Add `glitch-api-guardrails` for anything in `apps/api`.
+- Add `glitch-web-workflow` for `apps/website` or `apps/app`.
+- Add `glitch-addon-indicator-workflow` for AddOn, Indicator, persistence, localization, or NinjaTrader docs work.
+- Add `glitch-documentation-discipline` when updating READMEs or docs.
+- Add `glitch-localization-workflow` for `Localization.tsv`, localization services, or language-switcher UI work.
+- Add `glitch-deploy-workflow` when NinjaTrader workspace files must go live.
+- Add `glitch-vercel-operations` for direct Vercel operations.
+
+Keep this file, the Codex skills, the Cursor rules, and `CLAUDE.md` aligned as the repo evolves.

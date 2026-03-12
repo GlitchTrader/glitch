@@ -1,0 +1,4 @@
+interface:
+  display_name: "Glitch Route Work"
+  short_description: "Route Glitch repo tasks safely"
+  default_prompt: "Use $glitch-route-work to classify this Glitch repo task before editing."

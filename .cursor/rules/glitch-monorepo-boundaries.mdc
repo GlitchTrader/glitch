@@ -1,0 +1,23 @@
+---
+description: Route Glitch work to the correct package, source of truth, and safety bar across API, website, app, NinjaTrader, docs, and strategies
+globs: ["AGENTS.md", "CLAUDE.md", "README.md", "apps/**", "ninjatrader/**", ".codex/skills/**"]
+alwaysApply: true
+---
+
+# Glitch monorepo boundaries
+
+## Package map
+
+- `apps/api` is the critical backend for licensing, webhooks, market data, and admin or internal operations.
+- `apps/website` is the real public marketing surface.
+- `apps/app` is placeholder scaffolding unless the user explicitly wants product work there.
+- `ninjatrader/Glitch/AddOns/GlitchAddOn` and `ninjatrader/Glitch/Indicators/glitch` are the active NinjaTrader product.
+- `ninjatrader/Glitch/Docs` is the current code-derived docs source.
+- `ninjatrader/Glitch/Strategies` is research or legacy scope and stays out of default work unless explicitly requested.
+
+## Shared rules
+
+- Workspace files are the only source of truth.
+- Keep changes package-scoped unless the task requires an explicit cross-package contract change.
+- Read the owning README or NinjaTrader docs before editing instead of guessing.
+- If a task mentions a docs app, note that `apps/docs` does not exist yet.

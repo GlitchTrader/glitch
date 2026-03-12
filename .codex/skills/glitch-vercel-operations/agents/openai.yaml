@@ -1,0 +1,4 @@
+interface:
+  display_name: "Glitch Vercel Operations"
+  short_description: "Handle Vercel env and deploy ops"
+  default_prompt: "Use $glitch-vercel-operations for direct Vercel operations in Glitch."

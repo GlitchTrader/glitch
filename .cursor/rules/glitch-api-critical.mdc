@@ -1,0 +1,35 @@
+---
+description: Guard critical work in apps/api for licensing, webhooks, market data, admin and internal routes, env contracts, and auth-sensitive behavior
+globs: ["apps/api/**"]
+alwaysApply: true
+---
+
+# Glitch API is critical
+
+## Intent
+
+- Treat `apps/api` as the highest-risk surface in the repo.
+- Prefer the smallest safe change that fixes the problem.
+
+## Guardrails
+
+- Read the route and supporting libs before editing.
+- Never commit real secrets, private keys, or tokens.
+- Preserve auth, rate limiting, nonce validation, idempotency, and production safeguards unless the user explicitly requests a contract change.
+- Preserve AddOn-facing request and response contracts unless the change is intentionally coordinated across client and server.
+- Be especially careful around:
+  - `/api/license/*`
+  - `/api/webhooks/whop`
+  - `/api/market/*`
+  - `/api/admin/*`
+  - `/api/internal/*`
+
+## Ownership
+
+- If route behavior or env requirements change, update `apps/api/README.md` and `apps/api/.env.example`.
+- Respect the difference between stub and database-backed behavior.
+
+## Validation
+
+- Default to `npm run lint --workspace apps/api`.
+- Also run `npm run build --workspace apps/api` when route or shared-lib changes are broad enough to justify it.

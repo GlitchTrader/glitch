@@ -1,0 +1,4 @@
+interface:
+  display_name: "Glitch Web Workflow"
+  short_description: "Handle website and app work safely"
+  default_prompt: "Use $glitch-web-workflow for apps/website or apps/app work in Glitch."

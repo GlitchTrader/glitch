@@ -1,0 +1,26 @@
+---
+description: Shared working style for Glitch agents: read first, keep scope tight, protect secrets, and clean up after changes
+globs: ["AGENTS.md", "CLAUDE.md", "README.md", "apps/**", "ninjatrader/**", ".cursor/rules/**", ".codex/skills/**"]
+alwaysApply: true
+---
+
+# Glitch working style
+
+## Intent
+
+- Read the relevant code, docs, and config before editing.
+- Keep changes scoped, intentional, and easy to justify.
+- Prefer direct, elegant solutions over overengineered abstractions.
+
+## Guardrails
+
+- Avoid arbitrary refactors, cosmetic churn, and hidden scope creep.
+- Take ownership of every touched surface: code, docs, env examples, and cleanup.
+- Never print, commit, or restate real secrets from local env files.
+- Ask the user when an ambiguity affects package selection, data safety, contract behavior, or deployment risk.
+
+## Finish Well
+
+- Leave the workspace cleaner than you found it.
+- Validate the narrowest useful surface for the change.
+- Call out any skipped validation or runtime-only verification in the handoff.

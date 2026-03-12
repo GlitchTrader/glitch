@@ -1,0 +1,25 @@
+---
+description: Handle direct Vercel operations for the linked Glitch API project, including env vars, cron rollout, and production deploy control
+globs: [".env.codex.local", ".vercel/**", "apps/api/vercel.json", "apps/api/README.md", "apps/api/.env.example"]
+alwaysApply: true
+---
+
+# Glitch Vercel operations
+
+## Default path
+
+- Normal deployment flow is GitHub push followed by Vercel auto deploy.
+- Use direct CLI operations only when env vars, cron rollout, or urgent deployment control require it.
+
+## Guardrails
+
+- Read `.env.codex.local`, `.vercel/project.json`, and `apps/api/vercel.json` before acting.
+- Never print, commit, or restate secret values from `.env.codex.local`.
+- The repo root is linked to the API Vercel project unless intentionally changed.
+- Cron schedules are source-controlled in `apps/api/vercel.json`.
+
+## CLI notes
+
+- On this Windows machine, prefer `cmd /c npx vercel ...` because raw `npx` in PowerShell may fail under execution policy.
+- Use token-based, non-interactive commands.
+- Summarize what changed without exposing secrets.

@@ -1,0 +1,37 @@
+---
+description: Protect Glitch localization work with workspace-first edits, UTF-8 discipline, sparse runtime overrides, and mixed-UI triage rules
+globs: ["ninjatrader/Glitch/AddOns/GlitchAddOn/Resources/Localization.tsv", "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Localization/**", "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Persistence/GlitchStateStore.cs", "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/**"]
+alwaysApply: true
+---
+
+# Glitch localization discipline
+
+## Source of truth
+
+- `ninjatrader/Glitch/AddOns/GlitchAddOn/Resources/Localization.tsv` is the only localization source of truth.
+- Never hand-edit the live `bin\Custom` copy or `C:\Users\alan\Documents\NinjaTrader 8\GlitchData\Localization.tsv`.
+
+## Guardrails
+
+- Preserve UTF-8.
+- Do not round-trip the catalog through Excel or any ANSI or Windows-1252 tool.
+- `GlitchData\Localization.tsv` is sparse override only, never a second full catalog.
+- Preserve the runtime migration logic that prevents stale full-catalog overrides from winning.
+
+## Validation
+
+- Spot-check these stable keys after edits:
+  - `settings.title`
+  - `settings.risk.title`
+  - `tab.settings`
+  - `analytics.block.instrument_overview`
+  - `analytics.technical.bridge_missing_cta`
+- Verify `zh-CN` still contains CJK and `ru-RU` still contains Cyrillic.
+- If the UI looks mixed, inspect this order:
+  - workspace catalog
+  - live bundled catalog
+  - runtime `GlitchData` override
+
+## Deployment
+
+- Make workspace edits first, validate there, then deploy once with the approved NinjaTrader deploy workflow.

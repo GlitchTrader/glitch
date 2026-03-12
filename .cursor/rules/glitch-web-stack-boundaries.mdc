@@ -1,0 +1,24 @@
+---
+description: Keep Glitch website and placeholder app work properly scoped across apps/website and apps/app
+globs: ["apps/website/**", "apps/app/**"]
+alwaysApply: true
+---
+
+# Glitch web stack boundaries
+
+## Package roles
+
+- `apps/website` is the real public marketing site.
+- `apps/app` is still placeholder scaffolding unless the user explicitly wants product work there.
+
+## Guardrails
+
+- Preserve env-driven Whop links and CTA routing in `apps/website/src/lib/marketing-links.ts`.
+- Do not make arbitrary pricing, offer, legal, or marketing-copy changes.
+- Do not imply that `apps/app` is a finished product.
+- Do not invent an `apps/docs` app; current docs live under `ninjatrader/Glitch/Docs`.
+
+## Validation
+
+- Validate only the affected workspace by default.
+- Update local docs or env examples when behavior or required configuration changes.
