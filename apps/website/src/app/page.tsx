@@ -1,7 +1,7 @@
 import Image from "next/image";
-import Link from "next/link";
 import { CheckList } from "@/components/check-list";
 import { CoreCtas } from "@/components/core-ctas";
+import { ExternalLink } from "@/components/external-link";
 import { FaqList } from "@/components/faq-list";
 import { HeroScreenshotsCarousel } from "@/components/hero-screenshots-carousel";
 import { PricingCards } from "@/components/pricing-cards";
@@ -154,14 +154,12 @@ export default function Home() {
               <div className="mt-5">
                 <CheckList items={freeTierFeatures} />
               </div>
-              <Link
+              <ExternalLink
                 href={marketingLinks.freeAccessUrl}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="mt-6 inline-flex h-11 items-center justify-center rounded-full border border-zinc-300 px-5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
                 Start Free
-              </Link>
+              </ExternalLink>
             </div>
 
             <div id="go-pro" className="rounded-2xl border-2 border-glitch-teal bg-glitch-teal/5 p-6 sm:p-8 dark:bg-glitch-teal/10">
@@ -178,14 +176,12 @@ export default function Home() {
               <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
                 Choose monthly, annual, or lifetime at checkout.
               </p>
-              <Link
+              <ExternalLink
                 href={marketingLinks.goProCheckoutUrl}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="mt-5 inline-flex h-11 items-center justify-center rounded-full bg-glitch-orange px-5 text-sm font-medium text-white hover:opacity-90"
               >
                 Go Pro
-              </Link>
+              </ExternalLink>
             </div>
           </div>
         </div>
@@ -201,9 +197,9 @@ export default function Home() {
           <PricingCards className="mt-10" />
           <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
             Already joined?{" "}
-            <Link href={marketingLinks.memberHubUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-glitch-teal hover:underline">
+            <ExternalLink href={marketingLinks.memberHubUrl} className="font-medium text-glitch-teal hover:underline">
               Member Hub
-            </Link>{" "}
+            </ExternalLink>{" "}
             is where downloads, updates, and activation steps live.
           </p>
         </div>

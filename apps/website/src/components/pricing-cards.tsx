@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CheckList } from "@/components/check-list";
+import { ExternalLink } from "@/components/external-link";
 import { pricingPlans, type PricingPlanTone } from "@/lib/pricing";
 
 type PricingCardsProps = {
@@ -48,71 +49,79 @@ const buttonToneClass: Record<PricingPlanTone, string> = {
 export function PricingCards({ className, useAnchors = false }: PricingCardsProps) {
   return (
     <div className={`grid gap-6 lg:grid-cols-3 ${className ?? ""}`.trim()}>
-      {pricingPlans.map((plan) => (
-        <article
-          key={plan.id}
-          id={useAnchors ? plan.id : undefined}
-          className={`${baseCardClass} ${cardToneClass[plan.tone]}`}
-        >
-          <div
-            aria-hidden="true"
-            className={
-              plan.tone === "featured"
-                ? "pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(circle_at_top,rgba(26,188,156,0.18),transparent_72%)]"
-                : plan.tone === "premium"
-                  ? "pointer-events-none absolute right-0 top-0 h-28 w-28 bg-[radial-gradient(circle_at_center,rgba(255,66,0,0.12),transparent_72%)]"
-                  : "pointer-events-none absolute left-0 top-0 h-24 w-24 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.04),transparent_72%)]"
-            }
-          />
+      {pricingPlans.map((plan) => {
+        const isExternalCta = plan.ctaHref.startsWith("http");
+        const buttonClassName =
+          `mt-6 inline-flex h-12 w-full items-center justify-center rounded-full px-6 text-center font-medium transition-colors ${buttonToneClass[plan.tone]}`;
 
-          <div className="relative">
-            <div className="flex items-start justify-between gap-4">
-              <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${eyebrowToneClass[plan.tone]}`}>
-                {plan.eyebrow}
-              </p>
-              {plan.badge ? (
-                <span className="relative -top-[5px] -mb-[7px] inline-flex rounded-full border border-glitch-orange/40 bg-glitch-orange/10 px-3 py-1 text-xs font-semibold text-glitch-orange">
-                  {plan.badge}
-                </span>
-              ) : null}
-            </div>
+        return (
+          <article
+            key={plan.id}
+            id={useAnchors ? plan.id : undefined}
+            className={`${baseCardClass} ${cardToneClass[plan.tone]}`}
+          >
+            <div
+              aria-hidden="true"
+              className={
+                plan.tone === "featured"
+                  ? "pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(circle_at_top,rgba(26,188,156,0.18),transparent_72%)]"
+                  : plan.tone === "premium"
+                    ? "pointer-events-none absolute right-0 top-0 h-28 w-28 bg-[radial-gradient(circle_at_center,rgba(255,66,0,0.12),transparent_72%)]"
+                    : "pointer-events-none absolute left-0 top-0 h-24 w-24 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.04),transparent_72%)]"
+              }
+            />
 
-            <h3 className="mt-4 max-w-xs text-[1.75rem] font-semibold tracking-tight sm:text-[2rem]">{plan.title}</h3>
-
-            <p className={`mt-4 max-w-sm text-sm leading-6 ${bodyToneClass[plan.tone]}`}>{plan.description}</p>
-
-            <div className={`mt-8 border-t pt-6 ${dividerToneClass[plan.tone]}`}>
-              <div className="flex items-end gap-2">
-                <span className="text-4xl font-semibold tracking-tight sm:text-5xl">{plan.price}</span>
-                <span className={`pb-1 text-sm font-medium ${bodyToneClass[plan.tone]}`}>{plan.priceSuffix}</span>
+            <div className="relative">
+              <div className="flex items-start justify-between gap-4">
+                <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${eyebrowToneClass[plan.tone]}`}>
+                  {plan.eyebrow}
+                </p>
+                {plan.badge ? (
+                  <span className="relative -top-[5px] -mb-[7px] inline-flex rounded-full border border-glitch-orange/40 bg-glitch-orange/10 px-3 py-1 text-xs font-semibold text-glitch-orange">
+                    {plan.badge}
+                  </span>
+                ) : null}
               </div>
-              <p className={`mt-3 text-sm ${bodyToneClass[plan.tone]}`}>{plan.secondaryPrice}</p>
+
+              <h3 className="mt-4 max-w-xs text-[1.75rem] font-semibold tracking-tight sm:text-[2rem]">{plan.title}</h3>
+
+              <p className={`mt-4 max-w-sm text-sm leading-6 ${bodyToneClass[plan.tone]}`}>{plan.description}</p>
+
+              <div className={`mt-8 border-t pt-6 ${dividerToneClass[plan.tone]}`}>
+                <div className="flex items-end gap-2">
+                  <span className="text-4xl font-semibold tracking-tight sm:text-5xl">{plan.price}</span>
+                  <span className={`pb-1 text-sm font-medium ${bodyToneClass[plan.tone]}`}>{plan.priceSuffix}</span>
+                </div>
+                <p className={`mt-3 text-sm ${bodyToneClass[plan.tone]}`}>{plan.secondaryPrice}</p>
+              </div>
+
+              <div className="mt-8">
+                <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${bodyToneClass[plan.tone]}`}>
+                  What you get
+                </p>
+                <CheckList
+                  className="mt-4"
+                  items={plan.features}
+                  itemClassName={plan.tone === "featured" ? "text-zinc-100" : undefined}
+                />
+              </div>
             </div>
 
-            <div className="mt-8">
-              <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${bodyToneClass[plan.tone]}`}>
-                What you get
-              </p>
-              <CheckList
-                className="mt-4"
-                items={plan.features}
-                itemClassName={plan.tone === "featured" ? "text-zinc-100" : undefined}
-              />
+            <div className="relative mt-auto pt-8">
+              <p className={`text-sm leading-6 ${bodyToneClass[plan.tone]}`}>{plan.note}</p>
+              {isExternalCta ? (
+                <ExternalLink href={plan.ctaHref} className={buttonClassName}>
+                  {plan.ctaLabel}
+                </ExternalLink>
+              ) : (
+                <Link href={plan.ctaHref} className={buttonClassName}>
+                  {plan.ctaLabel}
+                </Link>
+              )}
             </div>
-          </div>
-
-          <div className="relative mt-auto pt-8">
-            <p className={`text-sm leading-6 ${bodyToneClass[plan.tone]}`}>{plan.note}</p>
-            <Link
-              href={plan.ctaHref}
-              {...(plan.ctaHref.startsWith("http") ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-              className={`mt-6 inline-flex h-12 w-full items-center justify-center rounded-full px-6 text-center font-medium transition-colors ${buttonToneClass[plan.tone]}`}
-            >
-              {plan.ctaLabel}
-            </Link>
-          </div>
-        </article>
-      ))}
+          </article>
+        );
+      })}
     </div>
   );
 }

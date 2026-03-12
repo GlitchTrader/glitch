@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { CheckList } from "@/components/check-list";
+import { ExternalLink } from "@/components/external-link";
 import { FaqList } from "@/components/faq-list";
 import { PricingCards } from "@/components/pricing-cards";
 import { SiteFooter } from "@/components/site-footer";
@@ -72,9 +72,9 @@ export default function PricingPage() {
           <PricingCards className="mt-10" useAnchors />
           <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
             After checkout,{" "}
-            <Link href={marketingLinks.memberHubUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-glitch-teal hover:underline">
+            <ExternalLink href={marketingLinks.memberHubUrl} className="font-medium text-glitch-teal hover:underline">
               Member Hub
-            </Link>{" "}
+            </ExternalLink>{" "}
             is where downloads, onboarding, updates, and activation steps live.
           </p>
         </div>

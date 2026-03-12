@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ExternalLink } from "@/components/external-link";
 import { SiteFooter } from "@/components/site-footer";
 import { marketingLinks } from "@/lib/marketing-links";
 import { buildPageMetadata } from "@/lib/seo";
@@ -59,22 +60,18 @@ export default function AffiliatePage() {
           </div>
 
           <div className="glitch-cta-row mt-10">
-            <a
+            <ExternalLink
               href={marketingLinks.affiliateDashboardUrl}
-              target="_blank"
-              rel="noopener noreferrer"
               className="inline-flex h-12 items-center justify-center rounded-full bg-glitch-orange px-6 font-medium text-white hover:opacity-90"
             >
               Affiliate Dashboard
-            </a>
-            <Link
+            </ExternalLink>
+            <ExternalLink
               href={marketingLinks.goProCheckoutUrl}
-              target="_blank"
-              rel="noopener noreferrer"
               className="inline-flex h-12 items-center justify-center rounded-full border border-zinc-300 px-6 font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
             >
               Go Pro Product
-            </Link>
+            </ExternalLink>
           </div>
           <p className="mt-6 text-sm text-zinc-500 dark:text-zinc-400">
             This opens Whop&apos;s affiliate dashboard, where approved offers expose your unique referral link and assets.

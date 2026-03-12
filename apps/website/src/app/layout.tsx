@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { ExternalLink } from "@/components/external-link";
 import { marketingLinks } from "@/lib/marketing-links";
 import "./globals.css";
 
@@ -85,22 +86,18 @@ function SiteHeader() {
           Glitch
         </Link>
         <nav className="flex items-center gap-4 text-sm md:hidden">
-          <Link
+          <ExternalLink
             href={marketingLinks.goProCheckoutUrl}
-            target="_blank"
-            rel="noopener noreferrer"
             className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
           >
             Go Pro
-          </Link>
-          <Link
+          </ExternalLink>
+          <ExternalLink
             href={marketingLinks.memberHubUrl}
-            target="_blank"
-            rel="noopener noreferrer"
             className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
           >
             Member Hub
-          </Link>
+          </ExternalLink>
         </nav>
         <nav className="hidden items-center gap-6 text-sm md:flex">
           <Link
@@ -127,22 +124,18 @@ function SiteHeader() {
           >
             Affiliate
           </Link>
-          <Link
+          <ExternalLink
             href={marketingLinks.goProCheckoutUrl}
-            target="_blank"
-            rel="noopener noreferrer"
             className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
           >
             Go Pro
-          </Link>
-          <Link
+          </ExternalLink>
+          <ExternalLink
             href={marketingLinks.memberHubUrl}
-            target="_blank"
-            rel="noopener noreferrer"
             className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
           >
             Member Hub
-          </Link>
+          </ExternalLink>
         </nav>
       </div>
     </header>
