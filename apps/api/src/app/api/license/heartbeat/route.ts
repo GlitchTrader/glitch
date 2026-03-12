@@ -11,7 +11,13 @@ import { readBooleanEnv, readOptionalEnv } from "@/lib/env";
 import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
 import { getWebhookStoreMode } from "@/lib/idempotency-store";
 import { buildLicenseContractBody } from "@/lib/license-contract";
-import { resolvePlanFromCode, buildPolicy, LICENSE_GRACE_WINDOW_SECONDS } from "@/lib/license-policy";
+import {
+  buildPolicy,
+  LICENSE_GRACE_WINDOW_SECONDS,
+  type LicenseBillingVariant,
+  type LicensePlan,
+  resolveEntitlementFromSource,
+} from "@/lib/license-policy";
 import { validateAndConsumeLicenseNonce } from "@/lib/license-nonce-store";
 import { issueLicenseToken, isLicenseTokenSigningConfigured } from "@/lib/license-token";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -105,17 +111,22 @@ function buildHeartbeatResponseBody(
     valid,
     status,
     reason,
-    planCode,
+    plan,
+    billingVariant,
+    sourceProductId,
+    sourcePlanCode,
     entitlementStatus,
   }: {
     valid: boolean;
     status: "active" | "inactive";
     reason: string | null;
-    planCode: string | null;
+    plan: LicensePlan;
+    billingVariant: LicenseBillingVariant;
+    sourceProductId: string | null;
+    sourcePlanCode: string | null;
     entitlementStatus: string | null;
   },
 ) {
-  const plan = resolvePlanFromCode(planCode);
   const policy = buildPolicy(plan);
   const graceUntil = Math.floor(Date.now() / 1000) + LICENSE_GRACE_WINDOW_SECONDS;
   const licenseToken = issueLicenseToken({
@@ -125,7 +136,9 @@ function buildHeartbeatResponseBody(
     features: policy.features,
     limits: policy.limits,
     policyVersion: policy.policyVersion,
-    sourcePlanCode: planCode,
+    billingVariant,
+    sourceProductId,
+    sourcePlanCode,
     entitlementStatus,
     graceUntil,
   });
@@ -140,8 +153,10 @@ function buildHeartbeatResponseBody(
     status,
     reason,
     plan,
+    billingVariant,
     entitlementStatus,
-    sourcePlanCode: planCode,
+    sourcePlanCode,
+    sourceProductId,
     licenseToken,
   });
 }
@@ -245,7 +260,10 @@ export async function POST(request: NextRequest) {
         valid: allowAll,
         status: allowAll ? "active" : "inactive",
         reason: allowAll ? null : "stub_deny_by_default",
-        planCode: allowAll ? "premium" : "free_lite",
+        plan: allowAll ? "premium" : "free_lite",
+        billingVariant: allowAll ? "unknown" : "free",
+        sourceProductId: null,
+        sourcePlanCode: allowAll ? "premium" : "free_lite",
         entitlementStatus: allowAll ? "active" : "inactive",
       }),
     );
@@ -259,7 +277,10 @@ export async function POST(request: NextRequest) {
         reason: !parsed.licenseKey
           ? "license_key_required_for_database_mode"
           : "device_fingerprint_required_for_database_mode",
-        planCode: "free_lite",
+        plan: "free_lite",
+        billingVariant: "free",
+        sourceProductId: null,
+        sourcePlanCode: null,
         entitlementStatus: null,
       }),
     );
@@ -273,19 +294,26 @@ export async function POST(request: NextRequest) {
           valid: false,
           status: "inactive",
           reason: "license_not_found",
-          planCode: "free_lite",
+          plan: "free_lite",
+          billingVariant: "free",
+          sourceProductId: null,
+          sourcePlanCode: null,
           entitlementStatus: null,
         }),
       );
     }
 
+    const resolvedEntitlement = resolveEntitlementFromSource(entitlement.productId, entitlement.planCode);
     if (!isWhopEntitlementStatusActive(entitlement.status)) {
       return jsonResponse(
         buildHeartbeatResponseBody(parsed, requestId, "database", {
           valid: false,
           status: "inactive",
           reason: `membership_status_${entitlement.status}`,
-          planCode: entitlement.planCode,
+          plan: resolvedEntitlement.plan,
+          billingVariant: resolvedEntitlement.billingVariant,
+          sourceProductId: resolvedEntitlement.sourceProductId,
+          sourcePlanCode: resolvedEntitlement.sourcePlanCode,
           entitlementStatus: entitlement.status,
         }),
       );
@@ -302,7 +330,10 @@ export async function POST(request: NextRequest) {
           valid: false,
           status: "inactive",
           reason: bindingResult.reason,
-          planCode: entitlement.planCode,
+          plan: resolvedEntitlement.plan,
+          billingVariant: resolvedEntitlement.billingVariant,
+          sourceProductId: resolvedEntitlement.sourceProductId,
+          sourcePlanCode: resolvedEntitlement.sourcePlanCode,
           entitlementStatus: entitlement.status,
         }),
       );
@@ -313,7 +344,10 @@ export async function POST(request: NextRequest) {
         valid: true,
         status: "active",
         reason: null,
-        planCode: entitlement.planCode,
+        plan: resolvedEntitlement.plan,
+        billingVariant: resolvedEntitlement.billingVariant,
+        sourceProductId: resolvedEntitlement.sourceProductId,
+        sourcePlanCode: resolvedEntitlement.sourcePlanCode,
         entitlementStatus: entitlement.status,
       }),
     );

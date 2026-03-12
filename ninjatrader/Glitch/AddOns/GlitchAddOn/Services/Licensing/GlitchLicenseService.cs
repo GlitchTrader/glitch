@@ -30,6 +30,8 @@ namespace Glitch.Services
         public DateTime ExpiresAtUtc { get; set; } = DateTime.MinValue;
         public DateTime GraceUntilUtc { get; set; } = DateTime.MinValue;
         public string PolicyVersion { get; set; } = string.Empty;
+        public string BillingVariant { get; set; } = string.Empty;
+        public string SourceProductId { get; set; } = string.Empty;
         public string SourcePlanCode { get; set; } = string.Empty;
         public string EntitlementStatus { get; set; } = string.Empty;
     }
@@ -500,6 +502,8 @@ namespace Glitch.Services
                 ExpiresAtUtc = expiresAtUtc,
                 GraceUntilUtc = graceUntilUtc,
                 PolicyVersion = ReadString(payload, "policyVersion", string.Empty),
+                BillingVariant = ReadString(payload, "billingVariant", string.Empty),
+                SourceProductId = ReadString(payload, "sourceProductId", string.Empty),
                 SourcePlanCode = ReadString(payload, "sourcePlanCode", string.Empty),
                 EntitlementStatus = ReadString(payload, "entitlementStatus", string.Empty)
             };

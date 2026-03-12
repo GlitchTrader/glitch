@@ -2,6 +2,7 @@ import { readBooleanEnv, readOptionalEnv } from "@/lib/env";
 import { isProductionRuntime } from "@/lib/security-context";
 
 export type LicensePlan = "free_lite" | "premium";
+export type LicenseBillingVariant = "free" | "monthly" | "annual" | "lifetime" | "unknown";
 
 export interface LicensePolicy {
   plan: LicensePlan;
@@ -21,12 +22,25 @@ export interface LicensePolicy {
 
 export const LICENSE_GRACE_WINDOW_SECONDS = 24 * 60 * 60;
 export const LICENSE_DEFAULT_CHECK_IN_SECONDS = 60;
-export const LICENSE_POLICY_VERSION = "2026-03-09-v1";
+export const LICENSE_POLICY_VERSION = "2026-03-12-v2";
+const DEFAULT_FREE_LITE_PRODUCT_IDS = ["prod_QX1HIqoZcBywS"];
+const DEFAULT_PREMIUM_PRODUCT_IDS = ["prod_nL5dDWWpEq9gF"];
 
-function parsePlanCodeSetFromEnv(envName: string): Set<string> {
+export interface ResolvedLicenseEntitlement {
+  plan: LicensePlan;
+  billingVariant: LicenseBillingVariant;
+  sourceProductId: string | null;
+  sourcePlanCode: string | null;
+}
+
+function parseCodeSetFromEnv(envName: string, defaults: readonly string[] = []): Set<string> {
   const raw = readOptionalEnv(envName);
   if (!raw) {
-    return new Set();
+    return new Set(
+      defaults
+        .map((token) => token.trim().toLowerCase())
+        .filter((token) => token.length > 0),
+    );
   }
 
   return new Set(
@@ -35,6 +49,30 @@ function parsePlanCodeSetFromEnv(envName: string): Set<string> {
       .map((token) => token.trim().toLowerCase())
       .filter((token) => token.length > 0),
   );
+}
+
+function normalizeCode(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function trimCode(value: string | null | undefined): string | null {
+  const trimmed = (value ?? "").trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function unionSets(...sets: Set<string>[]): Set<string> {
+  const union = new Set<string>();
+  for (const set of sets) {
+    for (const value of set) {
+      union.add(value);
+    }
+  }
+
+  return union;
+}
+
+function shouldRejectConfiguredPlan(normalizedPlanCode: string, allowedPlanCodes: Set<string>): boolean {
+  return allowedPlanCodes.size > 0 && normalizedPlanCode.length > 0 && !allowedPlanCodes.has(normalizedPlanCode);
 }
 
 function readDefaultUnmappedPlan(): LicensePlan {
@@ -46,33 +84,151 @@ function readDefaultUnmappedPlan(): LicensePlan {
   return "free_lite";
 }
 
-export function resolvePlanFromCode(planCode: string | null | undefined): LicensePlan {
-  const normalized = (planCode ?? "").trim().toLowerCase();
-  const explicitFreeLiteCodes = parsePlanCodeSetFromEnv("WHOP_FREE_LITE_PLAN_CODES");
-  const explicitPremiumCodes = parsePlanCodeSetFromEnv("WHOP_PREMIUM_PLAN_CODES");
+function resolveBillingVariant(
+  normalizedProductId: string,
+  normalizedPlanCode: string,
+  explicitFreeLiteProductIds: Set<string>,
+  explicitFreeLitePlanCodes: Set<string>,
+  explicitPremiumMonthlyPlanCodes: Set<string>,
+  explicitPremiumAnnualPlanCodes: Set<string>,
+  explicitPremiumLifetimePlanCodes: Set<string>,
+): LicenseBillingVariant {
+  if (
+    (normalizedProductId && explicitFreeLiteProductIds.has(normalizedProductId)) ||
+    (normalizedPlanCode && explicitFreeLitePlanCodes.has(normalizedPlanCode)) ||
+    normalizedPlanCode === "free_lite"
+  ) {
+    return "free";
+  }
+
+  if (normalizedPlanCode && explicitPremiumMonthlyPlanCodes.has(normalizedPlanCode)) {
+    return "monthly";
+  }
+
+  if (normalizedPlanCode && explicitPremiumAnnualPlanCodes.has(normalizedPlanCode)) {
+    return "annual";
+  }
+
+  if (normalizedPlanCode && explicitPremiumLifetimePlanCodes.has(normalizedPlanCode)) {
+    return "lifetime";
+  }
+
+  return "unknown";
+}
+
+export function resolveEntitlementFromSource(
+  productId: string | null | undefined,
+  planCode: string | null | undefined,
+): ResolvedLicenseEntitlement {
+  const trimmedProductId = trimCode(productId);
+  const trimmedPlanCode = trimCode(planCode);
+  const normalizedProductId = normalizeCode(productId);
+  const normalizedPlanCode = normalizeCode(planCode);
+  const explicitFreeLiteProductIds = parseCodeSetFromEnv("WHOP_FREE_LITE_PRODUCT_IDS", DEFAULT_FREE_LITE_PRODUCT_IDS);
+  const explicitPremiumProductIds = parseCodeSetFromEnv("WHOP_PREMIUM_PRODUCT_IDS", DEFAULT_PREMIUM_PRODUCT_IDS);
+  const explicitFreeLitePlanCodes = parseCodeSetFromEnv("WHOP_FREE_LITE_PLAN_CODES");
+  const explicitPremiumMonthlyPlanCodes = parseCodeSetFromEnv("WHOP_PREMIUM_MONTHLY_PLAN_CODES");
+  const explicitPremiumAnnualPlanCodes = parseCodeSetFromEnv("WHOP_PREMIUM_ANNUAL_PLAN_CODES");
+  const explicitPremiumLifetimePlanCodes = parseCodeSetFromEnv("WHOP_PREMIUM_LIFETIME_PLAN_CODES");
+  const legacyExplicitPremiumPlanCodes = parseCodeSetFromEnv("WHOP_PREMIUM_PLAN_CODES");
+  const explicitPremiumPlanCodes = unionSets(
+    explicitPremiumMonthlyPlanCodes,
+    explicitPremiumAnnualPlanCodes,
+    explicitPremiumLifetimePlanCodes,
+    legacyExplicitPremiumPlanCodes,
+  );
   const defaultUnmappedPlan = readDefaultUnmappedPlan();
-
-  if (normalized && explicitFreeLiteCodes.has(normalized)) {
-    return "free_lite";
-  }
-
-  if (normalized && explicitPremiumCodes.has(normalized)) {
-    return "premium";
-  }
-
+  const billingVariant = resolveBillingVariant(
+    normalizedProductId,
+    normalizedPlanCode,
+    explicitFreeLiteProductIds,
+    explicitFreeLitePlanCodes,
+    explicitPremiumMonthlyPlanCodes,
+    explicitPremiumAnnualPlanCodes,
+    explicitPremiumLifetimePlanCodes,
+  );
   const strictPlanMapping = readBooleanEnv(
     "WHOP_STRICT_PLAN_MAPPING",
-    isProductionRuntime() || explicitFreeLiteCodes.size > 0 || explicitPremiumCodes.size > 0,
+    isProductionRuntime() ||
+      explicitFreeLiteProductIds.size > 0 ||
+      explicitPremiumProductIds.size > 0 ||
+      explicitFreeLitePlanCodes.size > 0 ||
+      explicitPremiumPlanCodes.size > 0,
   );
 
-  if (strictPlanMapping) {
-    return "free_lite";
+  if (normalizedProductId && explicitFreeLiteProductIds.has(normalizedProductId)) {
+    return {
+      plan: "free_lite",
+      billingVariant: "free",
+      sourceProductId: trimmedProductId,
+      sourcePlanCode: trimmedPlanCode,
+    };
   }
 
-  if (!normalized) {
-    return "free_lite";
+  if (normalizedProductId && explicitPremiumProductIds.has(normalizedProductId)) {
+    if (shouldRejectConfiguredPlan(normalizedPlanCode, explicitPremiumPlanCodes) && strictPlanMapping) {
+      return {
+        plan: "free_lite",
+        billingVariant,
+        sourceProductId: trimmedProductId,
+        sourcePlanCode: trimmedPlanCode,
+      };
+    }
+
+    return {
+      plan: "premium",
+      billingVariant,
+      sourceProductId: trimmedProductId,
+      sourcePlanCode: trimmedPlanCode,
+    };
   }
-  return defaultUnmappedPlan;
+
+  if (normalizedPlanCode === "free_lite" || (normalizedPlanCode && explicitFreeLitePlanCodes.has(normalizedPlanCode))) {
+    return {
+      plan: "free_lite",
+      billingVariant: "free",
+      sourceProductId: trimmedProductId,
+      sourcePlanCode: trimmedPlanCode,
+    };
+  }
+
+  if (normalizedPlanCode === "premium" || (normalizedPlanCode && explicitPremiumPlanCodes.has(normalizedPlanCode))) {
+    return {
+      plan: "premium",
+      billingVariant,
+      sourceProductId: trimmedProductId,
+      sourcePlanCode: trimmedPlanCode,
+    };
+  }
+
+  if (strictPlanMapping) {
+    return {
+      plan: "free_lite",
+      billingVariant,
+      sourceProductId: trimmedProductId,
+      sourcePlanCode: trimmedPlanCode,
+    };
+  }
+
+  if (!normalizedProductId && !normalizedPlanCode) {
+    return {
+      plan: "free_lite",
+      billingVariant,
+      sourceProductId: null,
+      sourcePlanCode: null,
+    };
+  }
+
+  return {
+    plan: defaultUnmappedPlan,
+    billingVariant,
+    sourceProductId: trimmedProductId,
+    sourcePlanCode: trimmedPlanCode,
+  };
+}
+
+export function resolvePlanFromCode(planCode: string | null | undefined): LicensePlan {
+  return resolveEntitlementFromSource(null, planCode).plan;
 }
 
 export function buildPolicy(plan: LicensePlan): LicensePolicy {
@@ -88,8 +244,8 @@ export function buildPolicy(plan: LicensePlan): LicensePolicy {
         advancedReplication: true,
       },
       limits: {
-        maxGroups: 25,
-        maxFollowersPerGroup: 200,
+        maxGroups: 10,
+        maxFollowersPerGroup: 100,
       },
     };
   }

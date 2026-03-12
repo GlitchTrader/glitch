@@ -8,7 +8,7 @@ import {
 } from "@/lib/entitlements-store";
 import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
 import { getWebhookStoreMode } from "@/lib/idempotency-store";
-import { buildPolicy, resolvePlanFromCode } from "@/lib/license-policy";
+import { buildPolicy, resolveEntitlementFromSource } from "@/lib/license-policy";
 
 export const runtime = "nodejs";
 
@@ -93,6 +93,7 @@ export async function POST(request: NextRequest) {
     }
 
     const binding = await findActiveLicenseBinding(entitlement.id);
+    const resolvedEntitlement = resolveEntitlementFromSource(entitlement.productId, entitlement.planCode);
     const active = isWhopEntitlementStatusActive(entitlement.status);
     const valid = active && !!binding;
     const reason = valid
@@ -110,10 +111,12 @@ export async function POST(request: NextRequest) {
         status: valid ? "active" : "inactive",
         reason,
       },
-      policy: buildPolicy(resolvePlanFromCode(entitlement.planCode)),
+      policy: buildPolicy(resolvedEntitlement.plan),
+      billingVariant: resolvedEntitlement.billingVariant,
       entitlement: {
         ...entitlement,
         active,
+        billingVariant: resolvedEntitlement.billingVariant,
       },
       binding,
       bindingStatus: binding ? "bound" : "missing",

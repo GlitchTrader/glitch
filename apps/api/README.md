@@ -72,7 +72,9 @@ Optional / feature-specific:
 - `LICENSE_STUB_ALLOW_ALL` — `true`/`false`; stub license behavior when DB not used.
 - `LICENSE_TOKEN_ES256_PRIVATE_KEY_PEM`, `LICENSE_TOKEN_ES256_KID`, `LICENSE_TOKEN_TTL_SECONDS` — Signed license token issuance.
 - `FINNHUB_API_KEY`, `FRED_API_KEY` — Used by provider proxy and fundamentals.
-- Plan mapping: `WHOP_FREE_LITE_PLAN_CODES`, `WHOP_PREMIUM_PLAN_CODES`, `WHOP_STRICT_PLAN_MAPPING`, `WHOP_DEFAULT_ACTIVE_PLAN`.
+- Product/tier mapping: `WHOP_FREE_LITE_PRODUCT_IDS`, `WHOP_PREMIUM_PRODUCT_IDS`.
+- Plan/billing mapping: `WHOP_FREE_LITE_PLAN_CODES`, `WHOP_PREMIUM_MONTHLY_PLAN_CODES`, `WHOP_PREMIUM_ANNUAL_PLAN_CODES`, `WHOP_PREMIUM_LIFETIME_PLAN_CODES`, `WHOP_PREMIUM_PLAN_CODES`.
+- Fallback behavior: `WHOP_STRICT_PLAN_MAPPING`, `WHOP_DEFAULT_ACTIVE_PLAN`.
 - Retention: `WEBHOOK_EVENT_RETENTION_DAYS`, `REVOKED_BINDING_RETENTION_DAYS`, `LICENSE_NONCE_RETENTION_SECONDS`, `PROVIDER_PROXY_CACHE_RETENTION_SECONDS`, `PROVIDER_PROXY_ACCESS_CACHE_SECONDS`, `MARKET_CACHE_RETENTION_SECONDS`.
 - Rate limits: `LICENSE_VALIDATE_RATE_LIMIT_PER_MINUTE_IP`, `LICENSE_VALIDATE_RATE_LIMIT_PER_MINUTE_LICENSE`, `LICENSE_HEARTBEAT_*`, `PROVIDER_PROXY_RATE_LIMIT_*`, `FUNDAMENTALS_RATE_LIMIT_*`.
 - Provider proxy TTLs: `PROVIDER_PROXY_TTL_FINNHUB_*`, `PROVIDER_PROXY_TTL_FRED_*`.
@@ -88,6 +90,7 @@ npm run dev --workspace apps/api
 
 - Webhook verification uses `@whop/sdk` `webhooks.unwrap`. Idempotency uses Postgres when `DATABASE_URL` is set, otherwise in-memory.
 - Membership webhook events project to `entitlements` only when `DATABASE_URL` is set. Entitlements store monetization context (`company_id`, `product_id`, `promo_code_id`, `membership_metadata`) for attribution.
+- License tier resolution is product-first (`product_id` -> `free_lite` vs `premium`). `plan_id` is used to classify the billing variant (`free`, `monthly`, `annual`, `lifetime`) and as a legacy fallback when older rows do not have `product_id`.
 - DB-backed license validate/heartbeat use hashed Whop license keys and enforce one active `license_binding` per entitlement (installation + device fingerprint).
 - SQL scaffold: `db/schema.sql` (webhook_events, entitlements, license_bindings).
 

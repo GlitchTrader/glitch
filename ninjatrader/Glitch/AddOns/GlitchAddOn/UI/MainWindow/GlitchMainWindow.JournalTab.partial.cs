@@ -400,7 +400,7 @@ namespace Glitch.UI
                         Style = CreateGroupAddButtonStyle(context)
                     };
                     RegisterLocalizationBinding(() => checkoutButton.Content = L("overlay.button.get_license", "Get License"));
-                    checkoutButton.Click += (_, __) => OpenAnalyticsExternalUrl("https://whop.com/checkout/plan_W6nOCfXPm7pka");
+                    checkoutButton.Click += (_, __) => OpenAnalyticsExternalUrl("https://whop.com/joined/glitchtrader/products/glitch-ninjatrader-addon/");
                     buttonRow.Children.Add(checkoutButton);
 
                     var memberAppButton = new Button
@@ -412,7 +412,7 @@ namespace Glitch.UI
                         Style = CreateGroupActionButtonStyle(context)
                     };
                     RegisterLocalizationBinding(() => memberAppButton.Content = L("overlay.button.manage_membership", "Manage Membership"));
-                    memberAppButton.Click += (_, __) => OpenAnalyticsExternalUrl("https://whop.com/joined/glitchtrader/glitch-download-h1FPM8xSe5zaYs/app/");
+                    memberAppButton.Click += (_, __) => OpenAnalyticsExternalUrl("https://whop.com/joined/glitchtrader/");
                     buttonRow.Children.Add(memberAppButton);
                     stack.Children.Add(buttonRow);
 

@@ -2,6 +2,7 @@ import {
   buildPolicy,
   LICENSE_DEFAULT_CHECK_IN_SECONDS,
   LICENSE_GRACE_WINDOW_SECONDS,
+  type LicenseBillingVariant,
   type LicensePlan,
 } from "@/lib/license-policy";
 
@@ -18,8 +19,10 @@ interface BuildLicenseContractBodyInput {
   status: LicenseStatus;
   reason: string | null;
   plan: LicensePlan;
+  billingVariant?: LicenseBillingVariant | null;
   entitlementStatus?: string | null;
   sourcePlanCode?: string | null;
+  sourceProductId?: string | null;
   nextCheckInSeconds?: number;
   licenseToken?: string | null;
 }
@@ -54,6 +57,8 @@ export function buildLicenseContractBody(input: BuildLicenseContractBodyInput) {
     entitlement: {
       active: input.valid,
       plan: policy.plan,
+      billingVariant: input.billingVariant ?? "unknown",
+      sourceProductId: input.sourceProductId ?? null,
       sourcePlanCode: input.sourcePlanCode ?? null,
       status: input.entitlementStatus ?? null,
     },

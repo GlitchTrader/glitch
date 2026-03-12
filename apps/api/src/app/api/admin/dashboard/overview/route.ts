@@ -17,20 +17,21 @@ import {
   listMembershipWebhookDailyMetrics,
   listRecentWebhookEvents,
 } from "@/lib/idempotency-store";
-import { buildPolicy, resolvePlanFromCode } from "@/lib/license-policy";
+import { buildPolicy, resolveEntitlementFromSource } from "@/lib/license-policy";
 
 export const runtime = "nodejs";
 
 interface DashboardLicenseStatus {
   found: boolean;
   reason?: string;
+  billingVariant?: string;
   license?: {
     valid: boolean;
     status: "active" | "inactive";
     reason: string | null;
   };
   policy?: ReturnType<typeof buildPolicy>;
-  entitlement?: WhopEntitlement & { active: boolean };
+  entitlement?: WhopEntitlement & { active: boolean; billingVariant?: string };
   binding?: ActiveLicenseBinding | null;
   bindingStatus?: "bound" | "missing";
 }
@@ -116,6 +117,7 @@ async function loadLicenseStatus(licenseKey: string): Promise<DashboardLicenseSt
   }
 
   const binding = await findActiveLicenseBinding(entitlement.id);
+  const resolvedEntitlement = resolveEntitlementFromSource(entitlement.productId, entitlement.planCode);
   const entitlementActive = isWhopEntitlementStatusActive(entitlement.status);
   const valid = entitlementActive && !!binding;
   const reason = valid
@@ -131,10 +133,12 @@ async function loadLicenseStatus(licenseKey: string): Promise<DashboardLicenseSt
       status: valid ? "active" : "inactive",
       reason,
     },
-    policy: buildPolicy(resolvePlanFromCode(entitlement.planCode)),
+    policy: buildPolicy(resolvedEntitlement.plan),
+    billingVariant: resolvedEntitlement.billingVariant,
     entitlement: {
       ...entitlement,
       active: entitlementActive,
+      billingVariant: resolvedEntitlement.billingVariant,
     },
     binding,
     bindingStatus: binding ? "bound" : "missing",
@@ -242,4 +246,3 @@ export async function POST(request: NextRequest) {
 
   return handleOverviewRequest(request, parsed);
 }
-

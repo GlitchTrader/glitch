@@ -8,7 +8,7 @@ import {
 } from "@/lib/entitlements-store";
 import { getTrustedClientIp } from "@/lib/client-ip";
 import { readOptionalEnv } from "@/lib/env";
-import { buildPolicy, resolvePlanFromCode } from "@/lib/license-policy";
+import { buildPolicy, resolveEntitlementFromSource } from "@/lib/license-policy";
 import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
 import { validateAndConsumeLicenseNonce } from "@/lib/license-nonce-store";
 import { getMarketFundamentalSnapshot } from "@/lib/market-fundamentals";
@@ -199,7 +199,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const policy = buildPolicy(resolvePlanFromCode(entitlement.planCode));
+    const resolvedEntitlement = resolveEntitlementFromSource(entitlement.productId, entitlement.planCode);
+    const policy = buildPolicy(resolvedEntitlement.plan);
     if (!policy.features.fundamental) {
       return errorResponse(
         requestId,
@@ -219,7 +220,9 @@ export async function POST(request: NextRequest) {
       requestId,
       entitlement: {
         plan: policy.plan,
-        sourcePlanCode: entitlement.planCode,
+        billingVariant: resolvedEntitlement.billingVariant,
+        sourceProductId: resolvedEntitlement.sourceProductId,
+        sourcePlanCode: resolvedEntitlement.sourcePlanCode,
         status: entitlement.status,
         features: policy.features,
         limits: policy.limits,

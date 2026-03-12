@@ -93,7 +93,7 @@ Key types and members as they appear in the code. Not exhaustive; covers contrac
 - **HeartbeatAsync(...)** — same parameter shape. Canonical API base URL and allowed hosts defined in code.
 - **GlitchLicenseSnapshot:** RequestSucceeded, LicenseValid, LicenseStatus, Reason, NextCheckInSeconds, GraceWindowSeconds, ReceivedAtUtc, Policy, LicenseToken, HasVerifiedToken, TokenClaims.
 - **GlitchLicensePolicy:** Plan, Analytics, Macro, Fundamental, Strategies, AdvancedReplication, MaxGroups, MaxFollowersPerGroup.
-- **GlitchLicenseTokenClaims:** Plan, Policy, IssuedAtUtc, ExpiresAtUtc, GraceUntilUtc, PolicyVersion, SourcePlanCode, EntitlementStatus.
+- **GlitchLicenseTokenClaims:** Plan, Policy, IssuedAtUtc, ExpiresAtUtc, GraceUntilUtc, PolicyVersion, BillingVariant, SourceProductId, SourcePlanCode, EntitlementStatus.
 
 ### GlitchRuntimePolicyStore (static)
 
@@ -104,7 +104,7 @@ Key types and members as they appear in the code. Not exhaustive; covers contrac
 - **LoadLicenseCache(cachePath)** → GlitchLicenseCacheState
 - **SaveLicenseCache(cachePath, state)**
 - **GlitchRuntimePolicySettings:** EnforceAccountLevelCompliance, EnforceBufferFreeze15Percent, EnforceBufferOneContract30Percent, EnforceUnrealizedFlatten70Percent, EnforceEvalProfitTargetLock, FlattenOnCriticalBufferLock, LicenseKey, LicenseApiBaseUrl, InstallationId, LicenseKeyDecodeFailed, LicenseKeyRawStorage.
-- **GlitchLicenseCacheState:** SignedLicenseToken, SignedTokenExpiresUtc, Plan, FeatureAnalytics, FeatureMacro, FeatureFundamental, FeatureStrategies, FeatureAdvancedReplication, MaxGroups, MaxFollowersPerGroup, LastSuccessUtc, LastCheckedUtc, GraceUntilUtc, LastReason, LastStatus.
+- **GlitchLicenseCacheState:** SignedLicenseToken, SignedTokenExpiresUtc, Plan, BillingVariant, SourceProductId, SourcePlanCode, FeatureAnalytics, FeatureMacro, FeatureFundamental, FeatureStrategies, FeatureAdvancedReplication, MaxGroups, MaxFollowersPerGroup, LastSuccessUtc, LastCheckedUtc, GraceUntilUtc, LastReason, LastStatus.
 
 ---
 

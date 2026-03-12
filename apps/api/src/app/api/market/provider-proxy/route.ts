@@ -7,7 +7,7 @@ import {
   verifyLicenseBinding,
 } from "@/lib/entitlements-store";
 import { getTrustedClientIp } from "@/lib/client-ip";
-import { buildPolicy, resolvePlanFromCode } from "@/lib/license-policy";
+import { buildPolicy, resolveEntitlementFromSource } from "@/lib/license-policy";
 import type { LicensePlan } from "@/lib/license-policy";
 import { readOptionalEnv } from "@/lib/env";
 import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
@@ -680,7 +680,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      plan = resolvePlanFromCode(entitlement.planCode);
+      plan = resolveEntitlementFromSource(entitlement.productId, entitlement.planCode).plan;
       writeCachedProviderAccess(providerAccessCacheKey, plan);
     }
 

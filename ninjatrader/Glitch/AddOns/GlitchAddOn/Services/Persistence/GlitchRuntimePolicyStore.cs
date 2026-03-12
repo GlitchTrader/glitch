@@ -29,6 +29,9 @@ namespace Glitch.Services
         public string SignedLicenseToken { get; set; } = string.Empty;
         public DateTime SignedTokenExpiresUtc { get; set; } = DateTime.MinValue;
         public string Plan { get; set; } = "free_lite";
+        public string BillingVariant { get; set; } = string.Empty;
+        public string SourceProductId { get; set; } = string.Empty;
+        public string SourcePlanCode { get; set; } = string.Empty;
         public bool FeatureAnalytics { get; set; } = false;
         public bool FeatureMacro { get; set; } = false;
         public bool FeatureFundamental { get; set; } = false;
@@ -143,6 +146,9 @@ namespace Glitch.Services
             state.SignedLicenseToken = ReadString(rows, "SIGNED_LICENSE_TOKEN", state.SignedLicenseToken);
             state.SignedTokenExpiresUtc = ReadUtcTicks(rows, "SIGNED_TOKEN_EXPIRES_UTC_TICKS");
             state.Plan = ReadString(rows, "PLAN", state.Plan);
+            state.BillingVariant = ReadString(rows, "BILLING_VARIANT", state.BillingVariant);
+            state.SourceProductId = ReadString(rows, "SOURCE_PRODUCT_ID", state.SourceProductId);
+            state.SourcePlanCode = ReadString(rows, "SOURCE_PLAN_CODE", state.SourcePlanCode);
             state.FeatureAnalytics = ReadBool(rows, "FEATURE_ANALYTICS", state.FeatureAnalytics);
             state.FeatureMacro = ReadBool(rows, "FEATURE_MACRO", state.FeatureMacro);
             state.FeatureFundamental = ReadBool(rows, "FEATURE_FUNDAMENTAL", state.FeatureFundamental);
@@ -170,6 +176,9 @@ namespace Glitch.Services
                 $"SIGNED_LICENSE_TOKEN\t{CleanValue(state.SignedLicenseToken)}",
                 $"SIGNED_TOKEN_EXPIRES_UTC_TICKS\t{ToUtcTicks(state.SignedTokenExpiresUtc)}",
                 $"PLAN\t{CleanValue(state.Plan)}",
+                $"BILLING_VARIANT\t{CleanValue(state.BillingVariant)}",
+                $"SOURCE_PRODUCT_ID\t{CleanValue(state.SourceProductId)}",
+                $"SOURCE_PLAN_CODE\t{CleanValue(state.SourcePlanCode)}",
                 $"FEATURE_ANALYTICS\t{ToBoolToken(state.FeatureAnalytics)}",
                 $"FEATURE_MACRO\t{ToBoolToken(state.FeatureMacro)}",
                 $"FEATURE_FUNDAMENTAL\t{ToBoolToken(state.FeatureFundamental)}",

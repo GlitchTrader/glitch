@@ -1,7 +1,7 @@
 import { createPrivateKey, sign as cryptoSign } from "crypto";
 import { readOptionalEnv } from "@/lib/env";
 import { isProductionRuntime } from "@/lib/security-context";
-import type { LicensePolicy } from "@/lib/license-policy";
+import type { LicenseBillingVariant, LicensePolicy } from "@/lib/license-policy";
 
 export interface LicenseTokenClaims {
   installationId: string;
@@ -10,6 +10,8 @@ export interface LicenseTokenClaims {
   features: LicensePolicy["features"];
   limits: LicensePolicy["limits"];
   policyVersion: string;
+  billingVariant?: LicenseBillingVariant | null;
+  sourceProductId?: string | null;
   sourcePlanCode?: string | null;
   entitlementStatus?: string | null;
   graceUntil: number;
@@ -85,6 +87,8 @@ export function issueLicenseToken(claims: LicenseTokenClaims): string | null {
     features: claims.features,
     limits: claims.limits,
     policyVersion: claims.policyVersion,
+    billingVariant: claims.billingVariant ?? "unknown",
+    sourceProductId: claims.sourceProductId ?? null,
     sourcePlanCode: claims.sourcePlanCode ?? null,
     entitlementStatus: claims.entitlementStatus ?? null,
     graceUntil: claims.graceUntil,
@@ -99,4 +103,3 @@ export function issueLicenseToken(claims: LicenseTokenClaims): string | null {
 
   return `${signingInput}.${base64UrlEncode(signature)}`;
 }
-

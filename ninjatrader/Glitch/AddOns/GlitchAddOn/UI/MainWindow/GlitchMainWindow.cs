@@ -862,6 +862,9 @@ namespace Glitch.UI
 
             GlitchLicensePolicy policy = claims.Policy;
             _licenseCacheState.Plan = string.IsNullOrWhiteSpace(policy.Plan) ? "free_lite" : policy.Plan.Trim().ToLowerInvariant();
+            _licenseCacheState.BillingVariant = (claims.BillingVariant ?? string.Empty).Trim().ToLowerInvariant();
+            _licenseCacheState.SourceProductId = (claims.SourceProductId ?? string.Empty).Trim();
+            _licenseCacheState.SourcePlanCode = (claims.SourcePlanCode ?? string.Empty).Trim();
             _licenseCacheState.FeatureAnalytics = policy.Analytics;
             _licenseCacheState.FeatureMacro = policy.Macro;
             _licenseCacheState.FeatureFundamental = policy.Fundamental;
@@ -969,6 +972,9 @@ namespace Glitch.UI
                 _licenseCacheState = new GlitchLicenseCacheState();
 
             _licenseCacheState.Plan = "free_lite";
+            _licenseCacheState.BillingVariant = "free";
+            _licenseCacheState.SourceProductId = string.Empty;
+            _licenseCacheState.SourcePlanCode = string.Empty;
             _licenseCacheState.FeatureAnalytics = false;
             _licenseCacheState.FeatureMacro = false;
             _licenseCacheState.FeatureFundamental = false;

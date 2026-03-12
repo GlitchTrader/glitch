@@ -574,6 +574,7 @@ namespace Glitch.UI
                 ? "-"
                 : validUntilUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
             bool isPremiumPlan = plan.Equals("premium", StringComparison.OrdinalIgnoreCase);
+            string normalizedBillingVariant = NormalizeLicenseBillingVariant(cache.BillingVariant);
             string statusLabel;
             if (status.Equals("active", StringComparison.OrdinalIgnoreCase))
                 statusLabel = isPremiumPlan ? L("settings.license.status.active_premium", "Active Premium") : L("settings.license.status.free_lite", "Free Lite");
@@ -583,6 +584,9 @@ namespace Glitch.UI
                 statusLabel = L("settings.license.status.inactive_premium", "Inactive Premium");
             else
                 statusLabel = L("settings.license.status.free_lite", "Free Lite");
+
+            if (isPremiumPlan && !normalizedBillingVariant.Equals("unknown", StringComparison.OrdinalIgnoreCase))
+                statusLabel = $"{statusLabel} ({FormatBillingVariantLabel(normalizedBillingVariant)})";
 
             _settingsPlanBadgeText.Text = Lf("settings.license.status_format", "License Status: {0}, Valid until {1}", statusLabel, validUntilText);
             if (status.Equals("active", StringComparison.OrdinalIgnoreCase) && isPremiumPlan)
@@ -601,6 +605,38 @@ namespace Glitch.UI
             {
                 ApplySkinResource(_settingsPlanBadgeText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
                 ApplySkinResource(_settingsPlanBadgeBorder, Border.BorderBrushProperty, "BorderThinBrush", "TabControlBorderBrush");
+            }
+        }
+
+        private static string NormalizeLicenseBillingVariant(string billingVariant)
+        {
+            string normalized = (billingVariant ?? string.Empty).Trim().ToLowerInvariant();
+            switch (normalized)
+            {
+                case "free":
+                case "monthly":
+                case "annual":
+                case "lifetime":
+                    return normalized;
+                default:
+                    return "unknown";
+            }
+        }
+
+        private static string FormatBillingVariantLabel(string billingVariant)
+        {
+            switch (NormalizeLicenseBillingVariant(billingVariant))
+            {
+                case "free":
+                    return "Free";
+                case "monthly":
+                    return "Monthly";
+                case "annual":
+                    return "Annual";
+                case "lifetime":
+                    return "Lifetime";
+                default:
+                    return "Unknown";
             }
         }
     }
