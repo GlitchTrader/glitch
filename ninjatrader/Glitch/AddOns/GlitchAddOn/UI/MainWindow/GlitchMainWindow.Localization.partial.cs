@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using Glitch.Services;
 
@@ -153,10 +154,10 @@ namespace Glitch.UI
                 Height = 22,
                 IsEditable = false,
                 ItemsSource = _localizationService.SupportedLanguages,
-                DisplayMemberPath = nameof(GlitchLocalizationService.LanguageOption.CompactName),
                 SelectedValuePath = nameof(GlitchLocalizationService.LanguageOption.Code),
                 HorizontalContentAlignment = HorizontalAlignment.Left
             };
+            _languageSwitcherCombo.ItemTemplate = CreateLanguageOptionDisplayTemplate(useCompactName: false);
             _languageSwitcherCombo.Style = CreateGroupMasterComboBoxStyle(context);
             _languageSwitcherCombo.BorderThickness = new Thickness(0);
             _languageSwitcherCombo.BorderBrush = Brushes.Transparent;
@@ -204,6 +205,16 @@ namespace Glitch.UI
             ApplyLanguageSwitcherDisplayMode(expanded: false);
         }
 
+        private static DataTemplate CreateLanguageOptionDisplayTemplate(bool useCompactName)
+        {
+            var template = new DataTemplate(typeof(GlitchLocalizationService.LanguageOption));
+            var textBlock = new FrameworkElementFactory(typeof(TextBlock));
+            textBlock.SetBinding(TextBlock.TextProperty, new Binding(useCompactName ? "CompactName" : "DisplayName"));
+            textBlock.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+            template.VisualTree = textBlock;
+            return template;
+        }
+
         private void ApplyLanguageSwitcherDisplayMode(bool expanded)
         {
             if (_languageSwitcherCombo == null)
@@ -211,9 +222,7 @@ namespace Glitch.UI
 
             string selectedCode = _languageSwitcherCombo.SelectedValue as string;
             _languageSwitcherCombo.MinWidth = expanded ? 128 : 72;
-            _languageSwitcherCombo.DisplayMemberPath = expanded
-                ? nameof(GlitchLocalizationService.LanguageOption.DisplayName)
-                : nameof(GlitchLocalizationService.LanguageOption.CompactName);
+            _languageSwitcherCombo.ItemTemplate = CreateLanguageOptionDisplayTemplate(useCompactName: !expanded);
 
             if (!string.IsNullOrWhiteSpace(selectedCode))
                 _languageSwitcherCombo.SelectedValue = selectedCode;

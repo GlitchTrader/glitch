@@ -130,6 +130,7 @@ namespace Glitch.UI
                 VerticalAlignment = VerticalAlignment.Top,
                 Style = CreateSettingsActionButtonStyle(root)
             };
+            RegisterLocalizationBinding(() => _settingsSaveButton.Content = L("settings.button.save", "Save Settings"));
             _settingsSaveButton.Click += OnSettingsSaveClick;
             actionRow.Children.Add(_settingsSaveButton);
 
@@ -142,6 +143,7 @@ namespace Glitch.UI
                 VerticalAlignment = VerticalAlignment.Top,
                 Style = CreateSettingsActionButtonStyle(root)
             };
+            RegisterLocalizationBinding(() => _settingsValidateButton.Content = L("settings.button.validate", "Validate License Now"));
             _settingsValidateButton.Click += OnValidateLicenseNowClick;
             actionRow.Children.Add(_settingsValidateButton);
 
@@ -161,6 +163,7 @@ namespace Glitch.UI
                 FontWeight = FontWeights.SemiBold,
                 Margin = new Thickness(0, 0, 0, 6)
             };
+            RegisterLocalizationBinding(() => header.Text = L(key, fallback));
             ApplySkinResource(header, TextBlock.ForegroundProperty, "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
             return header;
         }
@@ -172,6 +175,7 @@ namespace Glitch.UI
                 Text = L(key, fallback),
                 Margin = new Thickness(0, 6, 0, 2)
             };
+            RegisterLocalizationBinding(() => label.Text = L(key, fallback));
             ApplySkinResource(label, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
             return label;
         }
@@ -318,6 +322,7 @@ namespace Glitch.UI
                 FontWeight = FontWeights.Medium,
                 Style = CreateSettingsPolicyCheckBoxStyle(_settingsRootGrid)
             };
+            RegisterLocalizationBinding(() => checkBox.Content = L(key, fallback));
             ApplySkinResource(checkBox, Control.ForegroundProperty, "FontControlBrush", "FontTableBrush");
             return checkBox;
         }

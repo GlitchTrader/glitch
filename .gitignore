@@ -10,3 +10,4 @@ out/
 .license_signing_private.pem
 .vercel/
 ninjatrader/Glitch/Strategies/
+.cursor/rules/

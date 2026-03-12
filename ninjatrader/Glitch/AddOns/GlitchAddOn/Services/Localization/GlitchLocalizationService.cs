@@ -35,6 +35,9 @@ namespace Glitch.Services
     internal sealed class GlitchLocalizationService
     {
         private static readonly Encoding Utf8NoBom = new UTF8Encoding(false);
+        private const string LocalizationHeaderLine = "# key\ten-US\tpt-BR\tes-ES\tzh-CN\tfr-FR\tru-RU";
+        private const int LegacyRuntimeLocalizationSnapshotThreshold = 100;
+        private const double LegacyRuntimeLocalizationOverlapRatio = 0.75d;
 
         internal sealed class LanguageOption
         {
@@ -48,6 +51,11 @@ namespace Glitch.Services
             public string Code { get; }
             public string DisplayName { get; }
             public string CompactName { get; }
+
+            public override string ToString()
+            {
+                return DisplayName ?? Code ?? string.Empty;
+            }
         }
 
         private const string DefaultLanguageCode = "en-US";
@@ -58,7 +66,10 @@ namespace Glitch.Services
         public GlitchLocalizationService(string localizationFilePath, string settingsFilePath)
         {
             _settingsFilePath = settingsFilePath;
-            var bundledRows = LoadRows(ResolveBundledLocalizationPath());
+            string bundledLocalizationPath = ResolveBundledLocalizationPath();
+            EnsureRuntimeLocalizationOverridesFile(localizationFilePath, bundledLocalizationPath);
+
+            var bundledRows = LoadRows(bundledLocalizationPath);
             var runtimeRows = LoadRows(localizationFilePath);
             _rowsByKey = MergeRows(bundledRows, runtimeRows);
             _supportedLanguages = new List<LanguageOption>
@@ -193,6 +204,75 @@ namespace Glitch.Services
             {
                 return null;
             }
+        }
+
+        private static void EnsureRuntimeLocalizationOverridesFile(string runtimeFilePath, string bundledFilePath)
+        {
+            if (string.IsNullOrWhiteSpace(runtimeFilePath))
+                return;
+
+            try
+            {
+                if (!File.Exists(runtimeFilePath))
+                {
+                    WriteRuntimeLocalizationTemplate(runtimeFilePath);
+                    return;
+                }
+
+                if (!LooksLikeLegacyRuntimeLocalizationSnapshot(runtimeFilePath, bundledFilePath))
+                    return;
+
+                ArchiveLegacyRuntimeLocalizationSnapshot(runtimeFilePath);
+                WriteRuntimeLocalizationTemplate(runtimeFilePath);
+            }
+            catch
+            {
+            }
+        }
+
+        private static bool LooksLikeLegacyRuntimeLocalizationSnapshot(string runtimeFilePath, string bundledFilePath)
+        {
+            Dictionary<string, Dictionary<string, string>> runtimeRows = LoadRows(runtimeFilePath);
+            if (runtimeRows.Count < LegacyRuntimeLocalizationSnapshotThreshold)
+                return false;
+
+            Dictionary<string, Dictionary<string, string>> bundledRows = LoadRows(bundledFilePath);
+            if (bundledRows.Count == 0)
+                return false;
+
+            int overlapCount = runtimeRows.Keys.Count(bundledRows.ContainsKey);
+            return overlapCount >= (int)Math.Ceiling(runtimeRows.Count * LegacyRuntimeLocalizationOverlapRatio);
+        }
+
+        private static void ArchiveLegacyRuntimeLocalizationSnapshot(string runtimeFilePath)
+        {
+            if (string.IsNullOrWhiteSpace(runtimeFilePath) || !File.Exists(runtimeFilePath))
+                return;
+
+            string directory = Path.GetDirectoryName(runtimeFilePath);
+            string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(runtimeFilePath);
+            string extension = Path.GetExtension(runtimeFilePath);
+            string backupPath = Path.Combine(directory ?? string.Empty, fileNameWithoutExtension + ".legacy-full-catalog" + extension);
+
+            if (File.Exists(backupPath))
+                File.Delete(backupPath);
+
+            File.Move(runtimeFilePath, backupPath);
+        }
+
+        private static void WriteRuntimeLocalizationTemplate(string runtimeFilePath)
+        {
+            if (string.IsNullOrWhiteSpace(runtimeFilePath))
+                return;
+
+            string directory = Path.GetDirectoryName(runtimeFilePath);
+            if (!string.IsNullOrWhiteSpace(directory))
+                Directory.CreateDirectory(directory);
+
+            File.WriteAllLines(
+                runtimeFilePath,
+                GlitchStateStore.WithTsvBanner(new[] { LocalizationHeaderLine }),
+                Utf8NoBom);
         }
 
         private static Dictionary<string, Dictionary<string, string>> MergeRows(

@@ -159,6 +159,9 @@ namespace Glitch.Services
                 return;
             }
 
+            if (fileName.Equals("Localization.tsv", StringComparison.OrdinalIgnoreCase))
+                return;
+
             try
             {
                 string runtimeDir = Path.GetDirectoryName(runtimePath);

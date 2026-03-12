@@ -26,227 +26,227 @@
 # key	en-US	pt-BR	es-ES	zh-CN	fr-FR	ru-RU
 analytics.adx_atr_label	ADX(14) | ATR(14): 	ADX(14) | ATR(14): 	ADX(14) | ATR(14): 	ADX(14) | ATR(14): 	ADX(14) | ATR(14): 	ADX(14) | ATR(14): 
 analytics.adx_atr_row	ADX(14) | ATR(14)	ADX(14) | ATR(14)	ADX(14) | ATR(14)	ADX(14) | ATR(14)	ADX(14) | ATR(14)	ADX(14) | ATR(14) 
-analytics.avg_prefix	Avg.	MÃ©dia.	Prom.	å‡å€¼.	Moy.	Ð¡Ñ€ÐµÐ´.
-analytics.awaiting_live_samples	Awaiting live samples	Aguardando amostras ao vivo	Esperando muestras en vivo	ç­‰å¾…å®žæ—¶æ ·æœ¬	En attente d'Ã©chantillons live	ÐžÐ¶Ð¸Ð´Ð°Ð½Ð¸Ðµ Ð¶Ð¸Ð²Ñ‹Ñ… Ð´Ð°Ð½Ð½Ñ‹Ñ…
-analytics.button.open_window	Open Nasdaq Macro	Abrir Nasdaq Macro	Abrir Nasdaq Macro	æ‰“å¼€ Nasdaq Macro	Ouvrir Nasdaq Macro	ÐžÑ‚ÐºÑ€Ñ‹Ñ‚ÑŒ Nasdaq Macro
-analytics.block.earnings_analysis	Earnings Analysis	AnÃ¡lise de Resultados	AnÃ¡lisis de Resultados	è´¢æŠ¥åˆ†æž	Analyse des RÃ©sultats	ÐÐ½Ð°Ð»Ð¸Ð· ÐžÑ‚Ñ‡ÐµÑ‚Ð½Ð¾ÑÑ‚Ð¸
-analytics.block.instrument_overview	Instrument Overview	VisÃ£o Geral do Instrumento	VisiÃ³n General del Instrumento	å“ç§æ¦‚è§ˆ	Vue d'Ensemble de l'Instrument	ÐžÐ±Ð·Ð¾Ñ€ Ð˜Ð½ÑÑ‚Ñ€ÑƒÐ¼ÐµÐ½Ñ‚Ð°
-analytics.block.instrument_scoring	Instrument Scoring	Score do Instrumento	PuntuaciÃ³n del Instrumento	å“ç§è¯„åˆ†	Score de l'Instrument	ÐžÑ†ÐµÐ½ÐºÐ° Ð˜Ð½ÑÑ‚Ñ€ÑƒÐ¼ÐµÐ½Ñ‚Ð°
-analytics.block.latest_headlines	Latest Headlines	Ãšltimas Manchetes	Ãšltimos Titulares	æœ€æ–°å¤´æ¡	Derniers Titres	ÐŸÐ¾ÑÐ»ÐµÐ´Ð½Ð¸Ðµ Ð—Ð°Ð³Ð¾Ð»Ð¾Ð²ÐºÐ¸
-analytics.block.upcoming_news_calendar	Upcoming News Calendar	PrÃ³ximos Eventos do CalendÃ¡rio	PrÃ³ximos Eventos del Calendario	å³å°†åˆ°æ¥çš„è´¢ç»æ—¥åŽ†	Calendrier des News Ã  Venir	Ð‘Ð»Ð¸Ð¶Ð°Ð¹ÑˆÐ¸Ð¹ ÐšÐ°Ð»ÐµÐ½Ð´Ð°Ñ€ÑŒ ÐÐ¾Ð²Ð¾ÑÑ‚ÐµÐ¹
-analytics.dial.buy	Buy	Compra	Compra	ä¹°å…¥	Achat	ÐŸÐ¾ÐºÑƒÐ¿ÐºÐ°
-analytics.dial.sell	Sell	Venda	Venta	å–å‡º	Vente	ÐŸÑ€Ð¾Ð´Ð°Ð¶Ð°
-analytics.factor.agreement	Agree	ConcordÃ¢ncia	Concordancia	ä¸€è‡´	Accord	Ð¡Ð¾Ð³Ð»Ð°ÑÐ¸Ðµ
+analytics.avg_prefix	Avg.	Média.	Prom.	均值.	Moy.	Сред.
+analytics.awaiting_live_samples	Awaiting live samples	Aguardando amostras ao vivo	Esperando muestras en vivo	等待实时样本	En attente d'échantillons live	Ожидание живых данных
+analytics.button.open_window	Open Nasdaq Macro	Abrir Nasdaq Macro	Abrir Nasdaq Macro	打开 Nasdaq Macro	Ouvrir Nasdaq Macro	Открыть Nasdaq Macro
+analytics.block.earnings_analysis	Earnings Analysis	Análise de Resultados	Análisis de Resultados	财报分析	Analyse des Résultats	Анализ Отчетности
+analytics.block.instrument_overview	Instrument Overview	Visão Geral do Instrumento	Visión General del Instrumento	品种概览	Vue d'Ensemble de l'Instrument	Обзор Инструмента
+analytics.block.instrument_scoring	Instrument Scoring	Score do Instrumento	Puntuación del Instrumento	品种评分	Score de l'Instrument	Оценка Инструмента
+analytics.block.latest_headlines	Latest Headlines	Últimas Manchetes	Últimos Titulares	最新头条	Derniers Titres	Последние Заголовки
+analytics.block.upcoming_news_calendar	Upcoming News Calendar	Próximos Eventos do Calendário	Próximos Eventos del Calendario	即将到来的财经日历	Calendrier des News à Venir	Ближайший Календарь Новостей
+analytics.dial.buy	Buy	Compra	Compra	买入	Achat	Покупка
+analytics.dial.sell	Sell	Venda	Venta	卖出	Vente	Продажа
+analytics.factor.agreement	Agree	Concordância	Concordancia	一致	Accord	Согласие
 analytics.factor.ema	EMA	EMA	EMA	EMA	EMA	EMA
 analytics.factor.ma	MA	MA	MA	MA	MA	MA
 analytics.factor.order_flow	OF	OF	OF	OF	OF	OF
 analytics.factor.rsi	RSI	RSI	RSI	RSI	RSI	RSI
 analytics.factor.stoch	Stoch	Stoch	Stoch	Stoch	Stoch	Stoch
 analytics.factor.osc	Osc	Osc	Osc	Osc	Osc	Osc
-analytics.factor.raw	Raw	Bruto	Bruto	åŽŸå§‹	Brut	Ð¡Ñ‹Ñ€Ð¾Ð¹
+analytics.factor.raw	Raw	Bruto	Bruto	原始	Brut	Сырой
 analytics.factor.z_score	Z-Score	Z-Score	Z-Score	Z-Score	Z-Score	Z-Score
-analytics.fundamental.error	Fundamental feed error	Erro no feed fundamental	Error del feed fundamental	åŸºæœ¬é¢æ•°æ®æºé”™è¯¯	Erreur du flux fondamental	ÐžÑˆÐ¸Ð±ÐºÐ° Ñ„ÑƒÐ½Ð´Ð°Ð¼ÐµÐ½Ñ‚Ð°Ð»ÑŒÐ½Ð¾Ð³Ð¾ Ð¿Ð¾Ñ‚Ð¾ÐºÐ°
-analytics.instrument	Instrument	Instrumento	Instrumento	å“ç§	Instrument	Ð˜Ð½ÑÑ‚Ñ€ÑƒÐ¼ÐµÐ½Ñ‚
-analytics.metric.avg_price	Avg Price	PreÃ§o MÃ©dio	Precio Prom.	å¹³å‡ä»·	Prix Moy.	Ð¡Ñ€ÐµÐ´Ð½. Ð¦ÐµÐ½Ð°
+analytics.fundamental.error	Fundamental feed error	Erro no feed fundamental	Error del feed fundamental	基本面数据源错误	Erreur du flux fondamental	Ошибка фундаментального потока
+analytics.instrument	Instrument	Instrumento	Instrumento	品种	Instrument	Инструмент
+analytics.metric.avg_price	Avg Price	Preço Médio	Precio Prom.	平均价	Prix Moy.	Средн. Цена
 analytics.metric.composite	Glitch Score	Glitch Score	Glitch Score	Glitch Score	Glitch Score	Glitch Score
-analytics.metric.current_price	Current Price	PreÃ§o Atual	Precio Actual	å½“å‰ä»·æ ¼	Prix Actuel	Ð¢ÐµÐºÑƒÑ‰Ð°Ñ Ð¦ÐµÐ½Ð°
-analytics.metric.session	Session	SessÃ£o	SesiÃ³n	æ—¶æ®µ	Session	Ð¡ÐµÑÑÐ¸Ñ
-analytics.no_recent_headlines	No recent instrument headlines.	Sem manchetes recentes do instrumento.	No hay titulares recientes del instrumento.	è¯¥å“ç§æš‚æ— æœ€æ–°å¤´æ¡ã€‚	Aucun titre rÃ©cent pour cet instrument.	ÐÐµÑ‚ ÑÐ²ÐµÐ¶Ð¸Ñ… Ð·Ð°Ð³Ð¾Ð»Ð¾Ð²ÐºÐ¾Ð² Ð¿Ð¾ Ð¸Ð½ÑÑ‚Ñ€ÑƒÐ¼ÐµÐ½Ñ‚Ñƒ.
-analytics.order_flow.confidence	Conf	Conf	Conf	ç½®ä¿¡åº¦	Conf	Ð£Ð²ÐµÑ€.
-analytics.order_flow.prefix	OrderFlow	OrderFlow	OrderFlow	è®¢å•æµ	OrderFlow	OrderFlow
-analytics.order_flow.unavailable	Order flow unavailable	Order flow indisponÃ­vel	Order flow no disponible	è®¢å•æµä¸å¯ç”¨	Order flow indisponible	Order flow Ð½ÐµÐ´Ð¾ÑÑ‚ÑƒÐ¿ÐµÐ½
-analytics.regime	Regime	Regime	RÃ©gimen	çŠ¶æ€	RÃ©gime	Ð ÐµÐ¶Ð¸Ð¼
-analytics.regime.choppy	Choppy	Lateral	Lateral	éœ‡è¡	HachÃ©	ÐŸÐ¸Ð»Ð°
-analytics.regime.trending	Trending	TendÃªncia	Tendencia	è¶‹åŠ¿	Tendance	Ð¢Ñ€ÐµÐ½Ð´
-analytics.regime.transitional	Transitional	TransiÃ§Ã£o	TransiciÃ³n	è¿‡æ¸¡	Transition	ÐŸÐµÑ€ÐµÑ…Ð¾Ð´
-analytics.regime.with	with	com	con	ä¼´éš	avec	Ñ
-analytics.session_range.avg	Avg	MÃ©dia	Prom.	å‡å€¼	Moy.	Ð¡Ñ€ÐµÐ´.
-analytics.session_range.current	Current	Atual	Actual	å½“å‰	Actuel	Ð¢ÐµÐºÑƒÑ‰Ð¸Ð¹
-analytics.session_range.high	Session High	MÃ¡x. SessÃ£o	MÃ¡x. SesiÃ³n	æœ¬æ—¶æ®µé«˜ç‚¹	Plus Haut SÃ©ance	ÐœÐ°ÐºÑ. Ð¡ÐµÑÑÐ¸Ð¸
-analytics.session_range.low	Session Low	MÃ­n. SessÃ£o	MÃ­n. SesiÃ³n	æœ¬æ—¶æ®µä½Žç‚¹	Plus Bas SÃ©ance	ÐœÐ¸Ð½. Ð¡ÐµÑÑÐ¸Ð¸
-analytics.signal.neutral	Neutral	Neutro	Neutral	ä¸­æ€§	Neutre	ÐÐµÐ¹Ñ‚Ñ€Ð°Ð»ÑŒÐ½Ð¾
-analytics.technical.bridge_missing_cta	To enable Technical Analysis, add GlitchAnalyticsBridgeIndicator to a NinjaTrader chart. Data is available during market hours. If refresh is needed, re-apply the indicator on the chart.	Para habilitar a AnÃ¡lise TÃ©cnica, adicione o GlitchAnalyticsBridgeIndicator a um grÃ¡fico do NinjaTrader. Os dados ficam disponÃ­veis durante o horÃ¡rio de mercado. Se precisar atualizar, reaplique o indicador no grÃ¡fico.	Para habilitar el AnÃ¡lisis TÃ©cnico, aÃ±ade GlitchAnalyticsBridgeIndicator a un grÃ¡fico de NinjaTrader. Los datos estÃ¡n disponibles durante el horario de mercado. Si necesitas actualizar, vuelve a aplicar el indicador en el grÃ¡fico.	è¦å¯ç”¨æŠ€æœ¯åˆ†æžï¼Œè¯·å°† GlitchAnalyticsBridgeIndicator æ·»åŠ åˆ° NinjaTrader å›¾è¡¨ã€‚æ•°æ®ä»…åœ¨å¸‚åœºæ—¶æ®µå¯ç”¨ï¼›å¦‚éœ€åˆ·æ–°ï¼Œè¯·é‡æ–°åŠ è½½è¯¥æŒ‡æ ‡ã€‚	Pour activer l'Analyse Technique, ajoutez GlitchAnalyticsBridgeIndicator sur un graphique NinjaTrader. Les donnÃ©es sont disponibles pendant les heures de marchÃ©. Si un rafraÃ®chissement est nÃ©cessaire, rÃ©appliquez l'indicateur sur le graphique.	Ð§Ñ‚Ð¾Ð±Ñ‹ Ð²ÐºÐ»ÑŽÑ‡Ð¸Ñ‚ÑŒ Ñ‚ÐµÑ…Ð½Ð¸Ñ‡ÐµÑÐºÐ¸Ð¹ Ð°Ð½Ð°Ð»Ð¸Ð·, Ð´Ð¾Ð±Ð°Ð²ÑŒÑ‚Ðµ GlitchAnalyticsBridgeIndicator Ð½Ð° Ð³Ñ€Ð°Ñ„Ð¸Ðº NinjaTrader. Ð”Ð°Ð½Ð½Ñ‹Ðµ Ð´Ð¾ÑÑ‚ÑƒÐ¿Ð½Ñ‹ Ð² Ñ‚Ð¾Ñ€Ð³Ð¾Ð²Ñ‹Ðµ Ñ‡Ð°ÑÑ‹. Ð•ÑÐ»Ð¸ Ð½ÑƒÐ¶Ð½Ð¾ Ð¾Ð±Ð½Ð¾Ð²Ð»ÐµÐ½Ð¸Ðµ, Ð·Ð°Ð½Ð¾Ð²Ð¾ Ð¿Ñ€Ð¸Ð¼ÐµÐ½Ð¸Ñ‚Ðµ Ð¸Ð½Ð´Ð¸ÐºÐ°Ñ‚Ð¾Ñ€ Ðº Ð³Ñ€Ð°Ñ„Ð¸ÐºÑƒ.
-analytics.timeframe.min_format	{0} min	{0} min	{0} min	{0} åˆ†é’Ÿ	{0} min	{0} Ð¼Ð¸Ð½
-analytics.timeframe.avg_price_title	{0} min Avg Price	{0} min PreÃ§o MÃ©dio	{0} min Precio Prom.	{0} åˆ†é’Ÿå¹³å‡ä»·	{0} min Prix Moy.	{0} Ð¼Ð¸Ð½ Ð¡Ñ€ÐµÐ´Ð½. Ð¦ÐµÐ½Ð°
-analytics.unified.bias	Bias	ViÃ©s	Sesgo	åå‘	Biais	Ð£ÐºÐ»Ð¾Ð½
-analytics.unified.bias.long	Long	Long	Long	å¤šå¤´	Long	Ð›Ð¾Ð½Ð³
-analytics.unified.bias.neutral	Neutral	Neutro	Neutral	ä¸­æ€§	Neutre	ÐÐµÐ¹Ñ‚Ñ€Ð°Ð»ÑŒÐ½Ð¾
-analytics.unified.bias.short	Short	Short	Short	ç©ºå¤´	Short	Ð¨Ð¾Ñ€Ñ‚
+analytics.metric.current_price	Current Price	Preço Atual	Precio Actual	当前价格	Prix Actuel	Текущая Цена
+analytics.metric.session	Session	Sessão	Sesión	时段	Session	Сессия
+analytics.no_recent_headlines	No recent instrument headlines.	Sem manchetes recentes do instrumento.	No hay titulares recientes del instrumento.	该品种暂无最新头条。	Aucun titre récent pour cet instrument.	Нет свежих заголовков по инструменту.
+analytics.order_flow.confidence	Conf	Conf	Conf	置信度	Conf	Увер.
+analytics.order_flow.prefix	OrderFlow	OrderFlow	OrderFlow	订单流	OrderFlow	OrderFlow
+analytics.order_flow.unavailable	Order flow unavailable	Order flow indisponível	Order flow no disponible	订单流不可用	Order flow indisponible	Order flow недоступен
+analytics.regime	Regime	Regime	Régimen	状态	Régime	Режим
+analytics.regime.choppy	Choppy	Lateral	Lateral	震荡	Haché	Пила
+analytics.regime.trending	Trending	Tendência	Tendencia	趋势	Tendance	Тренд
+analytics.regime.transitional	Transitional	Transição	Transición	过渡	Transition	Переход
+analytics.regime.with	with	com	con	伴随	avec	с
+analytics.session_range.avg	Avg	Média	Prom.	均值	Moy.	Сред.
+analytics.session_range.current	Current	Atual	Actual	当前	Actuel	Текущий
+analytics.session_range.high	Session High	Máx. Sessão	Máx. Sesión	本时段高点	Plus Haut Séance	Макс. Сессии
+analytics.session_range.low	Session Low	Mín. Sessão	Mín. Sesión	本时段低点	Plus Bas Séance	Мин. Сессии
+analytics.signal.neutral	Neutral	Neutro	Neutral	中性	Neutre	Нейтрально
+analytics.technical.bridge_missing_cta	To enable Technical Analysis, add GlitchAnalyticsBridgeIndicator to a NinjaTrader chart. Data is available during market hours. If refresh is needed, re-apply the indicator on the chart.	Para habilitar a Análise Técnica, adicione o GlitchAnalyticsBridgeIndicator a um gráfico do NinjaTrader. Os dados ficam disponíveis durante o horário de mercado. Se precisar atualizar, reaplique o indicador no gráfico.	Para habilitar el Análisis Técnico, añade GlitchAnalyticsBridgeIndicator a un gráfico de NinjaTrader. Los datos están disponibles durante el horario de mercado. Si necesitas actualizar, vuelve a aplicar el indicador en el gráfico.	要启用技术分析，请将 GlitchAnalyticsBridgeIndicator 添加到 NinjaTrader 图表。数据仅在市场时段可用；如需刷新，请重新加载该指标。	Pour activer l'Analyse Technique, ajoutez GlitchAnalyticsBridgeIndicator sur un graphique NinjaTrader. Les données sont disponibles pendant les heures de marché. Si un rafraîchissement est nécessaire, réappliquez l'indicateur sur le graphique.	Чтобы включить технический анализ, добавьте GlitchAnalyticsBridgeIndicator на график NinjaTrader. Данные доступны в торговые часы. Если нужно обновление, заново примените индикатор к графику.
+analytics.timeframe.min_format	{0} min	{0} min	{0} min	{0} 分钟	{0} min	{0} мин
+analytics.timeframe.avg_price_title	{0} min Avg Price	{0} min Preço Médio	{0} min Precio Prom.	{0} 分钟平均价	{0} min Prix Moy.	{0} мин Средн. Цена
+analytics.unified.bias	Bias	Viés	Sesgo	偏向	Biais	Уклон
+analytics.unified.bias.long	Long	Long	Long	多头	Long	Лонг
+analytics.unified.bias.neutral	Neutral	Neutro	Neutral	中性	Neutre	Нейтрально
+analytics.unified.bias.short	Short	Short	Short	空头	Short	Шорт
 analytics.unified.exec_signal	Glitch TF Score	Glitch TF Score	Glitch TF Score	Glitch TF Score	Glitch TF Score	Glitch TF Score
-analytics.unified.execution_tf	Execution TF	TF de ExecuÃ§Ã£o	TF de EjecuciÃ³n	æ‰§è¡Œå‘¨æœŸ	TF d'ExÃ©cution	TF Ð˜ÑÐ¿Ð¾Ð»Ð½ÐµÐ½Ð¸Ñ
-analytics.unified.gate.go	Go	Entrar	Entrar	æ‰§è¡Œ	EntrÃ©e	Ð’Ñ…Ð¾Ð´
-analytics.unified.gate.pass	Pass	Passar	Pasar	è·³è¿‡	Passer	ÐŸÑ€Ð¾Ð¿ÑƒÑÐº
-analytics.unified.gate.watch	Watch	Observar	Vigilar	è§‚å¯Ÿ	Surveiller	ÐÐ°Ð±Ð»ÑŽÐ´Ð°Ñ‚ÑŒ
-analytics.unified.action	Action	AÃ§Ã£o	AcciÃ³n	æ“ä½œ	Action	Ð”ÐµÐ¹ÑÑ‚Ð²Ð¸Ðµ
-analytics.unified.action.execute	Execute	Executar	Ejecutar	æ‰§è¡Œ	ExÃ©cuter	Ð˜ÑÐ¿Ð¾Ð»Ð½Ð¸Ñ‚ÑŒ
-analytics.unified.action.execute_long	Execute Long	Executar Long	Ejecutar Long	æ‰§è¡Œå¤š	ExÃ©cuter Long	Ð˜ÑÐ¿Ð¾Ð»Ð½Ð¸Ñ‚ÑŒ Ð›Ð¾Ð½Ð³
-analytics.unified.action.execute_short	Execute Short	Executar Short	Ejecutar Short	æ‰§è¡Œç©º	ExÃ©cuter Short	Ð˜ÑÐ¿Ð¾Ð»Ð½Ð¸Ñ‚ÑŒ Ð¨Ð¾Ñ€Ñ‚
-analytics.unified.action.no_trade	No Trade	Sem OperaÃ§Ã£o	Sin OperaciÃ³n	æ— äº¤æ˜“	Pas de Trade	ÐÐµÑ‚ Ð¡Ð´ÐµÐ»ÐºÐ¸
-analytics.unified.action.wait	Wait	Aguardar	Esperar	ç­‰å¾…	Attendre	ÐžÐ¶Ð¸Ð´Ð°Ñ‚ÑŒ
-analytics.unified.quality	Quality	Qualidade	Calidad	è´¨é‡	QualitÃ©	ÐšÐ°Ñ‡ÐµÑÑ‚Ð²Ð¾
+analytics.unified.execution_tf	Execution TF	TF de Execução	TF de Ejecución	执行周期	TF d'Exécution	TF Исполнения
+analytics.unified.gate.go	Go	Entrar	Entrar	执行	Entrée	Вход
+analytics.unified.gate.pass	Pass	Passar	Pasar	跳过	Passer	Пропуск
+analytics.unified.gate.watch	Watch	Observar	Vigilar	观察	Surveiller	Наблюдать
+analytics.unified.action	Action	Ação	Acción	操作	Action	Действие
+analytics.unified.action.execute	Execute	Executar	Ejecutar	执行	Exécuter	Исполнить
+analytics.unified.action.execute_long	Execute Long	Executar Long	Ejecutar Long	执行多	Exécuter Long	Исполнить Лонг
+analytics.unified.action.execute_short	Execute Short	Executar Short	Ejecutar Short	执行空	Exécuter Short	Исполнить Шорт
+analytics.unified.action.no_trade	No Trade	Sem Operação	Sin Operación	无交易	Pas de Trade	Нет Сделки
+analytics.unified.action.wait	Wait	Aguardar	Esperar	等待	Attendre	Ожидать
+analytics.unified.quality	Quality	Qualidade	Calidad	质量	Qualité	Качество
 analytics.unified.setup	Setup	Setup	Setup	Setup	Setup	Setup
-analytics.unified.setup.continue	Continue	ContinuaÃ§Ã£o	ContinuaciÃ³n	å»¶ç»­	Continuation	ÐŸÑ€Ð¾Ð´Ð¾Ð»Ð¶ÐµÐ½Ð¸Ðµ
-analytics.unified.setup.flat	Flat	Flat	Flat	Flat	Flat	Ð¤Ð»ÑÑ‚
-analytics.unified.setup.pullback	Pullback	Pullback	Pullback	å›žæ’¤	Pullback	ÐžÑ‚ÐºÐ°Ñ‚
-analytics.unified.setup.reversal	Reversal	ReversÃ£o	ReversiÃ³n	åè½¬	Retournement	Ð Ð°Ð·Ð²Ð¾Ñ€Ð¾Ñ‚
-analytics.volatility.high	High volatility	Alta volatilidade	Alta volatilidad	é«˜æ³¢åŠ¨	Haute volatilitÃ©	Ð’Ñ‹ÑÐ¾ÐºÐ°Ñ Ð²Ð¾Ð»Ð°Ñ‚Ð¸Ð»ÑŒÐ½Ð¾ÑÑ‚ÑŒ
-analytics.volatility.low	Low volatility	Baixa volatilidade	Baja volatilidad	ä½Žæ³¢åŠ¨	Faible volatilitÃ©	ÐÐ¸Ð·ÐºÐ°Ñ Ð²Ð¾Ð»Ð°Ñ‚Ð¸Ð»ÑŒÐ½Ð¾ÑÑ‚ÑŒ
-analytics.volatility.moderate	Moderate volatility	Volatilidade moderada	Volatilidad moderada	ä¸­ç­‰æ³¢åŠ¨	VolatilitÃ© modÃ©rÃ©e	Ð£Ð¼ÐµÑ€ÐµÐ½Ð½Ð°Ñ Ð²Ð¾Ð»Ð°Ñ‚Ð¸Ð»ÑŒÐ½Ð¾ÑÑ‚ÑŒ
+analytics.unified.setup.continue	Continue	Continuação	Continuación	延续	Continuation	Продолжение
+analytics.unified.setup.flat	Flat	Flat	Flat	Flat	Flat	Флэт
+analytics.unified.setup.pullback	Pullback	Pullback	Pullback	回撤	Pullback	Откат
+analytics.unified.setup.reversal	Reversal	Reversão	Reversión	反转	Retournement	Разворот
+analytics.volatility.high	High volatility	Alta volatilidade	Alta volatilidad	高波动	Haute volatilité	Высокая волатильность
+analytics.volatility.low	Low volatility	Baixa volatilidade	Baja volatilidad	低波动	Faible volatilité	Низкая волатильность
+analytics.volatility.moderate	Moderate volatility	Volatilidade moderada	Volatilidad moderada	中等波动	Volatilité modérée	Умеренная волатильность
 analytics.window.secondary_title	Nasdaq Macro	Nasdaq Macro	Nasdaq Macro	Nasdaq Macro	Nasdaq Macro	Nasdaq Macro
-dashboard.column.account_name	Account Name	Nome da Conta	Nombre de la Cuenta	è´¦æˆ·åç§°	Nom du Compte	Ð˜Ð¼Ñ Ð¡Ñ‡ÐµÑ‚Ð°
-dashboard.column.buffer	Buffer	Buffer	Buffer	ç¼“å†²	Buffer	Ð‘ÑƒÑ„ÐµÑ€
-dashboard.column.equity	Equity	Equity	Equity	æƒç›Š	Equity	Equity
-dashboard.column.firm	Firm	Mesa	Firma	èµ„æ–¹	Firm	Ð¤Ð¸Ñ€Ð¼Ð°
+dashboard.column.account_name	Account Name	Nome da Conta	Nombre de la Cuenta	账户名称	Nom du Compte	Имя Счета
+dashboard.column.buffer	Buffer	Buffer	Buffer	缓冲	Buffer	Буфер
+dashboard.column.equity	Equity	Equity	Equity	权益	Equity	Equity
+dashboard.column.firm	Firm	Mesa	Firma	资方	Firm	Фирма
 dashboard.column.netliq	NetLiq	NetLiq	NetLiq	NetLiq	NetLiq	NetLiq
 dashboard.column.pnl	PnL	PnL	PnL	PnL	PnL	PnL
 dashboard.column.realized_pnl	R PnL	R PnL	R PnL	R PnL	R PnL	R PnL
-dashboard.column.risk	Risk	Risco	Riesgo	é£Žé™©	Risque	Ð Ð¸ÑÐº
-dashboard.column.size	Size	Tamanho	TamaÃ±o	è§„æ¨¡	Taille	Ð Ð°Ð·Ð¼ÐµÑ€
-dashboard.column.status	Status	Status	Estado	çŠ¶æ€	Statut	Ð¡Ñ‚Ð°Ñ‚ÑƒÑ
+dashboard.column.risk	Risk	Risco	Riesgo	风险	Risque	Риск
+dashboard.column.size	Size	Tamanho	Tamaño	规模	Taille	Размер
+dashboard.column.status	Status	Status	Estado	状态	Statut	Статус
 dashboard.column.unrealized_pnl	U PnL	U PnL	U PnL	U PnL	U PnL	U PnL
-dashboard.connected_accounts	Connected Accounts	Contas Conectadas	Cuentas Conectadas	å·²è¿žæŽ¥è´¦æˆ·	Comptes ConnectÃ©s	ÐŸÐ¾Ð´ÐºÐ»ÑŽÑ‡ÐµÐ½Ð½Ñ‹Ðµ Ð¡Ñ‡ÐµÑ‚Ð°
-dashboard.group.add_account	+ Add Account	+ Adicionar Conta	+ AÃ±adir Cuenta	+ æ·»åŠ è´¦æˆ·	+ Ajouter un Compte	+ Ð”Ð¾Ð±Ð°Ð²Ð¸Ñ‚ÑŒ Ð¡Ñ‡ÐµÑ‚
-dashboard.group.column.enable	Enable	Ativar	Activar	å¯ç”¨	Activer	Ð’ÐºÐ»
-dashboard.group.column.follower_account	Follower Account	Conta Follower	Cuenta Follower	è·Ÿéšè´¦æˆ·	Compte Follower	Ð¡Ñ‡ÐµÑ‚ Follower
-dashboard.group.column.master	Master	Master	Master	ä¸»è´¦æˆ·	Master	Master
-dashboard.group.column.max_c	Max C	Max C	Max C	æœ€å¤§æ‰‹æ•°	Max C	ÐœÐ°ÐºÑ C
-dashboard.group.column.max_dd	Max DD	Max DD	Max DD	æœ€å¤§å›žæ’¤	Max DD	ÐœÐ°ÐºÑ DD
-dashboard.group.column.max_l	Max L	Max L	Max L	æœ€å¤§äºæŸ	Max L	ÐœÐ°ÐºÑ L
-dashboard.group.column.position	Position	PosiÃ§Ã£o	PosiciÃ³n	æŒä»“	Position	ÐŸÐ¾Ð·Ð¸Ñ†Ð¸Ñ
-dashboard.group.column.ratio	Ratio	Ratio	Ratio	æ¯”ä¾‹	Ratio	ÐšÐ¾ÑÑ„.
-dashboard.group.create_group	+ Create Group	+ Criar Grupo	+ Crear Grupo	+ åˆ›å»ºåˆ†ç»„	+ CrÃ©er un Groupe	+ Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ð“Ñ€ÑƒÐ¿Ð¿Ñƒ
-dashboard.group.master_label_format	Group {0} | Master:	Grupo {0} | Master:	Grupo {0} | Master:	ç»„ {0} | Master:	Groupe {0} | Master :	Ð“Ñ€ÑƒÐ¿Ð¿Ð° {0} | Master:
-dashboard.group.remove	Remove	Remover	Quitar	ç§»é™¤	Supprimer	Ð£Ð´Ð°Ð»Ð¸Ñ‚ÑŒ
-dashboard.group.remove_group	Remove Group	Remover Grupo	Quitar Grupo	ç§»é™¤åˆ†ç»„	Supprimer le Groupe	Ð£Ð´Ð°Ð»Ð¸Ñ‚ÑŒ Ð“Ñ€ÑƒÐ¿Ð¿Ñƒ
-dashboard.group.select_all_tooltip	Select all followers	Selecionar todos os followers	Seleccionar todos los followers	é€‰æ‹©æ‰€æœ‰è·Ÿéšè´¦æˆ·	SÃ©lectionner tous les followers	Ð’Ñ‹Ð±Ñ€Ð°Ñ‚ÑŒ Ð²ÑÐµÑ… followers
-dialog.add_follower.prompt	Pick a follower account:	Escolha uma conta follower:	Elige una cuenta follower:	é€‰æ‹©ä¸€ä¸ªè·Ÿéšè´¦æˆ·ï¼š	Choisissez un compte follower :	Ð’Ñ‹Ð±ÐµÑ€Ð¸Ñ‚Ðµ ÑÑ‡ÐµÑ‚ follower:
-dialog.add_follower.title	Add Follower Account	Adicionar Conta Follower	AÃ±adir Cuenta Follower	æ·»åŠ è·Ÿéšè´¦æˆ·	Ajouter un Compte Follower	Ð”Ð¾Ð±Ð°Ð²Ð¸Ñ‚ÑŒ Ð¡Ñ‡ÐµÑ‚ Follower
-dialog.common.cancel	Cancel	Cancelar	Cancelar	å–æ¶ˆ	Annuler	ÐžÑ‚Ð¼ÐµÐ½Ð°
-dialog.common.ok	OK	OK	OK	ç¡®å®š	OK	OK
-dialog.common.proceed	Proceed	Prosseguir	Continuar	ç»§ç»­	Continuer	ÐŸÑ€Ð¾Ð´Ð¾Ð»Ð¶Ð¸Ñ‚ÑŒ
-dialog.create_group.prompt	Pick a master account:	Escolha uma conta master:	Elige una cuenta master:	é€‰æ‹©ä¸€ä¸ªä¸»è´¦æˆ·ï¼š	Choisissez un compte master :	Ð’Ñ‹Ð±ÐµÑ€Ð¸Ñ‚Ðµ master-ÑÑ‡ÐµÑ‚:
-dialog.create_group.title	Create Account Group	Criar Grupo de Contas	Crear Grupo de Cuentas	åˆ›å»ºè´¦æˆ·åˆ†ç»„	CrÃ©er un Groupe de Comptes	Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ð“Ñ€ÑƒÐ¿Ð¿Ñƒ Ð¡Ñ‡ÐµÑ‚Ð¾Ð²
-header.banner.news_event_in_progress	News Event in Progress	Evento de NotÃ­cia em Andamento	Evento de Noticias en Curso	æ–°é—»äº‹ä»¶è¿›è¡Œä¸­	Ã‰vÃ©nement News en Cours	ÐÐ¾Ð²Ð¾ÑÑ‚Ð½Ð¾Ðµ Ð¡Ð¾Ð±Ñ‹Ñ‚Ð¸Ðµ Ð˜Ð´ÐµÑ‚
-header.banner.news_event_in_progress_prefix	News Event in Progress:	Evento de NotÃ­cia em Andamento:	Evento de Noticias en Curso:	æ–°é—»äº‹ä»¶è¿›è¡Œä¸­ï¼š	Ã‰vÃ©nement News en Cours :	ÐÐ¾Ð²Ð¾ÑÑ‚Ð½Ð¾Ðµ Ð¡Ð¾Ð±Ñ‹Ñ‚Ð¸Ðµ Ð˜Ð´ÐµÑ‚:
-header.button.flatten_all	Flatten All	Zerar Tudo	Cerrar Todo	å…¨éƒ¨å¹³ä»“	Tout Aplatir	Ð—Ð°ÐºÑ€Ñ‹Ñ‚ÑŒ Ð’ÑÐµ
-header.button.flattened	Flattened!	Zerado!	Cerrado!	å·²å¹³ä»“ï¼	Aplati !	Ð—Ð°ÐºÑ€Ñ‹Ñ‚Ð¾!
-header.button.replicate	Replicate	Replicar	Replicar	å¤åˆ¶è·Ÿå•	RÃ©pliquer	Ð ÐµÐ¿Ð»Ð¸Ñ†Ð¸Ñ€Ð¾Ð²Ð°Ñ‚ÑŒ
-header.button.replicating	Replicating	Replicando	Replicando	å¤åˆ¶ä¸­	RÃ©plication	Ð ÐµÐ¿Ð»Ð¸ÐºÐ°Ñ†Ð¸Ñ
-header.button.start	Start	Iniciar	Iniciar	å¼€å§‹	DÃ©marrer	Ð¡Ñ‚Ð°Ñ€Ñ‚
-header.button.stop	Stop	Parar	Detener	åœæ­¢	ArrÃªter	Ð¡Ñ‚Ð¾Ð¿
-header.metric.daily_pnl	Daily PnL	PnL DiÃ¡rio	PnL Diario	å½“æ—¥ PnL	PnL Jour	Ð”Ð½ÐµÐ²Ð½Ð¾Ð¹ PnL
+dashboard.connected_accounts	Connected Accounts	Contas Conectadas	Cuentas Conectadas	已连接账户	Comptes Connectés	Подключенные Счета
+dashboard.group.add_account	+ Add Account	+ Adicionar Conta	+ Añadir Cuenta	+ 添加账户	+ Ajouter un Compte	+ Добавить Счет
+dashboard.group.column.enable	Enable	Ativar	Activar	启用	Activer	Вкл
+dashboard.group.column.follower_account	Follower Account	Conta Follower	Cuenta Follower	跟随账户	Compte Follower	Счет Follower
+dashboard.group.column.master	Master	Master	Master	主账户	Master	Master
+dashboard.group.column.max_c	Max C	Max C	Max C	最大手数	Max C	Макс C
+dashboard.group.column.max_dd	Max DD	Max DD	Max DD	最大回撤	Max DD	Макс DD
+dashboard.group.column.max_l	Max L	Max L	Max L	最大亏损	Max L	Макс L
+dashboard.group.column.position	Position	Posição	Posición	持仓	Position	Позиция
+dashboard.group.column.ratio	Ratio	Ratio	Ratio	比例	Ratio	Коэф.
+dashboard.group.create_group	+ Create Group	+ Criar Grupo	+ Crear Grupo	+ 创建分组	+ Créer un Groupe	+ Создать Группу
+dashboard.group.master_label_format	Group {0} | Master:	Grupo {0} | Master:	Grupo {0} | Master:	组 {0} | Master:	Groupe {0} | Master :	Группа {0} | Master:
+dashboard.group.remove	Remove	Remover	Quitar	移除	Supprimer	Удалить
+dashboard.group.remove_group	Remove Group	Remover Grupo	Quitar Grupo	移除分组	Supprimer le Groupe	Удалить Группу
+dashboard.group.select_all_tooltip	Select all followers	Selecionar todos os followers	Seleccionar todos los followers	选择所有跟随账户	Sélectionner tous les followers	Выбрать всех followers
+dialog.add_follower.prompt	Pick a follower account:	Escolha uma conta follower:	Elige una cuenta follower:	选择一个跟随账户：	Choisissez un compte follower :	Выберите счет follower:
+dialog.add_follower.title	Add Follower Account	Adicionar Conta Follower	Añadir Cuenta Follower	添加跟随账户	Ajouter un Compte Follower	Добавить Счет Follower
+dialog.common.cancel	Cancel	Cancelar	Cancelar	取消	Annuler	Отмена
+dialog.common.ok	OK	OK	OK	确定	OK	OK
+dialog.common.proceed	Proceed	Prosseguir	Continuar	继续	Continuer	Продолжить
+dialog.create_group.prompt	Pick a master account:	Escolha uma conta master:	Elige una cuenta master:	选择一个主账户：	Choisissez un compte master :	Выберите master-счет:
+dialog.create_group.title	Create Account Group	Criar Grupo de Contas	Crear Grupo de Cuentas	创建账户分组	Créer un Groupe de Comptes	Создать Группу Счетов
+header.banner.news_event_in_progress	News Event in Progress	Evento de Notícia em Andamento	Evento de Noticias en Curso	新闻事件进行中	Événement News en Cours	Новостное Событие Идет
+header.banner.news_event_in_progress_prefix	News Event in Progress:	Evento de Notícia em Andamento:	Evento de Noticias en Curso:	新闻事件进行中：	Événement News en Cours :	Новостное Событие Идет:
+header.button.flatten_all	Flatten All	Zerar Tudo	Cerrar Todo	全部平仓	Tout Aplatir	Закрыть Все
+header.button.flattened	Flattened!	Zerado!	Cerrado!	已平仓！	Aplati !	Закрыто!
+header.button.replicate	Replicate	Replicar	Replicar	复制跟单	Répliquer	Реплицировать
+header.button.replicating	Replicating	Replicando	Replicando	复制中	Réplication	Репликация
+header.button.start	Start	Iniciar	Iniciar	开始	Démarrer	Старт
+header.button.stop	Stop	Parar	Detener	停止	Arrêter	Стоп
+header.metric.daily_pnl	Daily PnL	PnL Diário	PnL Diario	当日 PnL	PnL Jour	Дневной PnL
 header.metric.eval_pnl	Eval PnL	Eval PnL	Eval PnL	Eval PnL	Eval PnL	Eval PnL
-header.metric.eval_risk	Eval Risk	Risco Eval	Riesgo Eval	Eval é£Žé™©	Risque Eval	Eval Ð Ð¸ÑÐº
-header.metric.global_risk	Global Risk	Risco Global	Riesgo Global	å…¨å±€é£Žé™©	Risque Global	Ð“Ð»Ð¾Ð±Ð°Ð»ÑŒÐ½Ñ‹Ð¹ Ð Ð¸ÑÐº
+header.metric.eval_risk	Eval Risk	Risco Eval	Riesgo Eval	Eval 风险	Risque Eval	Eval Риск
+header.metric.global_risk	Global Risk	Risco Global	Riesgo Global	全局风险	Risque Global	Глобальный Риск
 header.metric.pa_pnl	PA PnL	PA PnL	PA PnL	PA PnL	PA PnL	PA PnL
-header.metric.pa_risk	PA Risk	Risco PA	Riesgo PA	PA é£Žé™©	Risque PA	PA Ð Ð¸ÑÐº
-header.metric.warnings	Warnings	Alertas	Alertas	é¢„è­¦	Alertes	ÐŸÑ€ÐµÐ´ÑƒÐ¿Ñ€.
-journal.card.avg_loss	Avg Loss	Avg Loss	PÃ©rd. Prom.	å¹³å‡äºæŸ	Perte Moy.	Ð¡Ñ€ÐµÐ´Ð½. Ð£Ð±Ñ‹Ñ‚Ð¾Ðº
-journal.card.avg_win	Avg Win	Avg Win	Gan. Prom.	å¹³å‡ç›ˆåˆ©	Gain Moy.	Ð¡Ñ€ÐµÐ´Ð½. ÐŸÑ€Ð¸Ð±Ñ‹Ð»ÑŒ
-journal.card.total_trades	Total Trades	Total de Trades	Total Trades	æ€»äº¤æ˜“æ•°	Trades Totaux	Ð’ÑÐµÐ³Ð¾ Ð¡Ð´ÐµÐ»Ð¾Ðº
-journal.column.account	Account	Conta	Cuenta	è´¦æˆ·	Compte	Ð¡Ñ‡ÐµÑ‚
-journal.column.dismiss	Dismiss	Fechar	Descartar	å¿½ç•¥	Masquer	Ð¡ÐºÑ€Ñ‹Ñ‚ÑŒ
-journal.column.message	Message	Mensagem	Mensaje	æ¶ˆæ¯	Message	Ð¡Ð¾Ð¾Ð±Ñ‰ÐµÐ½Ð¸Ðµ
-journal.column.time	Time	Hora	Hora	æ—¶é—´	Heure	Ð’Ñ€ÐµÐ¼Ñ
-journal.column.type	Type	Tipo	Tipo	ç±»åž‹	Type	Ð¢Ð¸Ð¿
-journal.column.warning	Warning	Alerta	Alerta	é¢„è­¦	Alerte	ÐŸÑ€ÐµÐ´ÑƒÐ¿Ñ€ÐµÐ¶Ð´ÐµÐ½Ð¸Ðµ
-journal.critical_warnings	Critical Warnings	Alertas CrÃ­ticos	Alertas CrÃ­ticas	å…³é”®é¢„è­¦	Alertes Critiques	ÐšÑ€Ð¸Ñ‚Ð¸Ñ‡ÐµÑÐºÐ¸Ðµ ÐŸÑ€ÐµÐ´ÑƒÐ¿Ñ€ÐµÐ¶Ð´ÐµÐ½Ð¸Ñ
-journal.title	Journal	Journal	Diario	æ—¥å¿—	Journal	Ð–ÑƒÑ€Ð½Ð°Ð»
-journal.trade_feed	Live Feed	Feed ao Vivo	Feed en Vivo	å®žæ—¶æµ	Flux Live	Ð›ÐµÐ½Ñ‚Ð° Live
-journal.trader_performance	Trader Performance	Performance do Trader	Rendimiento del Trader	äº¤æ˜“è¡¨çŽ°	Performance du Trader	Ð ÐµÐ·ÑƒÐ»ÑŒÑ‚Ð°Ñ‚Ñ‹ Ð¢Ñ€ÐµÐ¹Ð´ÐµÑ€Ð°
-summary.account_trades	Account Trades	Trades por Conta	Trades por Cuenta	è´¦æˆ·çº§äº¤æ˜“	Trades Compte	Ð¡Ð´ÐµÐ»ÐºÐ¸ Ð¿Ð¾ Ð¡Ñ‡ÐµÑ‚Ð°Ð¼
-summary.accounts	Accounts	Contas	Cuentas	è´¦æˆ·	Comptes	Ð¡Ñ‡ÐµÑ‚Ð°
-summary.accounts_count_format	{0} accounts	{0} contas	{0} cuentas	{0} ä¸ªè´¦æˆ·	{0} comptes	{0} ÑÑ‡ÐµÑ‚Ð¾Ð²
-summary.all	All	Geral	Total	å…¨éƒ¨	Tous	Ð’ÑÐµ
-summary.avg_contracts_trade	Avg Contracts / Trade	Contratos MÃ©dios / Trade	Contratos Prom. / Trade	æ¯ç¬”å¹³å‡åˆçº¦	Contrats Moy. / Trade	Ð¡Ñ€ÐµÐ´Ð½. ÐšÐ¾Ð½Ñ‚Ñ€Ð°ÐºÑ‚Ñ‹ / Ð¡Ð´ÐµÐ»ÐºÐ°
-summary.avg_duration	Avg Duration	DuraÃ§Ã£o MÃ©dia	DuraciÃ³n Prom.	å¹³å‡æŒä»“æ—¶é•¿	DurÃ©e Moy.	Ð¡Ñ€ÐµÐ´Ð½. Ð”Ð»Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ð¾ÑÑ‚ÑŒ
-summary.avg_loss	Avg Loss	Avg Loss	PÃ©rd. Prom.	å¹³å‡äºæŸ	Perte Moy.	Ð¡Ñ€ÐµÐ´Ð½. Ð£Ð±Ñ‹Ñ‚Ð¾Ðº
-summary.avg_trade	Avg Trade	Trade MÃ©dio	Trade Prom.	å¹³å‡æ¯ç¬”	Trade Moy.	Ð¡Ñ€ÐµÐ´Ð½. Ð¡Ð´ÐµÐ»ÐºÐ°
-summary.avg_win	Avg Win	Avg Win	Gan. Prom.	å¹³å‡ç›ˆåˆ©	Gain Moy.	Ð¡Ñ€ÐµÐ´Ð½. ÐŸÑ€Ð¸Ð±Ñ‹Ð»ÑŒ
-summary.card.accounts	Accounts Traded	Contas Operadas	Cuentas Operadas	å‚ä¸Žè´¦æˆ·	Comptes TradÃ©s	Ð¢Ð¾Ñ€Ð³ÑƒÑŽÑ‰Ð¸Ñ… Ð¡Ñ‡ÐµÑ‚Ð¾Ð²
-summary.card.fleet_trades	Fleet Trades	Trades da Frota	Trades de la Flota	ç¼–ç»„äº¤æ˜“æ•°	Trades Flotte	Ð¡Ð´ÐµÐ»ÐºÐ¸ Ð¤Ð»Ð¾Ñ‚Ð°
-summary.card.net_pnl	Net PnL	Net PnL	Net PnL	å‡€ PnL	Net PnL	Net PnL
-summary.card.profit_factor	Profit Factor	Fator de Lucro	Factor de Beneficio	ç›ˆåˆ©å› å­	Profit Factor	Ð¤Ð°ÐºÑ‚Ð¾Ñ€ ÐŸÑ€Ð¸Ð±Ñ‹Ð»Ð¸
-summary.card.trades	Closed Trades	Trades Fechados	Trades Cerrados	å·²å¹³ä»“äº¤æ˜“	Trades ClÃ´turÃ©s	Ð—Ð°ÐºÑ€Ñ‹Ñ‚Ñ‹Ðµ Ð¡Ð´ÐµÐ»ÐºÐ¸
-summary.card.win_rate	Win Rate	Taxa de Acerto	Tasa de Acierto	èƒœçŽ‡	Taux de RÃ©ussite	ÐŸÑ€Ð¾Ñ†ÐµÐ½Ñ‚ ÐŸÐ¾Ð±ÐµÐ´
-summary.close_reasons	Close Reasons	Motivos de SaÃ­da	Motivos de Salida	å¹³ä»“åŽŸå› 	Motifs de Sortie	ÐŸÑ€Ð¸Ñ‡Ð¸Ð½Ñ‹ Ð’Ñ‹Ñ…Ð¾Ð´Ð°
-summary.close_time	Close Time	Hora de Fechamento	Hora de Cierre	å¹³ä»“æ—¶é—´	Heure de Sortie	Ð’Ñ€ÐµÐ¼Ñ Ð—Ð°ÐºÑ€Ñ‹Ñ‚Ð¸Ñ
-summary.contracts	Contracts	Contratos	Contratos	åˆçº¦æ•°	Contrats	ÐšÐ¾Ð½Ñ‚Ñ€Ð°ÐºÑ‚Ñ‹
-summary.duration	Duration	DuraÃ§Ã£o	DuraciÃ³n	æŒç»­æ—¶é—´	DurÃ©e	Ð”Ð»Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ð¾ÑÑ‚ÑŒ
-summary.exit	Exit	SaÃ­da	Salida	é€€å‡º	Sortie	Ð’Ñ‹Ñ…Ð¾Ð´
-summary.exit.manual	Manual	Manual	Manual	æ‰‹åŠ¨	Manuel	Ð ÑƒÑ‡Ð½.
-summary.exit.news_event	News	News	News	æ–°é—»	News	News
-summary.exit.replication_sync	Sync	Sync	Sync	åŒæ­¥	Sync	Sync
+header.metric.pa_risk	PA Risk	Risco PA	Riesgo PA	PA 风险	Risque PA	PA Риск
+header.metric.warnings	Warnings	Alertas	Alertas	预警	Alertes	Предупр.
+journal.card.avg_loss	Avg Loss	Avg Loss	Pérd. Prom.	平均亏损	Perte Moy.	Средн. Убыток
+journal.card.avg_win	Avg Win	Avg Win	Gan. Prom.	平均盈利	Gain Moy.	Средн. Прибыль
+journal.card.total_trades	Total Trades	Total de Trades	Total Trades	总交易数	Trades Totaux	Всего Сделок
+journal.column.account	Account	Conta	Cuenta	账户	Compte	Счет
+journal.column.dismiss	Dismiss	Fechar	Descartar	忽略	Masquer	Скрыть
+journal.column.message	Message	Mensagem	Mensaje	消息	Message	Сообщение
+journal.column.time	Time	Hora	Hora	时间	Heure	Время
+journal.column.type	Type	Tipo	Tipo	类型	Type	Тип
+journal.column.warning	Warning	Alerta	Alerta	预警	Alerte	Предупреждение
+journal.critical_warnings	Critical Warnings	Alertas Críticos	Alertas Críticas	关键预警	Alertes Critiques	Критические Предупреждения
+journal.title	Journal	Journal	Diario	日志	Journal	Журнал
+journal.trade_feed	Live Feed	Feed ao Vivo	Feed en Vivo	实时流	Flux Live	Лента Live
+journal.trader_performance	Trader Performance	Performance do Trader	Rendimiento del Trader	交易表现	Performance du Trader	Результаты Трейдера
+summary.account_trades	Account Trades	Trades por Conta	Trades por Cuenta	账户级交易	Trades Compte	Сделки по Счетам
+summary.accounts	Accounts	Contas	Cuentas	账户	Comptes	Счета
+summary.accounts_count_format	{0} accounts	{0} contas	{0} cuentas	{0} 个账户	{0} comptes	{0} счетов
+summary.all	All	Geral	Total	全部	Tous	Все
+summary.avg_contracts_trade	Avg Contracts / Trade	Contratos Médios / Trade	Contratos Prom. / Trade	每笔平均合约	Contrats Moy. / Trade	Средн. Контракты / Сделка
+summary.avg_duration	Avg Duration	Duração Média	Duración Prom.	平均持仓时长	Durée Moy.	Средн. Длительность
+summary.avg_loss	Avg Loss	Avg Loss	Pérd. Prom.	平均亏损	Perte Moy.	Средн. Убыток
+summary.avg_trade	Avg Trade	Trade Médio	Trade Prom.	平均每笔	Trade Moy.	Средн. Сделка
+summary.avg_win	Avg Win	Avg Win	Gan. Prom.	平均盈利	Gain Moy.	Средн. Прибыль
+summary.card.accounts	Accounts Traded	Contas Operadas	Cuentas Operadas	参与账户	Comptes Tradés	Торгующих Счетов
+summary.card.fleet_trades	Fleet Trades	Trades da Frota	Trades de la Flota	编组交易数	Trades Flotte	Сделки Флота
+summary.card.net_pnl	Net PnL	Net PnL	Net PnL	净 PnL	Net PnL	Net PnL
+summary.card.profit_factor	Profit Factor	Fator de Lucro	Factor de Beneficio	盈利因子	Profit Factor	Фактор Прибыли
+summary.card.trades	Closed Trades	Trades Fechados	Trades Cerrados	已平仓交易	Trades Clôturés	Закрытые Сделки
+summary.card.win_rate	Win Rate	Taxa de Acerto	Tasa de Acierto	胜率	Taux de Réussite	Процент Побед
+summary.close_reasons	Close Reasons	Motivos de Saída	Motivos de Salida	平仓原因	Motifs de Sortie	Причины Выхода
+summary.close_time	Close Time	Hora de Fechamento	Hora de Cierre	平仓时间	Heure de Sortie	Время Закрытия
+summary.contracts	Contracts	Contratos	Contratos	合约数	Contrats	Контракты
+summary.duration	Duration	Duração	Duración	持续时间	Durée	Длительность
+summary.exit	Exit	Saída	Salida	退出	Sortie	Выход
+summary.exit.manual	Manual	Manual	Manual	手动	Manuel	Ручн.
+summary.exit.news_event	News	News	News	新闻	News	News
+summary.exit.replication_sync	Sync	Sync	Sync	同步	Sync	Sync
 summary.exit.risk_management	RM	RM	RM	RM	RM	RM
-summary.exit.session_end	Close	Sess.	Cierre	æ”¶ç›˜	ClÃ´t.	Ð¡ÐµÑÑ.
-summary.exit.signal_flip	Flip	Flip	Flip	ç¿»è½¬	Flip	Flip
+summary.exit.session_end	Close	Sess.	Cierre	收盘	Clôt.	Сесс.
+summary.exit.signal_flip	Flip	Flip	Flip	翻转	Flip	Flip
 summary.exit.stop_loss	SL	SL	SL	SL	SL	SL
 summary.exit.take_profit	TP	TP	TP	TP	TP	TP
 summary.exit.unknown	UNK	UNK	UNK	UNK	UNK	UNK
-summary.gross_loss	Gross Loss	Perda Bruta	PÃ©rdida Bruta	æ€»äºæŸ	Perte Brute	Ð’Ð°Ð»Ð¾Ð²Ñ‹Ð¹ Ð£Ð±Ñ‹Ñ‚Ð¾Ðº
-summary.gross_profit	Gross Profit	Lucro Bruto	Beneficio Bruto	æ€»ç›ˆåˆ©	Profit Brut	Ð’Ð°Ð»Ð¾Ð²Ð°Ñ ÐŸÑ€Ð¸Ð±Ñ‹Ð»ÑŒ
-summary.instrument	Instrument	Instrumento	Instrumento	å“ç§	Instrument	Ð˜Ð½ÑÑ‚Ñ€ÑƒÐ¼ÐµÐ½Ñ‚
-summary.largest_loss	Largest Loss	Maior Perda	Mayor PÃ©rdida	æœ€å¤§äºæŸ	Plus Grande Perte	Ð¡Ð°Ð¼Ñ‹Ð¹ Ð‘Ð¾Ð»ÑŒÑˆÐ¾Ð¹ Ð£Ð±Ñ‹Ñ‚Ð¾Ðº
-summary.largest_win	Largest Win	Maior Ganho	Mayor Ganancia	æœ€å¤§ç›ˆåˆ©	Plus Grand Gain	Ð¡Ð°Ð¼Ð°Ñ Ð‘Ð¾Ð»ÑŒÑˆÐ°Ñ ÐŸÑ€Ð¸Ð±Ñ‹Ð»ÑŒ
-summary.long	Long	Long	Long	å¤šå¤´	Long	Ð›Ð¾Ð½Ð³
-summary.max_loss_streak	Max Loss Streak	MÃ¡x. SequÃªncia de Perdas	MÃ¡x. Racha de PÃ©rdidas	æœ€å¤§è¿žäº	Max SÃ©rie de Pertes	ÐœÐ°ÐºÑ. Ð¡ÐµÑ€Ð¸Ñ Ð£Ð±Ñ‹Ñ‚ÐºÐ¾Ð²
-summary.max_win_streak	Max Win Streak	MÃ¡x. SequÃªncia de Ganhos	MÃ¡x. Racha de Ganancias	æœ€å¤§è¿žèµ¢	Max SÃ©rie de Gains	ÐœÐ°ÐºÑ. Ð¡ÐµÑ€Ð¸Ñ ÐŸÐ¾Ð±ÐµÐ´
-summary.metrics_column	Metrics	MÃ©tricas	MÃ©tricas	æŒ‡æ ‡	MÃ©triques	ÐœÐµÑ‚Ñ€Ð¸ÐºÐ¸
-summary.net_pnl	Net PnL	Net PnL	Net PnL	å‡€ PnL	Net PnL	Net PnL
-summary.open_reason.manual_entry	Manual Entry	Entrada Manual	Entrada Manual	æ‰‹åŠ¨å¼€ä»“	EntrÃ©e Manuelle	Ð ÑƒÑ‡Ð½Ð¾Ð¹ Ð’Ñ…Ð¾Ð´
-summary.open_reason.protective_followup	Protective Follow-up	Follow-up Protetivo	Seguimiento Protector	ä¿æŠ¤æ€§è·Ÿè¿›	Suivi Protecteur	Ð—Ð°Ñ‰Ð¸Ñ‚Ð½Ð¾Ðµ Ð¡Ð¾Ð¿Ñ€Ð¾Ð²Ð¾Ð¶Ð´ÐµÐ½Ð¸Ðµ
-summary.open_reason.replication_sync	Replication Sync	Replication Sync	Replication Sync	å¤åˆ¶åŒæ­¥	Sync RÃ©plication	Ð¡Ð¸Ð½Ñ…Ñ€Ð¾Ð½Ð¸Ð·Ð°Ñ†Ð¸Ñ Ð ÐµÐ¿Ð»Ð¸ÐºÐ°Ñ†Ð¸Ð¸
-summary.open_reason.unknown	Manual / Unknown	Manual / Desconhecido	Manual / Desconocido	æ‰‹åŠ¨ / æœªçŸ¥	Manuel / Inconnu	Ð ÑƒÑ‡Ð½Ð¾Ð¹ / ÐÐµÐ¸Ð·Ð²ÐµÑÑ‚Ð½Ð¾
-summary.open_time	Open Time	Hora de Abertura	Hora de Apertura	å¼€ä»“æ—¶é—´	Heure d'EntrÃ©e	Ð’Ñ€ÐµÐ¼Ñ ÐžÑ‚ÐºÑ€Ñ‹Ñ‚Ð¸Ñ
+summary.gross_loss	Gross Loss	Perda Bruta	Pérdida Bruta	总亏损	Perte Brute	Валовый Убыток
+summary.gross_profit	Gross Profit	Lucro Bruto	Beneficio Bruto	总盈利	Profit Brut	Валовая Прибыль
+summary.instrument	Instrument	Instrumento	Instrumento	品种	Instrument	Инструмент
+summary.largest_loss	Largest Loss	Maior Perda	Mayor Pérdida	最大亏损	Plus Grande Perte	Самый Большой Убыток
+summary.largest_win	Largest Win	Maior Ganho	Mayor Ganancia	最大盈利	Plus Grand Gain	Самая Большая Прибыль
+summary.long	Long	Long	Long	多头	Long	Лонг
+summary.max_loss_streak	Max Loss Streak	Máx. Sequência de Perdas	Máx. Racha de Pérdidas	最大连亏	Max Série de Pertes	Макс. Серия Убытков
+summary.max_win_streak	Max Win Streak	Máx. Sequência de Ganhos	Máx. Racha de Ganancias	最大连赢	Max Série de Gains	Макс. Серия Побед
+summary.metrics_column	Metrics	Métricas	Métricas	指标	Métriques	Метрики
+summary.net_pnl	Net PnL	Net PnL	Net PnL	净 PnL	Net PnL	Net PnL
+summary.open_reason.manual_entry	Manual Entry	Entrada Manual	Entrada Manual	手动开仓	Entrée Manuelle	Ручной Вход
+summary.open_reason.protective_followup	Protective Follow-up	Follow-up Protetivo	Seguimiento Protector	保护性跟进	Suivi Protecteur	Защитное Сопровождение
+summary.open_reason.replication_sync	Replication Sync	Replication Sync	Replication Sync	复制同步	Sync Réplication	Синхронизация Репликации
+summary.open_reason.unknown	Manual / Unknown	Manual / Desconhecido	Manual / Desconocido	手动 / 未知	Manuel / Inconnu	Ручной / Неизвестно
+summary.open_time	Open Time	Hora de Abertura	Hora de Apertura	开仓时间	Heure d'Entrée	Время Открытия
 summary.pnl_short	PnL	PnL	PnL	PnL	PnL	PnL
-summary.profit_factor	Profit Factor	Fator de Lucro	Factor de Beneficio	ç›ˆåˆ©å› å­	Profit Factor	Ð¤Ð°ÐºÑ‚Ð¾Ñ€ ÐŸÑ€Ð¸Ð±Ñ‹Ð»Ð¸
-summary.reason.manual_other	Manual / Other	Manual / Outro	Manual / Otro	æ‰‹åŠ¨ / å…¶ä»–	Manuel / Autre	Ð ÑƒÑ‡Ð½Ð¾Ð¹ / Ð”Ñ€ÑƒÐ³Ð¾Ðµ
-summary.reason.news_event	News Event	Evento de NotÃ­cia	Evento de Noticias	æ–°é—»äº‹ä»¶	Ã‰vÃ©nement News	ÐÐ¾Ð²Ð¾ÑÑ‚Ð½Ð¾Ðµ Ð¡Ð¾Ð±Ñ‹Ñ‚Ð¸Ðµ
-summary.reason.replication_sync	Replication Sync	Replication Sync	Replication Sync	å¤åˆ¶åŒæ­¥	Sync RÃ©plication	Ð¡Ð¸Ð½Ñ…Ñ€Ð¾Ð½Ð¸Ð·Ð°Ñ†Ð¸Ñ Ð ÐµÐ¿Ð»Ð¸ÐºÐ°Ñ†Ð¸Ð¸
-summary.reason.risk_management	Risk Management	Gerenciamento de Risco	GestiÃ³n de Riesgo	é£Žé™©ç®¡ç†	Gestion du Risque	Ð Ð¸ÑÐº-ÐœÐµÐ½ÐµÐ´Ð¶Ð¼ÐµÐ½Ñ‚
-summary.reason.session_end	Session End	Fim de SessÃ£o	Fin de SesiÃ³n	æ—¶æ®µç»“æŸ	Fin de Session	ÐšÐ¾Ð½ÐµÑ† Ð¡ÐµÑÑÐ¸Ð¸
-summary.reason.signal_flip	Signal Flip	InversÃ£o de Sinal	Cambio de SeÃ±al	ä¿¡å·ç¿»è½¬	Flip de Signal	Ð¡Ð¼ÐµÐ½Ð° Ð¡Ð¸Ð³Ð½Ð°Ð»Ð°
-summary.reason.stop_loss	Stop Loss	Stop Loss	Stop Loss	æ­¢æŸ	Stop Loss	Stop Loss
-summary.reason.take_profit	Take Profit	Take Profit	Take Profit	æ­¢ç›ˆ	Take Profit	Take Profit
-summary.reason.unknown	Unknown	Desconhecido	Desconocido	æœªçŸ¥	Inconnu	ÐÐµÐ¸Ð·Ð²ÐµÑÑ‚Ð½Ð¾
-summary.reset_data	Reset Data	Resetar Dados	Restablecer Datos	é‡ç½®æ•°æ®	RÃ©initialiser les DonnÃ©es	Ð¡Ð±Ñ€Ð¾ÑÐ¸Ñ‚ÑŒ Ð”Ð°Ð½Ð½Ñ‹Ðµ
-summary.reset_data.details	This clears Journal, Critical Warnings, and all Summary trade statistics so you can start over.	Isso limpa o Journal, os Alertas CrÃ­ticos e todas as estatÃ­sticas de trade do Summary para vocÃª comeÃ§ar do zero.	Esto limpia el Diario, las Alertas CrÃ­ticas y todas las estadÃ­sticas del Summary para empezar de cero.	è¿™å°†æ¸…é™¤æ—¥å¿—ã€å…³é”®é¢„è­¦ä»¥åŠ Summary ä¸­çš„å…¨éƒ¨äº¤æ˜“ç»Ÿè®¡ï¼Œä»¥ä¾¿é‡æ–°å¼€å§‹ã€‚	Cela efface le Journal, les Alertes Critiques et toutes les statistiques de trade du Summary pour repartir de zÃ©ro.	Ð­Ñ‚Ð¾ Ð¾Ñ‡Ð¸ÑÑ‚Ð¸Ñ‚ Journal, ÐºÑ€Ð¸Ñ‚Ð¸Ñ‡ÐµÑÐºÐ¸Ðµ Ð¿Ñ€ÐµÐ´ÑƒÐ¿Ñ€ÐµÐ¶Ð´ÐµÐ½Ð¸Ñ Ð¸ Ð²ÑÑŽ Ñ‚Ð¾Ñ€Ð³Ð¾Ð²ÑƒÑŽ ÑÑ‚Ð°Ñ‚Ð¸ÑÑ‚Ð¸ÐºÑƒ Summary, Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð½Ð°Ñ‡Ð°Ñ‚ÑŒ Ð·Ð°Ð½Ð¾Ð²Ð¾.
-summary.reset_data.prompt	Your data will be reset including statistics about your trades and accounts. Confirm?	Seus dados serÃ£o resetados, incluindo estatÃ­sticas sobre seus trades e contas. Confirmar?	Tus datos se restablecerÃ¡n, incluidas las estadÃ­sticas de tus trades y cuentas. Â¿Confirmar?	ä½ çš„æ•°æ®å°†è¢«é‡ç½®ï¼ŒåŒ…æ‹¬äº¤æ˜“å’Œè´¦æˆ·ç»Ÿè®¡ã€‚ç¡®è®¤å—ï¼Ÿ	Vos donnÃ©es seront rÃ©initialisÃ©es, y compris les statistiques sur vos trades et vos comptes. Confirmer ?	Ð’Ð°ÑˆÐ¸ Ð´Ð°Ð½Ð½Ñ‹Ðµ Ð±ÑƒÐ´ÑƒÑ‚ ÑÐ±Ñ€Ð¾ÑˆÐµÐ½Ñ‹, Ð²ÐºÐ»ÑŽÑ‡Ð°Ñ ÑÑ‚Ð°Ñ‚Ð¸ÑÑ‚Ð¸ÐºÑƒ Ð¿Ð¾ ÑÐ´ÐµÐ»ÐºÐ°Ð¼ Ð¸ ÑÑ‡ÐµÑ‚Ð°Ð¼. ÐŸÐ¾Ð´Ñ‚Ð²ÐµÑ€Ð´Ð¸Ñ‚ÑŒ?
-summary.reset_data.title	Reset Data	Resetar Dados	Restablecer Datos	é‡ç½®æ•°æ®	RÃ©initialiser les DonnÃ©es	Ð¡Ð±Ñ€Ð¾ÑÐ¸Ñ‚ÑŒ Ð”Ð°Ð½Ð½Ñ‹Ðµ
-summary.short	Short	Short	Short	ç©ºå¤´	Short	Ð¨Ð¾Ñ€Ñ‚
-summary.side	Side	Lado	Lado	æ–¹å‘	Sens	Ð¡Ñ‚Ð¾Ñ€Ð¾Ð½Ð°
-summary.side.long	Long	Long	Long	å¤šå¤´	Long	Ð›Ð¾Ð½Ð³
-summary.side.short	Short	Short	Short	ç©ºå¤´	Short	Ð¨Ð¾Ñ€Ñ‚
-summary.title	Trading Summary	Resumo Operacional	Resumen Operativo	äº¤æ˜“æ‘˜è¦	RÃ©sumÃ© de Trading	Ð¡Ð²Ð¾Ð´ÐºÐ° Ð¿Ð¾ Ð¢Ð¾Ñ€Ð³Ð¾Ð²Ð»Ðµ
-summary.total_trades	Total Trades	Total de Trades	Total Trades	æ€»äº¤æ˜“æ•°	Trades Totaux	Ð’ÑÐµÐ³Ð¾ Ð¡Ð´ÐµÐ»Ð¾Ðº
-summary.updated	Updated	Atualizado	Actualizado	æ›´æ–°äºŽ	Mis Ã  Jour	ÐžÐ±Ð½Ð¾Ð²Ð»ÐµÐ½Ð¾
-summary.win_rate	Win Rate	Taxa de Acerto	Tasa de Acierto	èƒœçŽ‡	Taux de RÃ©ussite	ÐŸÑ€Ð¾Ñ†ÐµÐ½Ñ‚ ÐŸÐ¾Ð±ÐµÐ´
-tab.analytics	Analytics	Analytics	AnalÃ­tica	åˆ†æž	Analytique	ÐÐ½Ð°Ð»Ð¸Ñ‚Ð¸ÐºÐ°
-tab.dashboard	Dashboard	Dashboard	Panel	ä»ªè¡¨ç›˜	Tableau	ÐŸÐ°Ð½ÐµÐ»ÑŒ
-tab.journal	Journal	Journal	Diario	æ—¥å¿—	Journal	Ð–ÑƒÑ€Ð½Ð°Ð»
-tab.settings	Settings	ConfiguraÃ§Ãµes	ConfiguraciÃ³n	è®¾ç½®	RÃ©glages	ÐÐ°ÑÑ‚Ñ€Ð¾Ð¹ÐºÐ¸
-settings.title	Settings	ConfiguraÃ§Ãµes	ConfiguraciÃ³n	è®¾ç½®	RÃ©glages	ÐÐ°ÑÑ‚Ñ€Ð¾Ð¹ÐºÐ¸
-settings.risk.title	Risk Management Rules	Regras de GestÃ£o de Risco	Reglas de GestiÃ³n de Riesgo	é£Žé™©ç®¡ç†è§„åˆ™	RÃ¨gles de Gestion du Risque	ÐŸÑ€Ð°Ð²Ð¸Ð»Ð° Ð£Ð¿Ñ€Ð°Ð²Ð»ÐµÐ½Ð¸Ñ Ð Ð¸ÑÐºÐ¾Ð¼
-settings.risk.enforce_15_flatten_freeze	Flatten and freeze account when buffer falls below 15% of maximum drawdown.	Achatar e congelar conta quando o buffer cair abaixo de 15% do drawdown mÃ¡ximo.	Aplanar y congelar cuenta cuando el buffer baje del 15% del drawdown mÃ¡ximo.	å½“ç¼ˆå†²ä¸‹è¿‡æœ€å¤§å›žæ’¤çš„15%æ—¶å¹³ä»“å¹¶å†ç»è´¦æˆ·ã€‚	Aplatir et geler le compte lorsque le buffer tombe sous 15% du drawdown max.	ÐŸÑ€Ð¸ Ð¿Ð°Ð´ÐµÐ½Ð¸Ð¸ Ð±ÑƒÑ„ÐµÑ€Ð° Ð½Ð¸Ð¶Ðµ 15% Ð¼Ð°ÐºÑ. Ð´Ð´ — Ð·Ð°ÐºÑ€Ñ‹Ñ‚ÑŒ Ð¸ Ð·Ð°Ð¼Ð¾Ñ€Ð¾Ð·Ð¸Ñ‚ÑŒ ÑÑ‡ÐµÑ‚.
-settings.risk.enforce_20_one_contract	Force one-contract replication when buffer falls below 20% of maximum drawdown (release at 25%).	ForÃ§ar replicaÃ§Ã£o de um contrato quando o buffer cair abaixo de 20% do drawdown mÃ¡ximo (liberar em 25%).	Forzar replicaciÃ³n de un contrato cuando el buffer baje del 20% del drawdown mÃ¡ximo (soltar al 25%).	å½“ç¼ˆå†²ä¸‹è¿‡æœ€å¤§å›žæ’¤çš„20%æ—¶å¼ºåˆ¶ä¸€åˆçº¦å¤åˆ¶ï¼ˆ25%æ—¶è§£é™¤ï¼‰ã€‚	Forcer la rÃ©plication un contrat quand le buffer tombe sous 20% du drawdown max (relÃ¢cher Ã  25%).	ÐŸÑ€Ð¸ Ð±ÑƒÑ„ÐµÑ€Ðµ < 20% Ð¼Ð°ÐºÑ. Ð´Ð´ — Ð¾Ð´Ð½Ð¾ÐºÐ¾Ð½Ñ‚Ñ€Ð°ÐºÑ‚Ð½Ð°Ñ Ñ€ÐµÐ¿Ð»Ð¸ÐºÐ°Ñ†Ð¸Ñ (ÑÐ½ÑÑ‚ÑŒ Ð¿Ñ€Ð¸ 25%).
-settings.risk.enforce_80_flatten	Flatten account when unrealized loss exceeds 80% of maximum intratrade loss (max loss limit).	Achatar conta quando a perda nÃ£o realizada exceder 80% da perda mÃ¡xima intratrade.	Aplanar cuenta cuando la pÃ©rdida no realizada supere el 80% de la pÃ©rdida mÃ¡xima intratrade.	å½“æœªå®žç¾äºæŸè¶…è¿‡æœ€å¤§äº¤æ˜“å†…äºæŸçš„80%æ—¶å¹³ä»“è´¦æˆ·ã€‚	Aplatir le compte quand la perte non rÃ©alisÃ©e dÃ©passe 80% de la perte max intratrade.	Ð—Ð°ÐºÑ€Ñ‹Ñ‚ÑŒ ÑÑ‡ÐµÑ‚, ÐºÐ¾Ð³Ð´Ð° Ð½ÐµÑ€ÐµÐ°Ð»Ð¸Ð·Ð¾Ð². ÑƒÐ±Ñ‹Ñ‚Ð¾Ðº > 80% Ð¼Ð°ÐºÑ. Ð²Ð½ÑƒÑ‚Ñ€Ð¸ÑÐ´ÐµÐ»Ð¾Ñ‡Ð½.
-settings.risk.enforce_eval_lock_flatten	Flatten and lock evaluation account when equity reaches the evaluation target lock balance.	Achatar e bloquear conta de avaliaÃ§Ã£o quando o patrimÃ´nio atingir o saldo de bloqueio da meta de avaliaÃ§Ã£o.	Aplanar y bloquear cuenta de evaluaciÃ³n cuando el patrimonio alcance el saldo de bloqueo de la meta.	å½“è´¦æˆ·è‡³è¾¾è¯„ä¼°ç›®æ ‡é”å®šä½™é¢æ—¶å¹³ä»“å¹¶éç»è¯„ä¼°è´¦æˆ·ã€‚	Aplatir et verrouiller le compte d'Ã©valuation quand l'equity atteint le solde de verrouillage cible.	Ð—Ð°ÐºÑ€Ñ‹Ñ‚ÑŒ Ð¸ Ð·Ð°Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²Ð°Ñ‚ÑŒ Ð¾Ñ†ÐµÐ½Ð¾Ñ‡Ð½Ñ‹Ð¹ ÑÑ‡ÐµÑ‚ Ð¿Ñ€Ð¸ Ð´Ð¾ÑÑ‚Ð¸Ð¶ÐµÐ½Ð¸Ð¸ Ñ†ÐµÐ»ÐµÐ²Ð¾Ð³Ð¾ Ð±Ð°Ð»Ð°Ð½ÑÐ°.
-settings.license.title	License	LicenÃ§a	Licencia	è®¸å¯	Licence	Ð›Ð¸Ñ†ÐµÐ½Ð·Ð¸Ñ
-settings.license.key	License Key	Chave de LicenÃ§a	Clave de Licencia	è®¸å¯å¯†é’¥	ClÃ© de Licence	ÐšÐ»ÑŽÑ‡ Ð›Ð¸Ñ†ÐµÐ½Ð·Ð¸Ð¸
-settings.license.key_placeholder	Enter license key	Digite a chave de licenÃ§a	Introduce la clave de licencia	è¾“å…¥è®¸å¯å¯†é’¥	Saisir la clÃ© de licence	Ð’Ð²ÐµÐ´Ð¸Ñ‚Ðµ ÐºÐ»ÑŽÑ‡ Ð»Ð¸Ñ†ÐµÐ½Ð·Ð¸Ð¸
-settings.license.paste_placeholder	Paste your license here	Cole sua licenÃ§a aqui	Pega tu licencia aquÃ­	è¯·å±†è´´è®¸å¯å†°è¿™é‡Œ	Collez votre licence ici	Ð’ÑÑ‚Ð°Ð²ÑŒÑ‚Ðµ Ð»Ð¸Ñ†ÐµÐ½Ð·Ð¸ÑŽ ÑÑŽÐ´Ð°
-settings.button.save	Save Settings	Salvar ConfiguraÃ§Ãµes	Guardar ConfiguraciÃ³n	ä¿å­˜è®¾ç½®	Enregistrer les RÃ©glages	Ð¡Ð¾Ñ…Ñ€Ð°Ð½Ð¸Ñ‚ÑŒ ÐÐ°ÑÑ‚Ñ€Ð¾Ð¹ÐºÐ¸
-settings.button.validate	Validate License Now	Validar LicenÃ§a Agora	Validar Licencia Ahora	ç«‹å³¶éªŒè¯è®¸å¯	Valider la Licence Maintenant	ÐŸÑ€Ð¾Ð²ÐµÑ€Ð¸Ñ‚ÑŒ Ð›Ð¸Ñ†ÐµÐ½Ð·Ð¸ÑŽ
-settings.feedback.saving	Saving!	Salvando!	Â¡Guardando!	æ­£åœ¨ä¿å­˜â€¦	Enregistrementâ€¦	Ð¡Ð¾Ñ…Ñ€Ð°Ð½ÐµÐ½Ð¸Ðµâ€¦
-settings.feedback.validating	Validating, please wait...	Validando, aguarde...	Validando, espere...	æ­£åœ¨éªŒè¯ï¼Œè¯·ç­‰å¾…â€¦	Validation en coursâ€¦	ÐŸÑ€Ð¾Ð²ÐµÑ€ÐºÐ° Ð»Ð¸Ñ†ÐµÐ½Ð·Ð¸Ð¸â€¦
-settings.license.status_format	License Status: {0}, Valid until {1}	Status da LicenÃ§a: {0}, VÃ¡lido atÃ© {1}	Estado de Licencia: {0}, VÃ¡lido hasta {1}	è®¸å¯çŠ¶æ€ï¼š{0}ï¼Œæœ‰æ•ˆè‡³ {1}	Statut Licence : {0}, Valide jusqu'au {1}	Ð¡Ñ‚Ð°Ñ‚ÑƒÑ Ð›Ð¸Ñ†ÐµÐ½Ð·Ð¸Ð¸: {0}, Ð”ÐµÐ¹ÑÑ‚Ð². Ð´Ð¾ {1}
-settings.license.status.active_premium	Active Premium	Premium Ativo	Premium Activo	æ´»è· Premium	Premium Actif	ÐÐºÑ‚Ð¸Ð². Premium
-settings.license.status.free_lite	Free Lite	Free Lite	Free Lite	å…è´¹ Lite	Free Lite	Free Lite
-settings.license.status.grace_premium	Grace Premium	Premium em GraÃ§a	Premium en Gracia	Grace Premium	Grace Premium	Grace Premium
-settings.license.status.grace_free_lite	Grace Free Lite	Free Lite em GraÃ§a	Free Lite en Gracia	Grace Free Lite	Grace Free Lite	Grace Free Lite
-settings.license.status.inactive_premium	Inactive Premium	Premium Inativo	Premium Inactivo	æœªæ´»è· Premium	Premium Inactif	ÐÐµÐ°ÐºÑ‚. Premium
-overlay.license_required	License Required	LicenÃ§a NecessÃ¡ria	Licencia Requerida	éœ€è¦è®¸å¯	Licence Requise	Ð¢Ñ€ÐµÐ±ÑƒÐµÑ‚ÑÑ Ð›Ð¸Ñ†ÐµÐ½Ð·Ð¸Ñ
-overlay.premium_gate_message	To enable premium features purchase your license below and validate it in the Settings tab.	Para habilitar recursos premium, compre sua licenÃ§a abaixo e valide-a na aba ConfiguraÃ§Ãµes.	Para habilitar funciones premium, compre su licencia abajo y valÃ­dela en la pestaÃ±a ConfiguraciÃ³n.	è¦å¯ç”¨é¢†å…ˆåŠ¡è¯·åœ¨ä¸‹æ–¹è´­ä¹°è®¸å¯å¹¶åœ¨è®¾ç½®å­™ä¸­éªŒè¯ã€‚	Pour activer les fonctionnalitÃ©s premium, achetez votre licence ci-dessous et validez-la dans l'onglet RÃ©glages.	Ð§Ñ‚Ð¾Ð±Ñ‹ Ð²ÐºÐ»ÑŽÑ‡Ð¸Ñ‚ÑŒ Ð¿Ñ€ÐµÐ¼Ð¸ÑƒÐ¼, ÐºÑƒÐ¿Ð¸Ñ‚Ðµ Ð»Ð¸Ñ†ÐµÐ½Ð·Ð¸ÑŽ Ð¸ Ð¿Ñ€Ð¾Ð²ÐµÑ€ÑŒÑ‚Ðµ ÐµÑ‘ Ð² Ð²ÐºÐ»Ð°Ð´ÐºÐµ ÐÐ°ÑÑ‚Ñ€Ð¾Ð¹ÐºÐ¸.
-overlay.button.get_license	Get License	Obter LicenÃ§a	Obtener Licencia	èŽ·å–è®¸å¯	Obtenir la Licence	ÐŸÐ¾Ð»ÑƒÑ‡Ð¸Ñ‚ÑŒ Ð›Ð¸Ñ†ÐµÐ½Ð·Ð¸ÑŽ
-overlay.button.manage_membership	Manage Membership	Gerenciar Assinatura	Gestionar MembresÃ­a	ç®¡ç†ä¼šå‘˜	GÃ©rer l'Abonnement	Ð£Ð¿Ñ€Ð°Ð²Ð»ÐµÐ½Ð¸Ðµ ÐŸÐ¾Ð´Ð¿Ð¸ÑÐºÐ¾Ð¹
-analytics.button.opened_macro	Opened Nasdaq Macro	Nasdaq Macro aberto	Nasdaq Macro abierto	å·²æ‰“å¼€ Nasdaq Macro	Nasdaq Macro ouvert	Nasdaq Macro Ð¾Ñ‚ÐºÑ€Ñ‹Ñ‚
+summary.profit_factor	Profit Factor	Fator de Lucro	Factor de Beneficio	盈利因子	Profit Factor	Фактор Прибыли
+summary.reason.manual_other	Manual / Other	Manual / Outro	Manual / Otro	手动 / 其他	Manuel / Autre	Ручной / Другое
+summary.reason.news_event	News Event	Evento de Notícia	Evento de Noticias	新闻事件	Événement News	Новостное Событие
+summary.reason.replication_sync	Replication Sync	Replication Sync	Replication Sync	复制同步	Sync Réplication	Синхронизация Репликации
+summary.reason.risk_management	Risk Management	Gerenciamento de Risco	Gestión de Riesgo	风险管理	Gestion du Risque	Риск-Менеджмент
+summary.reason.session_end	Session End	Fim de Sessão	Fin de Sesión	时段结束	Fin de Session	Конец Сессии
+summary.reason.signal_flip	Signal Flip	Inversão de Sinal	Cambio de Señal	信号翻转	Flip de Signal	Смена Сигнала
+summary.reason.stop_loss	Stop Loss	Stop Loss	Stop Loss	止损	Stop Loss	Stop Loss
+summary.reason.take_profit	Take Profit	Take Profit	Take Profit	止盈	Take Profit	Take Profit
+summary.reason.unknown	Unknown	Desconhecido	Desconocido	未知	Inconnu	Неизвестно
+summary.reset_data	Reset Data	Resetar Dados	Restablecer Datos	重置数据	Réinitialiser les Données	Сбросить Данные
+summary.reset_data.details	This clears Journal, Critical Warnings, and all Summary trade statistics so you can start over.	Isso limpa o Journal, os Alertas Críticos e todas as estatísticas de trade do Summary para você começar do zero.	Esto limpia el Diario, las Alertas Críticas y todas las estadísticas del Summary para empezar de cero.	这将清除日志、关键预警以及 Summary 中的全部交易统计，以便重新开始。	Cela efface le Journal, les Alertes Critiques et toutes les statistiques de trade du Summary pour repartir de zéro.	Это очистит Journal, критические предупреждения и всю торговую статистику Summary, чтобы начать заново.
+summary.reset_data.prompt	Your data will be reset including statistics about your trades and accounts. Confirm?	Seus dados serão resetados, incluindo estatísticas sobre seus trades e contas. Confirmar?	Tus datos se restablecerán, incluidas las estadísticas de tus trades y cuentas. ¿Confirmar?	你的数据将被重置，包括交易和账户统计。确认吗？	Vos données seront réinitialisées, y compris les statistiques sur vos trades et vos comptes. Confirmer ?	Ваши данные будут сброшены, включая статистику по сделкам и счетам. Подтвердить?
+summary.reset_data.title	Reset Data	Resetar Dados	Restablecer Datos	重置数据	Réinitialiser les Données	Сбросить Данные
+summary.short	Short	Short	Short	空头	Short	Шорт
+summary.side	Side	Lado	Lado	方向	Sens	Сторона
+summary.side.long	Long	Long	Long	多头	Long	Лонг
+summary.side.short	Short	Short	Short	空头	Short	Шорт
+summary.title	Trading Summary	Resumo Operacional	Resumen Operativo	交易摘要	Résumé de Trading	Сводка по Торговле
+summary.total_trades	Total Trades	Total de Trades	Total Trades	总交易数	Trades Totaux	Всего Сделок
+summary.updated	Updated	Atualizado	Actualizado	更新于	Mis à Jour	Обновлено
+summary.win_rate	Win Rate	Taxa de Acerto	Tasa de Acierto	胜率	Taux de Réussite	Процент Побед
+tab.analytics	Analytics	Analytics	Analítica	分析	Analytique	Аналитика
+tab.dashboard	Dashboard	Dashboard	Panel	仪表盘	Tableau	Панель
+tab.journal	Journal	Journal	Diario	日志	Journal	Журнал
+tab.settings	Settings	Configurações	Configuración	设置	Réglages	Настройки
+settings.title	Settings	Configurações	Configuración	设置	Réglages	Настройки
+settings.risk.title	Risk Management Rules	Regras de Gestão de Risco	Reglas de Gestión de Riesgo	风险管理规则	Règles de Gestion du Risque	Правила Управления Риском
+settings.risk.enforce_15_flatten_freeze	Flatten and freeze account when buffer falls below 15% of maximum drawdown.	Achatar e congelar conta quando o buffer cair abaixo de 15% do drawdown máximo.	Aplanar y congelar cuenta cuando el buffer baje del 15% del drawdown máximo.	当缓冲低于最大回撤的15%时，平仓并冻结账户。	Aplatir et geler le compte lorsque le buffer tombe sous 15% du drawdown max.	При падении буфера ниже 15% макс. дд — закрыть и заморозить счет.
+settings.risk.enforce_20_one_contract	Force one-contract replication when buffer falls below 20% of maximum drawdown (release at 25%).	Forçar replicação de um contrato quando o buffer cair abaixo de 20% do drawdown máximo (liberar em 25%).	Forzar replicación de un contrato cuando el buffer baje del 20% del drawdown máximo (soltar al 25%).	当缓冲低于最大回撤的20%时，强制单合约复制（25%时解除）。	Forcer la réplication un contrat quand le buffer tombe sous 20% du drawdown max (relâcher à 25%).	При буфере < 20% макс. дд — одноконтрактная репликация (снять при 25%).
+settings.risk.enforce_80_flatten	Flatten account when unrealized loss exceeds 80% of maximum intratrade loss (max loss limit).	Achatar conta quando a perda não realizada exceder 80% da perda máxima intratrade.	Aplanar cuenta cuando la pérdida no realizada supere el 80% de la pérdida máxima intratrade.	当未实现亏损超过最大单笔交易亏损的80%时，平仓账户。	Aplatir le compte quand la perte non réalisée dépasse 80% de la perte max intratrade.	Закрыть счет, когда нереализов. убыток > 80% макс. внутрисделочного убытка.
+settings.risk.enforce_eval_lock_flatten	Flatten and lock evaluation account when equity reaches the evaluation target lock balance.	Achatar e bloquear conta de avaliação quando o patrimônio atingir o saldo de bloqueio da meta de avaliação.	Aplanar y bloquear cuenta de evaluación cuando el patrimonio alcance el saldo de bloqueo de la meta.	当权益达到评估目标锁定余额时，平仓并锁定评估账户。	Aplatir et verrouiller le compte d'évaluation quand l'equity atteint le solde de verrouillage cible.	Закрыть и заблокировать оценочный счет при достижении целевого баланса.
+settings.license.title	License	Licença	Licencia	许可证	Licence	Лицензия
+settings.license.key	License Key	Chave de Licença	Clave de Licencia	许可证密钥	Clé de Licence	Ключ Лицензии
+settings.license.key_placeholder	Enter license key	Digite a chave de licença	Introduce la clave de licencia	输入许可证密钥	Saisir la clé de licence	Введите ключ лицензии
+settings.license.paste_placeholder	Paste your license here	Cole sua licença aqui	Pega tu licencia aquí	请在此粘贴许可证	Collez votre licence ici	Вставьте лицензию сюда
+settings.button.save	Save Settings	Salvar Configurações	Guardar Configuración	保存设置	Enregistrer les Réglages	Сохранить Настройки
+settings.button.validate	Validate License Now	Validar Licença Agora	Validar Licencia Ahora	立即验证许可证	Valider la Licence Maintenant	Проверить Лицензию
+settings.feedback.saving	Saving!	Salvando!	¡Guardando!	正在保存…	Enregistrement…	Сохранение…
+settings.feedback.validating	Validating, please wait...	Validando, aguarde...	Validando, espere...	正在验证，请稍候…	Validation en cours…	Проверка лицензии…
+settings.license.status_format	License Status: {0}, Valid until {1}	Status da Licença: {0}, Válido até {1}	Estado de Licencia: {0}, Válido hasta {1}	许可证状态：{0}，有效期至 {1}	Statut Licence : {0}, Valide jusqu'au {1}	Статус Лицензии: {0}, Действ. до {1}
+settings.license.status.active_premium	Active Premium	Premium Ativo	Premium Activo	已激活 Premium	Premium Actif	Актив. Premium
+settings.license.status.free_lite	Free Lite	Free Lite	Free Lite	免费 Lite	Free Lite	Free Lite
+settings.license.status.grace_premium	Grace Premium	Premium em Graça	Premium en Gracia	Grace Premium	Grace Premium	Grace Premium
+settings.license.status.grace_free_lite	Grace Free Lite	Free Lite em Graça	Free Lite en Gracia	Grace Free Lite	Grace Free Lite	Grace Free Lite
+settings.license.status.inactive_premium	Inactive Premium	Premium Inativo	Premium Inactivo	未激活 Premium	Premium Inactif	Неакт. Premium
+overlay.license_required	License Required	Licença Necessária	Licencia Requerida	需要许可证	Licence Requise	Требуется Лицензия
+overlay.premium_gate_message	To enable premium features purchase your license below and validate it in the Settings tab.	Para habilitar recursos premium, compre sua licença abaixo e valide-a na aba Configurações.	Para habilitar funciones premium, compre su licencia abajo y valídela en la pestaña Configuración.	要启用高级功能，请在下方购买许可证并在“设置”选项卡中验证。	Pour activer les fonctionnalités premium, achetez votre licence ci-dessous et validez-la dans l'onglet Réglages.	Чтобы включить премиум, купите лицензию и проверьте её во вкладке Настройки.
+overlay.button.get_license	Get License	Obter Licença	Obtener Licencia	获取许可证	Obtenir la Licence	Получить Лицензию
+overlay.button.manage_membership	Manage Membership	Gerenciar Assinatura	Gestionar Membresía	管理会员	Gérer l'Abonnement	Управление Подпиской
+analytics.button.opened_macro	Opened Nasdaq Macro	Nasdaq Macro aberto	Nasdaq Macro abierto	已打开 Nasdaq Macro	Nasdaq Macro ouvert	Nasdaq Macro открыт
