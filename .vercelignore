@@ -1,1 +1,5 @@
 ninjatrader/**
+!ninjatrader/
+!ninjatrader/Glitch/
+!ninjatrader/Glitch/Docs/
+!ninjatrader/Glitch/Docs/**
