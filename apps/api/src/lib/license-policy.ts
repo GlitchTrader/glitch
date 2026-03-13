@@ -79,10 +79,6 @@ function unionSets(...sets: Set<string>[]): Set<string> {
   return union;
 }
 
-function shouldRejectConfiguredPlan(normalizedPlanCode: string, allowedPlanCodes: Set<string>): boolean {
-  return allowedPlanCodes.size > 0 && normalizedPlanCode.length > 0 && !allowedPlanCodes.has(normalizedPlanCode);
-}
-
 function readDefaultUnmappedPlan(): LicensePlan {
   const raw = sanitizeCodeToken(readOptionalEnv("WHOP_DEFAULT_ACTIVE_PLAN")).toLowerCase();
   if (raw === "premium") {
@@ -174,15 +170,7 @@ export function resolveEntitlementFromSource(
   }
 
   if (normalizedProductId && explicitPremiumProductIds.has(normalizedProductId)) {
-    if (shouldRejectConfiguredPlan(normalizedPlanCode, explicitPremiumPlanCodes) && strictPlanMapping) {
-      return {
-        plan: "free_lite",
-        billingVariant,
-        sourceProductId: trimmedProductId,
-        sourcePlanCode: trimmedPlanCode,
-      };
-    }
-
+    // Product ownership is authoritative for access; plan ids only refine billing/reporting.
     return {
       plan: "premium",
       billingVariant,
