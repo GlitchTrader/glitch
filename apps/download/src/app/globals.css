@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+:root {
+  --background: #050607;
+  --foreground: #f3f4f6;
+  --glitch-teal: #1abc9c;
+  --glitch-orange: #ff4200;
+  --surface: rgba(14, 16, 19, 0.92);
+  --surface-border: rgba(255, 255, 255, 0.08);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-glitch-teal: var(--glitch-teal);
+  --color-glitch-orange: var(--glitch-orange);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background:
+    radial-gradient(900px 420px at 88% 0%, rgba(26, 188, 156, 0.13), transparent 60%),
+    radial-gradient(780px 420px at 0% 8%, rgba(255, 66, 0, 0.12), transparent 58%),
+    var(--background);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: transparent;
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.download-grid {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0)),
+    rgba(7, 8, 10, 0.78);
+  border: 1px solid var(--surface-border);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.32);
+}
