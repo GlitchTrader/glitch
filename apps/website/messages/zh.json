@@ -1,0 +1,56 @@
+{
+  "nav": {
+    "home": "首页",
+    "offer": "优惠",
+    "pricing": "价格",
+    "affiliate": "联盟",
+    "docs": "文档",
+    "goPro": "Go Pro",
+    "memberHub": "会员中心",
+    "ariaHome": "Glitch 首页"
+  },
+  "footer": {
+    "readyTitle": "准备好用风控交易了吗？",
+    "readyDescription": "免费开始。需要更深入分析和更大复制规模时升级 Go Pro。",
+    "openMemberHub": "打开会员中心",
+    "alreadyJoined": "已加入？",
+    "copyright": "版权所有 Glitch。面向 prop 交易员的 NinjaTrader 风控优先 AddOn。",
+    "riskDisclosure": "风险披露",
+    "terms": "条款",
+    "privacy": "隐私"
+  },
+  "home": {
+    "badge": "NinjaTrader 资管交易助手",
+    "title": "面向资管交易员的风控优先操作系统",
+    "lead": "Glitch 助您保护账户、扩展复制并带上下文执行。若流程是认真的，工具也应是。",
+    "sublead": "从单账户评估到多账户运营，Glitch 将合规、复制、分析与绩效智能统一于一层。",
+    "alreadyJoined": "已加入？",
+    "openMemberHub": "打开会员中心",
+    "whyFailTitle": "为何有好策略账户仍会失败",
+    "whyFailP1": "多数亏损并非缺想法，而是可避免的操作错误：错误账户、错误规模、规则漂移、复制不匹配或波动放大时缺乏上下文。",
+    "whyFailP2": "Glitch 先解决这一层。可将其视为纪律化资管交易流程的任务控制助手。",
+    "growTitle": "Glitch 助您更快成长",
+    "growLead": "从保护起步。需要规模、更深信号上下文和更多账户运营时再升级付费。",
+    "startFree": "免费开始",
+    "freeTitle": "核心保护，无需信用卡压力",
+    "goProLabel": "Go Pro",
+    "goProTitle": "为严肃运营者提供规模、上下文与控制",
+    "pricingTitle": "尊重交易员真实购买方式的定价",
+    "pricingLead": "免费试用。需要高级能力时灵活计费。当 Glitch 成为业务一部分时可选终身访问。",
+    "memberHubBlurb": "提供下载、更新与激活步骤。",
+    "setupTitle": "几分钟设置，长期改进",
+    "activationTitle": "激活流程",
+    "dailyTitle": "日常运营节奏",
+    "faqTitle": "常见问题",
+    "faqLead": "为关心绩效与流程的交易员提供的专业解答。"
+  },
+  "languages": {
+    "label": "选择语言",
+    "en": "English",
+    "pt": "Português",
+    "es": "Español",
+    "zh": "中文",
+    "fr": "Français",
+    "ru": "Русский"
+  }
+}

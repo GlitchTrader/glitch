@@ -1,27 +1,53 @@
-import Link from "next/link";
+import Image from "next/image";
+import { getTranslations } from "next-intl/server";
 import { CoreCtas } from "@/components/core-ctas";
+import { ExternalLink } from "@/components/external-link";
+import { marketingLinks } from "@/lib/marketing-links";
+import { Link } from "@/i18n/navigation";
 
-export function SiteFooter() {
+export async function SiteFooter() {
+  const t = await getTranslations("footer");
+  const navT = await getTranslations("nav");
   return (
     <footer className="border-t border-zinc-200 dark:border-zinc-800">
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-        <h2 className="text-lg font-semibold tracking-tight">Ready to trade with guardrails?</h2>
-        <p className="mt-2 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-          Start free. Upgrade to Go Pro when you want deeper analytics and larger replication scale.
-        </p>
-        <CoreCtas className="mt-6" />
+        <div className="w-full md:max-w-2xl">
+            <Image
+              src="/images/branding/Glitch%20Logo.svg"
+              alt="Glitch"
+              width={110}
+              height={30}
+              className="h-7 w-auto"
+              unoptimized
+            />
+            <h2 className="mt-5 text-lg font-semibold tracking-tight">{t("readyTitle")}</h2>
+            <p className="mt-2 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
+              {t("readyDescription")}
+            </p>
+            <CoreCtas className="mt-6" />
+            <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
+              {t("alreadyJoined")}{" "}
+              <ExternalLink href={marketingLinks.memberHubUrl} className="font-medium text-glitch-teal hover:underline">
+                {t("openMemberHub")}
+              </ExternalLink>
+              .
+            </p>
+        </div>
 
         <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-zinc-200 pt-6 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-          <span>Copyright Glitch. Risk-first NinjaTrader AddOn for prop traders.</span>
+          <span>{t("copyright")}</span>
           <div className="flex gap-6">
+            <ExternalLink href={marketingLinks.docsUrl} className="hover:text-zinc-700 dark:hover:text-zinc-300">
+              {navT("docs")}
+            </ExternalLink>
             <Link href="/risk-disclosure" className="hover:text-zinc-700 dark:hover:text-zinc-300">
-              Risk disclosure
+              {t("riskDisclosure")}
             </Link>
             <Link href="/terms" className="hover:text-zinc-700 dark:hover:text-zinc-300">
-              Terms
+              {t("terms")}
             </Link>
             <Link href="/privacy" className="hover:text-zinc-700 dark:hover:text-zinc-300">
-              Privacy
+              {t("privacy")}
             </Link>
           </div>
         </div>

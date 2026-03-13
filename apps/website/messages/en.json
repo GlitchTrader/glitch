@@ -1,0 +1,56 @@
+{
+  "nav": {
+    "home": "Home",
+    "offer": "Offer",
+    "pricing": "Pricing",
+    "affiliate": "Affiliate",
+    "docs": "Docs",
+    "goPro": "Go Pro",
+    "memberHub": "Member Hub",
+    "ariaHome": "Glitch home"
+  },
+  "footer": {
+    "readyTitle": "Ready to trade with guardrails?",
+    "readyDescription": "Start free. Upgrade to Go Pro when you want deeper analytics and larger replication scale.",
+    "openMemberHub": "Open Member Hub",
+    "alreadyJoined": "Already joined?",
+    "copyright": "Copyright Glitch. Risk-first NinjaTrader AddOn for prop traders.",
+    "riskDisclosure": "Risk disclosure",
+    "terms": "Terms",
+    "privacy": "Privacy"
+  },
+  "home": {
+    "badge": "Prop Trading Assistant for NinjaTrader",
+    "title": "The Risk-First Operating System for Prop Traders",
+    "lead": "Glitch helps you protect accounts, scale replication, and execute with context. If your process is serious, your tooling should be too.",
+    "sublead": "From single-account evaluations to high-account-count operations, Glitch unifies compliance enforcement, replication, analytics, and performance intelligence in one assistant layer.",
+    "alreadyJoined": "Already joined?",
+    "openMemberHub": "Open Member Hub",
+    "whyFailTitle": "Why accounts fail, even with good strategy",
+    "whyFailP1": "Most losses are not from lacking ideas. They come from avoidable operational errors: wrong account, wrong size, rule drift, replication mismatch, or no context when volatility spikes.",
+    "whyFailP2": "Glitch was built to solve that layer first. Think of it as your mission-control assistant for disciplined prop trading workflows.",
+    "growTitle": "Glitch helps you grow faster",
+    "growLead": "Start with protection. Upgrade to paid access when you want scale, deeper signal context, and higher-account-count operations.",
+    "startFree": "Start Free",
+    "freeTitle": "Core protection, no credit card pressure",
+    "goProLabel": "Go Pro",
+    "goProTitle": "Scale, context, and control for serious operators",
+    "pricingTitle": "Pricing that respects how traders actually buy",
+    "pricingLead": "Free for proof. Flexible billing when you want premium power. Lifetime access when Glitch becomes part of the business.",
+    "memberHubBlurb": "is where downloads, updates, and activation steps live.",
+    "setupTitle": "Setup in minutes, improve for years",
+    "activationTitle": "Activation flow",
+    "dailyTitle": "Daily operating cadence",
+    "faqTitle": "FAQ",
+    "faqLead": "Professional answers for traders who care about performance and process."
+  },
+  "languages": {
+    "label": "Select language",
+    "en": "English",
+    "pt": "Português",
+    "es": "Español",
+    "zh": "中文",
+    "fr": "Français",
+    "ru": "Русский"
+  }
+}

@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { CheckList } from "@/components/check-list";
 import { ExternalLink } from "@/components/external-link";
-import { pricingPlans, type PricingPlanTone } from "@/lib/pricing";
+import { getPricingContent, type PricingPlan, type PricingPlanTone } from "@/lib/pricing";
 
 type PricingCardsProps = {
   className?: string;
   useAnchors?: boolean;
+  plans?: PricingPlan[];
+  featureLabel?: string;
 };
 
 const baseCardClass =
@@ -46,10 +48,15 @@ const buttonToneClass: Record<PricingPlanTone, string> = {
     "border-2 border-glitch-teal text-glitch-teal hover:bg-glitch-teal/10 dark:hover:bg-glitch-teal/20",
 };
 
-export function PricingCards({ className, useAnchors = false }: PricingCardsProps) {
+const defaultPricingContent = getPricingContent("en");
+
+export function PricingCards({ className, useAnchors = false, plans, featureLabel }: PricingCardsProps) {
+  const resolvedPlans = plans ?? defaultPricingContent.pricingPlans;
+  const resolvedFeatureLabel = featureLabel ?? defaultPricingContent.featureLabel;
+
   return (
     <div className={`grid gap-6 lg:grid-cols-3 ${className ?? ""}`.trim()}>
-      {pricingPlans.map((plan) => {
+      {resolvedPlans.map((plan) => {
         const isExternalCta = plan.ctaHref.startsWith("http");
         const buttonClassName =
           `mt-6 inline-flex h-12 w-full items-center justify-center rounded-full px-6 text-center font-medium transition-colors ${buttonToneClass[plan.tone]}`;
@@ -77,7 +84,7 @@ export function PricingCards({ className, useAnchors = false }: PricingCardsProp
                   {plan.eyebrow}
                 </p>
                 {plan.badge ? (
-                  <span className="relative -top-[5px] -mb-[7px] inline-flex rounded-full border border-glitch-orange/40 bg-glitch-orange/10 px-3 py-1 text-xs font-semibold text-glitch-orange">
+                  <span className="relative -top-[5px] -mb-[7px] inline-flex shrink-0 whitespace-nowrap rounded-full border border-glitch-orange/40 bg-glitch-orange/10 px-3 py-1 text-xs font-semibold text-glitch-orange">
                     {plan.badge}
                   </span>
                 ) : null}
@@ -97,7 +104,7 @@ export function PricingCards({ className, useAnchors = false }: PricingCardsProp
 
               <div className="mt-8">
                 <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${bodyToneClass[plan.tone]}`}>
-                  What you get
+                  {resolvedFeatureLabel}
                 </p>
                 <CheckList
                   className="mt-4"

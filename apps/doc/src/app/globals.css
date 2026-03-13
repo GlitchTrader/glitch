@@ -1,0 +1,173 @@
+@import "tailwindcss";
+
+:root {
+  --background: #050607;
+  --foreground: #f4f4f5;
+  --glitch-teal: #1abc9c;
+  --glitch-orange: #ff4200;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-glitch-teal: var(--glitch-teal);
+  --color-glitch-orange: var(--glitch-orange);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 600px at 90% -10%, rgba(26, 188, 156, 0.12), transparent 55%),
+    radial-gradient(900px 500px at 10% 0%, rgba(255, 66, 0, 0.08), transparent 45%),
+    var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+.docs-prose {
+  color: #d4d4d8;
+  line-height: 1.8;
+}
+
+.docs-prose > :first-child {
+  margin-top: 0;
+}
+
+.docs-prose h1,
+.docs-prose h2,
+.docs-prose h3,
+.docs-prose h4 {
+  color: #fafafa;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  scroll-margin-top: 7rem;
+}
+
+.docs-prose h1 {
+  margin-top: 0;
+  margin-bottom: 1.25rem;
+  font-size: 2.4rem;
+}
+
+.docs-prose h2 {
+  margin-top: 2.75rem;
+  margin-bottom: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 1.7rem;
+}
+
+.docs-prose h3 {
+  margin-top: 2rem;
+  margin-bottom: 0.85rem;
+  font-size: 1.3rem;
+}
+
+.docs-prose h4 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.7rem;
+  font-size: 1.05rem;
+}
+
+.docs-prose p,
+.docs-prose ul,
+.docs-prose ol,
+.docs-prose blockquote,
+.docs-prose table,
+.docs-prose pre {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.docs-prose ul,
+.docs-prose ol {
+  padding-left: 1.35rem;
+}
+
+.docs-prose li + li {
+  margin-top: 0.45rem;
+}
+
+.docs-prose strong {
+  color: #fafafa;
+  font-weight: 600;
+}
+
+.docs-prose hr {
+  margin: 2rem 0;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.docs-prose blockquote {
+  border-left: 3px solid rgba(26, 188, 156, 0.6);
+  padding-left: 1rem;
+  color: #a1a1aa;
+}
+
+.docs-prose pre {
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.25rem;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 1rem 1.1rem;
+  color: #f4f4f5;
+}
+
+.docs-prose pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.docs-prose table {
+  width: 100%;
+  overflow: hidden;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+}
+
+.docs-prose thead {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.docs-prose th,
+.docs-prose td {
+  padding: 0.85rem 1rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.docs-prose tbody tr + tr td {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.docs-prose th {
+  color: #fafafa;
+  font-weight: 600;
+}
+
+.docs-prose a {
+  text-underline-offset: 0.24em;
+}
+
+@media (max-width: 640px) {
+  .docs-prose h1 {
+    font-size: 2rem;
+  }
+
+  .docs-prose h2 {
+    font-size: 1.45rem;
+  }
+
+  .docs-prose table {
+    display: block;
+    overflow-x: auto;
+  }
+}

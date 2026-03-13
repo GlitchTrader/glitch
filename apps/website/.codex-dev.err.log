@@ -1,0 +1,945 @@
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+⚠ Found a change in next.config.ts. Restarting the server to apply the changes...
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⨯ Error: Couldn't find next-intl config file. Please follow the instructions at https://next-intl.dev/docs/getting-started/app-router
+    at RootLayout (src\app\layout.tsx:21:37)
+  19 |   children: React.ReactNode;
+  20 | }>) {
+> 21 |   const messages = await getMessages();
+     |                                     ^
+  22 |   return (
+  23 |     <html suppressHydrationWarning>
+  24 |       <body {
+  digest: '4088363166'
+}
+⚠ Found a change in next.config.ts. Restarting the server to apply the changes...
+⨯ Failed to load next.config.ts, see more info here https://nextjs.org/docs/messages/next-config-error
+Error: 
+[next-intl] Turbopack support for next-intl currently does not support absolute paths, please provide a relative one (e.g. './src/i18n/config.ts').
+
+Found: d:\click-blue\trading\glitch-platform\apps\website\src\i18n\request.ts
+
+    at Object.<anonymous> (d:\click-blue\trading\glitch-platform\apps\website\next.config.compiled.js:57:18)
+npm error Lifecycle script `dev` failed with error:
+npm error code 1
+npm error path d:\click-blue\trading\glitch-platform\apps\website
+npm error workspace website@0.1.0
+npm error location d:\click-blue\trading\glitch-platform\apps\website
+npm error command failed
+npm error command C:\WINDOWS\system32\cmd.exe /d /s /c next dev --webpack --hostname 127.0.0.1 --port 3000

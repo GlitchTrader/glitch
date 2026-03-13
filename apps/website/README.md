@@ -2,15 +2,21 @@
 
 Next.js marketing website for the Glitch NinjaTrader AddOn: homepage, pricing, offer, affiliate, and legal pages. CTAs route to Whop product pages, affiliate dashboard, and member hub URLs from environment variables.
 
+## Internationalization (i18n)
+
+The site uses **next-intl** with locale-prefixed routes. Supported locales (aligned with the AddOn) are: **en**, **pt**, **es**, **zh**, **fr**, **ru**. A language switcher with flags is in the navbar (and on small screens next to the nav links). Locale is detected in order: path prefix → cookie (from previous choice) → `Accept-Language` header → default (en). Message dictionaries live in `messages/{locale}.json`.
+
 ## Routes
 
-- `/` - Home (hero, features, FAQ, CTAs).
-- `/pricing` - Pricing (free, Go Pro, lifetime; direct conversion CTAs).
-- `/offer` - Offer page (free vs paid positioning).
-- `/affiliate` - Affiliate program.
-- `/privacy` - Privacy policy.
-- `/terms` - Terms of service.
-- `/risk-disclosure` - Risk disclosure.
+All content is under a locale prefix (e.g. `/en`, `/pt`). Visiting `/` redirects to the detected or default locale.
+
+- `/[locale]` - Home (hero, features, FAQ, CTAs).
+- `/[locale]/pricing` - Pricing (free, Go Pro, lifetime; direct conversion CTAs).
+- `/[locale]/offer` - Offer page (free vs paid positioning).
+- `/[locale]/affiliate` - Affiliate program.
+- `/[locale]/privacy` - Privacy policy.
+- `/[locale]/terms` - Terms of service.
+- `/[locale]/risk-disclosure` - Risk disclosure.
 
 ## Environment
 

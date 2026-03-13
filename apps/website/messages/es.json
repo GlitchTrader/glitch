@@ -1,0 +1,56 @@
+{
+  "nav": {
+    "home": "Inicio",
+    "offer": "Oferta",
+    "pricing": "Precios",
+    "affiliate": "Afiliados",
+    "docs": "Docs",
+    "goPro": "Go Pro",
+    "memberHub": "Member Hub",
+    "ariaHome": "Glitch inicio"
+  },
+  "footer": {
+    "readyTitle": "¿Listo para operar con protecciones?",
+    "readyDescription": "Empieza gratis. Pásate a Go Pro cuando quieras más análisis y escala de replicación.",
+    "openMemberHub": "Abrir Member Hub",
+    "alreadyJoined": "¿Ya te uniste?",
+    "copyright": "Copyright Glitch. AddOn NinjaTrader con foco en riesgo para prop traders.",
+    "riskDisclosure": "Aviso de riesgo",
+    "terms": "Términos",
+    "privacy": "Privacidad"
+  },
+  "home": {
+    "badge": "Asistente de prop trading para NinjaTrader",
+    "title": "El sistema operativo con foco en riesgo para prop traders",
+    "lead": "Glitch te ayuda a proteger cuentas, escalar replicación y operar con contexto. Si tu proceso es serio, tus herramientas también deben serlo.",
+    "sublead": "Desde evaluaciones de una cuenta hasta operaciones con muchas cuentas, Glitch unifica cumplimiento, replicación, análisis e inteligencia de rendimiento en una capa.",
+    "alreadyJoined": "¿Ya te uniste?",
+    "openMemberHub": "Abrir Member Hub",
+    "whyFailTitle": "Por qué fallan las cuentas, incluso con buena estrategia",
+    "whyFailP1": "La mayoría de las pérdidas no vienen de falta de ideas. Vienen de errores operativos evitables: cuenta equivocada, tamaño equivocado, desvío de reglas, desajuste de replicación o sin contexto cuando sube la volatilidad.",
+    "whyFailP2": "Glitch se creó para resolver esa capa primero. Piénsalo como tu asistente de control de misión para flujos de prop trading disciplinados.",
+    "growTitle": "Glitch te ayuda a crecer más rápido",
+    "growLead": "Empieza con protección. Pásate a acceso de pago cuando quieras escala, más contexto de señal y operaciones con más cuentas.",
+    "startFree": "Empezar gratis",
+    "freeTitle": "Protección básica, sin presión de tarjeta",
+    "goProLabel": "Go Pro",
+    "goProTitle": "Escala, contexto y control para operadores serios",
+    "pricingTitle": "Precios que respetan cómo compran los traders",
+    "pricingLead": "Gratis para probar. Facturación flexible cuando quieras potencia premium. Acceso vitalicio cuando Glitch sea parte del negocio.",
+    "memberHubBlurb": "es donde están descargas, actualizaciones y activación.",
+    "setupTitle": "Configuración en minutos, mejora durante años",
+    "activationTitle": "Flujo de activación",
+    "dailyTitle": "Cadencia operativa diaria",
+    "faqTitle": "Preguntas frecuentes",
+    "faqLead": "Respuestas profesionales para traders que se preocupan por el rendimiento y el proceso."
+  },
+  "languages": {
+    "label": "Seleccionar idioma",
+    "en": "English",
+    "pt": "Português",
+    "es": "Español",
+    "zh": "中文",
+    "fr": "Français",
+    "ru": "Русский"
+  }
+}

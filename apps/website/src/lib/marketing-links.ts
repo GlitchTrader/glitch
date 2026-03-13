@@ -15,6 +15,10 @@ const whopUrls = {
   memberHubUrl: "https://whop.com/joined/glitchtrader/",
 };
 
+const publicUrls = {
+  docsUrl: "https://docs.glitchtrader.com",
+};
+
 function readPublicUrl(name: string, fallback: string): string {
   const value = process.env[name]?.trim();
   if (!value) {
@@ -32,4 +36,5 @@ export const marketingLinks = {
   lifetimeCheckoutUrl: readPublicUrl("NEXT_PUBLIC_WHOP_CHECKOUT_LIFETIME_URL", whopUrls.goProProductUrl),
   affiliateDashboardUrl: readPublicUrl("NEXT_PUBLIC_WHOP_AFFILIATE_URL", whopUrls.affiliateDashboardUrl),
   memberHubUrl: readPublicUrl("NEXT_PUBLIC_WHOP_MEMBER_HUB_URL", whopUrls.memberHubUrl),
+  docsUrl: readPublicUrl("NEXT_PUBLIC_DOCS_URL", publicUrls.docsUrl),
 };

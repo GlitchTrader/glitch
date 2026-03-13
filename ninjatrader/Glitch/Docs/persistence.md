@@ -1,101 +1,91 @@
 # Persistence
 
-All paths are provided by **Glitch.Services.GlitchStateStore** unless noted. Default root: `GlitchData` under NinjaTrader user data directory; if that is unavailable, fallback is `%LocalApplicationData%\Glitch\GlitchData`. Legacy files under `bin\Custom\AddOns\GlitchAddOn\Resources` may be migrated or sanitized on first use.
+## Storage root
 
-## Paths
+Glitch stores runtime state under `GlitchData` in the NinjaTrader user-data area. If that location is unavailable, the product falls back to a local application-data path.
 
-- **GlitchStateStore.GetDefaultPath(fileName)** — Returns `{userDataDir}\GlitchData\{fileName}` or fallback path. Used for all files below.
-- **GlitchRuntimePolicyStore.GetDefaultSettingsPath()** — `GetDefaultPath("RuntimePolicy.tsv")`.
-- **GlitchRuntimePolicyStore.GetDefaultLicenseCachePath()** — `GetDefaultPath("LicenseCache.tsv")`.
-- **GlitchLocalizationService.GetDefaultLocalizationPath()** — `GetDefaultPath("Localization.tsv")`.
-- **GlitchLocalizationService.GetDefaultSettingsPath()** — `GetDefaultPath("UiSettings.tsv")`.
+That design gives the AddOn a predictable, user-owned storage location while still allowing safe fallback behavior.
 
-## File and Record Types (code-derived)
+## Persistence model
 
-### AccountOverrides.tsv
+Glitch uses small tab-separated runtime files for operational state. Comment lines start with `#`, and the persistence layer ensures directories and template files exist before writing.
 
-- **Header:** `# account\tstatus\tfirmId\tsize\tmanual`
-- **Load:** `LoadSelectionOverrides(filePath, normalizeStatus)` → `Dictionary<string, SelectionOverrideRecord>` (key = account name).
-- **Save:** `SaveSelectionOverrides(filePath, records)`.
-- **SelectionOverrideRecord:** AccountStatus, PropFirmId, AccountSize (nullable), IsManual.
+Legacy resource files may be migrated forward on first use so newer builds can continue from earlier local state.
 
-### AccountGroups.tsv
+## Runtime files
 
-- **Header:** `# type\tgroupId\taccount\tfollowerSize\tratio\tmasterSize\tenabled`
-- **Types:** `G` = group (groupId, masterAccount, masterSize); `M` = member (groupId, followerAccount, followerSize, ratio, masterSize, enabled 1/0).
-- **Load:** `LoadAccountGroups(filePath)` → `List<AccountGroupRecord>`.
-- **Save:** `SaveAccountGroups(filePath, groups)`.
-- **AccountGroupRecord:** GroupId, MasterAccount, MasterSize, Members (list of AccountGroupMemberRecord). **AccountGroupMemberRecord:** FollowerAccount, FollowerSize, Ratio, MasterSize, IsEnabled.
+### `AccountOverrides.tsv`
 
-### AccountPeaks.tsv
+Stores manual account classification or override state, such as account status or firm mapping overrides.
 
-- **Header:** `# account\tpeak_equity\tlast_equity\tupdated_utc_ticks`
-- **Load:** `LoadPeakStates(filePath)` → `Dictionary<string, PeakStateRecord>`.
-- **Save:** `SavePeakStates(filePath, states)`.
-- **PeakStateRecord:** AccountName, PeakEquity, LastEquity, UpdatedUtc.
+### `AccountGroups.tsv`
 
-### WindowPlacement.tsv
+Stores replication groups, master accounts, follower memberships, sizing, and enabled state.
 
-- **Header:** `# left\ttop\twidth\theight\tstate`
-- **Load:** `TryLoadWindowPlacement(filePath, out WindowPlacementRecord)`.
-- **Save:** `SaveWindowPlacement(filePath, record)`.
-- **WindowPlacementRecord:** Left, Top, Width, Height, IsMaximized (state = "Maximized" or "Normal").
+### `AccountPeaks.tsv`
 
-### Journal.tsv
+Stores peak-equity style state used by compliance and drawdown-aware workflows.
 
-- **Header:** `# utc_ticks\taccount\tcategory\tmessage`
-- **Load:** `LoadJournalEntries(filePath)` → `List<JournalRecord>`, ordered by TimestampUtc descending.
-- **Save:** `SaveJournalEntries(filePath, entries)`; keeps up to 1200 entries.
-- **JournalRecord:** TimestampUtc, AccountName, Category, Message.
+### `WindowPlacement.tsv`
 
-### CriticalWarnings.tsv
+Stores the Glitch main-window position, size, and maximized state.
 
-- **Header:** `# utc_ticks\taccount\tmessage\twarning_key\tunlocks_trading\tis_dismissed\tdismissed_utc_ticks`
-- **Load:** `LoadCriticalWarnings(filePath)` → `List<CriticalWarningRecord>`.
-- **Save:** `SaveCriticalWarnings(filePath, entries)`; keeps up to 600 entries.
-- **CriticalWarningRecord:** TimestampUtc, AccountName, Message, WarningKey, UnlocksTrading, IsDismissed, DismissedUtc.
+### `Journal.tsv`
 
-### TradeLedger.tsv
+Stores journal entries used by the operator review surface.
 
-- **Header (from GlitchTradeLedgerService):** `# trade_id\tentry_utc_ticks\texit_utc_ticks\taccount\tinstrument\tside\tcontracts\tentry_price\texit_price\tpnl_points\topen_reason\tclose_reason\tentry_session\texit_session\ttrade_source\tentry_type\texit_type\tentry_signal\texit_signal`
-- Used by **GlitchTradeLedgerService** (merge and flush with min write interval and max rows).
+### `CriticalWarnings.tsv`
 
-### RiskLocks.tsv
+Stores warning history and dismissal state for critical account warnings.
 
-- **Template line:** `# event_id\tutc_ticks\taccount\tmessage`
-- Used by risk lock ledger.
+### `TradeLedger.tsv`
 
-### FundamentalCache.tsv
+Stores trade round-trip history used by review and insight workflows.
 
-- **Template line:** `# type\tutc_ticks\tc1\tc2\tc3\tc4\tc5\tc6\tc7`
-- Used by fundamental analysis cache.
+### `RiskLocks.tsv`
 
-### Localization.tsv
+Stores risk-lock events used by compliance-aware review surfaces.
 
-- **Template line:** `# key\ten-US\tpt-BR\tes-ES\tzh-CN\tfr-FR\tru-RU`
-- Key → language code → translated string. Loaded by **GlitchLocalizationService** (bundled path + runtime path merge).
+### `FundamentalCache.tsv`
 
-### UiSettings.tsv
+Stores cached market-context records used by the broader analytics layer.
 
-- **Template line:** `# key\tvalue`
-- Used for UI preferences (e.g. preferred language code).
+### `Localization.tsv`
 
-### RuntimePolicy.tsv
+Stores the shared localization catalog used by the UI localization service.
 
-- **Purpose:** Runtime policy settings (compliance toggles, license key storage, API base URL, installation ID). **GlitchRuntimePolicyStore** load/save.
+### `UiSettings.tsv`
 
-### LicenseCache.tsv
+Stores UI preferences such as the preferred language code.
 
-- **Purpose:** Cached license state (signed token, plan, feature flags, grace window). **GlitchRuntimePolicyStore** load/save.
+### `RuntimePolicy.tsv`
 
-### ApiKeys.tsv
+Stores local runtime policy settings and entitlement-related runtime preferences.
 
-- **Path:** `GetDefaultPath("ApiKeys.tsv")`. Template: comment lines plus `# key\tvalue`. Current AddOn uses license-gated Glitch API for fundamentals; local API keys for external providers are not loaded from this file in the current codebase.
+### `LicenseCache.tsv`
 
-## Helpers
+Stores cached license state so the AddOn can behave predictably between live entitlement checks.
 
-- **CleanPersistToken(string):** Replaces tab and newline with space, trims.
-- **ParseBooleanToken(string):** True for "true", "1", "yes" (case-insensitive).
-- **ReadAllDataLines(filePath):** Lines that are non-empty and do not start with `#`; tab escapes normalized.
-- **WriteAllLines(filePath, lines):** Ensures directory exists, writes lines.
-- **NormalizeTabEscapes:** Replaces `` `t `` with tab in value.
+### `ApiKeys.tsv`
+
+Reserved for local key-style settings where applicable. Current public docs intentionally keep this description generic and do not publish provider-specific runtime configuration details.
+
+## Helper behavior
+
+The persistence layer also provides a small set of normalization helpers for:
+
+- cleaning stored text tokens
+- parsing common boolean values
+- skipping comment and blank lines
+- normalizing tab-escaped values
+
+## Summary
+
+What matters most is not the exact line format of every file, but the persistence contract:
+
+- state is local and predictable
+- operational files are small and inspectable
+- runtime recovery does not depend on opaque binary blobs
+- Glitch can restore its operating surface after restart without inventing state
+
+That makes the product easier to audit, easier to recover, and easier to reason about in production use.

@@ -1,215 +1,174 @@
-# API Reference (Code-Derived)
+# API Reference
 
-Key types and members as they appear in the code. Not exhaustive; covers contracts used across AddOn and Indicator.
+This page summarizes the most important product contracts exposed across the AddOn, indicator, and shared service layers.
 
-## AddOn
+## AddOn entry points
 
-### GlitchAddOn (partial)
+### `GlitchAddOn`
 
-- **OnStateChange()** — SetDefaults / Active / Terminated.
-- **OnWindowCreated(Window)** — AttachControlCenterMenus(ControlCenter) or TryAttachChartTraderWidget(window).
-- **OnWindowDestroyed(Window)** — DetachControlCenterMenus or DetachChartTraderWidget.
-- **ShowMainWindowFromExternalSurface()** — Static; invokes ShowWindow on active instance on UI thread.
+Primary host entry point for the product.
 
-### GlitchShellBridge (static)
+Key responsibilities:
 
-- **event StateChanged**
-- **RegisterMainWindow(GlitchMainWindow)**, **UnregisterMainWindow(GlitchMainWindow)**
-- **Publish(GlitchShellSnapshot)**, **GetSnapshot()** → GlitchShellSnapshot
-- **ToggleReplication()** → bool
-- **FlattenAll()** → bool
+- attach and detach Glitch UI surfaces
+- manage the active main-window instance
+- attach Chart Trader controls
+- expose the product entry point inside NinjaTrader
 
-### GlitchShellSnapshot
+### `GlitchShellBridge`
 
-- **IsReplicating** (bool)
-- **GroupsByMaster** (IReadOnlyDictionary<string, GlitchGroupRuntimeSummary>)
-- **Empty()** → GlitchShellSnapshot
+Host-side shell bridge for compact surfaces and operator actions.
 
-### GlitchGroupRuntimeSummary
+Key responsibilities:
 
-- **MasterAccount**, **EnabledFollowerCount**, **GroupPnlRaw**
+- register and unregister the main window
+- publish shell snapshot state
+- expose current shell snapshot
+- forward replication and flatten actions
 
----
+### `GlitchShellSnapshot`
 
-## Feed Bus (UI)
+Summary contract for shell state, including replication state and grouped runtime summaries.
 
-### GlitchAnalyticsFeedBus (static)
+## Analytics contracts
 
-- **Publish(GlitchIndicatorReading)**
-- **RegisterBridge(string instrumentRoot, bool publishToGlitchUi)**
-- **TouchBridge(string instrumentRoot, bool publishToGlitchUi, bool isTrackedPrimaryTimeframe)**
-- **UnregisterBridge(string instrumentRoot)**
-- **RegisterBridgeBootstrapPublisher(string instrumentRoot, Action publisher)**
-- **UnregisterBridgeBootstrapPublisher(string instrumentRoot, Action publisher)**
-- **RequestBridgeBootstrapPublish(string instrumentRoot)** → bool
-- **GetBridgeInstrumentRoots(DateTime nowUtc, TimeSpan maxAge)** → IReadOnlyList<string>
-- **GetActiveInstrumentRoots(DateTime nowUtc, TimeSpan maxAge)** → IReadOnlyList<string>
-- **TryGetBridgeStatus(string instrumentRoot, DateTime nowUtc, TimeSpan maxAge, out GlitchBridgeStatus status)** → bool (internal)
-- **TryGetSnapshot(string instrumentRoot, DateTime nowUtc, TimeSpan maxAge, out GlitchIndicatorInstrumentSnapshot snapshot)** → bool (internal)
+### `GlitchAnalyticsFeedBus`
 
-### GlitchIndicatorReading
+Runtime cache for indicator-published analytics.
 
-- All properties: InstrumentRoot, Minutes, UtcTime, CurrentPrice, AveragePrice, Atr, Adx, Score, RawScore, DirectionalScore, TradeabilityScore, SignalLabel, VolatilityHint, TrendHint, RegimeLabel, NoTradeReasons, Rsi, StochK, ZScore, EmaAlignment, RegimeWeight, OscillatorCompositeScore, MaCompositeScore, OrderFlow* (Score, Confidence, Reliability, CumulativeDelta, DeltaChange, Vwap, VwapDeviation, AggressionBalance, DepthImbalance, Hint), SessionName, SessionHigh, SessionLow, PreviousSessionHigh, PreviousSessionLow.
-- **Clone()** → GlitchIndicatorReading
+Key responsibilities:
 
-### GlitchIndicatorInstrumentSnapshot
+- accept published readings
+- track active bridge presence
+- expose fresh instrument snapshots
+- support bootstrap publishing when a feed is present but no fresh snapshot exists yet
 
-- **InstrumentRoot**, **UpdatedUtc**, **CurrentPrice**, **SessionName**, **SessionHigh**, **SessionLow**, **PreviousSessionHigh**, **PreviousSessionLow**, **TimeframeReadings** (Dictionary<int, GlitchIndicatorReading>)
+### `GlitchIndicatorReading`
 
-### GlitchBridgeStatus (internal)
+Normalized reading contract published from the indicator into the AddOn. It carries:
 
-- **InstrumentRoot**, **ActiveInstanceCount**, **PublishToGlitchUi**, **IsTrackedPrimaryTimeframe**, **LastHeartbeatUtc**
+- instrument and timeframe identity
+- timestamp
+- price and volatility context
+- signal and regime context
+- session context
+- optional order-flow context
 
----
+### `GlitchIndicatorInstrumentSnapshot`
 
-## Analytics Engine (UI)
+Instrument-level snapshot used by the AddOn analytics engine to build UI-ready summaries.
 
-### GlitchAnalyticsEngine
+### `GlitchAnalyticsEngine`
 
-- **BuildInstrumentOptions(IEnumerable<Account> accounts, string selectedInstrument)** → IReadOnlyList<string>
-- **BuildSnapshot(string instrumentRoot, IEnumerable<Account> accounts, DateTime nowUtc)** → GlitchAnalyticsSnapshot
+Builds the AddOn-facing analytics snapshot from current accounts and fresh feed state.
 
-### GlitchAnalyticsSnapshot
+### `GlitchAnalyticsSnapshot`
 
-- **InstrumentRoot**, **CurrentPrice**, **SessionName**, **SessionHigh**, **SessionLow**, **PreviousSessionHigh**, **PreviousSessionLow**, **CompositeScore**, **CompositeSignal**, **TimeframeReadings** (IReadOnlyList<GlitchTimeframeReading>), **NewsSentiment**, **EarningsAnalysis**, **OfficialNews**, **ScoreSectionTitle**, **IsNewsEventLockoutActive**, **NewsEventLockoutText**, **Mag7ScoreLines**, **LatestHeadlineLines**, **OfficialNewsLines**, **UpdatedUtc**
+UI-ready analytics contract used by the Glitch main window. It includes:
 
-### GlitchTimeframeReading
+- current instrument context
+- consolidated timeframe readings
+- composite summary state
+- optional broader market-context enrichments
 
-- **Minutes**, **AveragePrice**, **AtrProxy**, **AdxProxy**, **Score**, **RawScore**, **DirectionalScore**, **TradeabilityScore**, **SignalLabel**, **VolatilityHint**, **TrendHint**, **RegimeLabel**, **NoTradeReasons**, **Rsi**, **StochK**, **ZScore**, **EmaAlignment**, **RegimeWeight**, **OscillatorCompositeScore**, **MaCompositeScore**.
-- **Order flow:** OrderFlowScore, OrderFlowConfidence, OrderFlowReliability, OrderFlowCumulativeDelta, OrderFlowDeltaChange, OrderFlowVwap, OrderFlowVwapDeviation, OrderFlowAggressionBalance, OrderFlowDepthImbalance, OrderFlowHint (all nullable double except OrderFlowHint string).
+## Indicator contract
 
-### GlitchSignalScale (static)
+### `GlitchAnalyticsBridge`
 
-- **ToLabel(double score)** → string  
-  ("Strong Sell" ≤ -0.75, "Sell" ≤ -0.35, "Weak Sell" ≤ -0.10, "Neutral" < 0.10, "Weak Buy" < 0.35, "Buy" < 0.75, "Strong Buy" otherwise.)
+Primary chart-side publisher.
 
----
+Public surface includes:
 
-## Licensing and runtime policy (Services)
+- public parameters for chart behavior and publishing
+- lifecycle hooks for configure, data load, realtime, and termination
+- publish behavior into the AddOn bridge
 
-### GlitchLicenseService (static)
+## Persistence and runtime services
 
-- **ValidateAsync(apiBaseUrl, licenseKey, installationId, deviceFingerprintHash, clientVersion)** → Task&lt;GlitchLicenseSnapshot&gt;
-- **HeartbeatAsync(...)** — same parameter shape. Canonical API base URL and allowed hosts defined in code.
-- **GlitchLicenseSnapshot:** RequestSucceeded, LicenseValid, LicenseStatus, Reason, NextCheckInSeconds, GraceWindowSeconds, ReceivedAtUtc, Policy, LicenseToken, HasVerifiedToken, TokenClaims.
-- **GlitchLicensePolicy:** Plan, Analytics, Macro, Fundamental, Strategies, AdvancedReplication, MaxGroups, MaxFollowersPerGroup.
-- **GlitchLicenseTokenClaims:** Plan, Policy, IssuedAtUtc, ExpiresAtUtc, GraceUntilUtc, PolicyVersion, BillingVariant, SourceProductId, SourcePlanCode, EntitlementStatus.
+### `GlitchStateStore`
 
-### GlitchRuntimePolicyStore (static)
+Central file-backed state service for:
 
-- **GetDefaultSettingsPath()**, **GetDefaultLicenseCachePath()**
-- **EnsureTemplatesExist(settingsPath, cachePath)**
-- **LoadSettings(settingsPath)** → GlitchRuntimePolicySettings
-- **SaveSettings(settingsPath, settings)**
-- **LoadLicenseCache(cachePath)** → GlitchLicenseCacheState
-- **SaveLicenseCache(cachePath, state)**
-- **GlitchRuntimePolicySettings:** EnforceAccountLevelCompliance, EnforceBufferFreeze15Percent, EnforceBufferOneContract30Percent, EnforceUnrealizedFlatten70Percent, EnforceEvalProfitTargetLock, FlattenOnCriticalBufferLock, LicenseKey, LicenseApiBaseUrl, InstallationId, LicenseKeyDecodeFailed, LicenseKeyRawStorage.
-- **GlitchLicenseCacheState:** SignedLicenseToken, SignedTokenExpiresUtc, Plan, BillingVariant, SourceProductId, SourcePlanCode, FeatureAnalytics, FeatureMacro, FeatureFundamental, FeatureStrategies, FeatureAdvancedReplication, MaxGroups, MaxFollowersPerGroup, LastSuccessUtc, LastCheckedUtc, GraceUntilUtc, LastReason, LastStatus.
+- account overrides
+- account groups
+- peak state
+- window placement
+- journal entries
+- warning history
 
----
+### `GlitchRuntimePolicyStore`
 
-## State Store (Services)
+File-backed runtime policy and cached entitlement state store.
 
-### GlitchStateStore (static)
+### `GlitchLocalizationService`
 
-- **GetDefaultPath(string fileName)** → string
-- **LoadSelectionOverrides**, **SaveSelectionOverrides**
-- **LoadAccountGroups**, **SaveAccountGroups**
-- **LoadPeakStates**, **SavePeakStates**
-- **TryLoadWindowPlacement**, **SaveWindowPlacement**
-- **LoadJournalEntries**, **SaveJournalEntries**
-- **LoadCriticalWarnings**, **SaveCriticalWarnings**
-- **CleanPersistToken**, **ParseBooleanToken**
-- Record types: SelectionOverrideRecord, AccountGroupRecord, AccountGroupMemberRecord, PeakStateRecord, WindowPlacementRecord, JournalRecord, CriticalWarningRecord.
+Loads and applies localized UI strings from the shared localization catalog and runtime settings.
 
----
+## Replication and compliance services
 
-## Fundamental analysis (Services)
+### `GlitchReplicationEngine`
 
-### GlitchFundamentalAnalysisSnapshot (internal)
+Shared logic for:
 
-- **NewsSentiment**, **EarningsAnalysis**, **OfficialNews**, **ScoreSectionTitle**, **IsNewsLockoutActive**, **NewsLockoutText**, **Mag7InfluenceScore**, **Mag7ScoreLines**, **LatestHeadlineLines**, **OfficialNewsLines**
+- contract rounding
+- account and instrument matching
+- replication coordination
+- flatten and recovery workflows
 
-### GlitchFundamentalAnalysisService (internal)
+### `GlitchComplianceEngine`
 
-- **Constructor(IReadOnlyDictionary<string, string> persistedKeys)**
-- **GetSnapshot(string instrumentRoot, DateTime nowUtc)** → GlitchFundamentalAnalysisSnapshot
-- **Dispose()**, **ReloadPersistedKeys(IReadOnlyDictionary<string, string>)**
+Shared logic for:
 
----
+- account classification
+- rule normalization
+- drawdown-aware state support
+- compliance-oriented decision support
 
-## Insights (Services)
+Public docs intentionally describe capability categories instead of publishing private compliance thresholds or heuristics.
 
-### GlitchTradeInsightsService (internal)
+## Licensing and entitlement services
 
-- **TradeRoundTrip:** TradeId, AccountName, Instrument, EntryUtc, ExitUtc, Duration, IsLong, Contracts, EntryPrice, ExitPrice, PnlPoints, OpenReason, CloseReason, TradeSource, EntryType, ExitType, EntrySignal, ExitSignal, EntrySession, ExitSession
-- **TradeInsightsSnapshot:** GeneratedUtc, ClosedTrades (List&lt;TradeRoundTrip&gt;), All/Long/Short (TradeStats), CloseReasons (List&lt;TradeCloseReasonSummary&gt;), AccountsWithCriticalLock
-- **TradeStats:** Trades, Wins, Losses, Even, WinRate, GrossProfitPoints, GrossLossPoints, NetPoints, ProfitFactor, AvgTradePoints, AvgWinningTradePoints, AvgLosingTradePoints, LargestWinningTradePoints, LargestLosingTradePoints, MaxConsecutiveWinners, MaxConsecutiveLosers, AvgTradeDuration; **Empty()**
-- **TradeCloseReasonSummary:** CloseReason, Trades, Wins, Losses, WinRate, AvgPoints
+### `GlitchLicenseService`
 
-### GlitchRiskLockLedgerService (internal)
+Handles license validation and heartbeat requests and returns normalized entitlement state to the AddOn.
 
-- **RiskLockSnapshot** (internal): **TotalEvents**, **UniqueAccounts**, **LastEventUtc**
+Public docs intentionally omit security-specific implementation details, token internals, and provider-host rules.
 
----
+### `GlitchLicenseSnapshot`
 
-## Replication and Compliance (Services)
+Normalized license result contract describing whether a request succeeded, whether the license is valid, and what policy state the AddOn should respect.
 
-### GlitchReplicationEngine (static)
+### `GlitchLicensePolicy`
 
-- **RoundConservativeContracts(double rawQuantity)** → int (step-up 0.8 threshold, max 10000)
-- **GetSyncInstrumentRoots(Account master, Account follower)** → List<string>
-- **GetInstrumentRoot(Instrument)** → string
-- **GetNetQuantityForInstrumentRoot(Account, string instrumentRoot)** → int
-- **FindInstrumentForInstrumentRoot(Account, string instrumentRoot)** → Instrument
-- **GetOpenPositionInstruments(Account)** → List<Instrument>
-- **IsAccountFlat(Account)**, **HasAnyWorkingOrders(Account)**
-- **WaitForAllAccountsFlatAsync(accounts, timeout)** → Task<bool>
-- **GetWorkingOrdersForInstrumentRoot(Account, string instrumentRoot)** → List<Order>
-- **IsWorkingOrderState(OrderState)**, **IsReplicatedProtectiveOrder(Order, stopName, targetName)**, **IsStopLikeOrder(Order)**, **IsLimitLikeOrder(Order)**, **IsExitOrderForNet(Order, int netQty)**
-- **GetOrderActionSign(OrderAction)**, **ExtractOrderPrice(Order, bool preferStopPrice)**
-- **BuildProtectiveOcoId(string accountName, string instrumentRoot)** → string
-- **ComputeStablePositiveHash(string)** → int
+Entitlement contract describing plan-level access and key feature limits such as analytics, macro access, advanced replication, and account-scale boundaries.
 
-### GlitchComplianceEngine (static)
+## Insight and review services
 
-- **ResolveMaxContractsLimit(maxContracts, maxMicros [, microMultiplier])** → double
-- **ResolveMaxMicrosLimit(maxMicros, maxContracts [, microMultiplier])** → double
-- **NormalizeAccountStatus(string)** → "Eval" | "Sim" | "AP"
-- **InferPropFirmId(Account, out confidence)** → string (e.g. "None", "WealthCharts", "ApexTraderFunding", "ApexIntraday", "ApexEod", "TakeProfitTrader", "TradeDay")
-- **InferAccountStatus(Account, string firmId, out confidence)** → string
-- **GetExecutionProviderHint(Account)** → string
-- **NormalizeMaxLossTracking(string maxLossTracking, string drawdownType)** → "TrailingEod" | "Static" | "TrailingUnrealized"
-- **BuildPeakStateKey(string accountName, string maxLossTracking)** → string
-- **TryGetNativeLiquidationThreshold(Account)** → double
-- **NormalizeNativeThreshold(...)** → double?
-- **ShouldStopEvalThresholdAtProfitTarget(evalRithmic..., evalTradovate..., executionProvider)** → bool
-- **StatusMatchesFilter(string status, string filterCsv)** → bool
-- **NormalizeFloorCapMode(string)** → "None" | "AtInitialBalance" | "AtInitialPlusOffset"
-- **NormalizeFloorCapTrigger(string)** → "None" | "WhenThresholdReachesCap" | "WhenReferenceReachesInitialPlusDrawdown" | "WhenReferenceReachesInitialPlusDrawdownPlusOffset" | "WhenRealizedProfitReachesDrawdownPlusOffset" | "Immediate"
-- **CalculateMinMargin(...)** → double? (overloads with account status, drawdown, floor cap, eval threshold, account size, equity, peak, etc.)
+### `GlitchTradeLedgerService`
 
----
+Maintains file-backed trade history for downstream review.
 
-## Indicator (GlitchAnalyticsBridge)
+### `GlitchTradeInsightsService`
 
-### Public properties (parameters)
+Builds higher-level review snapshots from closed trade history.
 
-- **NeutralBand**, **EnableBarColoring**, **PublishToGlitchUi**, **PublishIntervalMs**, **IntraBarColoring**, **PredictiveBoost**, **FlipHysteresis**, **PerformanceMode**, **EnableOrderFlowLayer**, **OrderFlowBlend**
+Key insight contracts include:
 
-### Lifecycle
+- `TradeRoundTrip`
+- `TradeInsightsSnapshot`
+- `TradeStats`
 
-- **OnStateChange()** — SetDefaults, Configure (AddMissingTimeframeSeries, AddOrderFlowTickSeries), DataLoaded (init, RegisterBridge, TouchBridge, RegisterBridgeBootstrapPublisher), Realtime (PublishBootstrapReadings), Terminated (cleanup, UnregisterBridgeBootstrapPublisher, UnregisterBridge).
-- **OnBarUpdate()** — Order flow tick handling; bridge touch and bootstrap re-register on primary BIP; for tracked minutes: build/cache signal, bar coloring, publish BridgeReading via BridgeBusCompat.
-- **OnMarketData(MarketDataEventArgs)** — Bid/Ask/Trade stored for order flow.
+### `GlitchRiskLockLedgerService`
 
-### Internal (BridgeBusCompat)
+Tracks risk-lock events used by review and warning surfaces.
 
-- **BridgeReading** — Same property set as GlitchIndicatorReading.
-- **IsAvailable()**, **RegisterBridge**, **TouchBridge**, **UnregisterBridge**, **RegisterBridgeBootstrapPublisher**, **UnregisterBridgeBootstrapPublisher**, **Publish(BridgeReading)** → bool
+## Summary
 
-### Internal structs/classes
+If you are auditing the product, the most important takeaway is the shape of the contracts:
 
-- **SignalSnapshot** — Close, AveragePrice, Atr, Adx, Rsi, StochK, ZScore, EmaAlignment, RegimeWeight, OscillatorCompositeScore, MaCompositeScore, Score, RawScore, DirectionalScore, TradeabilityScore, RegimeLabel, NoTradeReasons, OrderFlow* fields.
-- **SessionTracker** — SessionKey, Name, CurrentHigh/Low, PreviousHigh/Low; **Update(sessionKey, name, high, low)**.
-- **SessionBlock** — Name, Key; **Resolve(DateTime nowLocal)** (NYC/London/Asia).
+- the indicator publishes a normalized reading
+- the AddOn stores fresh feed state
+- the analytics engine builds a UI-ready snapshot
+- persistence and operational services stay outside the chart signal file
+
+That separation is what keeps the product inspectable without forcing all behavior into one oversized class.

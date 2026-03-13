@@ -1,0 +1,56 @@
+{
+  "nav": {
+    "home": "Accueil",
+    "offer": "Offre",
+    "pricing": "Tarifs",
+    "affiliate": "Affiliés",
+    "docs": "Docs",
+    "goPro": "Go Pro",
+    "memberHub": "Member Hub",
+    "ariaHome": "Glitch accueil"
+  },
+  "footer": {
+    "readyTitle": "Prêt à trader avec des garde-fous ?",
+    "readyDescription": "Commencez gratuitement. Passez à Go Pro pour plus d’analyses et d’échelle de réplication.",
+    "openMemberHub": "Ouvrir Member Hub",
+    "alreadyJoined": "Déjà inscrit ?",
+    "copyright": "Copyright Glitch. AddOn NinjaTrader axé risque pour prop traders.",
+    "riskDisclosure": "Avertissement risque",
+    "terms": "CGU",
+    "privacy": "Confidentialité"
+  },
+  "home": {
+    "badge": "Assistant prop trading pour NinjaTrader",
+    "title": "Le système d’exploitation axé risque pour prop traders",
+    "lead": "Glitch vous aide à protéger les comptes, scaler la réplication et exécuter avec contexte. Si votre process est sérieux, vos outils aussi.",
+    "sublead": "Des évaluations mono-compte aux opérations multi-comptes, Glitch unifie conformité, réplication, analytics et performance en une couche.",
+    "alreadyJoined": "Déjà inscrit ?",
+    "openMemberHub": "Ouvrir Member Hub",
+    "whyFailTitle": "Pourquoi les comptes échouent, même avec une bonne stratégie",
+    "whyFailP1": "La plupart des pertes ne viennent pas du manque d’idées. Elles viennent d’erreurs opérationnelles évitables : mauvais compte, mauvaise taille, dérive des règles, écart de réplication ou pas de contexte quand la volatilité monte.",
+    "whyFailP2": "Glitch a été conçu pour résoudre cette couche en premier. Voyez-le comme votre assistant de contrôle de mission pour des flux prop trading disciplinés.",
+    "growTitle": "Glitch vous aide à grandir plus vite",
+    "growLead": "Commencez par la protection. Passez à l’accès payant quand vous voulez de l’échelle, du contexte signal et des opérations multi-comptes.",
+    "startFree": "Commencer gratuit",
+    "freeTitle": "Protection de base, sans pression carte bancaire",
+    "goProLabel": "Go Pro",
+    "goProTitle": "Échelle, contexte et contrôle pour opérateurs sérieux",
+    "pricingTitle": "Des tarifs qui respectent la façon dont les traders achètent",
+    "pricingLead": "Gratuit pour prouver. Facturation flexible pour la puissance premium. Accès à vie quand Glitch fait partie du business.",
+    "memberHubBlurb": "c’est là que vivent téléchargements, mises à jour et activation.",
+    "setupTitle": "Configuration en minutes, amélioration sur des années",
+    "activationTitle": "Parcours d’activation",
+    "dailyTitle": "Cadence opérationnelle quotidienne",
+    "faqTitle": "FAQ",
+    "faqLead": "Réponses professionnelles pour les traders qui se soucient de la performance et du process."
+  },
+  "languages": {
+    "label": "Choisir la langue",
+    "en": "English",
+    "pt": "Português",
+    "es": "Español",
+    "zh": "中文",
+    "fr": "Français",
+    "ru": "Русский"
+  }
+}

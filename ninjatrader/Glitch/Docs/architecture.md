@@ -2,66 +2,91 @@
 
 ## Overview
 
-Glitch consists of two NinjaTrader 8 components that work together:
+Glitch is built from two active NinjaTrader 8 components that work as one product:
 
-1. **GlitchAddOn** — An AddOn (`AddOnBase`) that provides a main window (Control Center → New → Glitch), a Chart Trader widget on chart windows, replication/flatten controls, analytics UI, account and prop-firm rules management, and persistence.
-2. **GlitchAnalyticsBridge** — A NinjaScript Indicator that runs on charts, computes multi-timeframe regime/signal analytics, optionally colors bars, and publishes readings to the AddOn via a static feed bus.
+1. `GlitchAddOn` is the host-side operating layer. It owns the main window, Chart Trader controls, persistence, compliance workflows, replication controls, and analytics presentation.
+2. `GlitchAnalyticsBridge` is the chart-side analytics publisher. It runs as a NinjaScript indicator, computes multi-timeframe context, and publishes normalized readings into the AddOn.
 
-The Indicator runs inside NinjaTrader’s script host (potentially in a different assembly after recompile). The AddOn runs in the host process and consumes data from the Indicator through a **bridge**: the Indicator uses reflection to resolve `Glitch.UI.GlitchAnalyticsFeedBus` and `Glitch.UI.GlitchIndicatorReading` and invokes `Publish(GlitchIndicatorReading)`. The AddOn’s `GlitchAnalyticsFeedBus` holds the live state; the AddOn UI reads from it via `GlitchAnalyticsEngine` and related types.
+The product boundary is intentional: chart analytics stay on the chart side, while operational state and user-facing controls stay in the AddOn.
 
-## Namespaces and Assemblies
+## Runtime boundary
 
-- **NinjaTrader.NinjaScript.AddOns** — `GlitchAddOn` (partials: `GlitchAddOn.cs`, `GlitchAddOn.ChartTrader.partial.cs`).
-- **Glitch.Services** — State store, runtime policy store, shell bridge, replication engine, compliance engine, licensing, localization, fundamental analysis, trade ledger, risk lock ledger.
-- **Glitch.UI** — Main window (`GlitchMainWindow` and partials), analytics feed bus, analytics logic (engine, snapshot, timeframe reading, signal scale).
+The AddOn and indicator are loosely coupled.
 
-The Indicator is in **NinjaTrader.NinjaScript.Indicators** (`GlitchAnalyticsBridge`). It does not reference the AddOn assembly directly; it discovers the AddOn’s feed bus type by name at runtime (`BridgeBusCompat`).
+- The indicator does not need a direct compile-time dependency on the AddOn assembly.
+- A bridge layer publishes normalized readings into the AddOn when the host surface is available.
+- The AddOn consumes those readings through a feed bus and turns them into UI-ready snapshots.
 
-## Component Diagram (code-derived)
+This separation keeps the chart signal pipeline independent from the windowing, persistence, and operator-control layers.
 
-```
-[Chart] → GlitchAnalyticsBridge (Indicator)
-                ↓ BridgeBusCompat (reflection)
-                ↓ Publish(BridgeReading → GlitchIndicatorReading)
-          Glitch.UI.GlitchAnalyticsFeedBus (static)
-                ↓ StateByInstrument, BridgeStateByInstrument
-          GlitchAnalyticsEngine.BuildSnapshot()
-                ↓
-          GlitchMainWindow (Analytics tab, Dashboard, etc.)
+## Core components
 
-GlitchAddOn (AddOnBase)
-    ├── Menu: Control Center → New → Glitch
-    ├── GlitchMainWindow (single instance, Replicate / Flatten All, tabs)
-    └── Chart Trader widget (per chart window)
-            └── GlitchShellBridge (ToggleReplication, FlattenAll, GetSnapshot)
-```
+### GlitchAddOn
 
-## Key Data Paths
+Responsibilities:
 
-- **Analytics:** Indicator `OnBarUpdate` (and tick for order flow) → `BridgeBusCompat.Publish(BridgeReading)` → `GlitchAnalyticsFeedBus.Publish(GlitchIndicatorReading)` → `InstrumentFeedState.TimeframeReadings` keyed by `Minutes`. AddOn calls `GlitchAnalyticsFeedBus.TryGetSnapshot(instrumentRoot, nowUtc, maxAge, out snapshot)` and `GlitchAnalyticsEngine.BuildSnapshot(instrumentRoot, accounts, nowUtc)` to drive the Analytics tab.
-- **Replication / Flatten:** Chart Trader widget or main window buttons → `GlitchShellBridge.ToggleReplication()` / `FlattenAll()` → `GlitchMainWindow.ToggleReplicationFromExternalSurface()` / `FlattenAllFromExternalSurface()`. Snapshot for widget: `GlitchShellBridge.GetSnapshot()` (replication on/off, `GroupsByMaster` with group PnL and follower counts).
+- Expose the Glitch entry point in NinjaTrader
+- Keep a single main window active
+- Attach a compact control surface to Chart Trader
+- Coordinate replication, flatten, compliance, and persistence workflows
+- Present dashboard, analytics, journal, and operating views
 
-## File Layout (AddOn and Indicator only)
+### GlitchAnalyticsBridge
 
-```
+Responsibilities:
+
+- Watch supported chart timeframes
+- Build structured market context for the current instrument
+- Optionally color bars for fast visual feedback
+- Publish analytics readings for the AddOn UI
+
+## High-level data flow
+
+1. The indicator builds fresh readings from chart context.
+2. The bridge layer publishes a normalized reading for the instrument and timeframe.
+3. The AddOn feed bus stores the latest readings by instrument and timeframe.
+4. The analytics engine builds a snapshot for the main Glitch UI.
+5. The main window renders that snapshot alongside account, replication, and risk state.
+
+Operational controls such as replication and flatten use a separate shell bridge. Analytics flow and operator actions are intentionally separated.
+
+## Namespaces and ownership
+
+- `NinjaTrader.NinjaScript.AddOns`: AddOn entry point and window integration
+- `Glitch.UI`: Main window, feed bus, analytics presentation, and related models
+- `Glitch.Services`: Persistence, licensing, localization, replication, compliance, and insight services
+- `NinjaTrader.NinjaScript.Indicators`: Chart-side indicator implementation
+
+## File layout
+
+```text
 AddOns/GlitchAddOn/
   GlitchAddOn.cs
   GlitchAddOn.ChartTrader.partial.cs
   Services/
-    GlitchShellBridge.cs
-    Persistence/GlitchStateStore.cs
-    Persistence/GlitchRuntimePolicyStore.cs
-    Trading/GlitchReplicationEngine.cs
-    Risk/GlitchComplianceEngine.cs
-    Licensing/GlitchLicenseService.cs
-    Localization/GlitchLocalizationService.cs
-    FundamentalAnalysis/GlitchFundamentalAnalysisService.cs, *.partial.cs
-    Insights/GlitchTradeLedgerService.cs, GlitchTradeInsightsService.cs, GlitchRiskLockLedgerService.cs
+    Persistence/
+    Trading/
+    Risk/
+    Licensing/
+    Localization/
+    FundamentalAnalysis/
+    Insights/
   UI/
-    MainWindow/GlitchMainWindow.cs, *.partial.cs (Header, Dashboard, Summary, Replication, FirmRules, Journal, Analytics, Localization, Models, SettingsTab)
-    Analytics/GlitchAnalyticsFeedBus.cs, GlitchAnalyticsLogic.cs
-    MacroAnalysisWindow/*.cs
+    MainWindow/
+    Analytics/
+    MacroAnalysisWindow/
 
 Indicators/glitch/
   GlitchAnalyticsBridge.cs
 ```
+
+## Design intent
+
+Glitch is not organized like a single monolithic indicator. The design splits:
+
+- analytics generation
+- operational enforcement
+- persistence
+- user-facing control surfaces
+
+That architecture matters for real use. It lets the chart layer stay responsive, the AddOn stay stateful, and the operator work from one consistent control surface across multiple accounts and workflows.

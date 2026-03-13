@@ -1,4 +1,8 @@
 import type { NextConfig } from "next";
+import createNextIntlPlugin from "next-intl/plugin";
+
+// No path = plugin looks for i18n/request.ts in project root (apps/website/i18n/request.ts)
+const withNextIntl = createNextIntlPlugin();
 
 const securityHeaders = [
   {
@@ -23,4 +27,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);
