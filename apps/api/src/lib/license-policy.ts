@@ -33,30 +33,38 @@ export interface ResolvedLicenseEntitlement {
   sourcePlanCode: string | null;
 }
 
+function sanitizeCodeToken(value: string | null | undefined): string {
+  return (value ?? "")
+    .trim()
+    .replace(/^['"]|['"]$/g, "")
+    .replace(/\\r|\\n|\\t/g, "")
+    .trim();
+}
+
 function parseCodeSetFromEnv(envName: string, defaults: readonly string[] = []): Set<string> {
   const raw = readOptionalEnv(envName);
   if (!raw) {
     return new Set(
       defaults
-        .map((token) => token.trim().toLowerCase())
+        .map((token) => sanitizeCodeToken(token).toLowerCase())
         .filter((token) => token.length > 0),
     );
   }
 
   return new Set(
-    raw
+    sanitizeCodeToken(raw)
       .split(",")
-      .map((token) => token.trim().toLowerCase())
+      .map((token) => sanitizeCodeToken(token).toLowerCase())
       .filter((token) => token.length > 0),
   );
 }
 
 function normalizeCode(value: string | null | undefined): string {
-  return (value ?? "").trim().toLowerCase();
+  return sanitizeCodeToken(value).toLowerCase();
 }
 
 function trimCode(value: string | null | undefined): string | null {
-  const trimmed = (value ?? "").trim();
+  const trimmed = sanitizeCodeToken(value);
   return trimmed.length > 0 ? trimmed : null;
 }
 
@@ -76,7 +84,7 @@ function shouldRejectConfiguredPlan(normalizedPlanCode: string, allowedPlanCodes
 }
 
 function readDefaultUnmappedPlan(): LicensePlan {
-  const raw = (readOptionalEnv("WHOP_DEFAULT_ACTIVE_PLAN") ?? "").trim().toLowerCase();
+  const raw = sanitizeCodeToken(readOptionalEnv("WHOP_DEFAULT_ACTIVE_PLAN")).toLowerCase();
   if (raw === "premium") {
     return "premium";
   }
