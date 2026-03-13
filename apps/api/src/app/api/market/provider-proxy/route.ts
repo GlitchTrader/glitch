@@ -6,6 +6,7 @@ import {
 import { getTrustedClientIp } from "@/lib/client-ip";
 import { buildPolicy, resolveEntitlementFromSource } from "@/lib/license-policy";
 import type { LicensePlan } from "@/lib/license-policy";
+import { readDatabaseUrl } from "@/lib/database-url";
 import { readOptionalEnv } from "@/lib/env";
 import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -13,6 +14,7 @@ import {
   buildWhopLicenseSnapshot,
   getWhopMembershipByLicenseKey,
   inspectWhopMembershipBinding,
+  mapWhopApiErrorToHttpStatus,
   syncWhopMembershipToLocalState,
   WhopLicenseApiError,
 } from "@/lib/whop-license";
@@ -81,10 +83,6 @@ const providerOperationParamAllowList: Record<ProviderName, Record<string, reado
 
 function isNonEmpty(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
-}
-
-function readDatabaseUrl(): string | null {
-  return readOptionalEnv("DATABASE_URL");
 }
 
 function readRateLimitPerMinute(envName: string, fallback: number): number {
@@ -770,7 +768,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof WhopLicenseApiError) {
       return errorResponse(
         requestId,
-        error.status && error.status >= 400 && error.status < 500 ? 502 : 503,
+        mapWhopApiErrorToHttpStatus(error),
         error.code,
         "Failed to validate Whop license for provider access.",
         error.details,

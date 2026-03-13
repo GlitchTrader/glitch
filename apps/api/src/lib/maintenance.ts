@@ -1,3 +1,4 @@
+import { readDatabaseUrl } from "@/lib/database-url";
 import { readOptionalEnv } from "@/lib/env";
 import { pruneRevokedLicenseBindings } from "@/lib/entitlements-store";
 import { pruneWebhookEvents } from "@/lib/idempotency-store";
@@ -28,10 +29,6 @@ export interface MaintenanceCleanupSummary {
     providerCacheSeconds: number;
     marketCacheSeconds: number;
   };
-}
-
-function readDatabaseUrl(): string | null {
-  return readOptionalEnv("DATABASE_URL");
 }
 
 function readBoundedIntEnv(

@@ -3,14 +3,18 @@ import { readOptionalEnv, requireEnv } from "@/lib/env";
 
 let cachedWebhookClient: Whop | null = null;
 
-function stripCopyPasteWrappers(value: string): string {
-  return value.trim().replace(/^['"]|['"]$/g, "");
+function sanitizeWhopEnvValue(value: string): string {
+  return value
+    .trim()
+    .replace(/^['"]|['"]$/g, "")
+    .replace(/\\[rnt]/g, "")
+    .replace(/[\r\n\t]/g, "");
 }
 
 function readWebhookKeyFromEnv(): string {
   const key = readOptionalEnv("WHOP_WEBHOOK_KEY");
   if (key) {
-    return stripCopyPasteWrappers(key);
+    return sanitizeWhopEnvValue(key);
   }
 
   const secret = readOptionalEnv("WHOP_WEBHOOK_SECRET");
@@ -21,7 +25,7 @@ function readWebhookKeyFromEnv(): string {
   }
 
   // Whop docs pattern: webhookKey = btoa(webhookSecret)
-  return Buffer.from(stripCopyPasteWrappers(secret), "utf8").toString("base64");
+  return Buffer.from(sanitizeWhopEnvValue(secret), "utf8").toString("base64");
 }
 
 export function getWhopApiClient(): Whop {
@@ -29,7 +33,7 @@ export function getWhopApiClient(): Whop {
     return cachedWebhookClient;
   }
 
-  const whopApiKey = requireEnv("WHOP_API_KEY");
+  const whopApiKey = sanitizeWhopEnvValue(requireEnv("WHOP_API_KEY"));
   cachedWebhookClient = new Whop({
     apiKey: whopApiKey,
     webhookKey: readWebhookKeyFromEnv(),
@@ -43,7 +47,7 @@ export function getWhopWebhookClient(): Whop {
 
 export function getWhopApiV1BaseUrl(): string {
   const rawBaseUrl = readOptionalEnv("WHOP_BASE_URL");
-  const trimmed = rawBaseUrl?.trim();
+  const trimmed = rawBaseUrl ? sanitizeWhopEnvValue(rawBaseUrl) : null;
   return trimmed && trimmed.length > 0 ? trimmed : "https://api.whop.com/api/v1";
 }
 

@@ -1,4 +1,4 @@
-import { readOptionalEnv } from "@/lib/env";
+import { readDatabaseUrl } from "@/lib/database-url";
 
 const globalMemoryStoreKey = "__glitchLicenseNonceMemoryStoreV1";
 const globalPoolKey = "__glitchLicenseNonceStoreDbPoolV1";
@@ -26,10 +26,6 @@ interface ValidateNonceInput {
 type NonceValidationResult =
   | { ok: true }
   | { ok: false; reason: "timestamp_invalid" | "timestamp_skew_exceeded" | "nonce_replay_detected" };
-
-function readDatabaseUrl(): string | null {
-  return readOptionalEnv("DATABASE_URL");
-}
 
 function getMemoryStore(): Map<string, MemoryNonceEntry> {
   const globalScope = globalThis as typeof globalThis & {
@@ -241,4 +237,3 @@ export async function pruneLicenseNonces(retentionSeconds = 1200): Promise<{ del
     deletedCount: result.rowCount ?? 0,
   };
 }
-

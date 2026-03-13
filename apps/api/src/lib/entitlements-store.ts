@@ -5,6 +5,7 @@ import type {
   MembershipDeactivatedWebhookEvent,
 } from "@whop/sdk/resources/webhooks";
 import type { Membership as WhopMembership } from "@whop/sdk/resources/shared";
+import { readDatabaseUrl } from "@/lib/database-url";
 import { readOptionalEnv } from "@/lib/env";
 import { hashLicenseKey } from "@/lib/license-key-hash";
 
@@ -99,10 +100,6 @@ export interface ActiveLicenseBinding {
   deviceFingerprintHash: string;
   firstSeenAt: string;
   lastSeenAt: string;
-}
-
-function readDatabaseUrl(): string | null {
-  return readOptionalEnv("DATABASE_URL");
 }
 
 function isUniqueViolation(error: unknown): boolean {

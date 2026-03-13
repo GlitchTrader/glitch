@@ -22,6 +22,7 @@ import {
   buildWhopLicenseSnapshot,
   getWhopMembershipByLicenseKey,
   inspectWhopMembershipBinding,
+  mapWhopApiErrorToHttpStatus,
   reasonFromWhopBindingInspection,
   syncWhopMembershipToLocalState,
   validateWhopMembershipBinding,
@@ -371,7 +372,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof WhopLicenseApiError) {
       return errorResponse(
         requestId,
-        error.status && error.status >= 400 && error.status < 500 ? 502 : 503,
+        mapWhopApiErrorToHttpStatus(error),
         error.code,
         "Failed to validate license with Whop.",
         error.details,

@@ -10,6 +10,7 @@ import { buildPolicy } from "@/lib/license-policy";
 import {
   buildWhopLicenseSnapshot,
   getWhopMembershipByLicenseKey,
+  mapWhopApiErrorToHttpStatus,
   readWhopMembershipBindingMetadata,
   syncWhopMembershipToLocalState,
   WhopLicenseApiError,
@@ -156,7 +157,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof WhopLicenseApiError) {
       return errorResponse(
         requestId,
-        error.status && error.status >= 400 && error.status < 500 ? 502 : 503,
+        mapWhopApiErrorToHttpStatus(error),
         error.code,
         "Failed to fetch live Whop license status.",
         error.details,

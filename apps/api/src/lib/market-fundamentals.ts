@@ -1,3 +1,4 @@
+import { readDatabaseUrl } from "@/lib/database-url";
 import { readOptionalEnv } from "@/lib/env";
 
 const FINNHUB_BASE_URL = "https://finnhub.io/api/v1";
@@ -525,10 +526,6 @@ function parseRawPayload(input: unknown): RawFundamentalPayload | null {
   };
 }
 
-function readDatabaseUrl(): string | null {
-  return readOptionalEnv("DATABASE_URL");
-}
-
 async function getPool(): Promise<DbPool> {
   const globalScope = globalThis as typeof globalThis & {
     [globalPoolKey]?: DbPool;
@@ -702,4 +699,3 @@ export async function getMarketFundamentalSnapshot(
   const payload = await getRawPayload(pool);
   return projectSnapshot(payload, instrument);
 }
-

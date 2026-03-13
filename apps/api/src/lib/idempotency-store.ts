@@ -1,4 +1,4 @@
-import { readOptionalEnv } from "@/lib/env";
+import { readDatabaseUrl } from "@/lib/database-url";
 
 export type WebhookProcessingStatus = "received" | "processed" | "failed";
 
@@ -68,10 +68,6 @@ export interface RecentWebhookEvent {
   receivedAt: string;
   processedAt: string | null;
   failureReason: string | null;
-}
-
-function readDatabaseUrl(): string | null {
-  return readOptionalEnv("DATABASE_URL");
 }
 
 function toIsoString(input: string | Date | null): string | null {

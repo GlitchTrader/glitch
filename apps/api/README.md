@@ -69,6 +69,7 @@ Copy `.env.example` to `.env.local` and set values. Required for core behavior:
 Optional / feature-specific:
 
 - `DATABASE_URL` — Enables Postgres: webhook idempotency, entitlements, license bindings, dashboard/attribution. Without it, in-memory webhook store and stub license behavior.
+  - If the URL includes `sslmode`, use `sslmode=verify-full` when possible (or `uselibpqcompat=true&sslmode=require` for libpq-compatible semantics).
 - `LICENSE_STUB_ALLOW_ALL` — `true`/`false`; stub license behavior when DB not used.
 - `LICENSE_TOKEN_ES256_PRIVATE_KEY_PEM`, `LICENSE_TOKEN_ES256_KID`, `LICENSE_TOKEN_TTL_SECONDS` — Signed license token issuance.
 - `FINNHUB_API_KEY`, `FRED_API_KEY` — Used by provider proxy and fundamentals.

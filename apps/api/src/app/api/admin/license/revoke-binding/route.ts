@@ -8,6 +8,7 @@ import { getWebhookStoreMode } from "@/lib/idempotency-store";
 import {
   clearWhopMembershipBinding,
   getWhopMembershipByLicenseKey,
+  mapWhopApiErrorToHttpStatus,
   WhopLicenseApiError,
 } from "@/lib/whop-license";
 
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof WhopLicenseApiError) {
       return errorResponse(
         requestId,
-        error.status && error.status >= 400 && error.status < 500 ? 502 : 503,
+        mapWhopApiErrorToHttpStatus(error),
         error.code,
         "Failed to clear license binding in Whop.",
         error.details,

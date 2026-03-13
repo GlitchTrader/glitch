@@ -48,6 +48,18 @@ export class WhopLicenseApiError extends Error {
   }
 }
 
+export function mapWhopApiErrorToHttpStatus(error: WhopLicenseApiError): number {
+  if (error.status === 401 || error.status === 403) {
+    return 503;
+  }
+
+  if (typeof error.status === "number" && error.status >= 400 && error.status < 500) {
+    return 502;
+  }
+
+  return 503;
+}
+
 export interface WhopBindingInspection {
   state: WhopBindingState;
   metadata: Record<string, unknown>;
