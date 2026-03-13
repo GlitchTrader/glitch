@@ -572,9 +572,11 @@ namespace Glitch.UI
             GlitchLicenseCacheState cache = _licenseCacheState ?? new GlitchLicenseCacheState();
             string status = string.IsNullOrWhiteSpace(cache.LastStatus) ? "unknown" : cache.LastStatus.Trim().ToLowerInvariant();
             string plan = string.IsNullOrWhiteSpace(cache.Plan) ? "free_lite" : cache.Plan.Trim().ToLowerInvariant();
-            DateTime validUntilUtc = cache.SignedTokenExpiresUtc != DateTime.MinValue
-                ? cache.SignedTokenExpiresUtc
-                : (cache.GraceUntilUtc != DateTime.MinValue ? cache.GraceUntilUtc : cache.LastSuccessUtc);
+            DateTime validUntilUtc = status.Equals("grace", StringComparison.OrdinalIgnoreCase) && cache.GraceUntilUtc != DateTime.MinValue
+                ? cache.GraceUntilUtc
+                : (cache.SignedTokenExpiresUtc != DateTime.MinValue
+                    ? cache.SignedTokenExpiresUtc
+                    : (cache.GraceUntilUtc != DateTime.MinValue ? cache.GraceUntilUtc : cache.LastSuccessUtc));
             string validUntilText = validUntilUtc == DateTime.MinValue
                 ? "-"
                 : validUntilUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");

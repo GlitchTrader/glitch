@@ -4268,15 +4268,7 @@ namespace Glitch.UI
                 private bool CanAccessAnalyticsPremium(out string lockedMessage)
                 {
                     lockedMessage = null;
-                    string licenseKey = (_runtimePolicySettings?.LicenseKey ?? string.Empty).Trim();
-                    if (string.IsNullOrWhiteSpace(licenseKey))
-                    {
-                        lockedMessage = BuildPremiumAccessMessage("Analytics");
-                        return false;
-                    }
-
-                    string status = (_licenseCacheState?.LastStatus ?? string.Empty).Trim();
-                    if (!status.Equals("active", StringComparison.OrdinalIgnoreCase))
+                    if (!IsLicenseActiveOrGrace(DateTime.UtcNow))
                     {
                         lockedMessage = BuildPremiumAccessMessage("Analytics");
                         return false;
@@ -4420,7 +4412,9 @@ namespace Glitch.UI
                     if (!CanAccessAnalyticsPremium(out string lockedMessage))
                     {
                         if (_analyticsLicenseGateMessageText != null)
-                            _analyticsLicenseGateMessageText.Text = L("overlay.premium_gate_message", "To enable premium features purchase your license below and validate it in the Settings tab.");
+                            _analyticsLicenseGateMessageText.Text = string.IsNullOrWhiteSpace(lockedMessage)
+                                ? L("overlay.premium_gate_message", "To enable premium features purchase your license below and validate it in the Settings tab.")
+                                : lockedMessage;
                         _analyticsLicenseGateOverlay.Visibility = Visibility.Visible;
                         return;
                     }

@@ -1,10 +1,7 @@
 import { createHash } from "crypto";
 import { NextRequest } from "next/server";
 import {
-  claimLicenseBinding,
   EntitlementStoreConfigError,
-  findWhopEntitlementByLicenseKey,
-  isWhopEntitlementStatusActive,
 } from "@/lib/entitlements-store";
 import { getTrustedClientIp } from "@/lib/client-ip";
 import { readBooleanEnv, readOptionalEnv } from "@/lib/env";
@@ -16,12 +13,20 @@ import {
   LICENSE_GRACE_WINDOW_SECONDS,
   type LicenseBillingVariant,
   type LicensePlan,
-  resolveEntitlementFromSource,
 } from "@/lib/license-policy";
 import { validateAndConsumeLicenseNonce } from "@/lib/license-nonce-store";
 import { issueLicenseToken, isLicenseTokenSigningConfigured } from "@/lib/license-token";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { isProductionRuntime } from "@/lib/security-context";
+import {
+  buildWhopLicenseSnapshot,
+  getWhopMembershipByLicenseKey,
+  inspectWhopMembershipBinding,
+  reasonFromWhopBindingInspection,
+  syncWhopMembershipToLocalState,
+  validateWhopMembershipBinding,
+  WhopLicenseApiError,
+} from "@/lib/whop-license";
 
 export const runtime = "nodejs";
 
@@ -269,8 +274,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const entitlement = await findWhopEntitlementByLicenseKey(parsed.licenseKey);
-    if (!entitlement) {
+    let membership = await getWhopMembershipByLicenseKey(parsed.licenseKey);
+    if (!membership) {
       return jsonResponse(
         buildValidateResponseBody(parsed, requestId, "database", {
           valid: false,
@@ -285,53 +290,72 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const resolvedEntitlement = resolveEntitlementFromSource(entitlement.productId, entitlement.planCode);
-    const active = isWhopEntitlementStatusActive(entitlement.status);
-    if (!active) {
+    await syncWhopMembershipToLocalState(membership);
+    let liveSnapshot = buildWhopLicenseSnapshot(membership);
+    if (!liveSnapshot.active) {
       return jsonResponse(
         buildValidateResponseBody(parsed, requestId, "database", {
           valid: false,
           status: "inactive",
-          reason: `membership_status_${entitlement.status}`,
-          plan: resolvedEntitlement.plan,
-          billingVariant: resolvedEntitlement.billingVariant,
-          sourceProductId: resolvedEntitlement.sourceProductId,
-          sourcePlanCode: resolvedEntitlement.sourcePlanCode,
-          entitlementStatus: entitlement.status,
+          reason: `membership_status_${membership.status}`,
+          plan: liveSnapshot.resolvedEntitlement.plan,
+          billingVariant: liveSnapshot.resolvedEntitlement.billingVariant,
+          sourceProductId: liveSnapshot.resolvedEntitlement.sourceProductId,
+          sourcePlanCode: liveSnapshot.resolvedEntitlement.sourcePlanCode,
+          entitlementStatus: membership.status,
         }),
       );
     }
 
-    const bindingResult = await claimLicenseBinding(
-      entitlement.id,
+    let bindingInspection = inspectWhopMembershipBinding(
+      membership,
       parsed.installationId,
       parsed.deviceFingerprintHash,
     );
-    if (!bindingResult.ok) {
+    if (bindingInspection.state === "unbound") {
+      bindingInspection = await validateWhopMembershipBinding(
+        parsed.licenseKey,
+        parsed.installationId,
+        parsed.deviceFingerprintHash,
+      );
+      membership = (await getWhopMembershipByLicenseKey(parsed.licenseKey)) ?? membership;
+      await syncWhopMembershipToLocalState(membership, {
+        installationId: parsed.installationId,
+        deviceFingerprintHash: parsed.deviceFingerprintHash,
+      });
+      liveSnapshot = buildWhopLicenseSnapshot(membership);
+    }
+
+    if (bindingInspection.state !== "matched") {
       return jsonResponse(
         buildValidateResponseBody(parsed, requestId, "database", {
           valid: false,
           status: "inactive",
-          reason: bindingResult.reason,
-          plan: resolvedEntitlement.plan,
-          billingVariant: resolvedEntitlement.billingVariant,
-          sourceProductId: resolvedEntitlement.sourceProductId,
-          sourcePlanCode: resolvedEntitlement.sourcePlanCode,
-          entitlementStatus: entitlement.status,
+          reason: reasonFromWhopBindingInspection(bindingInspection),
+          plan: liveSnapshot.resolvedEntitlement.plan,
+          billingVariant: liveSnapshot.resolvedEntitlement.billingVariant,
+          sourceProductId: liveSnapshot.resolvedEntitlement.sourceProductId,
+          sourcePlanCode: liveSnapshot.resolvedEntitlement.sourcePlanCode,
+          entitlementStatus: membership.status,
         }),
       );
     }
+
+    await syncWhopMembershipToLocalState(membership, {
+      installationId: parsed.installationId,
+      deviceFingerprintHash: parsed.deviceFingerprintHash,
+    });
 
     return jsonResponse(
       buildValidateResponseBody(parsed, requestId, "database", {
         valid: true,
         status: "active",
         reason: null,
-        plan: resolvedEntitlement.plan,
-        billingVariant: resolvedEntitlement.billingVariant,
-        sourceProductId: resolvedEntitlement.sourceProductId,
-        sourcePlanCode: resolvedEntitlement.sourcePlanCode,
-        entitlementStatus: entitlement.status,
+        plan: liveSnapshot.resolvedEntitlement.plan,
+        billingVariant: liveSnapshot.resolvedEntitlement.billingVariant,
+        sourceProductId: liveSnapshot.resolvedEntitlement.sourceProductId,
+        sourcePlanCode: liveSnapshot.resolvedEntitlement.sourcePlanCode,
+        entitlementStatus: membership.status,
       }),
     );
   } catch (error) {
@@ -341,6 +365,16 @@ export async function POST(request: NextRequest) {
         503,
         "service_misconfigured",
         "License service is misconfigured.",
+      );
+    }
+
+    if (error instanceof WhopLicenseApiError) {
+      return errorResponse(
+        requestId,
+        error.status && error.status >= 400 && error.status < 500 ? 502 : 503,
+        error.code,
+        "Failed to validate license with Whop.",
+        error.details,
       );
     }
 

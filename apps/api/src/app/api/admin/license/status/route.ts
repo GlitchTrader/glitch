@@ -3,12 +3,17 @@ import { requireAdminToken } from "@/lib/admin-auth";
 import {
   EntitlementStoreConfigError,
   findActiveLicenseBinding,
-  findWhopEntitlementByLicenseKey,
-  isWhopEntitlementStatusActive,
 } from "@/lib/entitlements-store";
 import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
 import { getWebhookStoreMode } from "@/lib/idempotency-store";
-import { buildPolicy, resolveEntitlementFromSource } from "@/lib/license-policy";
+import { buildPolicy } from "@/lib/license-policy";
+import {
+  buildWhopLicenseSnapshot,
+  getWhopMembershipByLicenseKey,
+  readWhopMembershipBindingMetadata,
+  syncWhopMembershipToLocalState,
+  WhopLicenseApiError,
+} from "@/lib/whop-license";
 
 export const runtime = "nodejs";
 
@@ -76,8 +81,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const entitlement = await findWhopEntitlementByLicenseKey(parsed.licenseKey);
-    if (!entitlement) {
+    const membership = await getWhopMembershipByLicenseKey(parsed.licenseKey);
+    if (!membership) {
       return jsonResponse({
         ok: true,
         requestId,
@@ -92,15 +97,18 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const binding = await findActiveLicenseBinding(entitlement.id);
-    const resolvedEntitlement = resolveEntitlementFromSource(entitlement.productId, entitlement.planCode);
-    const active = isWhopEntitlementStatusActive(entitlement.status);
-    const valid = active && !!binding;
+    await syncWhopMembershipToLocalState(membership);
+    const liveSnapshot = buildWhopLicenseSnapshot(membership);
+    const metadataBinding = readWhopMembershipBindingMetadata(membership);
+    const binding = await findActiveLicenseBinding(`ent_whop_${membership.id}`);
+    const valid = liveSnapshot.active && metadataBinding.hasManagedBinding;
     const reason = valid
       ? null
-      : !active
-        ? `membership_status_${entitlement.status}`
-        : "binding_not_found";
+      : !liveSnapshot.active
+        ? `membership_status_${membership.status}`
+        : metadataBinding.hasConflict
+          ? "binding_metadata_conflict"
+          : "binding_not_found";
 
     return jsonResponse({
       ok: true,
@@ -111,15 +119,29 @@ export async function POST(request: NextRequest) {
         status: valid ? "active" : "inactive",
         reason,
       },
-      policy: buildPolicy(resolvedEntitlement.plan),
-      billingVariant: resolvedEntitlement.billingVariant,
+      policy: buildPolicy(liveSnapshot.resolvedEntitlement.plan),
+      billingVariant: liveSnapshot.resolvedEntitlement.billingVariant,
       entitlement: {
-        ...entitlement,
-        active,
-        billingVariant: resolvedEntitlement.billingVariant,
+        id: `ent_whop_${membership.id}`,
+        companyId: membership.company?.id ?? null,
+        productId: membership.product?.id ?? null,
+        promoCodeId: membership.promo_code?.id ?? null,
+        membershipMetadata: membership.metadata ?? {},
+        status: membership.status,
+        planCode: membership.plan?.id ?? "",
+        currentPeriodEnd: membership.renewal_period_end,
+        cancelAtPeriodEnd: membership.cancel_at_period_end,
+        updatedAt: membership.updated_at,
+        active: liveSnapshot.active,
+        billingVariant: liveSnapshot.resolvedEntitlement.billingVariant,
       },
       binding,
-      bindingStatus: binding ? "bound" : "missing",
+      whopBinding: metadataBinding,
+      bindingStatus: metadataBinding.hasManagedBinding
+        ? "bound"
+        : metadataBinding.hasConflict
+          ? "conflict"
+          : "missing",
     });
   } catch (error) {
     if (error instanceof EntitlementStoreConfigError) {
@@ -128,6 +150,16 @@ export async function POST(request: NextRequest) {
         500,
         error.code,
         error.message,
+      );
+    }
+
+    if (error instanceof WhopLicenseApiError) {
+      return errorResponse(
+        requestId,
+        error.status && error.status >= 400 && error.status < 500 ? 502 : 503,
+        error.code,
+        "Failed to fetch live Whop license status.",
+        error.details,
       );
     }
 

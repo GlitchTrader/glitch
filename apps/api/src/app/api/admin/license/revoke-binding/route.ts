@@ -2,11 +2,14 @@ import { NextRequest } from "next/server";
 import { requireAdminToken } from "@/lib/admin-auth";
 import {
   EntitlementStoreConfigError,
-  findWhopEntitlementByLicenseKey,
-  revokeActiveLicenseBinding,
 } from "@/lib/entitlements-store";
 import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
 import { getWebhookStoreMode } from "@/lib/idempotency-store";
+import {
+  clearWhopMembershipBinding,
+  getWhopMembershipByLicenseKey,
+  WhopLicenseApiError,
+} from "@/lib/whop-license";
 
 export const runtime = "nodejs";
 
@@ -78,8 +81,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const entitlement = await findWhopEntitlementByLicenseKey(parsed.licenseKey);
-    if (!entitlement) {
+    const membership = await getWhopMembershipByLicenseKey(parsed.licenseKey);
+    if (!membership) {
       return jsonResponse({
         ok: true,
         requestId,
@@ -88,11 +91,15 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const revokeResult = await revokeActiveLicenseBinding(entitlement.id);
+    const clearedMembership = await clearWhopMembershipBinding(parsed.licenseKey);
+    const revokeResult = clearedMembership
+      ? { ok: true, reason: null }
+      : { ok: false, reason: "license_not_found" };
+
     return jsonResponse({
       ok: true,
       requestId,
-      entitlementId: entitlement.id,
+      entitlementId: `ent_whop_${membership.id}`,
       revoked: revokeResult.ok,
       reason: revokeResult.reason,
     });
@@ -104,6 +111,16 @@ export async function POST(request: NextRequest) {
         revoked: false,
         reason: error.code,
       });
+    }
+
+    if (error instanceof WhopLicenseApiError) {
+      return errorResponse(
+        requestId,
+        error.status && error.status >= 400 && error.status < 500 ? 502 : 503,
+        error.code,
+        "Failed to clear license binding in Whop.",
+        error.details,
+      );
     }
 
     return errorResponse(

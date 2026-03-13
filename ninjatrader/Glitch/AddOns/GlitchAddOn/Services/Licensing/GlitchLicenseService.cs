@@ -126,6 +126,23 @@ namespace Glitch.Services
                 licenseToken,
                 expectedInstallationId,
                 expectedDeviceFingerprintHash,
+                false,
+                out claims,
+                out failureReason);
+        }
+
+        public static bool TryReadVerifiedCachedTokenClaims(
+            string licenseToken,
+            string expectedInstallationId,
+            string expectedDeviceFingerprintHash,
+            out GlitchLicenseTokenClaims claims,
+            out string failureReason)
+        {
+            return TryParseAndVerifyToken(
+                licenseToken,
+                expectedInstallationId,
+                expectedDeviceFingerprintHash,
+                true,
                 out claims,
                 out failureReason);
         }
@@ -292,6 +309,7 @@ namespace Glitch.Services
                     snapshot.LicenseToken,
                     expectedInstallationId,
                     expectedDeviceFingerprintHash,
+                    false,
                     out GlitchLicenseTokenClaims claims,
                     out string tokenFailureReason))
             {
@@ -331,6 +349,7 @@ namespace Glitch.Services
             string token,
             string expectedInstallationId,
             string expectedDeviceFingerprintHash,
+            bool allowExpiredWithinGrace,
             out GlitchLicenseTokenClaims claims,
             out string failureReason)
         {
@@ -387,6 +406,7 @@ namespace Glitch.Services
                     payload,
                     expectedInstallationId,
                     expectedDeviceFingerprintHash,
+                    allowExpiredWithinGrace,
                     out claims,
                     out failureReason))
             {
@@ -400,6 +420,7 @@ namespace Glitch.Services
             IDictionary payload,
             string expectedInstallationId,
             string expectedDeviceFingerprintHash,
+            bool allowExpiredWithinGrace,
             out GlitchLicenseTokenClaims claims,
             out string failureReason)
         {
@@ -436,6 +457,7 @@ namespace Glitch.Services
 
             long iat = ReadLong(payload, "iat", 0);
             long exp = ReadLong(payload, "exp", 0);
+            long graceUntilSeconds = ReadLong(payload, "graceUntil", exp);
             if (exp <= 0)
             {
                 failureReason = "license_token_exp_missing";
@@ -445,10 +467,16 @@ namespace Glitch.Services
             DateTime nowUtc = DateTime.UtcNow;
             DateTime issuedAtUtc = UnixSecondsToUtc(iat);
             DateTime expiresAtUtc = UnixSecondsToUtc(exp);
+            DateTime graceUntilUtc = UnixSecondsToUtc(graceUntilSeconds);
+            if (graceUntilUtc == DateTime.MinValue)
+                graceUntilUtc = expiresAtUtc;
             if (expiresAtUtc <= nowUtc)
             {
-                failureReason = "license_token_expired";
-                return false;
+                if (!allowExpiredWithinGrace || graceUntilUtc <= nowUtc)
+                {
+                    failureReason = "license_token_expired";
+                    return false;
+                }
             }
 
             if (issuedAtUtc != DateTime.MinValue && issuedAtUtc > nowUtc.AddMinutes(2))
@@ -488,11 +516,6 @@ namespace Glitch.Services
                 MaxGroups = ReadInt(limits, "maxGroups", plan.Equals("premium", StringComparison.OrdinalIgnoreCase) ? 10 : 1, 1, 100),
                 MaxFollowersPerGroup = ReadInt(limits, "maxFollowersPerGroup", plan.Equals("premium", StringComparison.OrdinalIgnoreCase) ? 100 : 2, 1, 500)
             };
-
-            long graceUntilSeconds = ReadLong(payload, "graceUntil", exp);
-            DateTime graceUntilUtc = UnixSecondsToUtc(graceUntilSeconds);
-            if (graceUntilUtc == DateTime.MinValue)
-                graceUntilUtc = expiresAtUtc;
 
             claims = new GlitchLicenseTokenClaims
             {

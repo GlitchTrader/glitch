@@ -829,7 +829,7 @@ namespace Glitch.UI
                 return;
             }
 
-            if (!GlitchLicenseService.TryReadVerifiedTokenClaims(
+            if (!GlitchLicenseService.TryReadVerifiedCachedTokenClaims(
                     signedToken,
                     _runtimePolicySettings.InstallationId,
                     _licenseDeviceFingerprintHash,
@@ -842,11 +842,16 @@ namespace Glitch.UI
                 return;
             }
 
-            ApplyTokenClaimsToCache(claims, "active", string.Empty);
+            DateTime nowUtc = DateTime.UtcNow;
+            string restoredStatus = claims.ExpiresAtUtc > nowUtc ? "active" : "grace";
+            string restoredReason = restoredStatus.Equals("grace", StringComparison.OrdinalIgnoreCase)
+                ? "startup_grace_from_signed_cache"
+                : string.Empty;
+            ApplyTokenClaimsToCache(claims, restoredStatus, restoredReason);
             _licenseCacheState.SignedLicenseToken = signedToken;
             _licenseCacheState.SignedTokenExpiresUtc = claims.ExpiresAtUtc;
             if (_licenseCacheState.LastSuccessUtc == DateTime.MinValue)
-                _licenseCacheState.LastSuccessUtc = DateTime.UtcNow;
+                _licenseCacheState.LastSuccessUtc = nowUtc;
         }
 
         private void ApplyTokenClaimsToCache(GlitchLicenseTokenClaims claims, string status, string reason)
@@ -911,14 +916,11 @@ namespace Glitch.UI
 
         private bool IsLicenseActiveOrGrace(DateTime nowUtc)
         {
-            if (!HasCurrentSignedToken(nowUtc))
-                return false;
-
             string status = (_licenseCacheState?.LastStatus ?? string.Empty).Trim();
             if (status.Equals("active", StringComparison.OrdinalIgnoreCase))
-                return true;
+                return HasCurrentSignedToken(nowUtc) || IsWithinGraceWindow(nowUtc);
             if (status.Equals("grace", StringComparison.OrdinalIgnoreCase))
-                return true;
+                return IsWithinGraceWindow(nowUtc);
             if ((_licenseCacheState?.LastSuccessUtc ?? DateTime.MinValue) == DateTime.MinValue)
                 return false;
             return IsWithinGraceWindow(nowUtc);
@@ -943,7 +945,7 @@ namespace Glitch.UI
             string normalizedModule = string.IsNullOrWhiteSpace(moduleLabel) ? "premium features" : moduleLabel.Trim();
             string licenseKey = (_runtimePolicySettings?.LicenseKey ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(licenseKey))
-                return "License required. Enter your key in Settings and validate.";
+                return $"Free Lite is active. Enter a paid license in Settings to unlock {normalizedModule}.";
 
             string status = (_licenseCacheState?.LastStatus ?? string.Empty).Trim();
             string reason = (_licenseCacheState?.LastReason ?? string.Empty).Trim();
@@ -962,6 +964,12 @@ namespace Glitch.UI
             {
                 return "License key not found. Verify your key in Settings and validate again.";
             }
+
+            if (reason.Equals("binding_not_found", StringComparison.OrdinalIgnoreCase))
+                return "License is not validated on this machine yet. Validate it in Settings to unlock premium modules.";
+
+            if (reason.Equals("binding_metadata_conflict", StringComparison.OrdinalIgnoreCase))
+                return "License metadata is out of sync. Reset the license in Whop or rebind this machine from admin.";
 
             return $"License expired or invalid. Renew and validate to unlock {normalizedModule}.";
         }
@@ -996,15 +1004,7 @@ namespace Glitch.UI
             denialReason = null;
             DateTime nowUtc = DateTime.UtcNow;
             if (!IsLicenseActiveOrGrace(nowUtc))
-            {
-                if (!HasSuccessfulLicenseValidation())
-                {
-                    denialReason = "License validation required. Enter key in Settings and validate.";
-                    return false;
-                }
-
                 ApplyFreeLitePolicyToCache("expired", _licenseCacheState?.LastReason ?? "grace_window_elapsed");
-            }
 
             if (IsFreeLitePlan())
             {
@@ -1118,13 +1118,7 @@ namespace Glitch.UI
             {
                 DateTime nowNoKey = DateTime.UtcNow;
                 _licenseCacheState.LastCheckedUtc = nowNoKey;
-                bool inGraceNoKey = IsWithinGraceWindow(nowNoKey);
-                _licenseCacheState.LastStatus = inGraceNoKey ? "grace" : "expired";
-                _licenseCacheState.LastReason = "missing_license_key";
-                if (!inGraceNoKey)
-                    ApplyFreeLitePolicyToCache("expired", "missing_license_key");
-                _licenseCacheState.SignedLicenseToken = string.Empty;
-                _licenseCacheState.SignedTokenExpiresUtc = DateTime.MinValue;
+                ApplyFreeLitePolicyToCache("free_lite", "missing_license_key");
                 GlitchRuntimePolicyStore.SaveLicenseCache(_licenseCacheFilePath, _licenseCacheState);
                 UpdateSettingsTabLicenseStatusText();
                 UpdateAnalyticsLicenseGateOverlay();
@@ -1199,8 +1193,6 @@ namespace Glitch.UI
                 _licenseCacheState.LastReason = error.Message ?? "license_check_failed";
                 if (!inGrace)
                     ApplyFreeLitePolicyToCache("expired", _licenseCacheState.LastReason);
-                _licenseCacheState.SignedLicenseToken = string.Empty;
-                _licenseCacheState.SignedTokenExpiresUtc = DateTime.MinValue;
                 GlitchRuntimePolicyStore.SaveLicenseCache(_licenseCacheFilePath, _licenseCacheState);
                 UpdateSettingsTabLicenseStatusText();
                 UpdateAnalyticsLicenseGateOverlay();

@@ -424,16 +424,7 @@ namespace Glitch.UI
                 private bool ShouldGateJournalByLicense(out string message)
                 {
                     message = null;
-
-                    string licenseKey = (_runtimePolicySettings?.LicenseKey ?? string.Empty).Trim();
-                    if (string.IsNullOrWhiteSpace(licenseKey))
-                    {
-                        message = BuildPremiumAccessMessage("Journal");
-                        return true;
-                    }
-
-                    string status = (_licenseCacheState?.LastStatus ?? string.Empty).Trim();
-                    if (status.Equals("active", StringComparison.OrdinalIgnoreCase))
+                    if (IsLicenseActiveOrGrace(DateTime.UtcNow) && !IsFreeLitePlan())
                         return false;
                     message = BuildPremiumAccessMessage("Journal");
                     return true;
@@ -447,7 +438,9 @@ namespace Glitch.UI
                     if (ShouldGateJournalByLicense(out string message))
                     {
                         if (_journalLicenseGateMessageText != null)
-                            _journalLicenseGateMessageText.Text = L("overlay.premium_gate_message", "To enable premium features purchase your license below and validate it in the Settings tab.");
+                            _journalLicenseGateMessageText.Text = string.IsNullOrWhiteSpace(message)
+                                ? L("overlay.premium_gate_message", "To enable premium features purchase your license below and validate it in the Settings tab.")
+                                : message;
                         _journalLicenseGateOverlay.Visibility = Visibility.Visible;
                         return;
                     }

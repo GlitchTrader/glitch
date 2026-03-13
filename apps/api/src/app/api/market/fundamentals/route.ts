@@ -2,9 +2,6 @@ import { createHash } from "crypto";
 import { NextRequest } from "next/server";
 import {
   EntitlementStoreConfigError,
-  findWhopEntitlementByLicenseKey,
-  isWhopEntitlementStatusActive,
-  verifyLicenseBinding,
 } from "@/lib/entitlements-store";
 import { getTrustedClientIp } from "@/lib/client-ip";
 import { readOptionalEnv } from "@/lib/env";
@@ -13,6 +10,13 @@ import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
 import { validateAndConsumeLicenseNonce } from "@/lib/license-nonce-store";
 import { getMarketFundamentalSnapshot } from "@/lib/market-fundamentals";
 import { checkRateLimit } from "@/lib/rate-limit";
+import {
+  buildWhopLicenseSnapshot,
+  getWhopMembershipByLicenseKey,
+  inspectWhopMembershipBinding,
+  syncWhopMembershipToLocalState,
+  WhopLicenseApiError,
+} from "@/lib/whop-license";
 
 export const runtime = "nodejs";
 
@@ -170,36 +174,46 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const entitlement = await findWhopEntitlementByLicenseKey(parsed.licenseKey);
-    if (!entitlement) {
+    const membership = await getWhopMembershipByLicenseKey(parsed.licenseKey);
+    if (!membership) {
       return errorResponse(requestId, 401, "license_not_found", "License key was not found.");
     }
 
-    if (!isWhopEntitlementStatusActive(entitlement.status)) {
+    await syncWhopMembershipToLocalState(membership);
+    const liveSnapshot = buildWhopLicenseSnapshot(membership);
+    if (!liveSnapshot.active) {
       return errorResponse(
         requestId,
         401,
         "license_inactive",
-        `Membership is not active (${entitlement.status}).`,
+        `Membership is not active (${membership.status}).`,
       );
     }
 
-    const bindingResult = await verifyLicenseBinding(
-      entitlement.id,
+    const bindingInspection = inspectWhopMembershipBinding(
+      membership,
       parsed.installationId,
       parsed.deviceFingerprintHash,
     );
-    if (!bindingResult.ok) {
+    if (bindingInspection.state !== "matched") {
       return errorResponse(
         requestId,
         401,
         "license_binding_invalid",
         "License binding validation failed.",
-        bindingResult.reason,
+        bindingInspection.state,
       );
     }
 
-    const resolvedEntitlement = resolveEntitlementFromSource(entitlement.productId, entitlement.planCode);
+    await syncWhopMembershipToLocalState(membership, {
+      installationId: parsed.installationId,
+      deviceFingerprintHash: parsed.deviceFingerprintHash,
+    });
+
+    const resolvedEntitlement = resolveEntitlementFromSource(
+      membership.product?.id ?? null,
+      membership.plan?.id ?? null,
+    );
     const policy = buildPolicy(resolvedEntitlement.plan);
     if (!policy.features.fundamental) {
       return errorResponse(
@@ -223,7 +237,7 @@ export async function POST(request: NextRequest) {
         billingVariant: resolvedEntitlement.billingVariant,
         sourceProductId: resolvedEntitlement.sourceProductId,
         sourcePlanCode: resolvedEntitlement.sourcePlanCode,
-        status: entitlement.status,
+        status: membership.status,
         features: policy.features,
         limits: policy.limits,
       },
@@ -237,6 +251,16 @@ export async function POST(request: NextRequest) {
         "entitlement_store_misconfigured",
         "Entitlement storage is not configured correctly.",
         error.code,
+      );
+    }
+
+    if (error instanceof WhopLicenseApiError) {
+      return errorResponse(
+        requestId,
+        error.status && error.status >= 400 && error.status < 500 ? 502 : 503,
+        error.code,
+        "Failed to validate Whop license for fundamentals.",
+        error.details,
       );
     }
 

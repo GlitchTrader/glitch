@@ -4,17 +4,19 @@ import type {
   MembershipCancelAtPeriodEndChangedWebhookEvent,
   MembershipDeactivatedWebhookEvent,
 } from "@whop/sdk/resources/webhooks";
+import type { Membership as WhopMembership } from "@whop/sdk/resources/shared";
 import { readOptionalEnv } from "@/lib/env";
 import { hashLicenseKey } from "@/lib/license-key-hash";
 
 type MembershipPayload =
   | MembershipActivatedWebhookEvent["data"]
   | MembershipDeactivatedWebhookEvent["data"]
-  | MembershipCancelAtPeriodEndChangedWebhookEvent["data"];
+  | MembershipCancelAtPeriodEndChangedWebhookEvent["data"]
+  | WhopMembership;
 
 const globalPoolKey = "__glitchEntitlementsStoreDbPoolV1";
 const globalSchemaReadyKey = "__glitchEntitlementsStoreSchemaReadyV1";
-const activeStatuses = new Set(["active", "trialing", "canceling", "past_due"]);
+const activeStatuses = new Set(["active", "trialing", "canceling", "past_due", "completed"]);
 
 interface EntitlementStoreDbPool {
   query<T = unknown>(text: string, params?: unknown[]): Promise<{ rowCount: number | null; rows: T[] }>;
@@ -640,6 +642,76 @@ export async function verifyLicenseBinding(
       WHERE id = $1;
     `,
     [existing.id],
+  );
+
+  return {
+    ok: true,
+    reason: null,
+  };
+}
+
+export async function replaceActiveLicenseBinding(
+  entitlementId: string,
+  installationId: string,
+  deviceFingerprintHash: string,
+): Promise<LicenseBindingResult> {
+  const pool = await getDatabasePool();
+  await ensureSchema(pool);
+
+  const existingResult = await pool.query<LicenseBindingRow>(
+    `
+      SELECT id, installation_id, device_fingerprint_hash
+      FROM license_bindings
+      WHERE entitlement_id = $1 AND revoked_at IS NULL
+      LIMIT 1;
+    `,
+    [entitlementId],
+  );
+
+  const existing = existingResult.rows[0];
+  if (
+    existing &&
+    existing.installation_id === installationId &&
+    existing.device_fingerprint_hash === deviceFingerprintHash
+  ) {
+    await pool.query(
+      `
+        UPDATE license_bindings
+        SET last_seen_at = NOW()
+        WHERE id = $1;
+      `,
+      [existing.id],
+    );
+
+    return {
+      ok: true,
+      reason: null,
+    };
+  }
+
+  await pool.query(
+    `
+      UPDATE license_bindings
+      SET revoked_at = NOW()
+      WHERE entitlement_id = $1 AND revoked_at IS NULL;
+    `,
+    [entitlementId],
+  );
+
+  await pool.query(
+    `
+      INSERT INTO license_bindings (
+        id,
+        entitlement_id,
+        installation_id,
+        device_fingerprint_hash,
+        first_seen_at,
+        last_seen_at,
+        revoked_at
+      )
+      VALUES ($1, $2, $3, $4, NOW(), NOW(), NULL);
+    `,
+    [`bind_${randomUUID()}`, entitlementId, installationId, deviceFingerprintHash],
   );
 
   return {

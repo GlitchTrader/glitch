@@ -20,8 +20,8 @@ Next.js app serving backend endpoints for health, Whop webhooks, license validat
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/license/validate` | Validate license and binding; returns policy and optional signed token. |
-| POST | `/api/license/heartbeat` | Heartbeat for active binding; returns policy and optional token. |
+| POST | `/api/license/validate` | Validate a Whop license key, bind it to this installation if Whop metadata is still empty, and return policy plus optional signed token. |
+| POST | `/api/license/heartbeat` | Re-check membership status and current binding against Whop; returns policy and optional token. |
 
 Both require `licenseKey`, `installationId`, `deviceFingerprintHash` in JSON body; rate-limited by IP and by license.
 
@@ -90,8 +90,10 @@ npm run dev --workspace apps/api
 
 - Webhook verification uses `@whop/sdk` `webhooks.unwrap`. Idempotency uses Postgres when `DATABASE_URL` is set, otherwise in-memory.
 - Membership webhook events project to `entitlements` only when `DATABASE_URL` is set. Entitlements store monetization context (`company_id`, `product_id`, `promo_code_id`, `membership_metadata`) for attribution.
+- License validation is live against Whop in database mode. `validate` looks up the membership directly by license key and uses Whop's `validate_license` flow to bind empty metadata; `heartbeat` checks the current Whop membership plus binding metadata.
 - License tier resolution is product-first (`product_id` -> `free_lite` vs `premium`). `plan_id` is used to classify the billing variant (`free`, `monthly`, `annual`, `lifetime`) and as a legacy fallback when older rows do not have `product_id`.
-- DB-backed license validate/heartbeat use hashed Whop license keys and enforce one active `license_binding` per entitlement (installation + device fingerprint).
+- Lifetime / one-time Whop memberships with status `completed` are treated as valid premium access.
+- The binding metadata stored on the Whop membership is the authoritative machine binding. The local `license_bindings` table is kept in sync for admin visibility and operational mirrors.
 - SQL scaffold: `db/schema.sql` (webhook_events, entitlements, license_bindings).
 
 ## Example (admin)

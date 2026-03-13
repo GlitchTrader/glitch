@@ -1,14 +1,16 @@
 import { NextRequest } from "next/server";
 import { requireAdminToken } from "@/lib/admin-auth";
 import {
-  claimLicenseBinding,
   EntitlementStoreConfigError,
-  findWhopEntitlementByLicenseKey,
-  isWhopEntitlementStatusActive,
-  revokeActiveLicenseBinding,
 } from "@/lib/entitlements-store";
 import { errorResponse, getRequestId, jsonResponse } from "@/lib/http";
 import { getWebhookStoreMode } from "@/lib/idempotency-store";
+import {
+  buildWhopLicenseSnapshot,
+  getWhopMembershipByLicenseKey,
+  rebindWhopMembership,
+  WhopLicenseApiError,
+} from "@/lib/whop-license";
 
 export const runtime = "nodejs";
 
@@ -88,8 +90,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const entitlement = await findWhopEntitlementByLicenseKey(parsed.licenseKey);
-    if (!entitlement) {
+    const membership = await getWhopMembershipByLicenseKey(parsed.licenseKey);
+    if (!membership) {
       return jsonResponse({
         ok: true,
         requestId,
@@ -98,27 +100,30 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    if (!isWhopEntitlementStatusActive(entitlement.status)) {
+    const liveSnapshot = buildWhopLicenseSnapshot(membership);
+    if (!liveSnapshot.active) {
       return jsonResponse({
         ok: true,
         requestId,
-        entitlementId: entitlement.id,
+        entitlementId: `ent_whop_${membership.id}`,
         rebound: false,
-        reason: `membership_status_${entitlement.status}`,
+        reason: `membership_status_${membership.status}`,
       });
     }
 
-    await revokeActiveLicenseBinding(entitlement.id);
-    const claimResult = await claimLicenseBinding(
-      entitlement.id,
+    const reboundMembership = await rebindWhopMembership(
+      parsed.licenseKey,
       parsed.installationId,
       parsed.deviceFingerprintHash,
     );
+    const claimResult = reboundMembership
+      ? { ok: true, reason: null }
+      : { ok: false, reason: "license_not_found" };
 
     return jsonResponse({
       ok: true,
       requestId,
-      entitlementId: entitlement.id,
+      entitlementId: `ent_whop_${membership.id}`,
       rebound: claimResult.ok,
       reason: claimResult.reason,
     });
@@ -132,6 +137,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (error instanceof WhopLicenseApiError) {
+      return errorResponse(
+        requestId,
+        error.status && error.status >= 400 && error.status < 500 ? 502 : 503,
+        error.code,
+        "Failed to rebind license in Whop.",
+        error.details,
+      );
+    }
+
     return errorResponse(
       requestId,
       500,
@@ -141,4 +156,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

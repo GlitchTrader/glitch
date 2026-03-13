@@ -24,7 +24,7 @@ function readWebhookKeyFromEnv(): string {
   return Buffer.from(stripCopyPasteWrappers(secret), "utf8").toString("base64");
 }
 
-export function getWhopWebhookClient(): Whop {
+export function getWhopApiClient(): Whop {
   if (cachedWebhookClient) {
     return cachedWebhookClient;
   }
@@ -35,4 +35,28 @@ export function getWhopWebhookClient(): Whop {
     webhookKey: readWebhookKeyFromEnv(),
   });
   return cachedWebhookClient;
+}
+
+export function getWhopWebhookClient(): Whop {
+  return getWhopApiClient();
+}
+
+export function getWhopApiV1BaseUrl(): string {
+  const rawBaseUrl = readOptionalEnv("WHOP_BASE_URL");
+  const trimmed = rawBaseUrl?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : "https://api.whop.com/api/v1";
+}
+
+export function getWhopApiV2BaseUrl(): string {
+  const v1BaseUrl = getWhopApiV1BaseUrl();
+
+  try {
+    const parsed = new URL(v1BaseUrl);
+    parsed.pathname = "/api/v2";
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return "https://api.whop.com/api/v2";
+  }
 }
