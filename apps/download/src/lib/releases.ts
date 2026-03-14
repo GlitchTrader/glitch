@@ -144,6 +144,47 @@ function compareReleaseRecords(a: ReleaseRecord, b: ReleaseRecord): number {
   });
 }
 
+function resolvePublicOrigin(): string {
+  const vercelUrl = process.env.VERCEL_URL?.trim();
+  if (vercelUrl) {
+    const normalized = vercelUrl.startsWith("http") ? vercelUrl : `https://${vercelUrl}`;
+    return normalized.replace(/\/+$/, "");
+  }
+
+  const configured = process.env.NEXT_PUBLIC_DOWNLOADS_URL?.trim() || defaultDownloadsUrl;
+  const normalized = configured.startsWith("http") ? configured : `https://${configured}`;
+  return normalized.replace(/\/+$/, "");
+}
+
+async function resolveReleaseDate(downloadPath: string, fallbackDate: Date): Promise<Date> {
+  const origin = resolvePublicOrigin();
+
+  try {
+    const response = await fetch(`${origin}${downloadPath}`, {
+      method: "HEAD",
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return fallbackDate;
+    }
+
+    const header = response.headers.get("last-modified");
+    if (!header) {
+      return fallbackDate;
+    }
+
+    const parsed = new Date(header);
+    if (Number.isNaN(parsed.getTime())) {
+      return fallbackDate;
+    }
+
+    return parsed;
+  } catch {
+    return fallbackDate;
+  }
+}
+
 async function hashFileSha256(filePath: string): Promise<string> {
   const hash = createHash("sha256");
   const stream = createReadStream(filePath);
@@ -167,6 +208,8 @@ async function readLocalReleases(): Promise<ReleaseRecord[]> {
       const [stats, sha256] = await Promise.all([fs.stat(absolutePath), hashFileSha256(absolutePath)]);
       const version = deriveVersion(fileName);
       const pathname = `files/${fileName}`;
+      const downloadPath = `/${pathname.split("/").map(encodeURIComponent).join("/")}`;
+      const uploadedAt = await resolveReleaseDate(downloadPath, new Date(stats.mtime));
 
       return {
         version,
@@ -174,8 +217,8 @@ async function readLocalReleases(): Promise<ReleaseRecord[]> {
         fileName,
         pathname,
         size: stats.size,
-        uploadedAt: new Date(stats.mtime),
-        downloadPath: `/${pathname.split("/").map(encodeURIComponent).join("/")}`,
+        uploadedAt,
+        downloadPath,
         sha256,
       };
     }),

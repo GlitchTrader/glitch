@@ -15,6 +15,16 @@ type DocDefinition = {
 
 const publicDocDefinitions: DocDefinition[] = [
   {
+    slug: "installation-guide-troubleshooting",
+    fileName: "installation-guide-troubleshooting.md",
+    navTitle: "Installation Guide & Troubleshooting",
+    section: "Product",
+    summary:
+      "Step-by-step install, license activation, bridge indicator setup, replication workflow, risk controls, and troubleshooting FAQ.",
+    spotlight:
+      "Best operational walkthrough for getting live quickly while validating account mapping, risk settings, and chart-linked context.",
+  },
+  {
     slug: "architecture",
     fileName: "architecture.md",
     navTitle: "Architecture",

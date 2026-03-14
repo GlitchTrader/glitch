@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { getDocsUrl, getDownloadsUrl, getLatestRelease, getReleaseCatalog, getWebsiteUrl, formatReleaseDate, formatReleaseSize } from "@/lib/releases";
 
 export const dynamic = "force-dynamic";
@@ -36,20 +35,12 @@ export default async function Home() {
         <header className="download-grid overflow-hidden rounded-[2rem] px-6 py-7 sm:px-8 sm:py-8">
           <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
-              <Image
-                src="/images/branding/Glitch Logo.svg"
-                alt="Glitch"
-                width={128}
-                height={34}
-                className="h-8 w-auto"
-                priority
-                unoptimized
-              />
               <p className="mt-6 inline-flex rounded-full border border-glitch-teal/40 bg-glitch-teal/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-glitch-teal">
                 Official Download
               </p>
               <h1 className="mt-5 max-w-3xl text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-                Download Glitch for NinjaTrader 8
+                Download Glitch
+                <span className="block">for NinjaTrader 8</span>
               </h1>
               <p className="mt-4 max-w-2xl text-base leading-8 text-zinc-300">
                 Install the latest release in minutes, or pick a specific version from the history below.
@@ -58,11 +49,11 @@ export default async function Home() {
 
             <div className="flex flex-col gap-3 rounded-[1.75rem] border border-white/8 bg-black/25 p-5 text-sm text-zinc-300 sm:min-w-[320px]">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-glitch-orange">Latest Link</p>
-              <code className="overflow-x-auto rounded-2xl border border-white/8 bg-black/30 px-3 py-3 font-mono text-xs text-white">
+              <code className="w-full rounded-2xl border border-white/8 bg-black/30 px-3 py-3 font-mono text-[11px] leading-4 text-white">
                 {`${downloadsUrl.replace(/\/$/, "")}/latest`}
               </code>
-              <p className="text-xs leading-6 text-zinc-400">
-                Bookmark this URL to always download the newest release.
+              <p className="text-xs text-zinc-400">
+                Bookmark this URL for newest release.
               </p>
             </div>
           </div>
@@ -114,7 +105,12 @@ export default async function Home() {
 
             <div className="mt-6 rounded-[1.5rem] border border-white/8 bg-white/[0.02] p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">SHA-256</p>
-              <code className="mt-2 block break-all font-mono text-[11px] text-zinc-200">{latestRelease.sha256}</code>
+              <code
+                className="mt-2 block overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11px] text-zinc-200"
+                title={latestRelease.sha256}
+              >
+                {latestRelease.sha256}
+              </code>
             </div>
           </section>
         ) : (
@@ -149,11 +145,16 @@ export default async function Home() {
                     >
                       <div>
                         <p className="font-medium text-white">{release.fileName}</p>
-                        <p className="mt-1 break-all font-mono text-[11px] text-zinc-500">SHA-256: {release.sha256}</p>
                       </div>
                       <span className="text-sm text-zinc-200">{release.version}</span>
                       <span className="text-sm text-zinc-400">{formatReleaseSize(release.size)}</span>
                       <span className="text-sm text-zinc-400">{formatReleaseDate(release.uploadedAt)}</span>
+                      <div
+                        className="sm:col-span-4 mt-1 overflow-hidden text-ellipsis whitespace-nowrap rounded-lg border border-white/8 bg-black/25 px-2.5 py-1 font-mono text-[11px] text-zinc-500"
+                        title={`SHA-256: ${release.sha256}`}
+                      >
+                        SHA-256: {release.sha256}
+                      </div>
                     </a>
                   ))}
                 </div>
@@ -171,7 +172,7 @@ export default async function Home() {
               <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white">Get up and running</h2>
               <ol className="mt-4 space-y-3 text-sm leading-7 text-zinc-300">
                 <li>1. Download the latest zip package.</li>
-                <li>2. In NinjaTrader, go to <span className="text-white">Tools &gt; Import &gt; NinjaScript Add-On</span>.</li>
+                <li>2. In NinjaTrader, go to Tools &gt; Import &gt; NinjaScript Add-On.</li>
                 <li>3. Select the downloaded file and complete import.</li>
                 <li>4. Open Glitch and sign in with your licensed account.</li>
               </ol>
