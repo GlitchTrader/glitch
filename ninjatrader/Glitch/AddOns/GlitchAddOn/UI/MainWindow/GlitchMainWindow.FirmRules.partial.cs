@@ -64,6 +64,10 @@ namespace Glitch.UI
                 }
             }
 
+            string bundledJson = TryReadBundledPropFirmRulesJson();
+            if (!string.IsNullOrWhiteSpace(bundledJson))
+                return bundledJson;
+
             return null;
         }
 

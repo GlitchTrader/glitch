@@ -58,6 +58,8 @@ namespace Glitch.UI
         private const double AnalyticsComponentMaWeight = 0.30;
         private const double AnalyticsComponentOscWeight = 0.20;
         private const double AnalyticsComponentOrderFlowWeight = 0.15;
+        private const string WhopUpgradeCheckoutUrl = "https://whop.com/joined/glitchtrader/products/glitch-ninjatrader-addon/";
+        private const string WhopMemberHubUrl = "https://whop.com/joined/glitchtrader/";
         private static readonly Brush AnalyticsDialSellStrongBrush = CreateFrozenAnalyticsDialBrush(0xFF, 0x42, 0x00);
         private static readonly Brush AnalyticsDialSellMidBrush = CreateFrozenAnalyticsDialBrush(0xFF, 0x7A, 0x26);
         private static readonly Brush AnalyticsDialSellWeakBrush = CreateFrozenAnalyticsDialBrush(0xD6, 0x8A, 0x55);
@@ -4329,10 +4331,14 @@ namespace Glitch.UI
 
                 private Grid CreatePremiumSurfaceOverlay(FrameworkElement context, string surfaceName)
                 {
+                    string surfaceLabel = string.IsNullOrWhiteSpace(surfaceName)
+                        ? L("overlay.surface.premium_features", "Premium Features")
+                        : CultureInfo.CurrentCulture.TextInfo.ToTitleCase(surfaceName.Trim());
+
                     var overlay = new Grid
                     {
                         Visibility = Visibility.Collapsed,
-                        Background = new SolidColorBrush(Color.FromArgb(204, 0, 0, 0)),
+                        Background = new SolidColorBrush(Color.FromArgb(217, 0, 0, 0)),
                         IsHitTestVisible = true
                     };
 
@@ -4349,23 +4355,33 @@ namespace Glitch.UI
                     ApplySkinResource(card, Border.BorderBrushProperty, "BorderThinBrush", "TabControlBorderBrush");
 
                     var stack = new StackPanel { Orientation = Orientation.Vertical };
+                    stack.Children.Add(new Border
+                    {
+                        Width = 96,
+                        Height = 2,
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        Margin = new Thickness(0, 0, 0, 10),
+                        Background = OrangeAccentBrush
+                    });
+
                     var title = new TextBlock
                     {
-                        Text = L("overlay.license_required", "License Required"),
+                        Text = Lf("overlay.go_pro.title_format", "Go Pro for {0}", surfaceLabel),
                         FontWeight = FontWeights.SemiBold,
                         Margin = new Thickness(0, 0, 0, 8)
                     };
-                    RegisterLocalizationBinding(() => title.Text = L("overlay.license_required", "License Required"));
+                    RegisterLocalizationBinding(() => title.Text = Lf("overlay.go_pro.title_format", "Go Pro for {0}", surfaceLabel));
                     ApplySkinResource(title, TextBlock.ForegroundProperty, "FontHeaderLevel3Brush", "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
                     stack.Children.Add(title);
+                    stack.Children.Add(CreateLiteLicensePromptLine(context));
 
                     _analyticsLicenseGateMessageText = new TextBlock
                     {
-                        Text = L("overlay.premium_gate_message", "To enable premium features purchase your license below and validate it in the Settings tab."),
+                        Text = BuildUnifiedPremiumGateMessage(),
                         TextWrapping = TextWrapping.Wrap,
                         Margin = new Thickness(0, 0, 0, 12)
                     };
-                    RegisterLocalizationBinding(() => _analyticsLicenseGateMessageText.Text = L("overlay.premium_gate_message", "To enable premium features purchase your license below and validate it in the Settings tab."));
+                    RegisterLocalizationBinding(() => _analyticsLicenseGateMessageText.Text = BuildUnifiedPremiumGateMessage());
                     ApplySkinResource(_analyticsLicenseGateMessageText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
                     stack.Children.Add(_analyticsLicenseGateMessageText);
 
@@ -4377,27 +4393,31 @@ namespace Glitch.UI
 
                     var checkoutButton = new Button
                     {
-                        Content = L("overlay.button.get_license", "Get License"),
+                        Content = L("overlay.button.go_pro", "Go Pro"),
                         HorizontalAlignment = HorizontalAlignment.Left,
                         MinWidth = 172,
-                        Style = CreateGroupAddButtonStyle(context)
+                        Style = CreateGroupActionButtonStyle(context),
+                        Background = OrangeAccentBrush,
+                        BorderBrush = OrangeAccentBrush,
+                        Foreground = Brushes.White
                     };
-                    RegisterLocalizationBinding(() => checkoutButton.Content = L("overlay.button.get_license", "Get License"));
-                    checkoutButton.Click += (_, __) => OpenAnalyticsExternalUrl("https://whop.com/joined/glitchtrader/products/glitch-ninjatrader-addon/");
+                    RegisterLocalizationBinding(() => checkoutButton.Content = L("overlay.button.go_pro", "Go Pro"));
+                    checkoutButton.Click += (_, __) => OpenAnalyticsExternalUrl(GetWhopUpgradeCheckoutUrl());
                     buttonRow.Children.Add(checkoutButton);
 
                     var memberAppButton = new Button
                     {
-                        Content = L("overlay.button.manage_membership", "Manage Membership"),
+                        Content = L("overlay.button.member_hub", "Open Member Hub"),
                         HorizontalAlignment = HorizontalAlignment.Left,
                         MinWidth = 172,
                         Margin = new Thickness(8, 0, 0, 0),
                         Style = CreateGroupActionButtonStyle(context)
                     };
-                    RegisterLocalizationBinding(() => memberAppButton.Content = L("overlay.button.manage_membership", "Manage Membership"));
-                    memberAppButton.Click += (_, __) => OpenAnalyticsExternalUrl("https://whop.com/joined/glitchtrader/");
+                    RegisterLocalizationBinding(() => memberAppButton.Content = L("overlay.button.member_hub", "Open Member Hub"));
+                    memberAppButton.Click += (_, __) => OpenAnalyticsExternalUrl(GetWhopMemberHubUrl());
                     buttonRow.Children.Add(memberAppButton);
                     stack.Children.Add(buttonRow);
+                    stack.Children.Add(CreateSettingsTabShortcutLine(context));
 
                     card.Child = stack;
                     overlay.Children.Add(card);
@@ -4409,12 +4429,10 @@ namespace Glitch.UI
                     if (_analyticsLicenseGateOverlay == null)
                         return;
 
-                    if (!CanAccessAnalyticsPremium(out string lockedMessage))
+                    if (!CanAccessAnalyticsPremium(out _))
                     {
                         if (_analyticsLicenseGateMessageText != null)
-                            _analyticsLicenseGateMessageText.Text = string.IsNullOrWhiteSpace(lockedMessage)
-                                ? L("overlay.premium_gate_message", "To enable premium features purchase your license below and validate it in the Settings tab.")
-                                : lockedMessage;
+                            _analyticsLicenseGateMessageText.Text = BuildUnifiedPremiumGateMessage();
                         _analyticsLicenseGateOverlay.Visibility = Visibility.Visible;
                         return;
                     }
@@ -4439,6 +4457,81 @@ namespace Glitch.UI
                     catch
                     {
                     }
+                }
+
+                private static string GetWhopUpgradeCheckoutUrl()
+                {
+                    return WhopUpgradeCheckoutUrl;
+                }
+
+                private static string GetWhopMemberHubUrl()
+                {
+                    return WhopMemberHubUrl;
+                }
+
+                private TextBlock CreateLiteLicensePromptLine(FrameworkElement context)
+                {
+                    Brush baseTextBrush = FindSkinBrush(context, "FontControlBrush", "FontTableBrush") ?? Brushes.White;
+                    double? skinFontSize = FindSkinDouble(context, "FontControlHeight", "FontTableHeight", "FontHeaderLevel4Height");
+                    double sharedFontSize = skinFontSize.HasValue && skinFontSize.Value > 0 ? skinFontSize.Value : 12d;
+
+                    var line = new TextBlock
+                    {
+                        Margin = new Thickness(0, 0, 0, 10),
+                        TextWrapping = TextWrapping.Wrap,
+                        FontSize = sharedFontSize
+                    };
+                    line.Inlines.Add(new Run(L("settings.license.active_prefix", "Active License: "))
+                    {
+                        Foreground = baseTextBrush,
+                        FontWeight = FontWeights.SemiBold,
+                        FontSize = sharedFontSize
+                    });
+                    line.Inlines.Add(new Run(L("settings.license.plan_lite", "Lite"))
+                    {
+                        Foreground = TealAccentBrush,
+                        FontWeight = FontWeights.SemiBold,
+                        FontSize = sharedFontSize
+                    });
+                    line.Inlines.Add(new Run(" - ")
+                    {
+                        Foreground = baseTextBrush,
+                        FontSize = sharedFontSize
+                    });
+
+                    var upgradeLink = new Hyperlink(new Run(L("settings.license.upgrade_to_pro", "Upgrade to Pro")))
+                    {
+                        Foreground = OrangeAccentBrush,
+                        FontWeight = FontWeights.SemiBold,
+                        FontSize = sharedFontSize,
+                        TextDecorations = null
+                    };
+                    upgradeLink.Click += (_, __) => OpenAnalyticsExternalUrl(GetWhopUpgradeCheckoutUrl());
+                    line.Inlines.Add(upgradeLink);
+                    return line;
+                }
+
+                private TextBlock CreateSettingsTabShortcutLine(FrameworkElement context)
+                {
+                    Brush baseTextBrush = FindSkinBrush(context, "FontControlBrush", "FontTableBrush") ?? Brushes.White;
+
+                    var line = new TextBlock
+                    {
+                        Margin = new Thickness(0, 10, 0, 0),
+                        TextWrapping = TextWrapping.Wrap
+                    };
+                    line.Inlines.Add(new Run(L("overlay.settings.shortcut_prefix", "Already have a key? "))
+                    {
+                        Foreground = baseTextBrush
+                    });
+
+                    var settingsLink = new Hyperlink(new Run(L("overlay.settings.shortcut_link", "Open Settings")))
+                    {
+                        Foreground = TealAccentBrush
+                    };
+                    settingsLink.Click += (_, __) => NavigateToSettingsTabFromOverlay();
+                    line.Inlines.Add(settingsLink);
+                    return line;
                 }
 
     }

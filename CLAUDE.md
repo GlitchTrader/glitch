@@ -27,6 +27,13 @@ Use the same instruction families that Codex and Cursor use here: working style,
 - Never directly edit `C:\Users\alan\Documents\NinjaTrader 8\bin\Custom`.
 - Treat `GlitchData` as runtime state, not source templates.
 - `Localization.tsv` in the workspace is the only localization source of truth.
+- Treat customer-facing NinjaTrader export zips as release artifacts. Inspect them before publish and prefer bundled C# fallbacks over manual post-export zip mutation for required static data.
+
+## NinjaTrader Packaging
+
+- Prefer compiled assembly exports for customer downloads unless the user explicitly wants source distribution.
+- If runtime defaults such as prop-firm rules are required, bundle them in workspace code before export rather than relying on ad hoc zip edits.
+- Keep release packages free of docs, TSV runtime state, secrets, formulas, provider internals, ports, and cryptography details.
 
 ## Vercel
 

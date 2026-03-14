@@ -9,7 +9,7 @@ type Props = {
   }>;
 };
 
-export async function GET(_: Request, { params }: Props) {
+export async function GET(request: Request, { params }: Props) {
   const { version } = await params;
   const release = await getReleaseBySlug(version);
 
@@ -22,5 +22,5 @@ export async function GET(_: Request, { params }: Props) {
     });
   }
 
-  return NextResponse.redirect(release.downloadUrl, 307);
+  return NextResponse.redirect(new URL(release.downloadPath, request.url), 307);
 }

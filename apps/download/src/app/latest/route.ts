@@ -3,7 +3,7 @@ import { getLatestRelease } from "@/lib/releases";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   const latestRelease = await getLatestRelease();
 
   if (!latestRelease) {
@@ -15,5 +15,5 @@ export async function GET() {
     });
   }
 
-  return NextResponse.redirect(latestRelease.downloadUrl, 307);
+  return NextResponse.redirect(new URL(latestRelease.downloadPath, request.url), 307);
 }

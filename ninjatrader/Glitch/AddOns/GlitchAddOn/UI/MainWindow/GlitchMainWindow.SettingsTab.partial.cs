@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 using Glitch.Services;
 
@@ -18,10 +19,10 @@ namespace Glitch.UI
         private Border _settingsPlanBadgeBorder;
         private TextBlock _settingsPlanBadgeText;
         private Button _settingsSaveButton;
-        private Button _settingsValidateButton;
         private bool _settingsSaveFeedbackActive;
-        private bool _settingsValidateFeedbackActive;
         private bool _settingsLicensePlaceholderActive;
+        private bool _settingsLicenseMaskedDisplayActive;
+        private string _settingsLicenseKeyUnmaskedValue;
 
         private UIElement CreateSettingsTabImpl()
         {
@@ -29,25 +30,13 @@ namespace Glitch.UI
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             _settingsRootGrid = root;
-
-            var title = new TextBlock
-            {
-                Text = L("settings.title", "Settings"),
-                FontWeight = FontWeights.Medium,
-                Margin = new Thickness(0, 0, 0, 10)
-            };
-            BindLocalizedText(title, "settings.title", "Settings");
-            ApplySkinResource(title, TextBlock.ForegroundProperty, "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
-            Grid.SetRow(title, 0);
-            root.Children.Add(title);
 
             var compliancePanel = new StackPanel
             {
                 Orientation = Orientation.Vertical,
-                Margin = new Thickness(12)
+                Margin = new Thickness(0)
             };
             compliancePanel.Children.Add(BuildSectionHeader("settings.risk.title", "Risk Management Rules"));
 
@@ -69,18 +58,14 @@ namespace Glitch.UI
             compliancePanel.Children.Add(BuildPolicyToggleRow(_settingsUnrealizedFlatten80CheckBox));
             compliancePanel.Children.Add(BuildPolicyToggleRow(_settingsEvalProfitTargetLockCheckBox));
 
-            var complianceCard = CreateSettingsCard();
-            complianceCard.Child = compliancePanel;
-            Grid.SetRow(complianceCard, 1);
-            root.Children.Add(complianceCard);
+            Grid.SetRow(compliancePanel, 0);
+            root.Children.Add(compliancePanel);
 
             var licensingPanel = new StackPanel
             {
                 Orientation = Orientation.Vertical,
-                Margin = new Thickness(12)
+                Margin = new Thickness(0, 16, 0, 0)
             };
-            licensingPanel.Children.Add(BuildSectionHeader("settings.license.title", "License"));
-
             _settingsLicenseKeyTextBox = BuildSettingsTextBox("settings.license.key_placeholder", "Enter license key");
             _settingsLicenseKeyTextBox.GotFocus += OnSettingsLicenseKeyTextBoxGotFocus;
             _settingsLicenseKeyTextBox.LostFocus += OnSettingsLicenseKeyTextBoxLostFocus;
@@ -94,36 +79,34 @@ namespace Glitch.UI
             ApplySkinResource(_settingsPlanBadgeText, TextBlock.ForegroundProperty, "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
             _settingsPlanBadgeBorder = new Border
             {
-                CornerRadius = new CornerRadius(3),
-                Padding = new Thickness(8, 4, 8, 4),
+                CornerRadius = new CornerRadius(0),
+                Padding = new Thickness(0),
                 Margin = new Thickness(0, 8, 0, 0),
-                BorderThickness = new Thickness(1),
+                BorderThickness = new Thickness(0),
                 Child = _settingsPlanBadgeText
             };
-            ApplySkinResource(_settingsPlanBadgeBorder, Border.BackgroundProperty, "BackgroundMainWindow", "GridEntireBackground", "BackgroundTextInput");
-            ApplySkinResource(_settingsPlanBadgeBorder, Border.BorderBrushProperty, "BorderThinBrush", "TabControlBorderBrush");
+            _settingsPlanBadgeBorder.Background = Brushes.Transparent;
+            _settingsPlanBadgeBorder.BorderBrush = Brushes.Transparent;
 
             licensingPanel.Children.Add(BuildSettingsLabel("settings.license.key", "License Key"));
             licensingPanel.Children.Add(_settingsLicenseKeyTextBox);
             licensingPanel.Children.Add(_settingsPlanBadgeBorder);
 
-            var licensingCard = CreateSettingsCard();
-            licensingCard.Child = licensingPanel;
-            Grid.SetRow(licensingCard, 2);
-            root.Children.Add(licensingCard);
+            Grid.SetRow(licensingPanel, 1);
+            root.Children.Add(licensingPanel);
 
             var actionRow = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, 4, 0, 0)
+                Margin = new Thickness(0, 14, 0, 0)
             };
 
             _settingsSaveButton = new Button
             {
                 Content = L("settings.button.save", "Save Settings"),
-                Margin = new Thickness(0, 0, 8, 0),
+                Margin = new Thickness(0),
                 Padding = new Thickness(10, 3, 10, 3),
                 MinHeight = 28,
                 MinWidth = 118,
@@ -134,20 +117,7 @@ namespace Glitch.UI
             _settingsSaveButton.Click += OnSettingsSaveClick;
             actionRow.Children.Add(_settingsSaveButton);
 
-            _settingsValidateButton = new Button
-            {
-                Content = L("settings.button.validate", "Validate License Now"),
-                Padding = new Thickness(10, 3, 10, 3),
-                MinHeight = 28,
-                MinWidth = 142,
-                VerticalAlignment = VerticalAlignment.Top,
-                Style = CreateSettingsActionButtonStyle(root)
-            };
-            RegisterLocalizationBinding(() => _settingsValidateButton.Content = L("settings.button.validate", "Validate License Now"));
-            _settingsValidateButton.Click += OnValidateLicenseNowClick;
-            actionRow.Children.Add(_settingsValidateButton);
-
-            Grid.SetRow(actionRow, 3);
+            Grid.SetRow(actionRow, 2);
             root.Children.Add(actionRow);
 
             UpdateSettingsControlsFromRuntimePolicy();
@@ -178,19 +148,6 @@ namespace Glitch.UI
             RegisterLocalizationBinding(() => label.Text = L(key, fallback));
             ApplySkinResource(label, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
             return label;
-        }
-
-        private Border CreateSettingsCard()
-        {
-            var border = new Border
-            {
-                CornerRadius = new CornerRadius(4),
-                BorderThickness = new Thickness(1),
-                Margin = new Thickness(0, 0, 0, 10)
-            };
-            ApplySkinResource(border, Border.BackgroundProperty, "BackgroundTextInput", "BackgroundMainWindow", "GridEntireBackground");
-            ApplySkinResource(border, Border.BorderBrushProperty, "BorderThinBrush", "TabControlBorderBrush");
-            return border;
         }
 
         private Border BuildPolicyToggleRow(CheckBox checkBox)
@@ -401,6 +358,8 @@ namespace Glitch.UI
             _runtimePolicySettings.EnforceEvalProfitTargetLock = _settingsEvalProfitTargetLockCheckBox?.IsChecked == true;
             _runtimePolicySettings.FlattenOnCriticalBufferLock = false;
             _runtimePolicySettings.LicenseKey = GetNormalizedSettingsLicenseKeyText();
+            _settingsLicenseKeyUnmaskedValue = (_runtimePolicySettings.LicenseKey ?? string.Empty).Trim();
+            ApplySettingsLicenseMaskedDisplay();
             if (string.IsNullOrWhiteSpace(_runtimePolicySettings.LicenseApiBaseUrl))
                 _runtimePolicySettings.LicenseApiBaseUrl = "https://api.glitchtrader.com";
 
@@ -415,33 +374,23 @@ namespace Glitch.UI
                 ClearComplianceEnforcementRuntimeState();
 
             _nextLicenseHeartbeatUtc = DateTime.UtcNow;
-            _ = RefreshLicenseStateAsync(useValidateEndpoint: true, force: true);
+            Task validateTask = RefreshLicenseStateAsync(useValidateEndpoint: true, force: true);
             _settingsSaveFeedbackActive = true;
             try
             {
                 await ShowTransientTealButtonFeedbackAsync(_settingsSaveButton, L("settings.feedback.saving", "Saving!"), 3000);
+                try
+                {
+                    await validateTask;
+                }
+                catch (Exception validateError)
+                {
+                    AppendJournal("System", "License", $"License validation failed after save: {validateError.Message}");
+                }
             }
             finally
             {
                 _settingsSaveFeedbackActive = false;
-            }
-        }
-
-        private async void OnValidateLicenseNowClick(object sender, RoutedEventArgs e)
-        {
-            if (_settingsValidateFeedbackActive)
-                return;
-
-            _settingsValidateFeedbackActive = true;
-            try
-            {
-                Task validateTask = RefreshLicenseStateAsync(useValidateEndpoint: true, force: true);
-                await ShowTransientTealButtonFeedbackAsync(_settingsValidateButton, L("settings.feedback.validating", "Validating, please wait..."), 3000);
-                await validateTask;
-            }
-            finally
-            {
-                _settingsValidateFeedbackActive = false;
             }
         }
 
@@ -489,15 +438,14 @@ namespace Glitch.UI
             if (_settingsLicenseKeyTextBox != null)
             {
                 string licenseKey = (_runtimePolicySettings.LicenseKey ?? string.Empty).Trim();
-                _settingsLicensePlaceholderActive = false;
-                _settingsLicenseKeyTextBox.Text = licenseKey;
+                _settingsLicenseKeyUnmaskedValue = licenseKey;
                 if (string.IsNullOrWhiteSpace(licenseKey))
                 {
                     ApplySettingsLicensePlaceholder();
                 }
                 else
                 {
-                    ApplySettingsLicenseInputNormalVisual();
+                    ApplySettingsLicenseMaskedDisplay();
                 }
             }
         }
@@ -505,7 +453,21 @@ namespace Glitch.UI
         private void OnSettingsLicenseKeyTextBoxGotFocus(object sender, RoutedEventArgs e)
         {
             if (_settingsLicensePlaceholderActive)
+            {
                 ClearSettingsLicensePlaceholder();
+                return;
+            }
+
+            if (_settingsLicenseKeyTextBox == null)
+                return;
+
+            if (_settingsLicenseMaskedDisplayActive && !string.IsNullOrWhiteSpace(_settingsLicenseKeyUnmaskedValue))
+            {
+                _settingsLicenseMaskedDisplayActive = false;
+                _settingsLicenseKeyTextBox.Text = _settingsLicenseKeyUnmaskedValue;
+                _settingsLicenseKeyTextBox.CaretIndex = _settingsLicenseKeyTextBox.Text.Length;
+                _settingsLicenseKeyTextBox.SelectAll();
+            }
         }
 
         private void OnSettingsLicenseKeyTextBoxLostFocus(object sender, RoutedEventArgs e)
@@ -513,8 +475,16 @@ namespace Glitch.UI
             if (_settingsLicenseKeyTextBox == null)
                 return;
 
-            if (string.IsNullOrWhiteSpace(_settingsLicenseKeyTextBox.Text))
+            string normalized = (_settingsLicenseKeyTextBox.Text ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                _settingsLicenseKeyUnmaskedValue = string.Empty;
                 ApplySettingsLicensePlaceholder();
+                return;
+            }
+
+            _settingsLicenseKeyUnmaskedValue = normalized;
+            ApplySettingsLicenseMaskedDisplay();
         }
 
         private void ClearSettingsLicensePlaceholder()
@@ -523,6 +493,7 @@ namespace Glitch.UI
                 return;
 
             _settingsLicensePlaceholderActive = false;
+            _settingsLicenseMaskedDisplayActive = false;
             _settingsLicenseKeyTextBox.Text = string.Empty;
             ApplySettingsLicenseInputNormalVisual();
         }
@@ -533,6 +504,7 @@ namespace Glitch.UI
                 return;
 
             _settingsLicensePlaceholderActive = true;
+            _settingsLicenseMaskedDisplayActive = false;
             _settingsLicenseKeyTextBox.Text = L("settings.license.paste_placeholder", "Paste your license here");
             FrameworkElement skinContext = (FrameworkElement)_settingsRootGrid ?? _settingsLicenseKeyTextBox;
             Brush placeholderBrush = FindSkinBrush(skinContext, "FontTableBrush", "FontControlBrush") ?? Brushes.Gray;
@@ -549,6 +521,24 @@ namespace Glitch.UI
             _settingsLicenseKeyTextBox.Foreground = normalBrush;
         }
 
+        private void ApplySettingsLicenseMaskedDisplay()
+        {
+            if (_settingsLicenseKeyTextBox == null)
+                return;
+
+            string normalized = (_settingsLicenseKeyUnmaskedValue ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                ApplySettingsLicensePlaceholder();
+                return;
+            }
+
+            _settingsLicensePlaceholderActive = false;
+            _settingsLicenseMaskedDisplayActive = true;
+            _settingsLicenseKeyTextBox.Text = BuildMaskedLicenseKey(normalized);
+            ApplySettingsLicenseInputNormalVisual();
+        }
+
         private string GetNormalizedSettingsLicenseKeyText()
         {
             if (_settingsLicenseKeyTextBox == null)
@@ -561,7 +551,28 @@ namespace Glitch.UI
             if (value.Equals(L("settings.license.paste_placeholder", "Paste your license here"), StringComparison.Ordinal))
                 return string.Empty;
 
+            if (_settingsLicenseMaskedDisplayActive)
+                return (_settingsLicenseKeyUnmaskedValue ?? string.Empty).Trim();
+
+            _settingsLicenseKeyUnmaskedValue = value;
             return value;
+        }
+
+        private static string BuildMaskedLicenseKey(string licenseKey)
+        {
+            string normalized = (licenseKey ?? string.Empty).Trim();
+            if (normalized.Length <= 8)
+                return normalized;
+
+            const int visiblePrefix = 4;
+            const int visibleSuffix = 4;
+            int maskLength = normalized.Length - visiblePrefix - visibleSuffix;
+            if (maskLength <= 0)
+                return normalized;
+
+            return normalized.Substring(0, visiblePrefix)
+                + new string('*', maskLength)
+                + normalized.Substring(normalized.Length - visibleSuffix, visibleSuffix);
         }
 
         private void UpdateSettingsTabLicenseStatusText()
@@ -572,79 +583,60 @@ namespace Glitch.UI
             GlitchLicenseCacheState cache = _licenseCacheState ?? new GlitchLicenseCacheState();
             string status = string.IsNullOrWhiteSpace(cache.LastStatus) ? "unknown" : cache.LastStatus.Trim().ToLowerInvariant();
             string plan = string.IsNullOrWhiteSpace(cache.Plan) ? "free_lite" : cache.Plan.Trim().ToLowerInvariant();
-            DateTime validUntilUtc = status.Equals("grace", StringComparison.OrdinalIgnoreCase) && cache.GraceUntilUtc != DateTime.MinValue
-                ? cache.GraceUntilUtc
-                : (cache.SignedTokenExpiresUtc != DateTime.MinValue
-                    ? cache.SignedTokenExpiresUtc
-                    : (cache.GraceUntilUtc != DateTime.MinValue ? cache.GraceUntilUtc : cache.LastSuccessUtc));
-            string validUntilText = validUntilUtc == DateTime.MinValue
-                ? "-"
-                : validUntilUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
-            bool isPremiumPlan = plan.Equals("premium", StringComparison.OrdinalIgnoreCase);
-            string normalizedBillingVariant = NormalizeLicenseBillingVariant(cache.BillingVariant);
-            string statusLabel;
-            if (status.Equals("active", StringComparison.OrdinalIgnoreCase))
-                statusLabel = isPremiumPlan ? L("settings.license.status.active_premium", "Active Premium") : L("settings.license.status.free_lite", "Free Lite");
-            else if (status.Equals("grace", StringComparison.OrdinalIgnoreCase))
-                statusLabel = isPremiumPlan ? L("settings.license.status.grace_premium", "Grace Premium") : L("settings.license.status.grace_free_lite", "Grace Free Lite");
-            else if (isPremiumPlan)
-                statusLabel = L("settings.license.status.inactive_premium", "Inactive Premium");
-            else
-                statusLabel = L("settings.license.status.free_lite", "Free Lite");
+            bool hasProAccess =
+                plan.Equals("premium", StringComparison.OrdinalIgnoreCase) &&
+                (status.Equals("active", StringComparison.OrdinalIgnoreCase) ||
+                 status.Equals("grace", StringComparison.OrdinalIgnoreCase));
 
-            if (isPremiumPlan && !normalizedBillingVariant.Equals("unknown", StringComparison.OrdinalIgnoreCase))
-                statusLabel = $"{statusLabel} ({FormatBillingVariantLabel(normalizedBillingVariant)})";
+            FrameworkElement skinContext = (FrameworkElement)_settingsRootGrid ?? _settingsPlanBadgeText;
+            Brush baseTextBrush = FindSkinBrush(skinContext, "FontControlBrush", "FontTableBrush") ?? Brushes.White;
+            double sharedFontSize = _settingsPlanBadgeText.FontSize;
+            if (sharedFontSize <= 0)
+            {
+                double? skinFontSize = FindSkinDouble(skinContext, "FontControlHeight", "FontTableHeight", "FontHeaderLevel4Height");
+                sharedFontSize = skinFontSize.HasValue && skinFontSize.Value > 0 ? skinFontSize.Value : 12d;
+            }
 
-            _settingsPlanBadgeText.Text = Lf("settings.license.status_format", "License Status: {0}, Valid until {1}", statusLabel, validUntilText);
-            if (status.Equals("active", StringComparison.OrdinalIgnoreCase) && isPremiumPlan)
+            _settingsPlanBadgeText.Inlines.Clear();
+            _settingsPlanBadgeText.Inlines.Add(new Run(L("settings.license.active_prefix", "Active License: "))
             {
-                _settingsPlanBadgeText.Foreground = TealAccentBrush;
-                _settingsPlanBadgeBorder.BorderBrush = TealAccentBrush;
-            }
-            else if (status.Equals("grace", StringComparison.OrdinalIgnoreCase) ||
-                     status.Equals("expired", StringComparison.OrdinalIgnoreCase) ||
-                     status.Equals("inactive", StringComparison.OrdinalIgnoreCase))
-            {
-                _settingsPlanBadgeText.Foreground = OrangeAccentBrush;
-                _settingsPlanBadgeBorder.BorderBrush = OrangeAccentBrush;
-            }
-            else
-            {
-                ApplySkinResource(_settingsPlanBadgeText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
-                ApplySkinResource(_settingsPlanBadgeBorder, Border.BorderBrushProperty, "BorderThinBrush", "TabControlBorderBrush");
-            }
-        }
+                Foreground = baseTextBrush,
+                FontWeight = FontWeights.SemiBold,
+                FontSize = sharedFontSize
+            });
 
-        private static string NormalizeLicenseBillingVariant(string billingVariant)
-        {
-            string normalized = (billingVariant ?? string.Empty).Trim().ToLowerInvariant();
-            switch (normalized)
+            if (hasProAccess)
             {
-                case "free":
-                case "monthly":
-                case "annual":
-                case "lifetime":
-                    return normalized;
-                default:
-                    return "unknown";
+                _settingsPlanBadgeText.Inlines.Add(new Run(L("settings.license.plan_pro", "Pro"))
+                {
+                    Foreground = OrangeAccentBrush,
+                    FontWeight = FontWeights.SemiBold,
+                    FontSize = sharedFontSize
+                });
+                return;
             }
-        }
 
-        private static string FormatBillingVariantLabel(string billingVariant)
-        {
-            switch (NormalizeLicenseBillingVariant(billingVariant))
+            _settingsPlanBadgeText.Inlines.Add(new Run(L("settings.license.plan_lite", "Lite"))
             {
-                case "free":
-                    return "Free";
-                case "monthly":
-                    return "Monthly";
-                case "annual":
-                    return "Annual";
-                case "lifetime":
-                    return "Lifetime";
-                default:
-                    return "Unknown";
-            }
+                Foreground = TealAccentBrush,
+                FontWeight = FontWeights.SemiBold,
+                FontSize = sharedFontSize
+            });
+            _settingsPlanBadgeText.Inlines.Add(new Run(" - ")
+            {
+                Foreground = baseTextBrush,
+                FontSize = sharedFontSize
+            });
+
+            var upgradeLink = new Hyperlink(new Run(L("settings.license.upgrade_to_pro", "Upgrade to Pro")))
+            {
+                Foreground = OrangeAccentBrush,
+                FontWeight = FontWeights.SemiBold,
+                FontSize = sharedFontSize,
+                TextDecorations = null
+            };
+            upgradeLink.Click += (_, __) => OpenAnalyticsExternalUrl(GetWhopUpgradeCheckoutUrl());
+            _settingsPlanBadgeText.Inlines.Add(upgradeLink);
         }
     }
 }

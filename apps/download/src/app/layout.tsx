@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { getDownloadsUrl } from "@/lib/releases";
+import { SiteFooter, SiteHeader } from "@/components/site-chrome";
 import "./globals.css";
 
 const socialImagePath = "/images/Glitch Banner.png";
@@ -28,7 +29,7 @@ function resolveMetadataBase(fallback: string) {
 }
 
 export const metadata: Metadata = {
-  metadataBase: resolveMetadataBase("https://downloads.glitchtrader.com"),
+  metadataBase: resolveMetadataBase("https://download.glitchtrader.com"),
   applicationName: "Glitch Downloads",
   title: "Glitch Downloads - NinjaTrader Releases",
   description:
@@ -77,7 +78,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}>
+        <SiteHeader />
         {children}
+        <SiteFooter />
       </body>
     </html>
   );

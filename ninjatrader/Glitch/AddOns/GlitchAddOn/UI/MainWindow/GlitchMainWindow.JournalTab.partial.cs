@@ -349,7 +349,7 @@ namespace Glitch.UI
                     var overlay = new Grid
                     {
                         Visibility = Visibility.Collapsed,
-                        Background = new SolidColorBrush(Color.FromArgb(204, 0, 0, 0)),
+                        Background = new SolidColorBrush(Color.FromArgb(217, 0, 0, 0)),
                         IsHitTestVisible = true
                     };
 
@@ -366,23 +366,33 @@ namespace Glitch.UI
                     ApplySkinResource(card, Border.BorderBrushProperty, "BorderThinBrush", "TabControlBorderBrush");
 
                     var stack = new StackPanel { Orientation = Orientation.Vertical };
+                    stack.Children.Add(new Border
+                    {
+                        Width = 96,
+                        Height = 2,
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        Margin = new Thickness(0, 0, 0, 10),
+                        Background = OrangeAccentBrush
+                    });
+
                     var title = new TextBlock
                     {
-                        Text = L("overlay.license_required", "License Required"),
+                        Text = L("overlay.journal.go_pro_title", "Go Pro for Journal"),
                         FontWeight = FontWeights.SemiBold,
                         Margin = new Thickness(0, 0, 0, 8)
                     };
-                    RegisterLocalizationBinding(() => title.Text = L("overlay.license_required", "License Required"));
+                    RegisterLocalizationBinding(() => title.Text = L("overlay.journal.go_pro_title", "Go Pro for Journal"));
                     ApplySkinResource(title, TextBlock.ForegroundProperty, "FontHeaderLevel3Brush", "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
                     stack.Children.Add(title);
+                    stack.Children.Add(CreateLiteLicensePromptLine(context));
 
                     _journalLicenseGateMessageText = new TextBlock
                     {
-                        Text = L("overlay.premium_gate_message", "To enable premium features purchase your license below and validate it in the Settings tab."),
+                        Text = BuildUnifiedPremiumGateMessage(),
                         TextWrapping = TextWrapping.Wrap,
                         Margin = new Thickness(0, 0, 0, 12)
                     };
-                    RegisterLocalizationBinding(() => _journalLicenseGateMessageText.Text = L("overlay.premium_gate_message", "To enable premium features purchase your license below and validate it in the Settings tab."));
+                    RegisterLocalizationBinding(() => _journalLicenseGateMessageText.Text = BuildUnifiedPremiumGateMessage());
                     ApplySkinResource(_journalLicenseGateMessageText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
                     stack.Children.Add(_journalLicenseGateMessageText);
 
@@ -394,27 +404,31 @@ namespace Glitch.UI
 
                     var checkoutButton = new Button
                     {
-                        Content = L("overlay.button.get_license", "Get License"),
+                        Content = L("overlay.button.go_pro", "Go Pro"),
                         HorizontalAlignment = HorizontalAlignment.Left,
                         MinWidth = 172,
-                        Style = CreateGroupAddButtonStyle(context)
+                        Style = CreateGroupActionButtonStyle(context),
+                        Background = OrangeAccentBrush,
+                        BorderBrush = OrangeAccentBrush,
+                        Foreground = Brushes.White
                     };
-                    RegisterLocalizationBinding(() => checkoutButton.Content = L("overlay.button.get_license", "Get License"));
-                    checkoutButton.Click += (_, __) => OpenAnalyticsExternalUrl("https://whop.com/joined/glitchtrader/products/glitch-ninjatrader-addon/");
+                    RegisterLocalizationBinding(() => checkoutButton.Content = L("overlay.button.go_pro", "Go Pro"));
+                    checkoutButton.Click += (_, __) => OpenAnalyticsExternalUrl(GetWhopUpgradeCheckoutUrl());
                     buttonRow.Children.Add(checkoutButton);
 
                     var memberAppButton = new Button
                     {
-                        Content = L("overlay.button.manage_membership", "Manage Membership"),
+                        Content = L("overlay.button.member_hub", "Open Member Hub"),
                         HorizontalAlignment = HorizontalAlignment.Left,
                         MinWidth = 172,
                         Margin = new Thickness(8, 0, 0, 0),
                         Style = CreateGroupActionButtonStyle(context)
                     };
-                    RegisterLocalizationBinding(() => memberAppButton.Content = L("overlay.button.manage_membership", "Manage Membership"));
-                    memberAppButton.Click += (_, __) => OpenAnalyticsExternalUrl("https://whop.com/joined/glitchtrader/");
+                    RegisterLocalizationBinding(() => memberAppButton.Content = L("overlay.button.member_hub", "Open Member Hub"));
+                    memberAppButton.Click += (_, __) => OpenAnalyticsExternalUrl(GetWhopMemberHubUrl());
                     buttonRow.Children.Add(memberAppButton);
                     stack.Children.Add(buttonRow);
+                    stack.Children.Add(CreateSettingsTabShortcutLine(context));
 
                     card.Child = stack;
                     overlay.Children.Add(card);
@@ -435,12 +449,10 @@ namespace Glitch.UI
                     if (_journalLicenseGateOverlay == null)
                         return;
 
-                    if (ShouldGateJournalByLicense(out string message))
+                    if (ShouldGateJournalByLicense(out _))
                     {
                         if (_journalLicenseGateMessageText != null)
-                            _journalLicenseGateMessageText.Text = string.IsNullOrWhiteSpace(message)
-                                ? L("overlay.premium_gate_message", "To enable premium features purchase your license below and validate it in the Settings tab.")
-                                : message;
+                            _journalLicenseGateMessageText.Text = BuildUnifiedPremiumGateMessage();
                         _journalLicenseGateOverlay.Visibility = Visibility.Visible;
                         return;
                     }

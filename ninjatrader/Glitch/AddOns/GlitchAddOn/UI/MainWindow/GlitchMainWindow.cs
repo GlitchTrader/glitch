@@ -211,6 +211,7 @@ namespace Glitch.UI
         private ListBox _analyticsLatestHeadlinesList;
         private Button _analyticsOpenDetachedWindowButton;
         private Grid _analyticsTopBarGrid;
+        private TabControl _mainTabControl;
         private FrameworkElement _analyticsInstrumentHost;
         private FrameworkElement _analyticsRoot;
         private Border _analyticsSessionRangeCard;
@@ -412,6 +413,7 @@ namespace Glitch.UI
                 HorizontalContentAlignment = HorizontalAlignment.Stretch,
                 VerticalContentAlignment = VerticalAlignment.Stretch
             };
+            _mainTabControl = tabs;
             tabs.FocusVisualStyle = null;
             ApplySkinResource(tabs, Control.BackgroundProperty, "BackgroundTextInput", "GridEntireBackground", "BackgroundMainWindow");
             ApplySkinResource(tabs, Control.ForegroundProperty, "FontControlBrush", "FontTableBrush");
@@ -945,33 +947,59 @@ namespace Glitch.UI
             string normalizedModule = string.IsNullOrWhiteSpace(moduleLabel) ? "premium features" : moduleLabel.Trim();
             string licenseKey = (_runtimePolicySettings?.LicenseKey ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(licenseKey))
-                return $"Free Lite is active. Enter a paid license in Settings to unlock {normalizedModule}.";
+                return $"Free Lite is active. Go Pro to unlock {normalizedModule}.";
 
             string status = (_licenseCacheState?.LastStatus ?? string.Empty).Trim();
             string reason = (_licenseCacheState?.LastReason ?? string.Empty).Trim();
 
             if (status.Equals("grace", StringComparison.OrdinalIgnoreCase))
-                return $"License is in grace period. Revalidate now to unlock {normalizedModule}.";
+                return $"Pro access is in grace period. Open Membership Hub to renew and keep {normalizedModule} unlocked.";
 
             if (reason.Equals("bound_to_other_installation", StringComparison.OrdinalIgnoreCase))
-                return "License is bound to another installation. Rebind this machine from the admin dashboard.";
+                return "This license is bound to another installation. Open Membership Hub to rebind this machine.";
 
             if (reason.Equals("device_fingerprint_mismatch", StringComparison.OrdinalIgnoreCase))
-                return "License fingerprint mismatch. Revalidate from this machine or rebind in admin.";
+                return "License fingerprint mismatch. Open Membership Hub to rebind this device.";
 
             if (reason.Equals("license_not_found", StringComparison.OrdinalIgnoreCase) ||
                 reason.Equals("missing_license_key", StringComparison.OrdinalIgnoreCase))
             {
-                return "License key not found. Verify your key in Settings and validate again.";
+                return $"License key not found. Verify your key in Settings, or Go Pro to unlock {normalizedModule}.";
             }
 
             if (reason.Equals("binding_not_found", StringComparison.OrdinalIgnoreCase))
-                return "License is not validated on this machine yet. Validate it in Settings to unlock premium modules.";
+                return $"This machine is not activated yet. Save Settings to validate, or Go Pro to unlock {normalizedModule}.";
 
             if (reason.Equals("binding_metadata_conflict", StringComparison.OrdinalIgnoreCase))
-                return "License metadata is out of sync. Reset the license in Whop or rebind this machine from admin.";
+                return "License metadata is out of sync. Open Membership Hub to reset and rebind.";
 
-            return $"License expired or invalid. Renew and validate to unlock {normalizedModule}.";
+            return $"Lite mode is active. Go Pro to unlock {normalizedModule}.";
+        }
+
+        private string BuildUnifiedPremiumGateMessage()
+        {
+            return BuildPremiumAccessMessage("premium modules");
+        }
+
+        private void NavigateToSettingsTabFromOverlay()
+        {
+            if (Dispatcher != null && !Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(NavigateToSettingsTabFromOverlay));
+                return;
+            }
+
+            if (_mainTabControl == null)
+                return;
+
+            if (_mainTabControl.Items.Count > 3)
+                _mainTabControl.SelectedIndex = 3;
+
+            if (_settingsLicenseKeyTextBox != null)
+            {
+                _settingsLicenseKeyTextBox.Focus();
+                _settingsLicenseKeyTextBox.SelectAll();
+            }
         }
 
         private void ApplyFreeLitePolicyToCache(string status, string reason)
@@ -2527,25 +2555,20 @@ namespace Glitch.UI
             string selectedBackgroundKey = FindSkinResourceKey(context, "BackgroundTextInput", "GridEntireBackground", "BackgroundMainWindow");
             string hoverBackgroundKey = FindSkinResourceKey(context, "BackgroundTableHeader", "BackgroundTableHeaderVertical", "BackgroundTextInput", "GridEntireBackground");
             string tabForegroundKey = FindSkinResourceKey(context, "FontControlBrush", "FontTableBrush", "GridRowForeground");
-            string activeBorderKey = FindSkinResourceKey(context, "BorderThinBrush", "TabControlBorderBrush", "GridHeaderHighlight");
-            string inactiveBorderKey = windowBackgroundKey ?? activeBorderKey;
 
             if (!string.IsNullOrWhiteSpace(tabBackgroundKey))
                 style.Setters.Add(new Setter(Control.BackgroundProperty, new DynamicResourceExtension(tabBackgroundKey)));
             if (!string.IsNullOrWhiteSpace(tabForegroundKey))
                 style.Setters.Add(new Setter(Control.ForegroundProperty, new DynamicResourceExtension(tabForegroundKey)));
-            if (!string.IsNullOrWhiteSpace(inactiveBorderKey))
-                style.Setters.Add(new Setter(Control.BorderBrushProperty, new DynamicResourceExtension(inactiveBorderKey)));
-            if (!string.IsNullOrWhiteSpace(activeBorderKey))
-                style.Setters.Add(new Setter(FrameworkElement.TagProperty, new DynamicResourceExtension(activeBorderKey)));
+            style.Setters.Add(new Setter(Control.BorderBrushProperty, Brushes.Transparent));
 
-            style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1, 0, 1, 1)));
+            style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0, 0, 0, 2)));
             style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(14, 7, 14, 7)));
             style.Setters.Add(new Setter(FrameworkElement.MinHeightProperty, 30d));
             style.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.Normal));
             style.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
             style.Setters.Add(new Setter(Control.VerticalContentAlignmentProperty, VerticalAlignment.Stretch));
-            style.Setters.Add(new Setter(UIElement.OpacityProperty, 0.85));
+            style.Setters.Add(new Setter(UIElement.OpacityProperty, 1.0));
             style.Setters.Add(new Setter(Control.FocusVisualStyleProperty, null));
 
             double? tabFontSize = FindSkinDouble(context, "FontControlHeight", "FontTableHeight", "FontHeaderLevel4Height");
@@ -2568,30 +2591,29 @@ namespace Glitch.UI
             contentFactory.SetValue(ContentPresenter.ContentSourceProperty, "Header");
             contentFactory.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
             contentFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            contentFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 1, 0, 0));
             contentFactory.SetValue(ContentPresenter.RecognizesAccessKeyProperty, true);
             borderFactory.AppendChild(contentFactory);
             rootFactory.AppendChild(borderFactory);
 
-            var topBorderFactory = new FrameworkElementFactory(typeof(Border));
-            topBorderFactory.Name = "TabTopBorder";
-            topBorderFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Top);
-            topBorderFactory.SetValue(FrameworkElement.HeightProperty, 1.0);
-            topBorderFactory.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(FrameworkElement.TagProperty));
-            topBorderFactory.SetValue(UIElement.IsHitTestVisibleProperty, false);
-            rootFactory.AppendChild(topBorderFactory);
+            var indicatorFactory = new FrameworkElementFactory(typeof(Border));
+            indicatorFactory.Name = "TabBottomIndicator";
+            indicatorFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Bottom);
+            indicatorFactory.SetValue(FrameworkElement.HeightProperty, 2.0);
+            indicatorFactory.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+            indicatorFactory.SetValue(UIElement.IsHitTestVisibleProperty, false);
+            indicatorFactory.SetValue(Border.SnapsToDevicePixelsProperty, true);
+            rootFactory.AppendChild(indicatorFactory);
 
             template.VisualTree = rootFactory;
 
             var selectedTrigger = new Trigger { Property = TabItem.IsSelectedProperty, Value = true };
             if (!string.IsNullOrWhiteSpace(selectedBackgroundKey))
                 selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, new DynamicResourceExtension(selectedBackgroundKey)));
-            if (!string.IsNullOrWhiteSpace(selectedBackgroundKey))
-                selectedTrigger.Setters.Add(new Setter(FrameworkElement.TagProperty, new DynamicResourceExtension(selectedBackgroundKey)));
             if (!string.IsNullOrWhiteSpace(tabForegroundKey))
                 selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, new DynamicResourceExtension(tabForegroundKey)));
-            if (!string.IsNullOrWhiteSpace(activeBorderKey))
-                selectedTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, new DynamicResourceExtension(activeBorderKey)));
-            selectedTrigger.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.Medium));
+            selectedTrigger.Setters.Add(new Setter(Border.BackgroundProperty, OrangeAccentBrush, "TabBottomIndicator"));
+            selectedTrigger.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.Normal));
             selectedTrigger.Setters.Add(new Setter(UIElement.OpacityProperty, 1.0));
             template.Triggers.Add(selectedTrigger);
 

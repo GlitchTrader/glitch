@@ -1,0 +1,23 @@
+---
+description: Keep NinjaTrader customer release packages compiled, inspected, customer-safe, and protected by bundled fallback resources instead of fragile post-export zip edits
+globs: ["ninjatrader/Glitch/AddOns/**", "ninjatrader/Glitch/Indicators/**", "apps/download/**", "scripts/generate_bundled_prop_rules.ps1"]
+alwaysApply: true
+---
+
+# Glitch NinjaTrader packaging
+
+## Release artifact
+
+- Treat customer-facing NinjaTrader zips as release artifacts, not workspace snapshots.
+- Prefer compiled assembly exports for customer downloads unless the user explicitly wants source distribution.
+
+## Bundled fallback resources
+
+- If static defaults such as `PropFirmRules.json` are required at runtime, prefer a bundled C# fallback before export.
+- Do not rely on manual post-export zip mutation for JSON or XML unless the exact import structure has been validated.
+
+## Package hygiene
+
+- Inspect every exported archive before publish.
+- Do not ship docs, TSV runtime state, secrets, formulas, provider internals, ports, cryptography details, or other internal material in customer packages.
+- Stage inspected release zips under `apps/download` or the chosen release area before pointing a public download link at them.

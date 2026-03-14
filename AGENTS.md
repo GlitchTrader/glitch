@@ -25,6 +25,7 @@ This repo is shared between multiple agents. Work like a responsible teammate.
 - Workspace files are the only source of truth.
 - Never directly edit `C:\Users\alan\Documents\NinjaTrader 8\bin\Custom`.
 - Treat `GlitchData` runtime files as state or sparse overrides, not source templates.
+- Treat customer-facing NinjaTrader export zips as release artifacts. Inspect them before publish and prefer bundled code fallbacks over manual post-export zip mutation for required static data.
 - Keep changes package-scoped. If a task crosses packages, identify the contract owner first.
 - API changes must preserve auth, licensing, rate limits, nonce validation, and documented env names unless the user explicitly wants a contract change.
 - Website changes must preserve env-driven Whop links and public-facing copy intent.
@@ -60,6 +61,7 @@ These are the same operating concepts expressed through different agent mechanis
 - `glitch-documentation-discipline`: Keep docs code-derived and scoped.
 - `glitch-localization-workflow`: Protect localization edits and validation.
 - `glitch-deploy-workflow`: Deploy NinjaTrader workspace files safely into live paths.
+- `glitch-ninjatrader-packaging`: Package compiled NinjaTrader exports, bundled fallbacks, and customer download artifacts safely.
 - `glitch-vercel-operations`: Handle direct Vercel env, deploy, and cron rollout work.
 
 ### Cursor rules
@@ -72,6 +74,7 @@ These are the same operating concepts expressed through different agent mechanis
 - `.cursor/rules/glitch-documentation-discipline.mdc`
 - `.cursor/rules/glitch-localization.mdc`
 - `.cursor/rules/glitch-deploy-safely.mdc`
+- `.cursor/rules/glitch-ninjatrader-packaging.mdc`
 - `.cursor/rules/glitch-vercel-operations.mdc`
 
 ### Claude
@@ -87,6 +90,7 @@ These are the same operating concepts expressed through different agent mechanis
 - Add `glitch-documentation-discipline` when updating READMEs or docs.
 - Add `glitch-localization-workflow` for `Localization.tsv`, localization services, or language-switcher UI work.
 - Add `glitch-deploy-workflow` when NinjaTrader workspace files must go live.
+- Add `glitch-ninjatrader-packaging` when exporting NinjaTrader zips, bundling `PropFirmRules.json`, inspecting release archives, or publishing customer-facing download packages.
 - Add `glitch-vercel-operations` for direct Vercel operations.
 
 Keep this file, the Codex skills, the Cursor rules, and `CLAUDE.md` aligned as the repo evolves.
