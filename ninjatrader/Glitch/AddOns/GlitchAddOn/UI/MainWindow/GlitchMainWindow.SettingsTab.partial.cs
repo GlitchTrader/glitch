@@ -587,6 +587,12 @@ namespace Glitch.UI
                 plan.Equals("premium", StringComparison.OrdinalIgnoreCase) &&
                 (status.Equals("active", StringComparison.OrdinalIgnoreCase) ||
                  status.Equals("grace", StringComparison.OrdinalIgnoreCase));
+            bool hasClientUpdate =
+                _isClientUpdateAvailable &&
+                !string.IsNullOrWhiteSpace(_latestClientVersion);
+            string updateDownloadUrl = string.IsNullOrWhiteSpace(_latestDownloadUrl)
+                ? DefaultLatestDownloadUrl
+                : _latestDownloadUrl.Trim();
 
             FrameworkElement skinContext = (FrameworkElement)_settingsRootGrid ?? _settingsPlanBadgeText;
             Brush baseTextBrush = FindSkinBrush(skinContext, "FontControlBrush", "FontTableBrush") ?? Brushes.White;
@@ -613,12 +619,45 @@ namespace Glitch.UI
                     FontWeight = FontWeights.SemiBold,
                     FontSize = sharedFontSize
                 });
-                return;
+            }
+            else
+            {
+                _settingsPlanBadgeText.Inlines.Add(new Run(L("settings.license.plan_lite", "Lite"))
+                {
+                    Foreground = TealAccentBrush,
+                    FontWeight = FontWeights.SemiBold,
+                    FontSize = sharedFontSize
+                });
+                _settingsPlanBadgeText.Inlines.Add(new Run(" - ")
+                {
+                    Foreground = baseTextBrush,
+                    FontSize = sharedFontSize
+                });
+
+                var upgradeLink = new Hyperlink(new Run(L("settings.license.upgrade_to_pro", "Upgrade to Pro")))
+                {
+                    Foreground = OrangeAccentBrush,
+                    FontWeight = FontWeights.SemiBold,
+                    FontSize = sharedFontSize,
+                    TextDecorations = null
+                };
+                upgradeLink.Click += (_, __) => OpenAnalyticsExternalUrl(GetWhopUpgradeCheckoutUrl());
+                _settingsPlanBadgeText.Inlines.Add(upgradeLink);
             }
 
-            _settingsPlanBadgeText.Inlines.Add(new Run(L("settings.license.plan_lite", "Lite"))
+            if (!hasClientUpdate)
+                return;
+
+            _settingsPlanBadgeText.Inlines.Add(new Run(Environment.NewLine));
+            _settingsPlanBadgeText.Inlines.Add(new Run(L("settings.update.available_prefix", "Update available: "))
             {
-                Foreground = TealAccentBrush,
+                Foreground = OrangeAccentBrush,
+                FontWeight = FontWeights.SemiBold,
+                FontSize = sharedFontSize
+            });
+            _settingsPlanBadgeText.Inlines.Add(new Run(_latestClientVersion.Trim())
+            {
+                Foreground = OrangeAccentBrush,
                 FontWeight = FontWeights.SemiBold,
                 FontSize = sharedFontSize
             });
@@ -628,15 +667,15 @@ namespace Glitch.UI
                 FontSize = sharedFontSize
             });
 
-            var upgradeLink = new Hyperlink(new Run(L("settings.license.upgrade_to_pro", "Upgrade to Pro")))
+            var downloadLink = new Hyperlink(new Run(L("settings.update.download_latest", "Download latest")))
             {
-                Foreground = OrangeAccentBrush,
+                Foreground = TealAccentBrush,
                 FontWeight = FontWeights.SemiBold,
                 FontSize = sharedFontSize,
                 TextDecorations = null
             };
-            upgradeLink.Click += (_, __) => OpenAnalyticsExternalUrl(GetWhopUpgradeCheckoutUrl());
-            _settingsPlanBadgeText.Inlines.Add(upgradeLink);
+            downloadLink.Click += (_, __) => OpenAnalyticsExternalUrl(updateDownloadUrl);
+            _settingsPlanBadgeText.Inlines.Add(downloadLink);
         }
     }
 }

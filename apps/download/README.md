@@ -10,6 +10,7 @@ Customer-facing download portal for Glitch NinjaTrader releases.
 4. The homepage and version list update automatically from those files.
 5. SHA-256 checksums are generated automatically and shown on the download page.
 6. Release dates come from `apps/download/src/lib/release-dates.json` (UTC), and new zip files are timestamped automatically by `sync:release-dates`.
+7. `/api/releases/latest` returns machine-readable metadata for the latest release (used by the licensing API update check).
 
 Version detection supports multi-part versions like `Glitch_v0.0.1.1.zip`.
 

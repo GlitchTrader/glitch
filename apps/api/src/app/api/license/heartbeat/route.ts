@@ -108,7 +108,7 @@ function hashLicenseKey(licenseKey: string): string {
     .digest("hex");
 }
 
-function buildHeartbeatResponseBody(
+async function buildHeartbeatResponseBody(
   parsed: LicenseHeartbeatRequest,
   requestId: string,
   mode: "stub" | "database",
@@ -261,7 +261,7 @@ export async function POST(request: NextRequest) {
 
     const allowAll = readBooleanEnv("LICENSE_STUB_ALLOW_ALL", false);
     return jsonResponse(
-      buildHeartbeatResponseBody(parsed, requestId, "stub", {
+      await buildHeartbeatResponseBody(parsed, requestId, "stub", {
         valid: allowAll,
         status: allowAll ? "active" : "inactive",
         reason: allowAll ? null : "stub_deny_by_default",
@@ -276,7 +276,7 @@ export async function POST(request: NextRequest) {
 
   if (!parsed.licenseKey || !parsed.deviceFingerprintHash) {
     return jsonResponse(
-      buildHeartbeatResponseBody(parsed, requestId, "database", {
+      await buildHeartbeatResponseBody(parsed, requestId, "database", {
         valid: false,
         status: "inactive",
         reason: !parsed.licenseKey
@@ -295,7 +295,7 @@ export async function POST(request: NextRequest) {
     const membership = await getWhopMembershipByLicenseKey(parsed.licenseKey);
     if (!membership) {
       return jsonResponse(
-        buildHeartbeatResponseBody(parsed, requestId, "database", {
+        await buildHeartbeatResponseBody(parsed, requestId, "database", {
           valid: false,
           status: "inactive",
           reason: "license_not_found",
@@ -312,7 +312,7 @@ export async function POST(request: NextRequest) {
     const liveSnapshot = buildWhopLicenseSnapshot(membership);
     if (!liveSnapshot.active) {
       return jsonResponse(
-        buildHeartbeatResponseBody(parsed, requestId, "database", {
+        await buildHeartbeatResponseBody(parsed, requestId, "database", {
           valid: false,
           status: "inactive",
           reason: `membership_status_${membership.status}`,
@@ -332,7 +332,7 @@ export async function POST(request: NextRequest) {
     );
     if (bindingInspection.state !== "matched") {
       return jsonResponse(
-        buildHeartbeatResponseBody(parsed, requestId, "database", {
+        await buildHeartbeatResponseBody(parsed, requestId, "database", {
           valid: false,
           status: "inactive",
           reason: reasonFromWhopBindingInspection(bindingInspection),
@@ -351,7 +351,7 @@ export async function POST(request: NextRequest) {
     });
 
     return jsonResponse(
-      buildHeartbeatResponseBody(parsed, requestId, "database", {
+      await buildHeartbeatResponseBody(parsed, requestId, "database", {
         valid: true,
         status: "active",
         reason: null,

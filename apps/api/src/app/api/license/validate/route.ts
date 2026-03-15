@@ -110,7 +110,7 @@ function hashLicenseKey(licenseKey: string): string {
     .digest("hex");
 }
 
-function buildValidateResponseBody(
+async function buildValidateResponseBody(
   parsed: LicenseValidateRequest,
   requestId: string,
   mode: "stub" | "database",
@@ -261,7 +261,7 @@ export async function POST(request: NextRequest) {
 
     const allowAll = readBooleanEnv("LICENSE_STUB_ALLOW_ALL", false);
     return jsonResponse(
-      buildValidateResponseBody(parsed, requestId, "stub", {
+      await buildValidateResponseBody(parsed, requestId, "stub", {
         valid: allowAll,
         status: allowAll ? "active" : "inactive",
         reason: allowAll ? null : "stub_deny_by_default",
@@ -278,7 +278,7 @@ export async function POST(request: NextRequest) {
     let membership = await getWhopMembershipByLicenseKey(parsed.licenseKey);
     if (!membership) {
       return jsonResponse(
-        buildValidateResponseBody(parsed, requestId, "database", {
+        await buildValidateResponseBody(parsed, requestId, "database", {
           valid: false,
           status: "inactive",
           reason: "license_not_found",
@@ -295,7 +295,7 @@ export async function POST(request: NextRequest) {
     let liveSnapshot = buildWhopLicenseSnapshot(membership);
     if (!liveSnapshot.active) {
       return jsonResponse(
-        buildValidateResponseBody(parsed, requestId, "database", {
+        await buildValidateResponseBody(parsed, requestId, "database", {
           valid: false,
           status: "inactive",
           reason: `membership_status_${membership.status}`,
@@ -329,7 +329,7 @@ export async function POST(request: NextRequest) {
 
     if (bindingInspection.state !== "matched") {
       return jsonResponse(
-        buildValidateResponseBody(parsed, requestId, "database", {
+        await buildValidateResponseBody(parsed, requestId, "database", {
           valid: false,
           status: "inactive",
           reason: reasonFromWhopBindingInspection(bindingInspection),
@@ -348,7 +348,7 @@ export async function POST(request: NextRequest) {
     });
 
     return jsonResponse(
-      buildValidateResponseBody(parsed, requestId, "database", {
+      await buildValidateResponseBody(parsed, requestId, "database", {
         valid: true,
         status: "active",
         reason: null,

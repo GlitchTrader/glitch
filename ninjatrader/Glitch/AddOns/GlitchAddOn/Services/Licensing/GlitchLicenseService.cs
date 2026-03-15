@@ -49,6 +49,10 @@ namespace Glitch.Services
         public string LicenseToken { get; set; } = string.Empty;
         public bool HasVerifiedToken { get; set; } = false;
         public GlitchLicenseTokenClaims TokenClaims { get; set; } = null;
+        public bool UpdateChecked { get; set; } = false;
+        public bool UpdateAvailable { get; set; } = false;
+        public string LatestClientVersion { get; set; } = string.Empty;
+        public string UpdateDownloadUrl { get; set; } = string.Empty;
     }
 
     public static class GlitchLicenseService
@@ -296,6 +300,7 @@ namespace Glitch.Services
             IDictionary heartbeat = ReadDictionary(root, "heartbeat");
             IDictionary policy = ReadDictionary(root, "policy");
             IDictionary entitlement = ReadDictionary(root, "entitlement");
+            IDictionary update = ReadDictionary(root, "update");
 
             snapshot.LicenseValid = ReadBool(license, "valid");
             snapshot.LicenseStatus = ReadString(license, "status", snapshot.LicenseValid ? "active" : "inactive");
@@ -304,6 +309,12 @@ namespace Glitch.Services
             snapshot.GraceWindowSeconds = ReadInt(license, "graceWindowSeconds", 86400, 60, 604800);
             snapshot.Policy = ParsePolicy(policy, entitlement);
             snapshot.LicenseToken = ReadString(root, "licenseToken", string.Empty);
+            snapshot.UpdateChecked = ReadBool(update, "checked");
+            snapshot.UpdateAvailable =
+                ReadBool(update, "isOutdated") ||
+                ReadBool(update, "updateAvailable");
+            snapshot.LatestClientVersion = ReadString(update, "latestVersion", string.Empty);
+            snapshot.UpdateDownloadUrl = ReadString(update, "downloadUrl", string.Empty);
 
             if (!TryParseAndVerifyToken(
                     snapshot.LicenseToken,

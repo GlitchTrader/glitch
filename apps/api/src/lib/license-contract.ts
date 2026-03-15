@@ -5,6 +5,7 @@ import {
   type LicenseBillingVariant,
   type LicensePlan,
 } from "@/lib/license-policy";
+import { resolveAddonUpdateInfo } from "@/lib/addon-update";
 
 export type LicenseMode = "stub" | "database";
 export type LicenseStatus = "active" | "inactive";
@@ -31,13 +32,14 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-export function buildLicenseContractBody(input: BuildLicenseContractBodyInput) {
+export async function buildLicenseContractBody(input: BuildLicenseContractBodyInput) {
   const nextCheckInSeconds = clamp(
     input.nextCheckInSeconds ?? LICENSE_DEFAULT_CHECK_IN_SECONDS,
     15,
     3600,
   );
   const policy = buildPolicy(input.plan);
+  const update = await resolveAddonUpdateInfo(input.clientVersion);
 
   return {
     ok: true,
@@ -68,5 +70,6 @@ export function buildLicenseContractBody(input: BuildLicenseContractBodyInput) {
       deviceFingerprintHash: input.deviceFingerprintHash,
       clientVersion: input.clientVersion ?? null,
     },
+    update,
   };
 }

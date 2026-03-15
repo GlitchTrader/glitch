@@ -64,7 +64,8 @@ namespace Glitch.UI
         private const string ReplicationSignalName = "GLT-SYNC";
         private const string ProtectiveStopSignalName = "GLT-PROT-STP";
         private const string ProtectiveTargetSignalName = "GLT-PROT-TGT";
-        private const string CurrentClientVersion = "addon-0.1.0";
+        private const string CurrentClientVersion = "addon-0.0.1.2";
+        private const string DefaultLatestDownloadUrl = "https://download.glitchtrader.com/latest";
         private const double UnrealizedLossFlattenThresholdRatio = 0.80;
         private const double BufferCriticalLockThresholdRatio = 0.15;
         private const double BufferOneContractThresholdRatio = 0.20;
@@ -175,6 +176,9 @@ namespace Glitch.UI
         private bool _isLicenseCheckInFlight;
         private DateTime _nextLicenseHeartbeatUtc;
         private string _licenseDeviceFingerprintHash;
+        private bool _isClientUpdateAvailable;
+        private string _latestClientVersion;
+        private string _latestDownloadUrl;
         private DateTime _lastPeakStateWriteUtc;
         private DateTime _lastAuditWriteUtc;
         private DateTime _lastUiRefreshUtc;
@@ -297,6 +301,9 @@ namespace Glitch.UI
             _replicationWarmupUntilUtc = DateTime.MinValue;
             _nextLicenseHeartbeatUtc = DateTime.UtcNow;
             _licenseDeviceFingerprintHash = ComputeDeviceFingerprintHash();
+            _isClientUpdateAvailable = false;
+            _latestClientVersion = string.Empty;
+            _latestDownloadUrl = DefaultLatestDownloadUrl;
             RehydrateLicenseStateFromSignedCache();
             GlitchRuntimePolicyStore.SaveLicenseCache(_licenseCacheFilePath, _licenseCacheState);
             LoadSelectionOverridesFromDisk(overwriteExisting: true);
@@ -1130,6 +1137,43 @@ namespace Glitch.UI
             _ = RefreshLicenseStateAsync(useValidateEndpoint: false, force: false);
         }
 
+        private static string ResolveCurrentClientVersion()
+        {
+            try
+            {
+                Assembly assembly = typeof(GlitchMainWindow).Assembly;
+                AssemblyName name = assembly?.GetName();
+                Version version = name?.Version;
+                if (name != null &&
+                    version != null &&
+                    string.Equals(name.Name, "Glitch", StringComparison.OrdinalIgnoreCase))
+                {
+                    int build = Math.Max(0, version.Build);
+                    int revision = Math.Max(0, version.Revision);
+                    return $"addon-{version.Major}.{version.Minor}.{build}.{revision}";
+                }
+            }
+            catch
+            {
+            }
+
+            return CurrentClientVersion;
+        }
+
+        private void ApplyClientUpdateStateFromSnapshot(GlitchLicenseSnapshot snapshot)
+        {
+            if (snapshot == null || !snapshot.UpdateChecked)
+                return;
+
+            _isClientUpdateAvailable = snapshot.UpdateAvailable;
+            _latestClientVersion = (snapshot.LatestClientVersion ?? string.Empty).Trim();
+
+            string snapshotDownloadUrl = (snapshot.UpdateDownloadUrl ?? string.Empty).Trim();
+            _latestDownloadUrl = string.IsNullOrWhiteSpace(snapshotDownloadUrl)
+                ? DefaultLatestDownloadUrl
+                : snapshotDownloadUrl;
+        }
+
         private async Task RefreshLicenseStateAsync(bool useValidateEndpoint, bool force)
         {
             if (_isLicenseCheckInFlight && !force)
@@ -1145,6 +1189,9 @@ namespace Glitch.UI
             if (string.IsNullOrWhiteSpace(licenseKey))
             {
                 DateTime nowNoKey = DateTime.UtcNow;
+                _isClientUpdateAvailable = false;
+                _latestClientVersion = string.Empty;
+                _latestDownloadUrl = DefaultLatestDownloadUrl;
                 _licenseCacheState.LastCheckedUtc = nowNoKey;
                 ApplyFreeLitePolicyToCache("free_lite", "missing_license_key");
                 GlitchRuntimePolicyStore.SaveLicenseCache(_licenseCacheFilePath, _licenseCacheState);
@@ -1158,19 +1205,22 @@ namespace Glitch.UI
             _isLicenseCheckInFlight = true;
             try
             {
+                string clientVersion = ResolveCurrentClientVersion();
                 GlitchLicenseSnapshot snapshot = useValidateEndpoint
                     ? await GlitchLicenseService.ValidateAsync(
                         _runtimePolicySettings.LicenseApiBaseUrl,
                         licenseKey,
                         _runtimePolicySettings.InstallationId,
                         _licenseDeviceFingerprintHash,
-                        CurrentClientVersion)
+                        clientVersion)
                     : await GlitchLicenseService.HeartbeatAsync(
                         _runtimePolicySettings.LicenseApiBaseUrl,
                         licenseKey,
                         _runtimePolicySettings.InstallationId,
                         _licenseDeviceFingerprintHash,
-                        CurrentClientVersion);
+                        clientVersion);
+
+                ApplyClientUpdateStateFromSnapshot(snapshot);
 
                 DateTime nowUtc = DateTime.UtcNow;
                 _licenseCacheState.LastCheckedUtc = nowUtc;
