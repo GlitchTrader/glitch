@@ -70,7 +70,7 @@ export function DocsShell({ activeSlug, children }: DocsShellProps) {
               <div className="mt-6 rounded-[1.5rem] border border-white/10 bg-white/[0.02] p-4">
                 <p className="text-sm font-semibold text-white">Looking for pricing or onboarding?</p>
                 <p className="mt-2 text-sm leading-6 text-zinc-400">
-                  Pricing, offer pages, and member actions stay on the main website.
+                  Pricing, product pages, and member actions stay on the main website.
                 </p>
                 <a
                   href={websiteUrl}
@@ -82,7 +82,7 @@ export function DocsShell({ activeSlug, children }: DocsShellProps) {
             </div>
           </aside>
 
-          <main className="min-w-0">{children}</main>
+          <main className="min-w-0 lg:pt-2.5">{children}</main>
         </div>
       </div>
       <SiteFooter />

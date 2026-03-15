@@ -1,6 +1,16 @@
-import { getDocsUrl, getDownloadsUrl, getLatestRelease, getReleaseCatalog, getWebsiteUrl, formatReleaseDate, formatReleaseSize } from "@/lib/releases";
+import { LatestLinkCard } from "@/components/latest-link-card";
+import {
+  formatReleaseDate,
+  formatReleaseSize,
+  getDocsUrl,
+  getDownloadsUrl,
+  getLatestRelease,
+  getReleaseCatalog,
+  getWebsiteUrl,
+} from "@/lib/releases";
 
 export const dynamic = "force-dynamic";
+const installationGuideUrl = "https://docs.glitchtrader.com/installation-guide-troubleshooting";
 
 function EmptyState({
   error,
@@ -47,15 +57,7 @@ export default async function Home() {
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 rounded-[1.75rem] border border-white/8 bg-black/25 p-5 text-sm text-zinc-300 sm:min-w-[320px]">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-glitch-orange">Latest Link</p>
-              <code className="w-full rounded-2xl border border-white/8 bg-black/30 px-3 py-3 font-mono text-[11px] leading-4 text-white">
-                {`${downloadsUrl.replace(/\/$/, "")}/latest`}
-              </code>
-              <p className="text-xs text-zinc-400">
-                Bookmark this URL for newest release.
-              </p>
-            </div>
+            <LatestLinkCard latestUrl={`${downloadsUrl.replace(/\/$/, "")}/latest`} />
           </div>
         </header>
 
@@ -72,18 +74,20 @@ export default async function Home() {
                 </p>
               </div>
 
-              <div className="grid gap-3 rounded-[1.75rem] border border-white/8 bg-white/[0.02] p-5 text-sm text-zinc-300 sm:grid-cols-3 sm:gap-5">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Released</p>
-                  <p className="mt-2 font-medium text-white">{formatReleaseDate(latestRelease.uploadedAt)}</p>
+              <div className="grid gap-3 rounded-[1.75rem] border border-white/8 bg-white/[0.02] p-5 text-sm text-zinc-300 sm:grid-cols-[minmax(0,1fr)_110px_140px] sm:gap-4">
+                <div className="min-w-0 text-center sm:text-left">
+                  <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">File</p>
+                  <p className="mt-2 overflow-hidden text-ellipsis whitespace-nowrap font-medium text-white" title={latestRelease.fileName}>
+                    {latestRelease.fileName}
+                  </p>
                 </div>
-                <div>
+                <div className="text-center">
                   <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Size</p>
                   <p className="mt-2 font-medium text-white">{formatReleaseSize(latestRelease.size)}</p>
                 </div>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">File</p>
-                  <p className="mt-2 truncate font-medium text-white">{latestRelease.fileName}</p>
+                <div className="text-center">
+                  <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Released</p>
+                  <p className="mt-2 font-medium text-white">{formatReleaseDate(latestRelease.uploadedAt)}</p>
                 </div>
               </div>
             </div>
@@ -96,10 +100,10 @@ export default async function Home() {
                 Download Latest
               </a>
               <a
-                href={`/download/${latestRelease.slug}`}
+                href={installationGuideUrl}
                 className="inline-flex h-12 items-center justify-center rounded-full border border-glitch-teal px-6 text-sm font-medium text-glitch-teal transition-colors hover:bg-glitch-teal/10"
               >
-                Version Link
+                Installation Guide
               </a>
             </div>
 
@@ -128,11 +132,11 @@ export default async function Home() {
             </div>
 
             <div className="mt-6 overflow-hidden rounded-[1.5rem] border border-white/8">
-              <div className="hidden grid-cols-[minmax(0,1.4fr)_140px_140px_160px] gap-4 border-b border-white/8 bg-white/[0.03] px-5 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 sm:grid">
+              <div className="hidden grid-cols-[minmax(0,1fr)_96px_96px_132px] gap-3 border-b border-white/8 bg-white/[0.03] px-5 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 sm:grid">
                 <span>Package</span>
-                <span>Version</span>
-                <span>Size</span>
-                <span>Released</span>
+                <span className="text-center">Version</span>
+                <span className="text-center">Size</span>
+                <span className="text-center">Released</span>
               </div>
 
               {catalog.releases.length > 0 ? (
@@ -141,16 +145,18 @@ export default async function Home() {
                     <a
                       key={release.pathname}
                       href={release.downloadPath}
-                      className="grid gap-3 px-5 py-4 transition-colors hover:bg-white/[0.03] sm:grid-cols-[minmax(0,1.4fr)_140px_140px_160px] sm:items-center"
+                      className="grid gap-3 px-5 py-4 text-center transition-colors hover:bg-white/[0.03] sm:grid-cols-[minmax(0,1fr)_96px_96px_132px] sm:items-center sm:gap-3 sm:text-left"
                     >
-                      <div>
-                        <p className="font-medium text-white">{release.fileName}</p>
+                      <div className="min-w-0">
+                        <p className="overflow-hidden text-ellipsis whitespace-nowrap font-medium text-white sm:text-left" title={release.fileName}>
+                          {release.fileName}
+                        </p>
                       </div>
-                      <span className="text-sm text-zinc-200">{release.version}</span>
-                      <span className="text-sm text-zinc-400">{formatReleaseSize(release.size)}</span>
-                      <span className="text-sm text-zinc-400">{formatReleaseDate(release.uploadedAt)}</span>
+                      <span className="text-center text-sm text-zinc-200">{release.version}</span>
+                      <span className="text-center text-sm text-zinc-400">{formatReleaseSize(release.size)}</span>
+                      <span className="text-center text-sm text-zinc-400">{formatReleaseDate(release.uploadedAt)}</span>
                       <div
-                        className="sm:col-span-4 mt-1 overflow-hidden text-ellipsis whitespace-nowrap rounded-lg border border-white/8 bg-black/25 px-2.5 py-1 font-mono text-[11px] text-zinc-500"
+                        className="sm:col-span-4 mt-1 overflow-hidden text-ellipsis whitespace-nowrap rounded-lg border border-white/8 bg-black/25 px-2.5 py-1 text-center font-mono text-[11px] text-zinc-500 sm:text-left"
                         title={`SHA-256: ${release.sha256}`}
                       >
                         SHA-256: {release.sha256}
@@ -172,9 +178,9 @@ export default async function Home() {
               <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white">Get up and running</h2>
               <ol className="mt-4 space-y-3 text-sm leading-7 text-zinc-300">
                 <li>1. Download the latest zip package.</li>
-                <li>2. In NinjaTrader, go to Tools &gt; Import &gt; NinjaScript Add-On.</li>
-                <li>3. Select the downloaded file and complete import.</li>
-                <li>4. Open Glitch and sign in with your licensed account.</li>
+                <li>2. NinjaTrader &gt; Tools &gt; Import &gt; NinjaScript Add-On.</li>
+                <li>3. Select downloaded file, restart NinjaTrader when done.</li>
+                <li>4. Open Glitch, validate your license in Settings.</li>
               </ol>
             </section>
 
@@ -188,10 +194,16 @@ export default async function Home() {
                   Website
                 </a>
                 <a
+                  href={installationGuideUrl}
+                  className="inline-flex h-11 items-center justify-center rounded-full border border-white/10 px-5 text-sm text-zinc-200 transition-colors hover:bg-white/[0.04]"
+                >
+                  Installation Guide &amp; Troubleshoot
+                </a>
+                <a
                   href={docsUrl}
                   className="inline-flex h-11 items-center justify-center rounded-full border border-white/10 px-5 text-sm text-zinc-200 transition-colors hover:bg-white/[0.04]"
                 >
-                  Installation Docs
+                  Documentation
                 </a>
               </div>
             </section>

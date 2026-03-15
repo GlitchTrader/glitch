@@ -3,7 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DocsMarkdown } from "@/components/docs-markdown";
 import { DocsShell } from "@/components/docs-shell";
+import { JsonLd } from "@/components/json-ld";
 import { getAdjacentDocs, getDocPage, getDocSummaries } from "@/lib/docs";
+import { docsSiteUrl, resolveSiteUrl, websiteUrl } from "@/lib/site";
 
 type DocPageProps = {
   params: Promise<{
@@ -45,9 +47,57 @@ export default async function DocPage({ params }: DocPageProps) {
   }
 
   const adjacent = getAdjacentDocs(slug);
+  const docsOrigin = resolveSiteUrl("NEXT_PUBLIC_DOCS_URL", docsSiteUrl).toString().replace(/\/$/, "");
+  const pageUrl = `${docsOrigin}${doc.href}`;
+
+  const jsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      headline: doc.title,
+      description: doc.summary,
+      url: pageUrl,
+      mainEntityOfPage: pageUrl,
+      inLanguage: "en-US",
+      author: {
+        "@type": "Organization",
+        name: "Glitch",
+      },
+      publisher: {
+        "@type": "Organization",
+        name: "Glitch",
+        url: websiteUrl,
+      },
+      isPartOf: {
+        "@type": "WebSite",
+        name: "Glitch Docs",
+        url: docsOrigin,
+      },
+      about: [doc.section, "NinjaTrader", "Glitch AddOn", "GlitchAnalyticsBridge"],
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Documentation Home",
+          item: docsOrigin,
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: doc.navTitle,
+          item: pageUrl,
+        },
+      ],
+    },
+  ];
 
   return (
     <DocsShell activeSlug={doc.slug}>
+      <JsonLd data={jsonLd} />
       <div className="space-y-6">
         <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-7 shadow-[0_30px_90px_rgba(0,0,0,0.22)] sm:p-9">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-glitch-teal">{doc.section}</p>

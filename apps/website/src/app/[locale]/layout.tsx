@@ -80,7 +80,7 @@ async function RenderSiteHeader() {
     <SiteHeaderClient
       labels={{
         home: navT("home"),
-        offer: navT("offer"),
+        product: navT("product"),
         pricing: navT("pricing"),
         affiliate: navT("affiliate"),
         docs: navT("docs"),

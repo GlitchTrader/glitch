@@ -1,8 +1,10 @@
 import Image from "next/image";
 import { getDocsUrl, getDownloadsUrl, getWebsiteUrl } from "@/lib/releases";
+import { SiteHeaderClient } from "@/components/site-header";
 
 const defaultMemberHubUrl = "https://whop.com/joined/glitchtrader/";
 const defaultGoProUrl = "https://whop.com/joined/glitchtrader/products/glitch-ninjatrader-addon/";
+const installationGuideUrl = "https://docs.glitchtrader.com/installation-guide-troubleshooting";
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
@@ -12,60 +14,23 @@ function websitePath(baseUrl: string, pathname: string): string {
   return `${trimTrailingSlash(baseUrl)}${pathname}`;
 }
 
-const navLinkClass = "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100";
-const memberHubClass = "font-medium text-glitch-teal hover:text-glitch-teal/80";
-const goProClass = "font-medium text-glitch-orange hover:text-glitch-orange/80";
-
 export function SiteHeader() {
   const websiteUrl = getWebsiteUrl();
   const docsUrl = trimTrailingSlash(getDocsUrl());
-  const downloadsUrl = trimTrailingSlash(getDownloadsUrl());
   const memberHubUrl = process.env.NEXT_PUBLIC_WHOP_MEMBER_HUB_URL?.trim() || defaultMemberHubUrl;
   const goProUrl = process.env.NEXT_PUBLIC_WHOP_GO_PRO_CHECKOUT_URL?.trim() || defaultGoProUrl;
 
   return (
-    <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-        <a href={websiteUrl} aria-label="Glitch home" className="flex items-center">
-          <Image
-            src="/images/branding/Glitch Logo.svg"
-            alt="Glitch"
-            width={90}
-            height={24}
-            className="h-6 w-auto"
-            unoptimized
-            priority
-          />
-        </a>
-
-        <nav className="hidden items-center gap-6 text-sm md:flex">
-          <a href={websitePath(websiteUrl, "/")} className={navLinkClass}>
-            Home
-          </a>
-          <a href={websitePath(websiteUrl, "/offer")} className={navLinkClass}>
-            Offer
-          </a>
-          <a href={websitePath(websiteUrl, "/pricing")} className={navLinkClass}>
-            Pricing
-          </a>
-          <a href={websitePath(websiteUrl, "/affiliate")} className={navLinkClass}>
-            Affiliate
-          </a>
-          <a href={docsUrl} className={navLinkClass}>
-            Docs
-          </a>
-          <a href={downloadsUrl} className={navLinkClass}>
-            Download
-          </a>
-          <a href={memberHubUrl} className={memberHubClass}>
-            Member Hub
-          </a>
-          <a href={goProUrl} className={goProClass}>
-            Go Pro
-          </a>
-        </nav>
-      </div>
-    </header>
+    <SiteHeaderClient
+      websiteUrl={websiteUrl}
+      homeUrl={websitePath(websiteUrl, "/")}
+      pricingUrl={websitePath(websiteUrl, "/pricing")}
+      affiliateUrl={websitePath(websiteUrl, "/affiliate")}
+      docsUrl={docsUrl}
+      guideUrl={installationGuideUrl}
+      memberHubUrl={memberHubUrl}
+      goProUrl={goProUrl}
+    />
   );
 }
 
@@ -111,20 +76,23 @@ export function SiteFooter() {
         <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-zinc-200 pt-6 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
           <span>© {year} Glitch. All rights reserved.</span>
           <div className="flex flex-wrap gap-6">
+            <a href={downloadsUrl} className="hover:text-zinc-700 dark:hover:text-zinc-300">
+              Download
+            </a>
+            <a href={installationGuideUrl} className="hover:text-zinc-700 dark:hover:text-zinc-300">
+              Guide
+            </a>
             <a href={docsUrl} className="hover:text-zinc-700 dark:hover:text-zinc-300">
               Docs
             </a>
             <a href={websitePath(websiteUrl, "/risk-disclosure")} className="hover:text-zinc-700 dark:hover:text-zinc-300">
-              Risk Disclosure
+              Risk
             </a>
             <a href={websitePath(websiteUrl, "/terms")} className="hover:text-zinc-700 dark:hover:text-zinc-300">
               Terms
             </a>
             <a href={websitePath(websiteUrl, "/privacy")} className="hover:text-zinc-700 dark:hover:text-zinc-300">
               Privacy
-            </a>
-            <a href={downloadsUrl} className="hover:text-zinc-700 dark:hover:text-zinc-300">
-              Downloads
             </a>
           </div>
         </div>

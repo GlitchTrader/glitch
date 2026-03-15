@@ -6,7 +6,7 @@ Monorepo for the Glitch trading platform: NinjaTrader 8 AddOn and Indicator, mar
 
 | Path | Description |
 |-----|-------------|
-| `apps/website` | Next.js marketing site (Whop checkout links, pricing, offer, affiliate, legal pages). |
+| `apps/website` | Next.js marketing site (Whop checkout links, pricing, product, affiliate, legal pages). |
 | `apps/api` | Next.js backend: health, Whop webhooks, license validate/heartbeat, admin and internal endpoints, market fundamentals and provider proxy. |
 | `apps/app` | Next.js app workspace (placeholder). |
 | `ninjatrader/Glitch` | NinjaTrader 8 AddOn and Indicator source and docs (AddOns/GlitchAddOn, Indicators/glitch, Docs). |

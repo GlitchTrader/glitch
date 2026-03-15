@@ -3,7 +3,7 @@ type FaqItem = {
   answer: string;
 };
 
-type OfferFeatureCard = {
+type ProductFeatureCard = {
   title: string;
   body: string;
 };
@@ -16,7 +16,7 @@ type MarketingContent = {
     dailySteps: string[];
     premiumCheckoutNote: string;
   };
-  offer: {
+  product: {
     metadataTitle: string;
     metadataDescription: string;
     badge: string;
@@ -38,7 +38,7 @@ type MarketingContent = {
     freeHighlights: string[];
     paidHighlights: string[];
     engineTitle: string;
-    engineCards: OfferFeatureCard[];
+    engineCards: ProductFeatureCard[];
     pricingTitle: string;
     pricingLead: string;
     memberHubBlurb: string;
@@ -157,10 +157,10 @@ const en: MarketingContent = {
     ],
     premiumCheckoutNote: "Choose monthly, annual, or lifetime at checkout.",
   },
-  offer: {
-    metadataTitle: "Glitch Offer - Risk-First Trading Assistant for NinjaTrader",
-    metadataDescription: "Explore the Glitch offer: compliance enforcement, replication control, Glitch Score analytics, and premium scaling for prop traders.",
-    badge: "The Glitch Offer",
+  product: {
+    metadataTitle: "Glitch Product - Risk-First Trading Assistant for NinjaTrader",
+    metadataDescription: "Explore the Glitch product: compliance enforcement, replication control, Glitch Score analytics, and premium scaling for prop traders.",
+    badge: "The Glitch Product",
     title: "Built for traders who treat this like a business",
     lead: "If you are done with avoidable rule breaks, replication chaos, and context-blind execution, this is the operating layer you were missing.",
     sublead: "Glitch is defining a new category: the risk-first trading assistant for prop traders who run real operations, not toy setups.",
@@ -329,7 +329,7 @@ const pt: MarketingContent = {
     ],
     premiumCheckoutNote: "Escolha mensal, anual ou vitalício no checkout.",
   },
-  offer: {
+  product: {
     metadataTitle: "Oferta Glitch - Assistente de Trading com Foco em Risco para NinjaTrader",
     metadataDescription: "Explore a oferta do Glitch: conformidade, controle de replicação, analytics com Glitch Score e escala premium para prop traders.",
     badge: "A oferta Glitch",
@@ -501,7 +501,7 @@ const es: MarketingContent = {
     ],
     premiumCheckoutNote: "Elige mensual, anual o vitalicio en el checkout.",
   },
-  offer: {
+  product: {
     metadataTitle: "Oferta Glitch - Asistente de Trading con Enfoque en Riesgo para NinjaTrader",
     metadataDescription: "Explora la oferta de Glitch: cumplimiento, control de replicación, analítica con Glitch Score y escala premium para prop traders.",
     badge: "La oferta de Glitch",
@@ -673,7 +673,7 @@ const fr: MarketingContent = {
     ],
     premiumCheckoutNote: "Choisissez mensuel, annuel ou à vie au checkout.",
   },
-  offer: {
+  product: {
     metadataTitle: "Offre Glitch - Assistant de Trading Axé Risque pour NinjaTrader",
     metadataDescription: "Explorez l’offre Glitch : conformité, contrôle de réplication, analytics Glitch Score et montée en charge premium pour prop traders.",
     badge: "L’offre Glitch",
@@ -845,7 +845,7 @@ const ru: MarketingContent = {
     ],
     premiumCheckoutNote: "На checkout можно выбрать месячный, годовой или lifetime доступ.",
   },
-  offer: {
+  product: {
     metadataTitle: "Предложение Glitch - Риск-ориентированный Торговый Ассистент для NinjaTrader",
     metadataDescription: "Изучите предложение Glitch: соблюдение правил, контроль репликации, аналитика Glitch Score и premium-масштабирование для prop-трейдеров.",
     badge: "Предложение Glitch",
@@ -1017,7 +1017,7 @@ const zh: MarketingContent = {
     ],
     premiumCheckoutNote: "在 checkout 中可选择月付、年付或终身访问。",
   },
-  offer: {
+  product: {
     metadataTitle: "Glitch 产品方案 - 面向 NinjaTrader 的风险优先交易助手",
     metadataDescription: "查看 Glitch 的产品方案：合规执行、复制控制、Glitch Score 分析，以及面向 prop 交易员的高级扩展能力。",
     badge: "Glitch 方案",

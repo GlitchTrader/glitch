@@ -14,18 +14,18 @@ type Props = { params: Promise<{ locale: string }> };
 
 export async function generateMetadata({ params }: Props) {
   const { locale } = await params;
-  const content = getMarketingContent(locale).offer;
+  const content = getMarketingContent(locale).product;
   return buildPageMetadata({
     title: content.metadataTitle,
     description: content.metadataDescription,
-    path: `/${locale}/offer`,
+    path: `/${locale}/product`,
     locale,
   });
 }
 
-export default async function OfferPage({ params }: Props) {
+export default async function ProductPage({ params }: Props) {
   const { locale } = await params;
-  const content = getMarketingContent(locale).offer;
+  const content = getMarketingContent(locale).product;
   const pricingContent = getPricingContent(locale);
   const ui = getUiContent(locale);
 
@@ -36,17 +36,19 @@ export default async function OfferPage({ params }: Props) {
           <p className="inline-flex rounded-full border border-glitch-teal/40 bg-glitch-teal/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-glitch-teal">
             {content.badge}
           </p>
-          <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
-            {content.title}
-          </h1>
-          <p className="mx-auto mt-6 max-w-3xl text-lg text-zinc-600 dark:text-zinc-400">
-            {content.lead}
-          </p>
-          <p className="mx-auto mt-3 max-w-3xl text-zinc-600 dark:text-zinc-400">
-            {content.sublead}
-          </p>
+          <div className="mx-auto mt-4 max-w-[640px]">
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
+              {content.title}
+            </h1>
+            <p className="mt-6 text-lg text-zinc-600 dark:text-zinc-400">
+              {content.lead}
+            </p>
+            <p className="mt-3 text-zinc-600 dark:text-zinc-400">
+              {content.sublead}
+            </p>
+          </div>
           <CoreCtas className="mt-10" centered />
-          <p className="mx-auto mt-4 max-w-3xl text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="mx-auto mt-4 max-w-[640px] text-sm text-zinc-500 dark:text-zinc-400">
             {content.alreadyJoinedLabel}{" "}
             <ExternalLink href={marketingLinks.memberHubUrl} className="font-medium text-glitch-teal hover:underline">
               {ui.actions.memberHub}

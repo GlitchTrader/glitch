@@ -4,7 +4,7 @@ import { locales } from "@/i18n/routing";
 
 const pathnames = [
   "",
-  "/offer",
+  "/product",
   "/pricing",
   "/affiliate",
   "/privacy",

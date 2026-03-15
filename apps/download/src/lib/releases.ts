@@ -3,6 +3,7 @@ import { createReadStream, existsSync } from "node:fs";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { cache } from "react";
+import releaseDateOverrides from "./release-dates.json";
 
 const defaultWebsiteUrl = "https://glitchtrader.com";
 const defaultDocsUrl = "https://docs.glitchtrader.com";
@@ -29,6 +30,8 @@ type ParsedVersion = {
   prerelease: string | null;
   valid: boolean;
 };
+
+type ReleaseDateOverrideMap = Record<string, string>;
 
 function getReleaseDirectoryPath(): string {
   const candidates = [
@@ -144,45 +147,18 @@ function compareReleaseRecords(a: ReleaseRecord, b: ReleaseRecord): number {
   });
 }
 
-function resolvePublicOrigin(): string {
-  const vercelUrl = process.env.VERCEL_URL?.trim();
-  if (vercelUrl) {
-    const normalized = vercelUrl.startsWith("http") ? vercelUrl : `https://${vercelUrl}`;
-    return normalized.replace(/\/+$/, "");
-  }
-
-  const configured = process.env.NEXT_PUBLIC_DOWNLOADS_URL?.trim() || defaultDownloadsUrl;
-  const normalized = configured.startsWith("http") ? configured : `https://${configured}`;
-  return normalized.replace(/\/+$/, "");
-}
-
-async function resolveReleaseDate(downloadPath: string, fallbackDate: Date): Promise<Date> {
-  const origin = resolvePublicOrigin();
-
-  try {
-    const response = await fetch(`${origin}${downloadPath}`, {
-      method: "HEAD",
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return fallbackDate;
-    }
-
-    const header = response.headers.get("last-modified");
-    if (!header) {
-      return fallbackDate;
-    }
-
-    const parsed = new Date(header);
-    if (Number.isNaN(parsed.getTime())) {
-      return fallbackDate;
-    }
-
-    return parsed;
-  } catch {
+function resolveReleaseDate(fileName: string, fallbackDate: Date): Date {
+  const configuredValue = (releaseDateOverrides as ReleaseDateOverrideMap)[fileName];
+  if (!configuredValue) {
     return fallbackDate;
   }
+
+  const parsed = new Date(configuredValue);
+  if (Number.isNaN(parsed.getTime())) {
+    return fallbackDate;
+  }
+
+  return parsed;
 }
 
 async function hashFileSha256(filePath: string): Promise<string> {
@@ -209,7 +185,7 @@ async function readLocalReleases(): Promise<ReleaseRecord[]> {
       const version = deriveVersion(fileName);
       const pathname = `files/${fileName}`;
       const downloadPath = `/${pathname.split("/").map(encodeURIComponent).join("/")}`;
-      const uploadedAt = await resolveReleaseDate(downloadPath, new Date(stats.mtime));
+      const uploadedAt = resolveReleaseDate(fileName, new Date(stats.mtime));
 
       return {
         version,
@@ -295,8 +271,9 @@ export function formatReleaseSize(size: number): string {
 
 export function formatReleaseDate(date: Date): string {
   return new Intl.DateTimeFormat("en-US", {
-    month: "short",
+    month: "long",
     day: "numeric",
     year: "numeric",
+    timeZone: "UTC",
   }).format(date);
 }

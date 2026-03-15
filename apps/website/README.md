@@ -1,6 +1,6 @@
 # Glitch Website
 
-Next.js marketing website for the Glitch NinjaTrader AddOn: homepage, pricing, offer, affiliate, and legal pages. CTAs route to Whop product pages, affiliate dashboard, and member hub URLs from environment variables.
+Next.js marketing website for the Glitch NinjaTrader AddOn: homepage, pricing, product, affiliate, and legal pages. CTAs route to Whop product pages, affiliate dashboard, and member hub URLs from environment variables.
 
 ## Internationalization (i18n)
 
@@ -12,7 +12,7 @@ All content is under a locale prefix (e.g. `/en`, `/pt`). Visiting `/` redirects
 
 - `/[locale]` - Home (hero, features, FAQ, CTAs).
 - `/[locale]/pricing` - Pricing (free, Go Pro, lifetime; direct conversion CTAs).
-- `/[locale]/offer` - Offer page (free vs paid positioning).
+- `/[locale]/product` - Product page (free vs paid positioning).
 - `/[locale]/affiliate` - Affiliate program.
 - `/[locale]/privacy` - Privacy policy.
 - `/[locale]/terms` - Terms of service.

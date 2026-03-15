@@ -5,6 +5,9 @@ import { ExternalLink } from "@/components/external-link";
 import { marketingLinks } from "@/lib/marketing-links";
 import { Link } from "@/i18n/navigation";
 
+const installationGuideUrl = "https://docs.glitchtrader.com/installation-guide-troubleshooting";
+const downloadsUrl = process.env.NEXT_PUBLIC_DOWNLOADS_URL?.trim() || "https://download.glitchtrader.com";
+
 export async function SiteFooter() {
   const t = await getTranslations("footer");
   const navT = await getTranslations("nav");
@@ -36,12 +39,18 @@ export async function SiteFooter() {
 
         <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-zinc-200 pt-6 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
           <span>{t("copyright")}</span>
-          <div className="flex gap-6">
+          <div className="flex flex-wrap gap-6">
+            <ExternalLink href={downloadsUrl} className="hover:text-zinc-700 dark:hover:text-zinc-300">
+              Download
+            </ExternalLink>
+            <ExternalLink href={installationGuideUrl} className="hover:text-zinc-700 dark:hover:text-zinc-300">
+              Guide
+            </ExternalLink>
             <ExternalLink href={marketingLinks.docsUrl} className="hover:text-zinc-700 dark:hover:text-zinc-300">
               {navT("docs")}
             </ExternalLink>
             <Link href="/risk-disclosure" className="hover:text-zinc-700 dark:hover:text-zinc-300">
-              {t("riskDisclosure")}
+              Risk
             </Link>
             <Link href="/terms" className="hover:text-zinc-700 dark:hover:text-zinc-300">
               {t("terms")}

@@ -9,7 +9,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 
 type SiteHeaderLabels = {
   home: string;
-  offer: string;
+  product: string;
   pricing: string;
   affiliate: string;
   docs: string;
@@ -30,11 +30,12 @@ type SiteHeaderProps = {
   links: SiteHeaderLinks;
 };
 
-const navLinkClass = "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100";
-const memberHubClass = "font-medium text-glitch-teal hover:text-glitch-teal/80";
-const goProClass = "font-medium text-glitch-orange hover:text-glitch-orange/80";
+const navLinkClass = "text-white hover:text-white/80";
+const memberHubClass = "font-medium !text-glitch-teal hover:!text-glitch-teal/80";
+const goProClass = "font-medium !text-glitch-orange hover:!text-glitch-orange/80";
 const mobileItemClass =
-  "flex items-center justify-between rounded-2xl border border-zinc-200/80 bg-zinc-50/85 px-4 py-3 text-sm text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900/90 dark:text-zinc-100 dark:hover:bg-zinc-800";
+  "flex items-center justify-between rounded-2xl border border-zinc-200/80 bg-zinc-50/85 px-4 py-3 text-sm transition-colors hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900/90 dark:hover:bg-zinc-800";
+const mobileNeutralTextClass = "text-white";
 
 function MenuIcon({ open }: { open: boolean }) {
   return (
@@ -99,8 +100,8 @@ export function SiteHeader({ labels, links }: SiteHeaderProps) {
           <Link href="/" className={navLinkClass}>
             {labels.home}
           </Link>
-          <Link href="/offer" className={navLinkClass}>
-            {labels.offer}
+          <Link href="/product" className={navLinkClass}>
+            {labels.product}
           </Link>
           <Link href="/pricing" className={navLinkClass}>
             {labels.pricing}
@@ -137,19 +138,19 @@ export function SiteHeader({ labels, links }: SiteHeaderProps) {
         >
           <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6">
             <nav className="flex flex-col gap-2">
-              <Link href="/" className={mobileItemClass} onClick={() => setOpen(false)}>
+              <Link href="/" className={`${mobileItemClass} ${mobileNeutralTextClass}`} onClick={() => setOpen(false)}>
                 <span>{labels.home}</span>
               </Link>
-              <Link href="/offer" className={mobileItemClass} onClick={() => setOpen(false)}>
-                <span>{labels.offer}</span>
+              <Link href="/product" className={`${mobileItemClass} ${mobileNeutralTextClass}`} onClick={() => setOpen(false)}>
+                <span>{labels.product}</span>
               </Link>
-              <Link href="/pricing" className={mobileItemClass} onClick={() => setOpen(false)}>
+              <Link href="/pricing" className={`${mobileItemClass} ${mobileNeutralTextClass}`} onClick={() => setOpen(false)}>
                 <span>{labels.pricing}</span>
               </Link>
-              <Link href="/affiliate" className={mobileItemClass} onClick={() => setOpen(false)}>
+              <Link href="/affiliate" className={`${mobileItemClass} ${mobileNeutralTextClass}`} onClick={() => setOpen(false)}>
                 <span>{labels.affiliate}</span>
               </Link>
-              <ExternalLink href={links.docsUrl} className={mobileItemClass} onClick={() => setOpen(false)}>
+              <ExternalLink href={links.docsUrl} className={`${mobileItemClass} ${mobileNeutralTextClass}`} onClick={() => setOpen(false)}>
                 <span>{labels.docs}</span>
               </ExternalLink>
               <ExternalLink href={links.memberHubUrl} className={`${mobileItemClass} ${memberHubClass}`} onClick={() => setOpen(false)}>
@@ -169,3 +170,4 @@ export function SiteHeader({ labels, links }: SiteHeaderProps) {
     </header>
   );
 }
+

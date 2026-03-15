@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "npm run sync:release-dates",
+    "prebuild": "npm run sync:release-dates",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sync:release-dates": "node ./scripts/sync-release-dates.mjs"
   },
   "dependencies": {
     "next": "16.1.6",
