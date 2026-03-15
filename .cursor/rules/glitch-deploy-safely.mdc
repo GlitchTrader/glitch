@@ -1,5 +1,5 @@
 ---
-description: Deploy Glitch NinjaTrader workspace files safely into the live bin/Custom tree with one validated, workspace-first copy step
+description: Deploy Glitch NinjaTrader AddOn safely into live bin/Custom using a full GlitchAddOn folder copy only
 globs: ["ninjatrader/Glitch/AddOns/**", "ninjatrader/Glitch/Indicators/glitch/**"]
 alwaysApply: true
 ---
@@ -13,12 +13,14 @@ alwaysApply: true
 
 ## Deploy scope
 
-- Default deploy scope is AddOn plus Indicator only.
-- Do not include Strategies unless the user explicitly requests strategy deployment.
+- Live AddOn deploys are full-folder only.
+- Always copy the entire `D:\click-blue\trading\glitch-platform\ninjatrader\Glitch\AddOns\GlitchAddOn` tree to `C:\Users\alan\Documents\NinjaTrader 8\bin\Custom\AddOns\GlitchAddOn`.
+- Never cherry-pick individual AddOn files for live deploy.
+- Indicator and Strategy deploys still require explicit user request and separate intent confirmation.
 
 ## Workflow
 
 - Finish the patch in the workspace first.
 - Validate workspace files first.
-- Run the approved deploy script once with every file that should go live.
+- Run the approved deploy script once with the complete recursive `GlitchAddOn` file list.
 - Report the copy map in the handoff.

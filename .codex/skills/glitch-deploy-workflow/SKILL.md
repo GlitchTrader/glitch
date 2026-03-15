@@ -8,29 +8,33 @@ description: Deploy Glitch NinjaTrader workspace files safely. Use when AddOn or
 ## Overview
 
 Use this skill when NinjaTrader workspace edits need to go live. The deployment model is always workspace-first, validate-first, then one approved copy step.
+For AddOn deploys, live deployment is full-folder only: copy the entire `GlitchAddOn` workspace folder, never individual AddOn files.
 
 ## Guardrails
 
 - Source of truth: `D:\click-blue\trading\glitch-platform\ninjatrader\Glitch`
 - Never edit or patch `C:\Users\alan\Documents\NinjaTrader 8\bin\Custom` directly.
+- AddOn live deploys must copy the full `ninjatrader\Glitch\AddOns\GlitchAddOn` tree.
+- Do not cherry-pick AddOn files for live deploy.
 - Do not deploy Strategies unless the user explicitly requests strategy deployment.
 - Finish the patch first. Validate workspace files first. Deploy once at the end.
 
 ## Deployment Command
 
-Use the approved deploy script in one invocation with every file that should go live:
+Use the approved deploy script in one invocation with the full recursive `GlitchAddOn` file list:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -Command "& 'C:\Users\alan\.codex\skills\deploy-glitch-safely\scripts\deploy_glitch_files.ps1' -SourceFiles @(
-  'D:\click-blue\trading\glitch-platform\ninjatrader\Glitch\AddOns\GlitchAddOn\...',
-  'D:\click-blue\trading\glitch-platform\ninjatrader\Glitch\Indicators\glitch\...'
-)"
+@'
+$sourceRoot = 'D:\click-blue\trading\glitch-platform\ninjatrader\Glitch\AddOns\GlitchAddOn'
+$files = Get-ChildItem -Path $sourceRoot -Recurse -File | Select-Object -ExpandProperty FullName
+& 'C:\Users\alan\.codex\skills\deploy-glitch-safely\scripts\deploy_glitch_files.ps1' -SourceFiles $files
+'@ | powershell -ExecutionPolicy Bypass -Command -
 ```
 
 ## Workflow
 
 1. Validate the workspace patch.
-2. Identify the exact AddOn and Indicator files to copy.
+2. Build the full recursive `GlitchAddOn` file list from the workspace source.
 3. Run one deploy command.
 4. Report the source-to-destination copy map.
 
