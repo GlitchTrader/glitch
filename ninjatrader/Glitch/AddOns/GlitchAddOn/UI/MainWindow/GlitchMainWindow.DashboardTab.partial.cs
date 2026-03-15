@@ -58,12 +58,12 @@ namespace Glitch.UI
             var sectionHeader = new TextBlock
             {
                 Text = L("dashboard.connected_accounts", "Connected Accounts"),
-                FontWeight = FontWeights.Medium,
+                FontWeight = UiHeadingFontWeight,
                 Margin = new Thickness(0, 0, 0, 8),
                 VerticalAlignment = VerticalAlignment.Center
             };
             BindLocalizedText(sectionHeader, "dashboard.connected_accounts", "Connected Accounts");
-            ApplySkinResource(sectionHeader, TextBlock.ForegroundProperty, "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
+            ApplySkinResource(sectionHeader, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
             Grid.SetRow(sectionHeader, 0);
             root.Children.Add(sectionHeader);
 
@@ -286,5 +286,4 @@ namespace Glitch.UI
 
     }
 }
-
 

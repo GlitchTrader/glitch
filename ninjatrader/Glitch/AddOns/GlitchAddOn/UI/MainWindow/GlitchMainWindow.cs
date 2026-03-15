@@ -61,6 +61,10 @@ namespace Glitch.UI
     {
         private static readonly SolidColorBrush TealAccentBrush = new SolidColorBrush(Color.FromRgb(26, 188, 156));   // #1ABC9C
         private static readonly SolidColorBrush OrangeAccentBrush = new SolidColorBrush(Color.FromRgb(255, 66, 0));  // #FF4200
+        private static readonly FontWeight UiHeadingFontWeight = FontWeights.Medium;
+        private static readonly FontWeight UiActionFontWeight = FontWeights.Medium;
+        private static readonly FontWeight UiTabFontWeight = FontWeights.Medium;
+        private static readonly Brush UiPrimaryTextBrush = Brushes.White;
         private const string ReplicationSignalName = "GLT-SYNC";
         private const string ProtectiveStopSignalName = "GLT-PROT-STP";
         private const string ProtectiveTargetSignalName = "GLT-PROT-TGT";
@@ -553,7 +557,6 @@ namespace Glitch.UI
             var style = new Style(typeof(Button), baseStyle);
 
             ApplySkinSetter(style, Control.BackgroundProperty, context, "BackgroundTextInput", "BackgroundMainWindow", "GridEntireBackground");
-            ApplySkinSetter(style, Control.ForegroundProperty, context, "FontControlBrush", "FontTableBrush");
             ApplySkinSetter(style, Control.BorderBrushProperty, context, "BorderThinBrush", "TabControlBorderBrush");
 
             double? sharedFontSize = FindSkinDouble(context, "FontTableHeight", "FontControlHeight", "FontHeaderLevel4Height");
@@ -562,7 +565,8 @@ namespace Glitch.UI
 
             style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
             style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(14, 6, 14, 6)));
-            style.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.Medium));
+            style.Setters.Add(new Setter(Control.ForegroundProperty, UiPrimaryTextBrush));
+            style.Setters.Add(new Setter(Control.FontWeightProperty, UiActionFontWeight));
             style.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Center));
             style.Setters.Add(new Setter(Control.VerticalContentAlignmentProperty, VerticalAlignment.Center));
             style.Setters.Add(new Setter(Control.CursorProperty, System.Windows.Input.Cursors.Hand));
@@ -606,7 +610,6 @@ namespace Glitch.UI
             var style = new Style(typeof(Button), baseStyle);
 
             ApplySkinSetter(style, Control.BackgroundProperty, context, "BackgroundTextInput", "BackgroundMainWindow", "GridEntireBackground");
-            ApplySkinSetter(style, Control.ForegroundProperty, context, "FontControlBrush", "FontTableBrush");
             ApplySkinSetter(style, Control.BorderBrushProperty, context, "BorderThinBrush", "TabControlBorderBrush");
 
             double? sharedFontSize = FindSkinDouble(context, "FontTableHeight", "FontControlHeight", "FontHeaderLevel4Height");
@@ -615,7 +618,8 @@ namespace Glitch.UI
 
             style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
             style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(14, 6, 14, 6)));
-            style.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.Medium));
+            style.Setters.Add(new Setter(Control.ForegroundProperty, UiPrimaryTextBrush));
+            style.Setters.Add(new Setter(Control.FontWeightProperty, UiActionFontWeight));
             style.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Center));
             style.Setters.Add(new Setter(Control.VerticalContentAlignmentProperty, VerticalAlignment.Center));
             style.Setters.Add(new Setter(Control.CursorProperty, System.Windows.Input.Cursors.Hand));
@@ -636,7 +640,6 @@ namespace Glitch.UI
             var style = new Style(typeof(Button), baseStyle);
 
             ApplySkinSetter(style, Control.BackgroundProperty, context, "BackgroundMainWindow", "GridEntireBackground", "BackgroundTextInput");
-            ApplySkinSetter(style, Control.ForegroundProperty, context, "FontControlBrush", "FontTableBrush");
             ApplySkinSetter(style, Control.BorderBrushProperty, context, "BorderThinBrush", "TabControlBorderBrush");
 
             double? sharedFontSize = FindSkinDouble(context, "FontTableHeight", "FontControlHeight", "FontHeaderLevel4Height");
@@ -646,7 +649,8 @@ namespace Glitch.UI
             style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
             style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(10, 4, 10, 4)));
             style.Setters.Add(new Setter(Control.MinHeightProperty, 28d));
-            style.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.Medium));
+            style.Setters.Add(new Setter(Control.ForegroundProperty, UiPrimaryTextBrush));
+            style.Setters.Add(new Setter(Control.FontWeightProperty, UiActionFontWeight));
             style.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Center));
             style.Setters.Add(new Setter(Control.VerticalContentAlignmentProperty, VerticalAlignment.Center));
             style.Setters.Add(new Setter(Control.CursorProperty, System.Windows.Input.Cursors.Hand));
@@ -1189,11 +1193,23 @@ namespace Glitch.UI
             if (string.IsNullOrWhiteSpace(licenseKey))
             {
                 DateTime nowNoKey = DateTime.UtcNow;
-                _isClientUpdateAvailable = false;
-                _latestClientVersion = string.Empty;
-                _latestDownloadUrl = DefaultLatestDownloadUrl;
                 _licenseCacheState.LastCheckedUtc = nowNoKey;
                 ApplyFreeLitePolicyToCache("free_lite", "missing_license_key");
+                try
+                {
+                    string clientVersion = ResolveCurrentClientVersion();
+                    GlitchLicenseSnapshot updateSnapshot = await GlitchLicenseService.HeartbeatAsync(
+                        _runtimePolicySettings.LicenseApiBaseUrl,
+                        string.Empty,
+                        _runtimePolicySettings.InstallationId,
+                        _licenseDeviceFingerprintHash,
+                        clientVersion);
+                    ApplyClientUpdateStateFromSnapshot(updateSnapshot);
+                }
+                catch (Exception updateError)
+                {
+                    AppendJournal("System", "License", $"Update check failed without license key: {updateError.Message}");
+                }
                 GlitchRuntimePolicyStore.SaveLicenseCache(_licenseCacheFilePath, _licenseCacheState);
                 UpdateSettingsTabLicenseStatusText();
                 UpdateAnalyticsLicenseGateOverlay();
@@ -1485,10 +1501,10 @@ namespace Glitch.UI
                 var groupLabel = new TextBlock
                 {
                     Text = Lf("dashboard.group.master_label_format", "Group {0} | Master:", index),
-                    FontWeight = FontWeights.Medium,
+                    FontWeight = UiHeadingFontWeight,
                     VerticalAlignment = VerticalAlignment.Center
                 };
-                ApplySkinResource(groupLabel, TextBlock.ForegroundProperty, "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
+                ApplySkinResource(groupLabel, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
                 masterPanel.Children.Add(groupLabel);
 
                 var masterOptions = GetMasterOptionsForGroup(connectedAccounts, group.MasterAccount);
@@ -2600,24 +2616,18 @@ namespace Glitch.UI
         {
             var style = new Style(typeof(TabItem));
 
-            string windowBackgroundKey = FindSkinResourceKey(context, "BackgroundMainWindow", "GridEntireBackground");
-            string tabBackgroundKey = windowBackgroundKey ?? FindSkinResourceKey(context, "GridEntireBackground", "BackgroundMainWindow");
             string selectedBackgroundKey = FindSkinResourceKey(context, "BackgroundTextInput", "GridEntireBackground", "BackgroundMainWindow");
-            string hoverBackgroundKey = FindSkinResourceKey(context, "BackgroundTableHeader", "BackgroundTableHeaderVertical", "BackgroundTextInput", "GridEntireBackground");
-            string tabForegroundKey = FindSkinResourceKey(context, "FontControlBrush", "FontTableBrush", "GridRowForeground");
-
-            if (!string.IsNullOrWhiteSpace(tabBackgroundKey))
-                style.Setters.Add(new Setter(Control.BackgroundProperty, new DynamicResourceExtension(tabBackgroundKey)));
-            if (!string.IsNullOrWhiteSpace(tabForegroundKey))
-                style.Setters.Add(new Setter(Control.ForegroundProperty, new DynamicResourceExtension(tabForegroundKey)));
+            style.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
+            style.Setters.Add(new Setter(Control.ForegroundProperty, UiPrimaryTextBrush));
             style.Setters.Add(new Setter(Control.BorderBrushProperty, Brushes.Transparent));
 
             style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0, 0, 0, 2)));
             style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(14, 7, 14, 7)));
             style.Setters.Add(new Setter(FrameworkElement.MinHeightProperty, 30d));
-            style.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.Normal));
+            style.Setters.Add(new Setter(Control.FontWeightProperty, UiTabFontWeight));
             style.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
             style.Setters.Add(new Setter(Control.VerticalContentAlignmentProperty, VerticalAlignment.Stretch));
+            style.Setters.Add(new Setter(Control.CursorProperty, Cursors.Hand));
             style.Setters.Add(new Setter(UIElement.OpacityProperty, 1.0));
             style.Setters.Add(new Setter(Control.FocusVisualStyleProperty, null));
 
@@ -2660,19 +2670,11 @@ namespace Glitch.UI
             var selectedTrigger = new Trigger { Property = TabItem.IsSelectedProperty, Value = true };
             if (!string.IsNullOrWhiteSpace(selectedBackgroundKey))
                 selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, new DynamicResourceExtension(selectedBackgroundKey)));
-            if (!string.IsNullOrWhiteSpace(tabForegroundKey))
-                selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, new DynamicResourceExtension(tabForegroundKey)));
+            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, UiPrimaryTextBrush));
             selectedTrigger.Setters.Add(new Setter(Border.BackgroundProperty, OrangeAccentBrush, "TabBottomIndicator"));
-            selectedTrigger.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.Normal));
+            selectedTrigger.Setters.Add(new Setter(Control.FontWeightProperty, UiTabFontWeight));
             selectedTrigger.Setters.Add(new Setter(UIElement.OpacityProperty, 1.0));
             template.Triggers.Add(selectedTrigger);
-
-            var hoverTrigger = new MultiTrigger();
-            hoverTrigger.Conditions.Add(new Condition(UIElement.IsMouseOverProperty, true));
-            hoverTrigger.Conditions.Add(new Condition(TabItem.IsSelectedProperty, false));
-            if (!string.IsNullOrWhiteSpace(hoverBackgroundKey))
-                hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, new DynamicResourceExtension(hoverBackgroundKey)));
-            template.Triggers.Add(hoverTrigger);
 
             var disabledTrigger = new Trigger { Property = UIElement.IsEnabledProperty, Value = false };
             disabledTrigger.Setters.Add(new Setter(UIElement.OpacityProperty, 0.6));

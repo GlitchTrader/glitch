@@ -58,8 +58,15 @@ namespace Glitch.UI
         private const double AnalyticsComponentMaWeight = 0.30;
         private const double AnalyticsComponentOscWeight = 0.20;
         private const double AnalyticsComponentOrderFlowWeight = 0.15;
+        private const double AnalyticsLabelFontSize = 11.0;
+        private const double AnalyticsBodyFontSize = 11.0;
+        private const double AnalyticsValueFontSize = 12.0;
+        private const double AnalyticsProminentValueFontSize = 13.0;
         private const string WhopUpgradeCheckoutUrl = "https://whop.com/joined/glitchtrader/products/glitch-ninjatrader-addon/";
         private const string WhopMemberHubUrl = "https://whop.com/joined/glitchtrader/";
+        private static readonly FontWeight AnalyticsLabelFontWeight = FontWeights.Medium;
+        private static readonly FontWeight AnalyticsBodyFontWeight = FontWeights.Normal;
+        private static readonly FontWeight AnalyticsValueFontWeight = FontWeights.SemiBold;
         private static readonly Brush AnalyticsDialSellStrongBrush = CreateFrozenAnalyticsDialBrush(0xFF, 0x42, 0x00);
         private static readonly Brush AnalyticsDialSellMidBrush = CreateFrozenAnalyticsDialBrush(0xFF, 0x7A, 0x26);
         private static readonly Brush AnalyticsDialSellWeakBrush = CreateFrozenAnalyticsDialBrush(0xD6, 0x8A, 0x55);
@@ -125,8 +132,9 @@ namespace Glitch.UI
                 Text = L("analytics.instrument", "Instrument"),
                 Margin = new Thickness(0, 0, 0, 4)
             };
+            ApplyAnalyticsLabelTypography(instrumentLabel);
             BindLocalizedText(instrumentLabel, "analytics.instrument", "Instrument");
-            ApplySkinResource(instrumentLabel, TextBlock.ForegroundProperty, "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
+            ApplySkinResource(instrumentLabel, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
             instrumentStack.Children.Add(instrumentLabel);
 
             _analyticsInstrumentCombo = new ComboBox
@@ -268,6 +276,33 @@ namespace Glitch.UI
 
             RefreshAnalyticsDashboard(GetActiveAccountsSnapshot());
             return root;
+        }
+
+        private static void ApplyAnalyticsLabelTypography(TextBlock textBlock)
+        {
+            if (textBlock == null)
+                return;
+
+            textBlock.FontSize = AnalyticsLabelFontSize;
+            textBlock.FontWeight = AnalyticsLabelFontWeight;
+        }
+
+        private static void ApplyAnalyticsBodyTypography(TextBlock textBlock)
+        {
+            if (textBlock == null)
+                return;
+
+            textBlock.FontSize = AnalyticsBodyFontSize;
+            textBlock.FontWeight = AnalyticsBodyFontWeight;
+        }
+
+        private static void ApplyAnalyticsValueTypography(TextBlock textBlock, bool prominent = false)
+        {
+            if (textBlock == null)
+                return;
+
+            textBlock.FontSize = prominent ? AnalyticsProminentValueFontSize : AnalyticsValueFontSize;
+            textBlock.FontWeight = AnalyticsValueFontWeight;
         }
 
 
@@ -691,12 +726,11 @@ namespace Glitch.UI
                     };
                     var executionTfLabel = new TextBlock
                     {
-                        Text = L("analytics.unified.execution_tf", "Execution TF"),
-                        FontSize = 10,
-                        FontWeight = FontWeights.Medium
+                        Text = L("analytics.unified.execution_tf", "Execution TF")
                     };
+                    ApplyAnalyticsLabelTypography(executionTfLabel);
                     BindLocalizedText(executionTfLabel, "analytics.unified.execution_tf", "Execution TF");
-                    ApplySkinResource(executionTfLabel, TextBlock.ForegroundProperty, "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
+                    ApplySkinResource(executionTfLabel, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
                     executionTfCell.Children.Add(executionTfLabel);
 
                     _analyticsUnifiedExecutionTfCombo = new ComboBox
@@ -761,22 +795,20 @@ namespace Glitch.UI
 
                     var labelText = new TextBlock
                     {
-                        Text = L(labelKey, labelFallback),
-                        FontSize = 10,
-                        FontWeight = FontWeights.Medium
+                        Text = L(labelKey, labelFallback)
                     };
+                    ApplyAnalyticsLabelTypography(labelText);
                     BindLocalizedText(labelText, labelKey, labelFallback);
-                    ApplySkinResource(labelText, TextBlock.ForegroundProperty, "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
+                    ApplySkinResource(labelText, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
                     stack.Children.Add(labelText);
 
                     valueText = new TextBlock
                     {
                         Text = valueFallback,
-                        FontSize = 13,
-                        FontWeight = FontWeights.SemiBold,
                         Margin = new Thickness(0, 2, 0, 0),
                         TextWrapping = TextWrapping.Wrap
                     };
+                    ApplyAnalyticsValueTypography(valueText, prominent: true);
                     ApplySkinResource(valueText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
                     stack.Children.Add(valueText);
 
@@ -935,14 +967,16 @@ namespace Glitch.UI
                     };
         
                     AddAnalyticsDialBands(dialCanvas);
-        
+
+                    Brush dialNeedleBrush = ResolveAnalyticsDialNeedleBrush();
+
                     var needle = new System.Windows.Shapes.Line
                     {
                         X1 = 80,
                         Y1 = 72,
                         X2 = 80,
                         Y2 = 26,
-                        Stroke = Brushes.White,
+                        Stroke = dialNeedleBrush,
                         StrokeThickness = 2
                     };
                     var needleRotation = new RotateTransform(0, 80, 72);
@@ -953,7 +987,7 @@ namespace Glitch.UI
                     {
                         Width = 6,
                         Height = 6,
-                        Fill = Brushes.White
+                        Fill = dialNeedleBrush
                     };
                     Canvas.SetLeft(hub, 77);
                     Canvas.SetTop(hub, 69);
@@ -1124,14 +1158,16 @@ namespace Glitch.UI
                     };
         
                     AddAnalyticsDialBands(dialCanvas);
-        
+
+                    Brush dialNeedleBrush = ResolveAnalyticsDialNeedleBrush();
+
                     var needle = new System.Windows.Shapes.Line
                     {
                         X1 = 80,
                         Y1 = 72,
                         X2 = 80,
                         Y2 = 26,
-                        Stroke = Brushes.White,
+                        Stroke = dialNeedleBrush,
                         StrokeThickness = 2
                     };
                     var needleRotation = new RotateTransform(0, 80, 72);
@@ -1142,7 +1178,7 @@ namespace Glitch.UI
                     {
                         Width = 6,
                         Height = 6,
-                        Fill = Brushes.White
+                        Fill = dialNeedleBrush
                     };
                     Canvas.SetLeft(hub, 77);
                     Canvas.SetTop(hub, 69);
@@ -1546,19 +1582,19 @@ namespace Glitch.UI
                     var titleText = new TextBlock
                     {
                         Text = L(titleKey, titleFallback),
-                        FontWeight = FontWeights.Medium,
                         Margin = new Thickness(0, 0, 0, 4)
                     };
+                    ApplyAnalyticsLabelTypography(titleText);
                     BindLocalizedText(titleText, titleKey, titleFallback);
-                    ApplySkinResource(titleText, TextBlock.ForegroundProperty, "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
+                    ApplySkinResource(titleText, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
                     stack.Children.Add(titleText);
-        
+
                     valueText = new TextBlock
                     {
                         Text = "-",
-                        TextWrapping = TextWrapping.Wrap,
-                        FontSize = 11
+                        TextWrapping = TextWrapping.Wrap
                     };
+                    ApplyAnalyticsBodyTypography(valueText);
                     ApplySkinResource(valueText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
                     stack.Children.Add(valueText);
         
@@ -1574,11 +1610,11 @@ namespace Glitch.UI
                     var titleText = new TextBlock
                     {
                         Text = L(titleKey, titleFallback),
-                        FontWeight = FontWeights.Medium,
                         Margin = new Thickness(0, 0, 0, 4)
                     };
+                    ApplyAnalyticsLabelTypography(titleText);
                     BindLocalizedText(titleText, titleKey, titleFallback);
-                    ApplySkinResource(titleText, TextBlock.ForegroundProperty, "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
+                    ApplySkinResource(titleText, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
                     stack.Children.Add(titleText);
         
                     listBox = new ListBox
@@ -1618,11 +1654,11 @@ namespace Glitch.UI
                     titleText = new TextBlock
                     {
                         Text = L("analytics.block.instrument_overview", "Instrument Overview"),
-                        FontWeight = FontWeights.Medium,
                         Margin = new Thickness(0, 0, 0, 4)
                     };
+                    ApplyAnalyticsLabelTypography(titleText);
                     BindLocalizedText(titleText, "analytics.block.instrument_overview", "Instrument Overview");
-                    ApplySkinResource(titleText, TextBlock.ForegroundProperty, "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
+                    ApplySkinResource(titleText, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
                     stack.Children.Add(titleText);
         
                     itemsHost = new StackPanel
@@ -1677,20 +1713,18 @@ namespace Glitch.UI
                     var titleText = new TextBlock
                     {
                         Text = L(titleKey, titleFallback),
-                        FontSize = 11,
-                        FontWeight = FontWeights.Bold,
                         Margin = new Thickness(0, 0, 0, 3)
                     };
+                    ApplyAnalyticsLabelTypography(titleText);
                     BindLocalizedText(titleText, titleKey, titleFallback);
-                    ApplySkinResource(titleText, TextBlock.ForegroundProperty, "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
+                    ApplySkinResource(titleText, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
                     stack.Children.Add(titleText);
-        
+
                     valueText = new TextBlock
                     {
-                        Text = "-",
-                        FontSize = 16,
-                        FontWeight = FontWeights.Bold
+                        Text = "-"
                     };
+                    ApplyAnalyticsValueTypography(valueText, prominent: true);
                     ApplySkinResource(valueText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush", "GridRowForeground");
                     stack.Children.Add(valueText);
         
@@ -1714,10 +1748,10 @@ namespace Glitch.UI
                         Text = L("analytics.session_range.low", "Session Low") + Environment.NewLine + "-",
                         Margin = new Thickness(0, 0, 6, 0),
                         VerticalAlignment = VerticalAlignment.Center,
-                        FontSize = 10,
                         TextAlignment = TextAlignment.Left,
                         MinWidth = 42
                     };
+                    ApplyAnalyticsLabelTypography(_analyticsSessionRangeLowLabel);
                     ApplySkinResource(_analyticsSessionRangeLowLabel, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
                     host.Children.Add(_analyticsSessionRangeLowLabel);
         
@@ -1737,10 +1771,10 @@ namespace Glitch.UI
                         Text = L("analytics.session_range.high", "Session High") + Environment.NewLine + "-",
                         Margin = new Thickness(6, 0, 0, 0),
                         VerticalAlignment = VerticalAlignment.Center,
-                        FontSize = 10,
                         TextAlignment = TextAlignment.Right,
                         MinWidth = 42
                     };
+                    ApplyAnalyticsLabelTypography(_analyticsSessionRangeHighLabel);
                     ApplySkinResource(_analyticsSessionRangeHighLabel, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
                     Grid.SetColumn(_analyticsSessionRangeHighLabel, 2);
                     host.Children.Add(_analyticsSessionRangeHighLabel);
@@ -1772,18 +1806,18 @@ namespace Glitch.UI
                     _analyticsSessionRangeAvgText = new TextBlock
                     {
                         Text = L("analytics.session_range.avg", "Avg") + " -",
-                        FontSize = 10,
                         TextWrapping = TextWrapping.NoWrap
                     };
+                    ApplyAnalyticsLabelTypography(_analyticsSessionRangeAvgText);
                     ApplySkinResource(_analyticsSessionRangeAvgText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
                     _analyticsSessionRangeCanvas.Children.Add(_analyticsSessionRangeAvgText);
-        
+
                     _analyticsSessionRangeCurrentText = new TextBlock
                     {
                         Text = L("analytics.session_range.current", "Current") + " -",
-                        FontSize = 10,
                         TextWrapping = TextWrapping.NoWrap
                     };
+                    ApplyAnalyticsLabelTypography(_analyticsSessionRangeCurrentText);
                     ApplySkinResource(_analyticsSessionRangeCurrentText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
                     _analyticsSessionRangeCanvas.Children.Add(_analyticsSessionRangeCurrentText);
         
@@ -2115,9 +2149,9 @@ namespace Glitch.UI
                         var fallback = new TextBlock
                         {
                             Text = string.IsNullOrWhiteSpace(fallbackText) ? "-" : fallbackText,
-                            TextWrapping = TextWrapping.Wrap,
-                            FontSize = 11
+                            TextWrapping = TextWrapping.Wrap
                         };
+                        ApplyAnalyticsBodyTypography(fallback);
                         ApplySkinResource(fallback, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
                         _analyticsMag7ItemsHost.Children.Add(fallback);
                             return;
@@ -2126,8 +2160,8 @@ namespace Glitch.UI
                     Brush defaultBrush = ResolveSkinBrush(
                         "FontControlBrush",
                         "FontTableBrush") ?? Brushes.White;
-                    const double headingFontSize = 11.0;
-                    const double detailFontSize = 10.0;
+                    const double headingFontSize = AnalyticsLabelFontSize;
+                    const double detailFontSize = AnalyticsBodyFontSize;
                     bool firstItem = true;
         
                     for (int i = 0; i < nonEmptyLines.Count; i++)
@@ -2161,7 +2195,7 @@ namespace Glitch.UI
                             heading,
                             headingLine,
                             headingFontSize,
-                            FontWeights.Medium,
+                            AnalyticsLabelFontWeight,
                             defaultBrush);
                         itemHost.Children.Add(heading);
         
@@ -2174,7 +2208,7 @@ namespace Glitch.UI
                             detail,
                             string.IsNullOrWhiteSpace(detailLine) ? "-" : detailLine,
                             detailFontSize,
-                            FontWeights.Normal,
+                            AnalyticsBodyFontWeight,
                             defaultBrush);
                         itemHost.Children.Add(detail);
         
@@ -2187,9 +2221,9 @@ namespace Glitch.UI
                         var fallback = new TextBlock
                         {
                             Text = string.IsNullOrWhiteSpace(fallbackText) ? "-" : fallbackText,
-                            TextWrapping = TextWrapping.Wrap,
-                            FontSize = 11
+                            TextWrapping = TextWrapping.Wrap
                         };
+                        ApplyAnalyticsBodyTypography(fallback);
                         ApplySkinResource(fallback, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
                         _analyticsMag7ItemsHost.Children.Add(fallback);
                     }
@@ -2276,6 +2310,38 @@ namespace Glitch.UI
                     }
         
                     return null;
+                }
+
+                private Brush ResolveAnalyticsDialNeedleBrush()
+                {
+                    Brush background = ResolveSkinBrush("BackgroundMainWindow", "GridEntireBackground", "BackgroundTextInput");
+                    if (TryResolveBrushColor(background, out Color color))
+                    {
+                        double luminance = ((0.2126 * color.R) + (0.7152 * color.G) + (0.0722 * color.B)) / 255.0;
+                        return luminance >= 0.57 ? Brushes.Black : Brushes.White;
+                    }
+
+                    return Brushes.White;
+                }
+
+                private static bool TryResolveBrushColor(Brush brush, out Color color)
+                {
+                    if (brush is SolidColorBrush solidBrush)
+                    {
+                        color = solidBrush.Color;
+                        return true;
+                    }
+
+                    if (brush is GradientBrush gradientBrush &&
+                        gradientBrush.GradientStops != null &&
+                        gradientBrush.GradientStops.Count > 0)
+                    {
+                        color = gradientBrush.GradientStops[0].Color;
+                        return true;
+                    }
+
+                    color = Colors.Transparent;
+                    return false;
                 }
         
                 private static Brush ResolveSignedScoreBrush(double score, Brush defaultBrush)
@@ -3903,12 +3969,13 @@ namespace Glitch.UI
                     host.Inlines.Add(new Run((caption ?? "-") + Environment.NewLine)
                     {
                         Foreground = defaultBrush,
+                        FontWeight = AnalyticsLabelFontWeight,
                         FontSize = host.FontSize > 0 ? host.FontSize : 10
                     });
                     host.Inlines.Add(new Run(string.IsNullOrWhiteSpace(valueText) ? "-" : valueText)
                     {
                         Foreground = valueBrush ?? defaultBrush,
-                        FontWeight = FontWeights.SemiBold,
+                        FontWeight = AnalyticsValueFontWeight,
                         FontSize = host.FontSize > 0 ? host.FontSize : 10
                     });
                 }

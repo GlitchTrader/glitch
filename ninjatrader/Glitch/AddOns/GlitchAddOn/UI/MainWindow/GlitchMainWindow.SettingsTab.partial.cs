@@ -18,11 +18,26 @@ namespace Glitch.UI
         private TextBox _settingsLicenseKeyTextBox;
         private Border _settingsPlanBadgeBorder;
         private TextBlock _settingsPlanBadgeText;
+        private TextBlock _settingsUpdateBadgeText;
         private Button _settingsSaveButton;
         private bool _settingsSaveFeedbackActive;
         private bool _settingsLicensePlaceholderActive;
         private bool _settingsLicenseMaskedDisplayActive;
         private string _settingsLicenseKeyUnmaskedValue;
+
+        private double ResolveSettingsBodyFontSize()
+        {
+            FrameworkElement skinContext = (FrameworkElement)_settingsRootGrid ?? _settingsPlanBadgeText;
+            double? skinFontSize = FindSkinDouble(skinContext, "FontControlHeight", "FontTableHeight", "FontHeaderLevel4Height");
+            return skinFontSize.HasValue && skinFontSize.Value > 0 ? skinFontSize.Value : 12d;
+        }
+
+        private double ResolveSettingsHeadingFontSize()
+        {
+            FrameworkElement skinContext = (FrameworkElement)_settingsRootGrid ?? _settingsPlanBadgeText;
+            double? skinFontSize = FindSkinDouble(skinContext, "FontHeaderLevel4Height", "FontControlHeight", "FontTableHeight");
+            return skinFontSize.HasValue && skinFontSize.Value > 0 ? skinFontSize.Value : ResolveSettingsBodyFontSize();
+        }
 
         private UIElement CreateSettingsTabImpl()
         {
@@ -74,14 +89,15 @@ namespace Glitch.UI
             {
                 Margin = new Thickness(0),
                 VerticalAlignment = VerticalAlignment.Center,
-                FontWeight = FontWeights.SemiBold
+                FontWeight = UiHeadingFontWeight,
+                FontSize = ResolveSettingsBodyFontSize()
             };
-            ApplySkinResource(_settingsPlanBadgeText, TextBlock.ForegroundProperty, "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
+            ApplySkinResource(_settingsPlanBadgeText, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
             _settingsPlanBadgeBorder = new Border
             {
                 CornerRadius = new CornerRadius(0),
                 Padding = new Thickness(0),
-                Margin = new Thickness(0, 8, 0, 0),
+                Margin = new Thickness(0, 10, 0, 8),
                 BorderThickness = new Thickness(0),
                 Child = _settingsPlanBadgeText
             };
@@ -95,12 +111,20 @@ namespace Glitch.UI
             Grid.SetRow(licensingPanel, 1);
             root.Children.Add(licensingPanel);
 
+            var actionHost = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 14, 0, 0)
+            };
+
             var actionRow = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, 14, 0, 0)
+                Margin = new Thickness(0)
             };
 
             _settingsSaveButton = new Button
@@ -110,6 +134,7 @@ namespace Glitch.UI
                 Padding = new Thickness(10, 3, 10, 3),
                 MinHeight = 28,
                 MinWidth = 118,
+                FontSize = ResolveSettingsBodyFontSize(),
                 VerticalAlignment = VerticalAlignment.Top,
                 Style = CreateSettingsActionButtonStyle(root)
             };
@@ -117,8 +142,21 @@ namespace Glitch.UI
             _settingsSaveButton.Click += OnSettingsSaveClick;
             actionRow.Children.Add(_settingsSaveButton);
 
-            Grid.SetRow(actionRow, 2);
-            root.Children.Add(actionRow);
+            _settingsUpdateBadgeText = new TextBlock
+            {
+                Margin = new Thickness(0, 14, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                FontWeight = UiHeadingFontWeight,
+                FontSize = ResolveSettingsBodyFontSize(),
+                Visibility = Visibility.Collapsed
+            };
+            ApplySkinResource(_settingsUpdateBadgeText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
+
+            actionHost.Children.Add(actionRow);
+            actionHost.Children.Add(_settingsUpdateBadgeText);
+
+            Grid.SetRow(actionHost, 2);
+            root.Children.Add(actionHost);
 
             UpdateSettingsControlsFromRuntimePolicy();
             UpdateSettingsTabLicenseStatusText();
@@ -130,11 +168,12 @@ namespace Glitch.UI
             var header = new TextBlock
             {
                 Text = L(key, fallback),
-                FontWeight = FontWeights.SemiBold,
+                FontWeight = UiHeadingFontWeight,
+                FontSize = ResolveSettingsHeadingFontSize(),
                 Margin = new Thickness(0, 0, 0, 6)
             };
             RegisterLocalizationBinding(() => header.Text = L(key, fallback));
-            ApplySkinResource(header, TextBlock.ForegroundProperty, "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
+            ApplySkinResource(header, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
             return header;
         }
 
@@ -143,6 +182,8 @@ namespace Glitch.UI
             var label = new TextBlock
             {
                 Text = L(key, fallback),
+                FontWeight = UiHeadingFontWeight,
+                FontSize = ResolveSettingsHeadingFontSize(),
                 Margin = new Thickness(0, 6, 0, 2)
             };
             RegisterLocalizationBinding(() => label.Text = L(key, fallback));
@@ -171,11 +212,12 @@ namespace Glitch.UI
             var style = new Style(typeof(Button), baseStyle);
 
             ApplySkinSetter(style, Control.BackgroundProperty, context, "BackgroundMainWindow", "GridEntireBackground", "BackgroundTextInput");
-            ApplySkinSetter(style, Control.ForegroundProperty, context, "FontControlBrush", "FontTableBrush");
             ApplySkinSetter(style, Control.BorderBrushProperty, context, "BorderThinBrush", "TabControlBorderBrush");
             style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
             style.Setters.Add(new Setter(Control.FocusVisualStyleProperty, null));
             style.Setters.Add(new Setter(Control.CursorProperty, System.Windows.Input.Cursors.Hand));
+            style.Setters.Add(new Setter(Control.ForegroundProperty, UiPrimaryTextBrush));
+            style.Setters.Add(new Setter(Control.FontWeightProperty, UiActionFontWeight));
             style.Setters.Add(new Setter(Control.TemplateProperty, CreateActionButtonTemplate()));
             double? sharedFontSize = FindSkinDouble(context, "FontTableHeight", "FontControlHeight", "FontHeaderLevel4Height");
             if (sharedFontSize.HasValue)
@@ -277,6 +319,7 @@ namespace Glitch.UI
                 Content = L(key, fallback),
                 Margin = new Thickness(0),
                 FontWeight = FontWeights.Medium,
+                FontSize = ResolveSettingsBodyFontSize(),
                 Style = CreateSettingsPolicyCheckBoxStyle(_settingsRootGrid)
             };
             RegisterLocalizationBinding(() => checkBox.Content = L(key, fallback));
@@ -293,6 +336,7 @@ namespace Glitch.UI
                 MinWidth = 420,
                 Padding = new Thickness(8, 5, 8, 5),
                 BorderThickness = new Thickness(1),
+                FontSize = ResolveSettingsBodyFontSize(),
                 ToolTip = L(key, fallback),
                 Style = CreateSettingsLicenseTextBoxStyle(_settingsRootGrid)
             };
@@ -595,19 +639,23 @@ namespace Glitch.UI
                 : _latestDownloadUrl.Trim();
 
             FrameworkElement skinContext = (FrameworkElement)_settingsRootGrid ?? _settingsPlanBadgeText;
-            Brush baseTextBrush = FindSkinBrush(skinContext, "FontControlBrush", "FontTableBrush") ?? Brushes.White;
+            Brush baseTextBrush = UiPrimaryTextBrush;
             double sharedFontSize = _settingsPlanBadgeText.FontSize;
             if (sharedFontSize <= 0)
             {
-                double? skinFontSize = FindSkinDouble(skinContext, "FontControlHeight", "FontTableHeight", "FontHeaderLevel4Height");
-                sharedFontSize = skinFontSize.HasValue && skinFontSize.Value > 0 ? skinFontSize.Value : 12d;
+                sharedFontSize = ResolveSettingsBodyFontSize();
             }
 
             _settingsPlanBadgeText.Inlines.Clear();
+            if (_settingsUpdateBadgeText != null)
+            {
+                _settingsUpdateBadgeText.Inlines.Clear();
+                _settingsUpdateBadgeText.Visibility = Visibility.Collapsed;
+            }
             _settingsPlanBadgeText.Inlines.Add(new Run(L("settings.license.active_prefix", "Active License: "))
             {
                 Foreground = baseTextBrush,
-                FontWeight = FontWeights.SemiBold,
+                FontWeight = UiHeadingFontWeight,
                 FontSize = sharedFontSize
             });
 
@@ -616,7 +664,7 @@ namespace Glitch.UI
                 _settingsPlanBadgeText.Inlines.Add(new Run(L("settings.license.plan_pro", "Pro"))
                 {
                     Foreground = OrangeAccentBrush,
-                    FontWeight = FontWeights.SemiBold,
+                    FontWeight = UiHeadingFontWeight,
                     FontSize = sharedFontSize
                 });
             }
@@ -625,7 +673,7 @@ namespace Glitch.UI
                 _settingsPlanBadgeText.Inlines.Add(new Run(L("settings.license.plan_lite", "Lite"))
                 {
                     Foreground = TealAccentBrush,
-                    FontWeight = FontWeights.SemiBold,
+                    FontWeight = UiHeadingFontWeight,
                     FontSize = sharedFontSize
                 });
                 _settingsPlanBadgeText.Inlines.Add(new Run(" - ")
@@ -637,7 +685,7 @@ namespace Glitch.UI
                 var upgradeLink = new Hyperlink(new Run(L("settings.license.upgrade_to_pro", "Upgrade to Pro")))
                 {
                     Foreground = OrangeAccentBrush,
-                    FontWeight = FontWeights.SemiBold,
+                    FontWeight = UiHeadingFontWeight,
                     FontSize = sharedFontSize,
                     TextDecorations = null
                 };
@@ -648,34 +696,38 @@ namespace Glitch.UI
             if (!hasClientUpdate)
                 return;
 
-            _settingsPlanBadgeText.Inlines.Add(new Run(Environment.NewLine));
-            _settingsPlanBadgeText.Inlines.Add(new Run(L("settings.update.available_prefix", "Update available: "))
+            if (_settingsUpdateBadgeText == null)
+                return;
+
+            _settingsUpdateBadgeText.Inlines.Clear();
+            _settingsUpdateBadgeText.Visibility = Visibility.Visible;
+            _settingsUpdateBadgeText.Inlines.Add(new Run(L("settings.update.available_prefix", "Update Available v. "))
             {
-                Foreground = OrangeAccentBrush,
-                FontWeight = FontWeights.SemiBold,
+                Foreground = baseTextBrush,
+                FontWeight = UiHeadingFontWeight,
                 FontSize = sharedFontSize
             });
-            _settingsPlanBadgeText.Inlines.Add(new Run(_latestClientVersion.Trim())
+            _settingsUpdateBadgeText.Inlines.Add(new Run(_latestClientVersion.Trim())
             {
-                Foreground = OrangeAccentBrush,
-                FontWeight = FontWeights.SemiBold,
+                Foreground = baseTextBrush,
+                FontWeight = UiHeadingFontWeight,
                 FontSize = sharedFontSize
             });
-            _settingsPlanBadgeText.Inlines.Add(new Run(" - ")
+            _settingsUpdateBadgeText.Inlines.Add(new Run(" - ")
             {
                 Foreground = baseTextBrush,
                 FontSize = sharedFontSize
             });
 
-            var downloadLink = new Hyperlink(new Run(L("settings.update.download_latest", "Download latest")))
+            var downloadLink = new Hyperlink(new Run(L("settings.update.download_latest", "Download Latest")))
             {
                 Foreground = TealAccentBrush,
-                FontWeight = FontWeights.SemiBold,
+                FontWeight = UiHeadingFontWeight,
                 FontSize = sharedFontSize,
                 TextDecorations = null
             };
             downloadLink.Click += (_, __) => OpenAnalyticsExternalUrl(updateDownloadUrl);
-            _settingsPlanBadgeText.Inlines.Add(downloadLink);
+            _settingsUpdateBadgeText.Inlines.Add(downloadLink);
         }
     }
 }

@@ -44,6 +44,8 @@ namespace Glitch.UI
     internal sealed class GlitchTradingViewMacroWindow : NTWindow
     {
         private static readonly System.Windows.Media.SolidColorBrush ActiveTabOrangeBrush = CreateFrozenSolidBrush(0xFF, 0x42, 0x00);
+        private static readonly FontWeight UiTabFontWeight = FontWeights.Medium;
+        private static readonly System.Windows.Media.Brush UiPrimaryTextBrush = System.Windows.Media.Brushes.White;
         private bool _isDarkTheme;
         private readonly List<DeferredBrowserTab> _deferredTabs = new List<DeferredBrowserTab>();
         private BrowserHost _tickerBrowser;
@@ -810,24 +812,18 @@ namespace Glitch.UI
         {
             var style = new Style(typeof(TabItem));
 
-            string windowBackgroundKey = FindSkinResourceKey(context, "BackgroundMainWindow", "GridEntireBackground");
-            string tabBackgroundKey = windowBackgroundKey ?? FindSkinResourceKey(context, "GridEntireBackground", "BackgroundMainWindow");
             string selectedBackgroundKey = FindSkinResourceKey(context, "BackgroundTextInput", "GridEntireBackground", "BackgroundMainWindow");
-            string hoverBackgroundKey = FindSkinResourceKey(context, "BackgroundTableHeader", "BackgroundTableHeaderVertical", "BackgroundTextInput", "GridEntireBackground");
-            string tabForegroundKey = FindSkinResourceKey(context, "FontControlBrush", "FontTableBrush", "GridRowForeground");
-
-            if (!string.IsNullOrWhiteSpace(tabBackgroundKey))
-                style.Setters.Add(new Setter(Control.BackgroundProperty, new DynamicResourceExtension(tabBackgroundKey)));
-            if (!string.IsNullOrWhiteSpace(tabForegroundKey))
-                style.Setters.Add(new Setter(Control.ForegroundProperty, new DynamicResourceExtension(tabForegroundKey)));
+            style.Setters.Add(new Setter(Control.BackgroundProperty, System.Windows.Media.Brushes.Transparent));
+            style.Setters.Add(new Setter(Control.ForegroundProperty, UiPrimaryTextBrush));
             style.Setters.Add(new Setter(Control.BorderBrushProperty, System.Windows.Media.Brushes.Transparent));
 
             style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0, 0, 0, 2)));
             style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(14, 7, 14, 7)));
             style.Setters.Add(new Setter(FrameworkElement.MinHeightProperty, 30d));
-            style.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.Normal));
+            style.Setters.Add(new Setter(Control.FontWeightProperty, UiTabFontWeight));
             style.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
             style.Setters.Add(new Setter(Control.VerticalContentAlignmentProperty, VerticalAlignment.Stretch));
+            style.Setters.Add(new Setter(Control.CursorProperty, System.Windows.Input.Cursors.Hand));
             style.Setters.Add(new Setter(UIElement.OpacityProperty, 1.0));
             style.Setters.Add(new Setter(Control.FocusVisualStyleProperty, null));
 
@@ -870,19 +866,11 @@ namespace Glitch.UI
             var selectedTrigger = new Trigger { Property = TabItem.IsSelectedProperty, Value = true };
             if (!string.IsNullOrWhiteSpace(selectedBackgroundKey))
                 selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, new DynamicResourceExtension(selectedBackgroundKey)));
-            if (!string.IsNullOrWhiteSpace(tabForegroundKey))
-                selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, new DynamicResourceExtension(tabForegroundKey)));
+            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, UiPrimaryTextBrush));
             selectedTrigger.Setters.Add(new Setter(Border.BackgroundProperty, ActiveTabOrangeBrush, "TabBottomIndicator"));
-            selectedTrigger.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.Normal));
+            selectedTrigger.Setters.Add(new Setter(Control.FontWeightProperty, UiTabFontWeight));
             selectedTrigger.Setters.Add(new Setter(UIElement.OpacityProperty, 1.0));
             template.Triggers.Add(selectedTrigger);
-
-            var hoverTrigger = new MultiTrigger();
-            hoverTrigger.Conditions.Add(new Condition(UIElement.IsMouseOverProperty, true));
-            hoverTrigger.Conditions.Add(new Condition(TabItem.IsSelectedProperty, false));
-            if (!string.IsNullOrWhiteSpace(hoverBackgroundKey))
-                hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, new DynamicResourceExtension(hoverBackgroundKey)));
-            template.Triggers.Add(hoverTrigger);
 
             var disabledTrigger = new Trigger { Property = UIElement.IsEnabledProperty, Value = false };
             disabledTrigger.Setters.Add(new Setter(UIElement.OpacityProperty, 0.6));

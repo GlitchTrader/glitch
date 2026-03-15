@@ -70,10 +70,10 @@ namespace Glitch.UI
             var title = new TextBlock
             {
                 Text = L("journal.title", "Journal"),
-                FontWeight = FontWeights.SemiBold
+                FontWeight = UiHeadingFontWeight
             };
             BindLocalizedText(title, "journal.title", "Journal");
-            ApplySkinResource(title, TextBlock.ForegroundProperty, "FontHeaderLevel3Brush", "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
+            ApplySkinResource(title, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel3Brush", "FontHeaderLevel4Brush", "FontTableBrush");
             header.Children.Add(title);
 
             _summaryAsOfText = new TextBlock
@@ -131,11 +131,11 @@ namespace Glitch.UI
             var metricsHeader = new TextBlock
             {
                 Text = L("journal.trader_performance", "Trader Performance"),
-                FontWeight = FontWeights.Medium,
+                FontWeight = UiHeadingFontWeight,
                 Margin = new Thickness(0, 0, 0, 8)
             };
             BindLocalizedText(metricsHeader, "journal.trader_performance", "Trader Performance");
-            ApplySkinResource(metricsHeader, TextBlock.ForegroundProperty, "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
+            ApplySkinResource(metricsHeader, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
             Grid.SetRow(metricsHeader, 0);
             metricsPanel.Children.Add(metricsHeader);
 
@@ -151,11 +151,11 @@ namespace Glitch.UI
             var warningsHeader = new TextBlock
             {
                 Text = L("journal.critical_warnings", "Critical Warnings"),
-                FontWeight = FontWeights.Medium,
+                FontWeight = UiHeadingFontWeight,
                 VerticalAlignment = VerticalAlignment.Center
             };
             BindLocalizedText(warningsHeader, "journal.critical_warnings", "Critical Warnings");
-            ApplySkinResource(warningsHeader, TextBlock.ForegroundProperty, "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
+            ApplySkinResource(warningsHeader, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
             warningsHeaderRow.Children.Add(warningsHeader);
             _journalWarningsHeaderText = warningsHeader;
             _journalWarningsHeaderRow = warningsHeaderRow;
@@ -179,11 +179,11 @@ namespace Glitch.UI
             var tradeFeedHeader = new TextBlock
             {
                 Text = L("journal.trade_feed", "Live Feed"),
-                FontWeight = FontWeights.Medium,
+                FontWeight = UiHeadingFontWeight,
                 Margin = new Thickness(0, 0, 0, 8)
             };
             BindLocalizedText(tradeFeedHeader, "journal.trade_feed", "Live Feed");
-            ApplySkinResource(tradeFeedHeader, TextBlock.ForegroundProperty, "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
+            ApplySkinResource(tradeFeedHeader, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
             Grid.SetRow(tradeFeedHeader, 3);
             root.Children.Add(tradeFeedHeader);
 
