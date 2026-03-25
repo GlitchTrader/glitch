@@ -1,4 +1,4 @@
-﻿# Installation Guide & Troubleshooting
+# Installation Guide & Troubleshooting
 
 This guide covers the standard Glitch setup flow for NinjaTrader 8, from install through license activation, chart setup, replication controls, and troubleshooting.
 
@@ -8,7 +8,7 @@ This guide covers the standard Glitch setup flow for NinjaTrader 8, from install
 
 1. [Installation and Import](#1-installation-and-import)
 2. [License Activation](#2-license-activation)
-3. [Add GlitchAnalyticsBridgeIndicator](#3-add-glitchanalyticsbridgeindicator)
+3. [Add GlitchAnalyticsBridge](#3-add-glitchanalyticsbridge)
 4. [Chart Trader Widget and Manual Workflow](#4-chart-trader-widget-and-manual-workflow)
 5. [Account Detection and Risk Verification](#5-account-detection-and-risk-verification)
 6. [Creating Groups, Master, Followers, Ratios](#6-creating-groups-master-followers-ratios)
@@ -93,17 +93,17 @@ If the key is valid, Glitch should recognize the active license and reflect the 
 - If the plan does not update correctly, recheck the key and save again.
 - If needed, restart NinjaTrader after saving.
 
-Next step: [Add GlitchAnalyticsBridgeIndicator](#3-add-glitchanalyticsbridgeindicator)
+Next step: [Add GlitchAnalyticsBridge](#3-add-glitchanalyticsbridge)
 
 ---
 
-## 3) Add GlitchAnalyticsBridgeIndicator
+## 3) Add GlitchAnalyticsBridge
 
 Glitch uses a chart-side indicator to feed chart context into the platform.
 
 The indicator name is:
 
-- `GlitchAnalyticsBridgeIndicator`
+- `GlitchAnalyticsBridge`
 
 ### What it does
 
@@ -118,7 +118,7 @@ Adding this indicator helps power Glitch features tied to chart context, includi
 
 - Open a chart in NinjaTrader.
 - Open the chart's indicator list.
-- Find and add `GlitchAnalyticsBridgeIndicator`.
+- Find and add `GlitchAnalyticsBridge`.
 - Apply it to the chart.
 
 ### Important
@@ -384,7 +384,7 @@ Glitch is designed to reduce that blindness.
 
 ### Important dependency
 
-To enable chart-linked technical context, make sure `GlitchAnalyticsBridgeIndicator` is added to the chart.
+To enable chart-linked technical context, make sure `GlitchAnalyticsBridge` is added to the chart.
 
 If it is missing, parts of the analytics workflow may not populate as expected.
 
@@ -420,7 +420,7 @@ Next step: [Troubleshooting / FAQ](#10-troubleshooting-and-faq)
 
 ### Analytics are empty or not updating
 
-- Confirm `GlitchAnalyticsBridgeIndicator` is added to the chart.
+- Confirm `GlitchAnalyticsBridge` is added to the chart.
 - Confirm the chart is open and active.
 - Re-apply the indicator if needed.
 - Check whether the relevant market/session context is available.

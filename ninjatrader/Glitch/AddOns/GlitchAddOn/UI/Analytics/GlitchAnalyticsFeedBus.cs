@@ -15,9 +15,6 @@
 //
 //
 // Glitch AddOn
-//
-// v.0.1.0.
-// March 03, 2026
 // by GlitchTrader.com
 //
 // __________________________________________________
@@ -525,11 +522,19 @@ namespace Glitch.UI
             try
             {
                 string flag = Environment.GetEnvironmentVariable("GLITCH_ALLOW_LEGACY_FEED_IMPORT");
-                return string.Equals(flag, "1", StringComparison.Ordinal);
+                if (string.Equals(flag, "0", StringComparison.Ordinal) ||
+                    string.Equals(flag, "false", StringComparison.OrdinalIgnoreCase))
+                    return false;
+
+                if (string.Equals(flag, "1", StringComparison.Ordinal) ||
+                    string.Equals(flag, "true", StringComparison.OrdinalIgnoreCase))
+                    return true;
+
+                return true;
             }
             catch
             {
-                return false;
+                return true;
             }
 #endif
         }

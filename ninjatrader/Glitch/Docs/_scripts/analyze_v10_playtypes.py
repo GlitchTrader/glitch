@@ -1,0 +1,145 @@
+"""
+Analyze Glitch247TradeEvents10.csv: per-play (LL,LS,HL,HS) PnL, exits, ADX at entry.
+Assumes MNQ-like: tick 0.25, $0.50 per tick per contract (adjust if needed).
+"""
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+EVENTS = Path(r"C:\Users\alan\Documents\NinjaTrader 8\GlitchData\Telemetry\Glitch247TradeEvents10.csv")
+TICK_SIZE = 0.25
+DOLLARS_PER_TICK = 0.5  # MNQ micro common; verify for your instrument
+
+
+def load_events() -> pd.DataFrame:
+    df = pd.read_csv(EVENTS, low_memory=False)
+    df["ts"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
+    return df
+
+
+def pair_trades(df: pd.DataFrame) -> pd.DataFrame:
+    """FIFO: each EXIT closes the oldest unmatched ENTRY (sequence names repeat across days)."""
+    df = df.sort_values("ts")
+    queue: list[pd.Series] = []
+    rows: list[dict] = []
+    for _, row in df.iterrows():
+        et = str(row.get("event_type", ""))
+        if et == "ENTRY":
+            queue.append(row)
+        elif et == "EXIT" and queue:
+            ent = queue.pop(0)
+            er = ent.to_dict()
+            xr = row.to_dict()
+            combined = {}
+            for k, v in er.items():
+                combined[f"{k}_entry"] = v
+            for k, v in xr.items():
+                combined[f"{k}_exit"] = v
+            rows.append(combined)
+    return pd.DataFrame(rows)
+
+
+def tick_move(entry_px: float, exit_px: float, direction: str) -> float:
+    if direction == "Long":
+        return (exit_px - entry_px) / TICK_SIZE
+    return (entry_px - exit_px) / TICK_SIZE
+
+
+def main():
+    df = load_events()
+    paired = pair_trades(df)
+    paired["tick_move"] = paired.apply(
+        lambda r: tick_move(float(r["fill_price_entry"]), float(r["fill_price_exit"]), r["direction_entry"]),
+        axis=1,
+    )
+    paired["qty"] = paired["qty_entry"].fillna(1).astype(int)
+    paired["pnl_est"] = paired["tick_move"] * paired["qty"] * DOLLARS_PER_TICK
+    paired["play"] = paired["play_type_entry"]
+    paired["exit_kind"] = paired["order_name_exit"].astype(str)
+    paired["adx_entry"] = pd.to_numeric(paired["adx_now_entry"], errors="coerce")
+
+    print("=== Paired trades (ENTRY+EXIT, FIFO) ===")
+    es = "entry_signal_entry" if "entry_signal_entry" in paired.columns else "entry_signal"
+    print("rows:", len(paired), "unique entry_signal:", paired[es].nunique())
+    print("net pnl_est (sum):", round(paired["pnl_est"].sum(), 2))
+    print()
+
+    for play in ["LL", "LS", "HL", "HS"]:
+        sub = paired[paired["play"] == play]
+        if sub.empty:
+            print(f"--- {play}: no rows ---\n")
+            continue
+        n = len(sub)
+        wins = (sub["pnl_est"] > 0).sum()
+        print(f"=== {play}  n={n}  win%={100*wins/n:.1f}  net=${sub['pnl_est'].sum():,.2f}  avg=${sub['pnl_est'].mean():.2f}")
+        print("  exits:", sub["exit_kind"].value_counts().to_dict())
+        print(
+            "  adx @ entry: median=%.1f  p25=%.1f  p75=%.1f"
+            % (
+                sub["adx_entry"].median(),
+                sub["adx_entry"].quantile(0.25),
+                sub["adx_entry"].quantile(0.75),
+            )
+        )
+        # winners vs losers ADX
+        w = sub[sub["pnl_est"] > 0]["adx_entry"]
+        l = sub[sub["pnl_est"] <= 0]["adx_entry"]
+        if len(w) > 20 and len(l) > 20:
+            print("  adx winners median=%.1f  losers median=%.1f" % (w.median(), l.median()))
+        # stop-heavy?
+        stop_share = (sub["exit_kind"].str.contains("Stop", case=False, na=False)).mean()
+        tgt_share = (sub["exit_kind"].str.contains("Target", case=False, na=False)).mean()
+        print("  stop exit share=%.1f%%  target share=%.1f%%" % (100 * stop_share, 100 * tgt_share))
+        # implied risk at entry (ticks)
+        print(
+            "  stop_ticks median=%.0f  tp1 median=%.0f  tp2 median=%.0f"
+            % (
+                sub["selected_stop_ticks_entry"].median(),
+                sub["selected_tp1_ticks_entry"].median(),
+                sub["selected_tp2_ticks_entry"].median(),
+            )
+        )
+        print()
+
+    # ADX threshold sweep suggestion: net by play for adx_entry >= K
+    print("=== Net $ by play when ADX at entry >= K (coarse sweep) ===")
+    for play in ["LL", "LS", "HL", "HS"]:
+        sub = paired[paired["play"] == play]
+        if len(sub) < 50:
+            continue
+        best_k = None
+        best_net = -1e18
+        for k in range(15, 56, 3):
+            s = sub[sub["adx_entry"] >= k]
+            if len(s) < 30:
+                continue
+            net = s["pnl_est"].sum()
+            if net > best_net:
+                best_net = net
+                best_k = k
+        print(f"  {play}: best floor among tested ~{best_k} (net ${best_net:,.0f}, n={len(sub[sub['adx_entry']>=best_k])})")
+
+    out = Path(__file__).resolve().parents[1] / "glitch-247-v10-playtype-analysis-autogen.md"
+    lines = ["# v10 trade-events analysis (autogenerated)\n\n"]
+    lines.append(f"- Source: `{EVENTS}`\n")
+    lines.append(f"- Paired trades: {len(paired)}, net pnl_est: ${paired['pnl_est'].sum():,.2f}\n\n")
+    for play in ["LL", "LS", "HL", "HS"]:
+        sub = paired[paired["play"] == play]
+        if sub.empty:
+            continue
+        lines.append(f"## {play}\n\n")
+        lines.append(f"- n={len(sub)}, win%={(sub['pnl_est']>0).mean()*100:.1f}, net=${sub['pnl_est'].sum():,.2f}\n")
+        lines.append(f"- Exits: {sub['exit_kind'].value_counts().to_dict()}\n")
+        lines.append(
+            f"- ADX entry median={sub['adx_entry'].median():.1f}\n\n"
+        )
+    out.write_text("".join(lines), encoding="utf-8")
+    print("Wrote", out)
+
+
+if __name__ == "__main__":
+    main()

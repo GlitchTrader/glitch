@@ -101,18 +101,67 @@ namespace Glitch.UI
                         if (string.IsNullOrWhiteSpace(instrumentRoot))
                             continue;
                         bool enforceStrategyCompliance = IsStrategyDrivenMasterInstrument(masterAccount, instrumentRoot, nowUtc);
+                        if (IsReplicationFrozen(followerAccountName))
+                        {
+                            AppendReplicationStructuredJournal(
+                                followerAccountName,
+                                "sync_veto",
+                                ReplicationVetoReason.LocalComplianceBreach.ToString(),
+                                $"instrument={CleanJournalToken(instrumentRoot)}|reason=frozen_until_manual_ack");
+                            continue;
+                        }
+
                         if (enforceStrategyCompliance && IsTradingLocked(masterAccountName))
+                        {
+                            AppendReplicationStructuredJournal(
+                                followerAccountName,
+                                "sync_veto",
+                                ReplicationVetoReason.TradingLocked.ToString(),
+                                $"instrument={CleanJournalToken(instrumentRoot)}|locked_account={CleanJournalToken(masterAccountName)}");
                             continue;
+                        }
                         if (enforceStrategyCompliance && IsTradingLocked(followerAccountName))
+                        {
+                            AppendReplicationStructuredJournal(
+                                followerAccountName,
+                                "sync_veto",
+                                ReplicationVetoReason.LocalComplianceBreach.ToString(),
+                                $"instrument={CleanJournalToken(instrumentRoot)}|locked_account={CleanJournalToken(followerAccountName)}");
                             continue;
+                        }
 
                         int masterNetQty = GetNetQuantityForInstrumentRoot(masterAccount, instrumentRoot);
+                        rowsByAccount.TryGetValue(masterAccountName ?? string.Empty, out AccountGridRow masterAccountRow);
+                        int declaredMasterCap = ResolveDeclaredContractCap(masterAccountRow, instrumentRoot, microRootCache);
+                        if (declaredMasterCap > 0 && Math.Abs(masterNetQty) > declaredMasterCap)
+                        {
+                            string capDetail = $"instrument={CleanJournalToken(instrumentRoot)}|masterNetQty={masterNetQty}|declaredCap={declaredMasterCap}";
+                            AppendReplicationStructuredJournal(
+                                followerAccountName,
+                                "sync_veto",
+                                ReplicationVetoReason.MasterCapExceeded.ToString(),
+                                capDetail);
+                            FreezeReplicationForAccount(
+                                followerAccountName,
+                                ReplicationVetoReason.MasterCapExceeded,
+                                instrumentRoot,
+                                $"Master net qty {masterNetQty} exceeds declared cap {declaredMasterCap}. Manual ack required.");
+                            continue;
+                        }
+
                         int targetAbsQty = masterNetQty == 0
                             ? 0
                             : RoundConservativeContracts(Math.Abs(masterNetQty) * member.Ratio);
                         int followerCapForInstrument = ResolveFollowerInstrumentContractCap(followerAccountRow, instrumentRoot, microRootCache);
                         if (followerCapForInstrument > 0 && targetAbsQty > followerCapForInstrument)
+                        {
+                            AppendReplicationStructuredJournal(
+                                followerAccountName,
+                                "sync_intent",
+                                ReplicationVetoReason.FollowerCapExceeded.ToString(),
+                                $"instrument={CleanJournalToken(instrumentRoot)}|targetAbsQty={targetAbsQty}|cap={followerCapForInstrument}|action=clamp");
                             targetAbsQty = followerCapForInstrument;
+                        }
                         if (enforceStrategyCompliance &&
                             targetAbsQty > 1 &&
                             !string.IsNullOrWhiteSpace(followerAccountName) &&
@@ -190,17 +239,46 @@ namespace Glitch.UI
                 ReplicationIntent intent = kvp.Value;
                 if (intent?.FollowerAccount == null || string.IsNullOrWhiteSpace(intent.InstrumentRoot))
                     continue;
+                if (IsReplicationFrozen(intent.FollowerAccount.Name))
+                {
+                    AppendReplicationStructuredJournal(
+                        intent.FollowerAccount.Name,
+                        "sync_veto",
+                        ReplicationVetoReason.LocalComplianceBreach.ToString(),
+                        $"instrument={CleanJournalToken(intent.InstrumentRoot)}|reason=frozen_until_manual_ack");
+                    continue;
+                }
                 if (intent.EnforceStrategyCompliance &&
                     (IsTradingLocked(intent.MasterAccount?.Name) || IsTradingLocked(intent.FollowerAccount?.Name)))
                 {
+                    AppendReplicationStructuredJournal(
+                        intent.FollowerAccount.Name,
+                        "sync_veto",
+                        ReplicationVetoReason.LocalComplianceBreach.ToString(),
+                        $"instrument={CleanJournalToken(intent.InstrumentRoot)}|reason=trading_locked");
                     continue;
                 }
 
                 int followerNetQty = GetNetQuantityForInstrumentRoot(intent.FollowerAccount, intent.InstrumentRoot);
                 int inFlightReplicationDelta = GetInFlightReplicationEntryDeltaForInstrumentRoot(intent.FollowerAccount, intent.InstrumentRoot);
                 int effectiveFollowerNetQty = followerNetQty + inFlightReplicationDelta;
+                if (DetectReplicationBurst(followerInstrumentKey, effectiveFollowerNetQty, nowUtc, out string burstReason))
+                {
+                    FreezeReplicationForAccount(
+                        intent.FollowerAccount.Name,
+                        ReplicationVetoReason.BurstDetected,
+                        intent.InstrumentRoot,
+                        $"Burst detection triggered ({burstReason}).");
+                    continue;
+                }
+
                 ApplyLiveFollowerAggregatePosition(intent.FollowerAccount);
                 int deltaNetQty = intent.TargetNetQty - effectiveFollowerNetQty;
+                AppendReplicationStructuredJournal(
+                    intent.FollowerAccount.Name,
+                    "sync_intent",
+                    "intent_evaluated",
+                    $"instrument={CleanJournalToken(intent.InstrumentRoot)}|masterNetQty={GetNetQuantityForInstrumentRoot(intent.MasterAccount, intent.InstrumentRoot)}|followerCurrentQty={followerNetQty}|targetFollowerQty={intent.TargetNetQty}|deltaQty={deltaNetQty}");
                 if (deltaNetQty != 0)
                 {
                     if (inFlightReplicationDelta != 0)
@@ -209,6 +287,19 @@ namespace Glitch.UI
                         continue;
                     if (IsReplicationSubmissionCoolingDown(followerInstrumentKey, nowUtc))
                         continue;
+
+                    int originalTarget = intent.TargetNetQty;
+                    int clampedDelta = ClampReplicationDelta(deltaNetQty, out bool deltaClamped);
+                    if (deltaClamped)
+                    {
+                        intent.TargetNetQty = effectiveFollowerNetQty + clampedDelta;
+                        AppendReplicationStructuredJournal(
+                            intent.FollowerAccount.Name,
+                            "sync_intent",
+                            "delta_clamped",
+                            $"instrument={CleanJournalToken(intent.InstrumentRoot)}|requestedDelta={deltaNetQty}|clampedDelta={clampedDelta}|targetAfterClamp={intent.TargetNetQty}");
+                    }
+
                     if (HasBlockingWorkingOrdersForInstrumentRoot(intent.FollowerAccount, intent.InstrumentRoot))
                     {
                         bool requiresHardResync =
@@ -243,6 +334,7 @@ namespace Glitch.UI
                         followerNetQty,
                         nowUtc))
                     {
+                        intent.TargetNetQty = originalTarget;
                         continue;
                     }
 
@@ -259,6 +351,11 @@ namespace Glitch.UI
                             intent.FollowerAccount.Name,
                             "Replication",
                             $"Synced {intent.InstrumentRoot} to target {intent.TargetNetQty} contracts.");
+                        AppendReplicationStructuredJournal(
+                            intent.FollowerAccount.Name,
+                            "sync_submit",
+                            "accepted",
+                            $"instrument={CleanJournalToken(intent.InstrumentRoot)}|targetFollowerQty={intent.TargetNetQty}|deltaQty={(intent.TargetNetQty - effectiveFollowerNetQty)}");
                     }
                     else
                     {
@@ -274,7 +371,14 @@ namespace Glitch.UI
                             intent.FollowerAccount.Name,
                             "Replication",
                             $"Submit failed for {intent.InstrumentRoot}; target {intent.TargetNetQty}, current {followerNetQty}. {reasonText}");
+                        AppendReplicationStructuredJournal(
+                            intent.FollowerAccount.Name,
+                            "sync_submit",
+                            "rejected",
+                            $"instrument={CleanJournalToken(intent.InstrumentRoot)}|targetFollowerQty={intent.TargetNetQty}|followerCurrentQty={followerNetQty}|detail={CleanJournalToken(reasonText)}");
                     }
+
+                    intent.TargetNetQty = originalTarget;
 
                     continue;
                 }
@@ -864,12 +968,26 @@ namespace Glitch.UI
             {
                 changed = CancelReplicatedProtectiveOrders(intent.FollowerAccount, intent.InstrumentRoot);
                 if (changed)
+                {
+                    AppendReplicationStructuredJournal(
+                        intent.FollowerAccount.Name,
+                        "protective_cancel",
+                        "target_qty_zero",
+                        $"instrument={CleanJournalToken(intent.InstrumentRoot)}|reason=position_sync_flat");
+                }
+                if (changed)
                     MarkProtectiveSync(cooldownKey, nowUtc);
                 return;
             }
 
             if (intent.TradeInstrument == null)
-                return;
+            {
+                intent.TradeInstrument =
+                    FindInstrumentForInstrumentRoot(intent.FollowerAccount, intent.InstrumentRoot) ??
+                    FindInstrumentForInstrumentRoot(intent.MasterAccount, intent.InstrumentRoot);
+                if (intent.TradeInstrument == null)
+                    return;
+            }
 
             int followerNetQty = GetNetQuantityForInstrumentRoot(intent.FollowerAccount, intent.InstrumentRoot);
             if (followerNetQty != intent.TargetNetQty)
@@ -877,11 +995,43 @@ namespace Glitch.UI
 
             if (!TryBuildMasterProtectiveTemplate(intent.MasterAccount, intent.InstrumentRoot, intent.TargetNetQty, out ProtectiveTemplate template))
             {
+                AppendReplicationStructuredJournal(
+                    intent.FollowerAccount.Name,
+                    "protective_template",
+                    "absent",
+                    $"instrument={CleanJournalToken(intent.InstrumentRoot)}|followerQty={followerNetQty}");
+
+                if (followerNetQty != 0)
+                {
+                    EnsureFollowerEmergencyStop(intent, followerNetQty);
+                    FreezeReplicationForAccount(
+                        intent.FollowerAccount.Name,
+                        ReplicationVetoReason.MissingMasterProtective,
+                        intent.InstrumentRoot,
+                        "Master protective template missing while follower has open position. Emergency stop retained and replication frozen.");
+                    MarkProtectiveSync(cooldownKey, nowUtc);
+                    return;
+                }
+
                 changed = CancelReplicatedProtectiveOrders(intent.FollowerAccount, intent.InstrumentRoot);
+                if (changed)
+                {
+                    AppendReplicationStructuredJournal(
+                        intent.FollowerAccount.Name,
+                        "protective_cancel",
+                        "template_absent_no_position",
+                        $"instrument={CleanJournalToken(intent.InstrumentRoot)}|reason=cleanup_only");
+                }
                 if (changed)
                     MarkProtectiveSync(cooldownKey, nowUtc);
                 return;
             }
+
+            AppendReplicationStructuredJournal(
+                intent.FollowerAccount.Name,
+                "protective_template",
+                "present",
+                $"instrument={CleanJournalToken(intent.InstrumentRoot)}|followerQty={followerNetQty}|targetQty={intent.TargetNetQty}");
 
             changed = EnsureFollowerProtectiveOrders(intent, template);
             if (changed)
@@ -1025,6 +1175,9 @@ namespace Glitch.UI
                 if (existingOrder == null)
                     return false;
 
+                if (string.Equals(signalName, ProtectiveStopSignalName, StringComparison.OrdinalIgnoreCase))
+                    return false;
+
                 return CancelOrders(account, new[] { existingOrder });
             }
 
@@ -1049,6 +1202,9 @@ namespace Glitch.UI
 
             if (!sameShape)
             {
+                if (string.Equals(signalName, ProtectiveStopSignalName, StringComparison.OrdinalIgnoreCase))
+                    return false;
+
                 bool cancelled = CancelOrders(account, new[] { existingOrder });
                 if (!cancelled)
                     return false;
@@ -1078,6 +1234,9 @@ namespace Glitch.UI
             }
             catch
             {
+                if (string.Equals(signalName, ProtectiveStopSignalName, StringComparison.OrdinalIgnoreCase))
+                    return false;
+
                 bool cancelled = CancelOrders(account, new[] { existingOrder });
                 if (!cancelled)
                     return false;
@@ -1607,6 +1766,218 @@ namespace Glitch.UI
                     adjustedUnits -= reducerWeight;
                 }
             }
+        }
+
+        private void AppendReplicationStructuredJournal(
+            string accountName,
+            string eventType,
+            string reasonCode,
+            string details)
+        {
+            string evt = string.IsNullOrWhiteSpace(eventType) ? "unknown" : CleanJournalToken(eventType);
+            string reason = string.IsNullOrWhiteSpace(reasonCode) ? "none" : CleanJournalToken(reasonCode);
+            string payload = string.IsNullOrWhiteSpace(details) ? string.Empty : details.Trim();
+            string message = string.IsNullOrWhiteSpace(payload)
+                ? $"SYNC|event={evt}|reason={reason}"
+                : $"SYNC|event={evt}|reason={reason}|{payload}";
+            AppendJournal(string.IsNullOrWhiteSpace(accountName) ? "System" : accountName, "Replication", message);
+        }
+
+        private int ResolveDeclaredContractCap(AccountGridRow row, string instrumentRoot, IDictionary<string, bool> microRootCache = null)
+        {
+            int capFromRow = ResolveFollowerInstrumentContractCap(row, instrumentRoot, microRootCache);
+            int capFromPolicy = _runtimePolicySettings != null ? Math.Max(0, _runtimePolicySettings.ReplicationDeclaredCapContracts) : 0;
+            if (capFromRow > 0 && capFromPolicy > 0)
+                return Math.Min(capFromRow, capFromPolicy);
+            if (capFromRow > 0)
+                return capFromRow;
+            return capFromPolicy;
+        }
+
+        private bool IsReplicationFrozen(string accountName)
+        {
+            if (string.IsNullOrWhiteSpace(accountName))
+                return false;
+            return _replicationFrozenKeys.Contains(accountName.Trim());
+        }
+
+        private void FreezeReplicationForAccount(string accountName, ReplicationVetoReason reason, string instrumentRoot, string details)
+        {
+            if (string.IsNullOrWhiteSpace(accountName))
+                return;
+
+            string normalized = accountName.Trim();
+            if (_replicationFrozenKeys.Add(normalized))
+            {
+                string reasonCode = reason.ToString();
+                string instrumentToken = string.IsNullOrWhiteSpace(instrumentRoot) ? "-" : CleanJournalToken(instrumentRoot);
+                string detailText = string.IsNullOrWhiteSpace(details) ? string.Empty : details.Trim();
+                AppendReplicationStructuredJournal(
+                    normalized,
+                    "replication_frozen",
+                    reasonCode,
+                    $"instrument={instrumentToken}|detail={CleanJournalToken(detailText)}");
+            }
+
+            string message = $"Replication frozen for {normalized} on {CleanJournalToken(instrumentRoot)}. {details}";
+            RaiseCriticalWarning(
+                normalized,
+                message,
+                "ReplicationFreeze",
+                unlocksTrading: _runtimePolicySettings == null || _runtimePolicySettings.FreezeRequiresManualAcknowledge);
+        }
+
+        private int ClampReplicationDelta(int deltaNetQty, out bool clamped)
+        {
+            clamped = false;
+            if (deltaNetQty == 0)
+                return 0;
+
+            int maxDelta = _runtimePolicySettings != null
+                ? Math.Max(1, _runtimePolicySettings.ReplicationMaxDeltaPerCycle)
+                : 3;
+            int absDelta = Math.Abs(deltaNetQty);
+            if (absDelta <= maxDelta)
+                return deltaNetQty;
+
+            clamped = true;
+            return Math.Sign(deltaNetQty) * maxDelta;
+        }
+
+        private bool DetectReplicationBurst(string key, int observedQty, DateTime nowUtc, out string reason)
+        {
+            reason = null;
+            if (string.IsNullOrWhiteSpace(key))
+                return false;
+
+            int windowMs = _runtimePolicySettings != null
+                ? Math.Max(250, _runtimePolicySettings.ReplicationBurstWindowMs)
+                : 1000;
+            int fillThreshold = _runtimePolicySettings != null
+                ? Math.Max(2, _runtimePolicySettings.ReplicationBurstFillCountThreshold)
+                : 4;
+            int qtyJumpThreshold = _runtimePolicySettings != null
+                ? Math.Max(2, _runtimePolicySettings.ReplicationBurstQtyJumpThreshold)
+                : 6;
+
+            if (!_replicationBurstStateByKey.TryGetValue(key, out ReplicationBurstState state) || state == null)
+            {
+                _replicationBurstStateByKey[key] = new ReplicationBurstState
+                {
+                    WindowStartUtc = nowUtc,
+                    LastObservedQty = observedQty,
+                    QtyChangeCount = 0
+                };
+                return false;
+            }
+
+            if ((nowUtc - state.WindowStartUtc).TotalMilliseconds > windowMs)
+            {
+                state.WindowStartUtc = nowUtc;
+                state.LastObservedQty = observedQty;
+                state.QtyChangeCount = 0;
+                return false;
+            }
+
+            int delta = Math.Abs(observedQty - state.LastObservedQty);
+            if (delta > 0)
+            {
+                state.QtyChangeCount++;
+                state.LastObservedQty = observedQty;
+            }
+
+            if (delta >= qtyJumpThreshold)
+            {
+                reason = $"qty_jump_{delta}";
+                return true;
+            }
+
+            if (state.QtyChangeCount >= fillThreshold)
+            {
+                reason = $"qty_changes_{state.QtyChangeCount}";
+                return true;
+            }
+
+            return false;
+        }
+
+        private static Position FindOpenPositionForInstrumentRoot(Account account, string instrumentRoot)
+        {
+            if (account == null || string.IsNullOrWhiteSpace(instrumentRoot))
+                return null;
+
+            try
+            {
+                return account.Positions.FirstOrDefault(position =>
+                    position != null &&
+                    position.Instrument != null &&
+                    position.MarketPosition != MarketPosition.Flat &&
+                    string.Equals(GetInstrumentRoot(position.Instrument), instrumentRoot, StringComparison.OrdinalIgnoreCase));
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private bool EnsureFollowerEmergencyStop(ReplicationIntent intent, int followerNetQty)
+        {
+            if (intent?.FollowerAccount == null || string.IsNullOrWhiteSpace(intent.InstrumentRoot) || followerNetQty == 0)
+                return false;
+
+            Position position = FindOpenPositionForInstrumentRoot(intent.FollowerAccount, intent.InstrumentRoot);
+            if (position == null || position.Instrument == null)
+                return false;
+
+            Instrument instrument = position.Instrument;
+            double tickSize = instrument.MasterInstrument != null && instrument.MasterInstrument.TickSize > 0
+                ? instrument.MasterInstrument.TickSize
+                : 0;
+            if (tickSize <= 0)
+                return false;
+
+            int stopTicks = _runtimePolicySettings != null
+                ? Math.Max(2, _runtimePolicySettings.FollowerEmergencyStopTicks)
+                : 20;
+            double averagePrice = position.AveragePrice;
+            if (averagePrice <= 0 || double.IsNaN(averagePrice) || double.IsInfinity(averagePrice))
+                return false;
+
+            OrderAction exitAction = followerNetQty > 0 ? OrderAction.Sell : OrderAction.BuyToCover;
+            int quantity = Math.Abs(followerNetQty);
+            double stopPrice = followerNetQty > 0
+                ? averagePrice - (stopTicks * tickSize)
+                : averagePrice + (stopTicks * tickSize);
+            stopPrice = instrument.MasterInstrument.RoundToTickSize(stopPrice);
+
+            List<Order> protectiveOrders = GetWorkingOrdersForInstrumentRoot(intent.FollowerAccount, intent.InstrumentRoot)
+                .Where(IsReplicatedProtectiveOrder)
+                .ToList();
+            Order existingStop = protectiveOrders.FirstOrDefault(IsStopLikeOrder);
+            string ocoId = BuildProtectiveOcoId(intent.FollowerAccount.Name, intent.InstrumentRoot);
+            bool changed = EnsureProtectiveOrder(
+                intent.FollowerAccount,
+                instrument,
+                existingStop,
+                shouldExist: true,
+                action: exitAction,
+                quantity: quantity,
+                orderType: OrderType.StopMarket,
+                limitPrice: 0.0,
+                stopPrice: stopPrice,
+                ocoId: ocoId,
+                signalName: ProtectiveStopSignalName);
+
+            if (changed)
+            {
+                AppendReplicationStructuredJournal(
+                    intent.FollowerAccount.Name,
+                    "emergency_stop",
+                    "master_template_missing",
+                    $"instrument={CleanJournalToken(intent.InstrumentRoot)}|qty={quantity}|stop={stopPrice.ToString(CultureInfo.InvariantCulture)}");
+            }
+
+            return changed;
         }
 
         private static List<string> GetSyncInstrumentRoots(Account masterAccount, Account followerAccount)

@@ -15,9 +15,6 @@
 //
 //
 // Glitch AddOn
-//
-// v.0.1.0.
-// March 03, 2026
 // by GlitchTrader.com
 //
 // __________________________________________________
@@ -4212,7 +4209,7 @@ namespace Glitch.UI
 
                     _analyticsTechnicalFeedFootnoteText.Text = L(
                         "analytics.technical.bridge_missing_cta",
-                        "To enable Technical Analysis, add GlitchAnalyticsBridgeIndicator to a NinjaTrader chart. Data is available during market hours. If refresh is needed, re-apply the indicator on the chart.");
+                        "To enable Technical Analysis, add GlitchAnalyticsBridge to a NinjaTrader chart. Data is available during market hours. If refresh is needed, re-apply the indicator on the chart.");
                     _analyticsTechnicalFeedFootnoteText.Visibility = Visibility.Visible;
                 }
 
@@ -4603,7 +4600,6 @@ namespace Glitch.UI
 
     }
 }
-
 
 
 

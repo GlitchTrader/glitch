@@ -307,6 +307,37 @@ namespace Glitch.UI
             public double SignedAgreementScore { get; set; }
         }
 
+        private enum ReplicationVetoReason
+        {
+            None = 0,
+            MasterCapExceeded = 1,
+            FollowerCapExceeded = 2,
+            TradingLocked = 3,
+            BurstDetected = 4,
+            LocalComplianceBreach = 5,
+            MissingMasterProtective = 6,
+            Unknown = 7
+        }
+
+        private enum ComplianceBreachReason
+        {
+            None = 0,
+            BufferCriticalLock = 1,
+            EvalProfitTargetLock = 2,
+            UnrealizedLossFlatten = 3,
+            MaxContractsExceeded = 4,
+            NoProtectionDetected = 5
+        }
+
+        private enum FlattenOrigin
+        {
+            Unknown = 0,
+            StrategyRisk = 1,
+            AddonGovernor = 2,
+            ReplicationHardResync = 3,
+            FallbackAccountFlatten = 4
+        }
+
         private sealed class ReplicationIntent
         {
             public string Key { get; set; }
@@ -316,6 +347,13 @@ namespace Glitch.UI
             public Instrument TradeInstrument { get; set; }
             public int TargetNetQty { get; set; }
             public bool EnforceStrategyCompliance { get; set; }
+        }
+
+        private sealed class ReplicationBurstState
+        {
+            public DateTime WindowStartUtc { get; set; }
+            public int LastObservedQty { get; set; }
+            public int QtyChangeCount { get; set; }
         }
 
         private sealed class ReplicationPendingSubmitState

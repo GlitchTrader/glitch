@@ -68,6 +68,11 @@ namespace Glitch.UI
         private const string ReplicationSignalName = "GLT-SYNC";
         private const string ProtectiveStopSignalName = "GLT-PROT-STP";
         private const string ProtectiveTargetSignalName = "GLT-PROT-TGT";
+        private const string RiskFlattenUnrealizedSignalName = "GLT-RISK-FLAT-UNRLZ";
+        private const string RiskFlattenBufferSignalName = "GLT-RISK-FLAT-BUFFER";
+        private const string RiskFlattenMaxQtySignalName = "GLT-RISK-FLAT-MAXQTY";
+        private const string RiskFlattenNakedSignalName = "GLT-RISK-FLAT-NAKED";
+        private const string RiskFlattenDailyLimitSignalName = "GLT-RISK-FLAT-DAILYLIMIT";
         private const string CurrentClientVersion = "addon-0.0.1.2";
         private const string DefaultLatestDownloadUrl = "https://download.glitchtrader.com/latest";
         private const double UnrealizedLossFlattenThresholdRatio = 0.80;
@@ -77,6 +82,8 @@ namespace Glitch.UI
         private const double DefaultMicroContractMultiplier = 10.0;
         private const string DefaultMicroContractRootRegex = "^M[A-Z0-9]+$";
         private const int MaxMicroContractRegexLength = 128;
+        private const int RiskFlattenConfirmationTimeoutMs = 500;
+        private const int RiskFlattenConfirmationPollMs = 25;
         private static readonly TimeSpan RiskMitigationCooldown = TimeSpan.FromSeconds(4);
         private static readonly TimeSpan ReplicationStartupWarmup = TimeSpan.FromSeconds(3);
         private static readonly TimeSpan StrategySourceSnapshotTtl = TimeSpan.FromHours(12);
@@ -117,7 +124,12 @@ namespace Glitch.UI
         private readonly HashSet<string> _riskLockAcknowledgedAccounts;
         private readonly HashSet<string> _riskOneContractAccounts;
         private readonly HashSet<string> _unrealizedLossFlattenTriggeredAccounts;
+        private readonly HashSet<string> _replicationFrozenKeys;
+        private readonly Dictionary<string, ReplicationBurstState> _replicationBurstStateByKey;
+        private readonly Dictionary<string, DateTime> _noProtectionDetectedSinceByKey;
         private readonly Dictionary<string, DateTime> _riskMitigationCooldownByKey;
+        private readonly Dictionary<string, DateTime> _riskFlattenFallbackWarningCooldownByKey;
+        private readonly object _riskFlattenFallbackWarningLock = new object();
         private readonly Dictionary<string, TradeSourceKind> _tradeSourceByAccountInstrument;
         private readonly Dictionary<string, DateTime> _tradeSourceObservedUtcByAccountInstrument;
         private readonly object _tradeSourceLock = new object();
@@ -188,6 +200,7 @@ namespace Glitch.UI
         private DateTime _lastUiRefreshUtc;
         private DateTime _replicationWarmupUntilUtc;
         private bool _hasLoggedStartupRuntimeSettings;
+        private bool _isWindowClosed;
         private TextBlock _totalPnlValueText;
         private TextBlock _evalPnlValueText;
         private TextBlock _paPnlValueText;
@@ -287,7 +300,11 @@ namespace Glitch.UI
             _riskLockAcknowledgedAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _riskOneContractAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _unrealizedLossFlattenTriggeredAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _replicationFrozenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _replicationBurstStateByKey = new Dictionary<string, ReplicationBurstState>(StringComparer.OrdinalIgnoreCase);
+            _noProtectionDetectedSinceByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
             _riskMitigationCooldownByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+            _riskFlattenFallbackWarningCooldownByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
             _tradeSourceByAccountInstrument = new Dictionary<string, TradeSourceKind>(StringComparer.OrdinalIgnoreCase);
             _tradeSourceObservedUtcByAccountInstrument = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
             _lastOrderJournalSnapshotByKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -825,6 +842,10 @@ namespace Glitch.UI
                 $"oneContract20to25={settings.EnforceBufferOneContract30Percent}, " +
                 $"unrlzdFlatten80={settings.EnforceUnrealizedFlatten70Percent}, " +
                 $"evalLock={settings.EnforceEvalProfitTargetLock}, " +
+                $"replMaxDelta={settings.ReplicationMaxDeltaPerCycle}, " +
+                $"replBurstMs={settings.ReplicationBurstWindowMs}, " +
+                $"noProtMs={settings.NoProtectionTimeoutMs}, " +
+                $"rearmMs={settings.RearmTimeoutMs}, " +
                 $"limits={{groups:{cache.MaxGroups}, followersPerGroup:{cache.MaxFollowersPerGroup}}}.";
         }
 
@@ -1391,13 +1412,57 @@ namespace Glitch.UI
                 {
                     foreach (Instrument instrument in GetOpenPositionInstruments(account))
                     {
-                        try
+                        string instrumentToken = CleanJournalToken(GetInstrumentRoot(instrument));
+                        const string flattenAllReason = "flatten_all_manual";
+                        AppendJournal(
+                            account.Name,
+                            "Risk",
+                            $"SYNC|event=flatten_attempt|reason={flattenAllReason}|instrument={instrumentToken}|signal={RiskFlattenBufferSignalName}");
+
+                        bool namedConfirmed = TrySubmitNamedRiskFlattenOrder(
+                            account,
+                            instrument,
+                            RiskFlattenBufferSignalName,
+                            out string namedResult,
+                            out Order submittedOrder);
+                        if (namedConfirmed)
                         {
-                            account.Flatten(new[] { instrument });
+                            AppendJournal(
+                                account.Name,
+                                "Risk",
+                                $"SYNC|event=flatten_named_result|reason={flattenAllReason}|instrument={instrumentToken}|signal={RiskFlattenBufferSignalName}|origin={FlattenOrigin.AddonGovernor}|result=confirmed|cause={CleanJournalToken(namedResult)}");
+                            AppendJournal(
+                                account.Name,
+                                "Risk",
+                                $"SYNC|event=flatten_origin|reason={flattenAllReason}|origin={FlattenOrigin.AddonGovernor}|signal={RiskFlattenBufferSignalName}|instrument={instrumentToken}");
+                            continue;
                         }
-                        catch
+
+                        if (submittedOrder != null)
                         {
+                            AppendJournal(
+                                account.Name,
+                                "Risk",
+                                $"SYNC|event=flatten_named_result|reason={flattenAllReason}|instrument={instrumentToken}|signal={RiskFlattenBufferSignalName}|origin={FlattenOrigin.Unknown}|result=pending|cause={CleanJournalToken(namedResult)}");
+                            ScheduleNamedRiskFlattenConfirmationFallback(
+                                account,
+                                instrument,
+                                submittedOrder,
+                                RiskFlattenBufferSignalName,
+                                flattenAllReason,
+                                mitigationKey: "FLATTENALL|" + CleanJournalToken(account.Name) + "|" + instrumentToken,
+                                allowFallbackWarning: false);
+                            continue;
                         }
+
+                        TryIssueInstrumentFlattenFallback(
+                            account,
+                            instrument,
+                            RiskFlattenBufferSignalName,
+                            flattenAllReason,
+                            namedResult,
+                            mitigationKey: "FLATTENALL|" + CleanJournalToken(account.Name) + "|" + instrumentToken,
+                            allowFallbackWarning: false);
                     }
                 }
 
@@ -3300,6 +3365,7 @@ namespace Glitch.UI
 
         private void OnWindowClosed(object sender, EventArgs e)
         {
+            _isWindowClosed = true;
             _refreshTimer.Stop();
             _refreshTimer.Tick -= OnRefreshTimerTick;
             CaptureSelectionOverridesFromRows();
@@ -3658,9 +3724,57 @@ namespace Glitch.UI
                     _evalTargetLockedAccounts.Remove(accountName);
                     _riskOneContractAccounts.Remove(accountName);
                     _unrealizedLossFlattenTriggeredAccounts.Remove(accountName);
+                    _replicationFrozenKeys.Remove(accountName);
                     _riskLockAcknowledgedAccounts.Remove(BuildTradingLockAckKey(accountName, "BufferCriticalLock"));
                     _riskLockAcknowledgedAccounts.Remove(BuildTradingLockAckKey(accountName, "EvalProfitTargetLock"));
                     continue;
+                }
+
+                if (accountsByName.TryGetValue(accountName, out Account liveAccount))
+                {
+                    int declaredCap = row.MaxContractsRaw > 0
+                        ? Math.Max(1, (int)Math.Round(row.MaxContractsRaw, MidpointRounding.AwayFromZero))
+                        : (_runtimePolicySettings != null ? Math.Max(0, _runtimePolicySettings.ReplicationDeclaredCapContracts) : 0);
+                    int currentAbsContracts = GetTotalAbsoluteOpenContracts(liveAccount);
+                    if (declaredCap > 0 && currentAbsContracts > declaredCap)
+                    {
+                        _riskLockedAccounts.Add(accountName);
+                        _riskOneContractAccounts.Remove(accountName);
+                        _replicationFrozenKeys.Add(accountName);
+                        AppendJournal(
+                            accountName,
+                            "Risk",
+                            $"SYNC|event=local_compliance_breach|reason={ComplianceBreachReason.MaxContractsExceeded}|current={currentAbsContracts}|cap={declaredCap}");
+                        RaiseCriticalWarning(
+                            accountName,
+                            $"Max contracts breach detected ({currentAbsContracts} > {declaredCap}). Trading locked until manual dismiss.",
+                            "MaxContractsBreach",
+                            unlocksTrading: _runtimePolicySettings == null || _runtimePolicySettings.LockRequiresManualAcknowledge);
+                        TryFlattenAccountForRisk(
+                            liveAccount,
+                            $"MAXQTY|{accountName}",
+                            "Max contracts breach");
+                    }
+
+                    if (TryDetectNoProtectionBreach(liveAccount, nowUtc, out string breachedInstrumentRoot, out string breachDetail))
+                    {
+                        _riskLockedAccounts.Add(accountName);
+                        _riskOneContractAccounts.Remove(accountName);
+                        _replicationFrozenKeys.Add(accountName);
+                        AppendJournal(
+                            accountName,
+                            "Risk",
+                            $"SYNC|event=local_compliance_breach|reason={ComplianceBreachReason.NoProtectionDetected}|instrument={CleanJournalToken(breachedInstrumentRoot)}|detail={CleanJournalToken(breachDetail)}");
+                        RaiseCriticalWarning(
+                            accountName,
+                            $"No protection breach on {CleanJournalToken(breachedInstrumentRoot)}. {breachDetail}. Trading locked until manual dismiss.",
+                            "NoProtectionLock",
+                            unlocksTrading: _runtimePolicySettings == null || _runtimePolicySettings.LockRequiresManualAcknowledge);
+                        TryFlattenAccountForRisk(
+                            liveAccount,
+                            $"NAKED|{accountName}",
+                            "No protection detector breach");
+                    }
                 }
 
                 bool criticalBufferBreach = IsBufferCriticalRiskTriggered(row);
@@ -3853,6 +3967,9 @@ namespace Glitch.UI
             foreach (string stale in _unrealizedLossFlattenTriggeredAccounts.Where(name => !seenAccounts.Contains(name)).ToList())
                 _unrealizedLossFlattenTriggeredAccounts.Remove(stale);
 
+            foreach (string stale in _replicationFrozenKeys.Where(name => !seenAccounts.Contains(name)).ToList())
+                _replicationFrozenKeys.Remove(stale);
+
             foreach (string stale in _riskLockAcknowledgedAccounts
                          .Where(key => !seenAccounts.Contains(ExtractTradingLockAckAccountName(key)))
                          .ToList())
@@ -3866,7 +3983,12 @@ namespace Glitch.UI
             _riskOneContractAccounts.Clear();
             _unrealizedLossFlattenTriggeredAccounts.Clear();
             _riskLockAcknowledgedAccounts.Clear();
+            _replicationFrozenKeys.Clear();
+            _replicationBurstStateByKey.Clear();
+            _noProtectionDetectedSinceByKey.Clear();
             _riskMitigationCooldownByKey.Clear();
+            lock (_riskFlattenFallbackWarningLock)
+                _riskFlattenFallbackWarningCooldownByKey.Clear();
         }
 
         private static bool IsUnrealizedLossRiskTriggered(AccountGridRow row)
@@ -3926,6 +4048,116 @@ namespace Glitch.UI
             return row.BufferMarginRaw >= (BufferOneContractReleaseThresholdRatio * row.MaxDrawdownRaw);
         }
 
+        private static int GetTotalAbsoluteOpenContracts(Account account)
+        {
+            if (account == null)
+                return 0;
+
+            int total = 0;
+            try
+            {
+                foreach (Position position in account.Positions)
+                {
+                    if (position == null || position.MarketPosition == MarketPosition.Flat)
+                        continue;
+
+                    total += Math.Abs(position.Quantity);
+                }
+            }
+            catch
+            {
+            }
+
+            return total;
+        }
+
+        private static bool HasWorkingProtectiveStop(Account account, string instrumentRoot)
+        {
+            if (account == null || string.IsNullOrWhiteSpace(instrumentRoot))
+                return false;
+
+            try
+            {
+                return account.Orders.Any(order =>
+                    order != null &&
+                    order.Instrument != null &&
+                    IsWorkingOrderState(order.OrderState) &&
+                    string.Equals(GetInstrumentRoot(order.Instrument), instrumentRoot, StringComparison.OrdinalIgnoreCase) &&
+                    IsStopLikeOrder(order));
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private bool TryDetectNoProtectionBreach(Account account, DateTime nowUtc, out string breachedInstrumentRoot, out string detail)
+        {
+            breachedInstrumentRoot = string.Empty;
+            detail = string.Empty;
+            if (account == null || string.IsNullOrWhiteSpace(account.Name))
+                return false;
+
+            string accountName = account.Name.Trim();
+            int timeoutMs = _runtimePolicySettings != null
+                ? Math.Max(100, _runtimePolicySettings.NoProtectionTimeoutMs)
+                : 1000;
+
+            var openRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                foreach (Position position in account.Positions)
+                {
+                    if (position == null || position.Instrument == null || position.MarketPosition == MarketPosition.Flat)
+                        continue;
+
+                    string instrumentRoot = GetInstrumentRoot(position.Instrument);
+                    if (string.IsNullOrWhiteSpace(instrumentRoot))
+                        continue;
+
+                    openRoots.Add(instrumentRoot);
+                    string key = accountName + "|" + instrumentRoot;
+                    if (HasWorkingProtectiveStop(account, instrumentRoot))
+                    {
+                        _noProtectionDetectedSinceByKey.Remove(key);
+                        continue;
+                    }
+
+                    if (!_noProtectionDetectedSinceByKey.TryGetValue(key, out DateTime sinceUtc))
+                    {
+                        _noProtectionDetectedSinceByKey[key] = nowUtc;
+                        continue;
+                    }
+
+                    if ((nowUtc - sinceUtc).TotalMilliseconds >= timeoutMs)
+                    {
+                        breachedInstrumentRoot = instrumentRoot;
+                        detail = $"no protective stop for {timeoutMs}ms";
+                        return true;
+                    }
+                }
+            }
+            catch
+            {
+                return false;
+            }
+
+            foreach (string staleKey in _noProtectionDetectedSinceByKey.Keys
+                .Where(key =>
+                {
+                    if (!key.StartsWith(accountName + "|", StringComparison.OrdinalIgnoreCase))
+                        return false;
+                    string root = key.Substring(accountName.Length + 1);
+                    return !openRoots.Contains(root);
+                })
+                .ToList())
+            {
+                _noProtectionDetectedSinceByKey.Remove(staleKey);
+            }
+
+            return false;
+        }
+
         private bool TryFlattenAccountForRisk(Account account, string mitigationKey, string reason)
         {
             if (account == null || string.IsNullOrWhiteSpace(mitigationKey))
@@ -3939,17 +4171,77 @@ namespace Glitch.UI
             if (instruments.Count == 0)
                 return false;
 
+            string flattenSignalName = ResolveRiskFlattenSignalName(mitigationKey);
+            string reasonToken = CleanJournalToken(reason);
             bool flattenIssued = false;
             foreach (Instrument instrument in instruments)
             {
+                string instrumentToken = CleanJournalToken(GetInstrumentRoot(instrument));
+                AppendJournal(
+                    account.Name,
+                    "Risk",
+                    $"SYNC|event=flatten_attempt|reason={reasonToken}|instrument={instrumentToken}|signal={flattenSignalName}");
+
+                bool namedConfirmed;
+                string namedResult;
+                Order submittedOrder;
                 try
                 {
-                    account.Flatten(new[] { instrument });
-                    flattenIssued = true;
+                    namedConfirmed = TrySubmitNamedRiskFlattenOrder(account, instrument, flattenSignalName, out namedResult, out submittedOrder);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    namedConfirmed = false;
+                    namedResult = "named_submit_exception_" + ex.GetType().Name;
+                    submittedOrder = null;
                 }
+
+                if (namedConfirmed)
+                {
+                    flattenIssued = true;
+                    AppendJournal(
+                        account.Name,
+                        "Risk",
+                        $"SYNC|event=flatten_named_result|reason={reasonToken}|instrument={instrumentToken}|signal={flattenSignalName}|origin={FlattenOrigin.AddonGovernor}|result=confirmed|cause={CleanJournalToken(namedResult)}");
+                    AppendJournal(
+                        account.Name,
+                        "Risk",
+                        $"SYNC|event=flatten_origin|reason={reasonToken}|origin={FlattenOrigin.AddonGovernor}|signal={flattenSignalName}|instrument={instrumentToken}");
+                    continue;
+                }
+
+                if (submittedOrder != null)
+                {
+                    flattenIssued = true;
+                    AppendJournal(
+                        account.Name,
+                        "Risk",
+                        $"SYNC|event=flatten_named_result|reason={reasonToken}|instrument={instrumentToken}|signal={flattenSignalName}|origin={FlattenOrigin.Unknown}|result=pending|cause={CleanJournalToken(namedResult)}");
+                    ScheduleNamedRiskFlattenConfirmationFallback(
+                        account,
+                        instrument,
+                        submittedOrder,
+                        flattenSignalName,
+                        reasonToken,
+                        mitigationKey,
+                        allowFallbackWarning: true);
+                    continue;
+                }
+
+                bool fallbackIssued = TryIssueInstrumentFlattenFallback(
+                    account,
+                    instrument,
+                    flattenSignalName,
+                    reasonToken,
+                    namedResult,
+                    mitigationKey,
+                    allowFallbackWarning: true);
+                AppendJournal(
+                    account.Name,
+                    "Risk",
+                    $"SYNC|event=flatten_named_result|reason={reasonToken}|instrument={instrumentToken}|signal={flattenSignalName}|origin={FlattenOrigin.Unknown}|result=failed|cause={CleanJournalToken(namedResult)}");
+                if (fallbackIssued)
+                    flattenIssued = true;
             }
 
             if (!flattenIssued)
@@ -3958,6 +4250,280 @@ namespace Glitch.UI
             MarkRiskMitigation(mitigationKey, nowUtc);
             AppendJournal(account.Name, "Risk", reason + ". Flatten issued.");
             return true;
+        }
+
+        private static string ResolveRiskFlattenSignalName(string mitigationKey)
+        {
+            string key = string.IsNullOrWhiteSpace(mitigationKey) ? string.Empty : mitigationKey.Trim().ToUpperInvariant();
+            if (key.StartsWith("UNRLZ", StringComparison.OrdinalIgnoreCase))
+                return RiskFlattenUnrealizedSignalName;
+            if (key.StartsWith("MAXQTY", StringComparison.OrdinalIgnoreCase))
+                return RiskFlattenMaxQtySignalName;
+            if (key.StartsWith("NAKED", StringComparison.OrdinalIgnoreCase))
+                return RiskFlattenNakedSignalName;
+            if (key.StartsWith("DAILYLIMIT", StringComparison.OrdinalIgnoreCase))
+                return RiskFlattenDailyLimitSignalName;
+            if (key.StartsWith("LOCK", StringComparison.OrdinalIgnoreCase) || key.StartsWith("EVAL", StringComparison.OrdinalIgnoreCase))
+                return RiskFlattenBufferSignalName;
+
+            return RiskFlattenBufferSignalName;
+        }
+
+        private bool TryIssueInstrumentFlattenFallback(
+            Account account,
+            Instrument instrument,
+            string flattenSignalName,
+            string reasonToken,
+            string cause,
+            string mitigationKey,
+            bool allowFallbackWarning)
+        {
+            if (account == null || instrument == null)
+                return false;
+
+            string instrumentToken = CleanJournalToken(GetInstrumentRoot(instrument));
+            string fallbackCause = string.IsNullOrWhiteSpace(cause) ? "named_unconfirmed" : cause;
+            bool fallbackIssued = false;
+            try
+            {
+                account.Flatten(new[] { instrument });
+                fallbackIssued = true;
+            }
+            catch (Exception ex)
+            {
+                fallbackCause = fallbackCause + ";fallback_exception_" + ex.GetType().Name;
+            }
+
+            AppendJournal(
+                account.Name,
+                "Risk",
+                $"SYNC|event=flatten_fallback_used|reason={CleanJournalToken(reasonToken)}|instrument={instrumentToken}|signal={flattenSignalName}|origin={FlattenOrigin.FallbackAccountFlatten}|result={(fallbackIssued ? "issued" : "failed")}|cause={CleanJournalToken(fallbackCause)}");
+            if (!fallbackIssued)
+                return false;
+
+            AppendJournal(
+                account.Name,
+                "Risk",
+                $"SYNC|event=flatten_origin|reason={CleanJournalToken(reasonToken)}|origin={FlattenOrigin.FallbackAccountFlatten}|signal={flattenSignalName}|instrument={instrumentToken}");
+            if (allowFallbackWarning)
+                RaiseRiskFlattenFallbackWarningIfNeeded(account.Name, mitigationKey, flattenSignalName, CleanJournalToken(reasonToken));
+
+            return true;
+        }
+
+        private void RaiseRiskFlattenFallbackWarningIfNeeded(string accountName, string mitigationKey, string flattenSignalName, string reasonToken)
+        {
+            if (_isWindowClosed)
+                return;
+
+            DateTime nowUtc = DateTime.UtcNow;
+            if (!TryMarkRiskFlattenFallbackWarning(mitigationKey, nowUtc))
+                return;
+
+            RaiseCriticalWarning(
+                accountName,
+                "Risk flatten fallback used. Review connection health and broker attribution.",
+                "RiskFlattenFallback",
+                unlocksTrading: false);
+            AppendJournal(
+                accountName,
+                "Risk",
+                $"SYNC|event=flatten_fallback_used|reason={CleanJournalToken(reasonToken)}|instrument=ALL|signal={flattenSignalName}|origin={FlattenOrigin.FallbackAccountFlatten}|result=warning_raised|cause=manual_review_required");
+        }
+
+        private bool TryMarkRiskFlattenFallbackWarning(string mitigationKey, DateTime nowUtc)
+        {
+            string key = string.IsNullOrWhiteSpace(mitigationKey)
+                ? "GLOBAL"
+                : mitigationKey.Trim();
+
+            lock (_riskFlattenFallbackWarningLock)
+            {
+                if (_riskFlattenFallbackWarningCooldownByKey.TryGetValue(key, out DateTime cooldownUntilUtc) &&
+                    cooldownUntilUtc > nowUtc)
+                {
+                    return false;
+                }
+
+                _riskFlattenFallbackWarningCooldownByKey[key] = nowUtc.Add(RiskMitigationCooldown);
+                return true;
+            }
+        }
+
+        private void ScheduleNamedRiskFlattenConfirmationFallback(
+            Account account,
+            Instrument instrument,
+            Order submittedOrder,
+            string flattenSignalName,
+            string reasonToken,
+            string mitigationKey,
+            bool allowFallbackWarning)
+        {
+            if (_isWindowClosed || account == null || instrument == null || submittedOrder == null)
+                return;
+
+            string accountName = account.Name ?? "System";
+            string instrumentToken = CleanJournalToken(GetInstrumentRoot(instrument));
+            string normalizedReason = CleanJournalToken(reasonToken);
+
+            _ = Task.Run(async () =>
+            {
+                if (_isWindowClosed)
+                    return;
+
+                try
+                {
+                    string confirmationResult = await ConfirmNamedRiskFlattenOrderAsync(submittedOrder).ConfigureAwait(false);
+                    bool confirmed = confirmationResult.StartsWith("confirmed_", StringComparison.OrdinalIgnoreCase);
+                    if (confirmed)
+                    {
+                        AppendJournal(
+                            accountName,
+                            "Risk",
+                            $"SYNC|event=flatten_named_result|reason={normalizedReason}|instrument={instrumentToken}|signal={flattenSignalName}|origin={FlattenOrigin.AddonGovernor}|result=confirmed_async|cause={CleanJournalToken(confirmationResult)}");
+                        AppendJournal(
+                            accountName,
+                            "Risk",
+                            $"SYNC|event=flatten_origin|reason={normalizedReason}|origin={FlattenOrigin.AddonGovernor}|signal={flattenSignalName}|instrument={instrumentToken}");
+                        return;
+                    }
+
+                    AppendJournal(
+                        accountName,
+                        "Risk",
+                        $"SYNC|event=flatten_named_result|reason={normalizedReason}|instrument={instrumentToken}|signal={flattenSignalName}|origin={FlattenOrigin.Unknown}|result=failed_async|cause={CleanJournalToken(confirmationResult)}");
+                    TryIssueInstrumentFlattenFallback(
+                        account,
+                        instrument,
+                        flattenSignalName,
+                        normalizedReason,
+                        confirmationResult,
+                        mitigationKey,
+                        allowFallbackWarning);
+                }
+                catch
+                {
+                }
+            });
+        }
+
+        private static bool TrySubmitNamedRiskFlattenOrder(Account account, Instrument instrument, string signalName, out string result, out Order submittedOrder)
+        {
+            result = "unknown";
+            submittedOrder = null;
+            if (account == null || instrument == null)
+            {
+                result = "invalid_account_or_instrument";
+                return false;
+            }
+
+            Position position = null;
+            try
+            {
+                position = account.Positions.FirstOrDefault(p =>
+                    p != null &&
+                    p.Instrument != null &&
+                    string.Equals(GetInstrumentRoot(p.Instrument), GetInstrumentRoot(instrument), StringComparison.OrdinalIgnoreCase) &&
+                    p.MarketPosition != MarketPosition.Flat);
+            }
+            catch
+            {
+                result = "position_lookup_failed";
+                return false;
+            }
+
+            if (position == null || position.MarketPosition == MarketPosition.Flat)
+            {
+                result = "no_open_position";
+                return false;
+            }
+
+            int qty = Math.Abs(position.Quantity);
+            if (qty <= 0)
+            {
+                result = "invalid_qty";
+                return false;
+            }
+
+            OrderAction action = position.MarketPosition == MarketPosition.Long
+                ? OrderAction.Sell
+                : OrderAction.BuyToCover;
+
+            try
+            {
+                Order order = account.CreateOrder(
+                    instrument,
+                    action,
+                    OrderType.Market,
+                    GetPreferredFollowerOrderEntry(),
+                    TimeInForce.Day,
+                    qty,
+                    0.0,
+                    0.0,
+                    string.Empty,
+                    signalName ?? RiskFlattenBufferSignalName,
+                    DateTime.MaxValue,
+                    null);
+                if (order == null)
+                {
+                    result = "create_order_null";
+                    return false;
+                }
+
+                account.Submit(new[] { order });
+                OrderState state = order.OrderState;
+                if (state == OrderState.Accepted ||
+                    state == OrderState.Working ||
+                    state == OrderState.PartFilled ||
+                    state == OrderState.Filled)
+                {
+                    result = "confirmed_" + state;
+                    return true;
+                }
+
+                if (state == OrderState.Cancelled || state == OrderState.Rejected)
+                {
+                    result = "failed_" + state;
+                    return false;
+                }
+
+                submittedOrder = order;
+                result = "pending_" + state;
+                return false;
+            }
+            catch
+            {
+                result = "submit_exception";
+                return false;
+            }
+        }
+
+        private static async Task<string> ConfirmNamedRiskFlattenOrderAsync(Order order)
+        {
+            if (order == null)
+                return "failed_order_null";
+
+            DateTime deadlineUtc = DateTime.UtcNow.AddMilliseconds(RiskFlattenConfirmationTimeoutMs);
+            while (DateTime.UtcNow <= deadlineUtc)
+            {
+                OrderState state = order.OrderState;
+                if (state == OrderState.Accepted ||
+                    state == OrderState.Working ||
+                    state == OrderState.PartFilled ||
+                    state == OrderState.Filled)
+                {
+                    return "confirmed_" + state;
+                }
+
+                if (state == OrderState.Cancelled || state == OrderState.Rejected)
+                {
+                    return "failed_" + state;
+                }
+
+                await Task.Delay(RiskFlattenConfirmationPollMs).ConfigureAwait(false);
+            }
+
+            return "failed_timeout_" + order.OrderState;
         }
 
         private bool IsRiskMitigationCoolingDown(string mitigationKey, DateTime nowUtc)
@@ -3985,6 +4551,17 @@ namespace Glitch.UI
                 .ToList())
             {
                 _riskMitigationCooldownByKey.Remove(stale);
+            }
+
+            lock (_riskFlattenFallbackWarningLock)
+            {
+                foreach (string stale in _riskFlattenFallbackWarningCooldownByKey
+                    .Where(kvp => kvp.Value <= nowUtc)
+                    .Select(kvp => kvp.Key)
+                    .ToList())
+                {
+                    _riskFlattenFallbackWarningCooldownByKey.Remove(stale);
+                }
             }
         }
 
@@ -4108,6 +4685,17 @@ namespace Glitch.UI
                 else if (warningKey.StartsWith("EvalProfitTargetLock|", StringComparison.OrdinalIgnoreCase))
                 {
                     removedAnyLock = _evalTargetLockedAccounts.Remove(accountName);
+                }
+                else if (warningKey.StartsWith("ReplicationFreeze|", StringComparison.OrdinalIgnoreCase))
+                {
+                    removedAnyLock = _replicationFrozenKeys.Remove(accountName);
+                }
+                else if (warningKey.StartsWith("MaxContractsBreach|", StringComparison.OrdinalIgnoreCase) ||
+                         warningKey.StartsWith("NoProtectionLock|", StringComparison.OrdinalIgnoreCase))
+                {
+                    removedAnyLock = _riskLockedAccounts.Remove(accountName);
+                    if (_replicationFrozenKeys.Remove(accountName))
+                        removedAnyLock = true;
                 }
                 else
                 {

@@ -180,7 +180,7 @@ analytics.metric.composite	Glitch Score
 analytics.metric.current_price	Current Price
 analytics.metric.session	Session
 analytics.regime	Regime
-analytics.technical.bridge_missing_cta	To enable Technical Analysis, add GlitchAnalyticsBridgeIndicator to a NinjaTrader chart. Data is available during market hours. If refresh is needed, re-apply the indicator on the chart.
+analytics.technical.bridge_missing_cta	To enable Technical Analysis, add GlitchAnalyticsBridge to a NinjaTrader chart. Data is available during market hours. If refresh is needed, re-apply the indicator on the chart.
 analytics.timeframe.avg_price_title	{0} min Avg Price
 analytics.unified.action	Action
 analytics.unified.action.execute	Execute

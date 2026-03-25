@@ -17,6 +17,18 @@ namespace Glitch.Services
         public bool EnforceUnrealizedFlatten70Percent { get; set; } = false;
         public bool EnforceEvalProfitTargetLock { get; set; } = false;
         public bool FlattenOnCriticalBufferLock { get; set; } = false;
+        public int ReplicationDeclaredCapContracts { get; set; } = 0;
+        public int ReplicationMaxDeltaPerCycle { get; set; } = 3;
+        public int ReplicationBurstWindowMs { get; set; } = 1000;
+        public int ReplicationBurstFillCountThreshold { get; set; } = 4;
+        public int ReplicationBurstQtyJumpThreshold { get; set; } = 6;
+        public int FollowerEmergencyStopTicks { get; set; } = 20;
+        public int NoProtectionTimeoutMs { get; set; } = 1000;
+        public int NoProtectionTimeoutTicks { get; set; } = 3;
+        public int RearmTimeoutMs { get; set; } = 1500;
+        public int RearmTimeoutTicks { get; set; } = 4;
+        public bool FreezeRequiresManualAcknowledge { get; set; } = true;
+        public bool LockRequiresManualAcknowledge { get; set; } = true;
         public string LicenseKey { get; set; } = string.Empty;
         public string LicenseApiBaseUrl { get; set; } = "https://api.glitchtrader.com";
         public string InstallationId { get; set; } = Guid.NewGuid().ToString("N");
@@ -87,6 +99,18 @@ namespace Glitch.Services
             settings.EnforceUnrealizedFlatten70Percent = ReadBool(rows, "ENFORCE_UNREALIZED_FLATTEN_70_PERCENT", settings.EnforceUnrealizedFlatten70Percent);
             settings.EnforceEvalProfitTargetLock = ReadBool(rows, "ENFORCE_EVAL_PROFIT_TARGET_LOCK", settings.EnforceEvalProfitTargetLock);
             settings.FlattenOnCriticalBufferLock = ReadBool(rows, "FLATTEN_ON_CRITICAL_BUFFER_LOCK", settings.FlattenOnCriticalBufferLock);
+            settings.ReplicationDeclaredCapContracts = ReadInt(rows, "REPLICATION_DECLARED_CAP_CONTRACTS", settings.ReplicationDeclaredCapContracts, 0, 200);
+            settings.ReplicationMaxDeltaPerCycle = ReadInt(rows, "REPLICATION_MAX_DELTA_PER_CYCLE", settings.ReplicationMaxDeltaPerCycle, 1, 25);
+            settings.ReplicationBurstWindowMs = ReadInt(rows, "REPLICATION_BURST_WINDOW_MS", settings.ReplicationBurstWindowMs, 250, 10000);
+            settings.ReplicationBurstFillCountThreshold = ReadInt(rows, "REPLICATION_BURST_FILL_COUNT_THRESHOLD", settings.ReplicationBurstFillCountThreshold, 2, 25);
+            settings.ReplicationBurstQtyJumpThreshold = ReadInt(rows, "REPLICATION_BURST_QTY_JUMP_THRESHOLD", settings.ReplicationBurstQtyJumpThreshold, 2, 100);
+            settings.FollowerEmergencyStopTicks = ReadInt(rows, "FOLLOWER_EMERGENCY_STOP_TICKS", settings.FollowerEmergencyStopTicks, 2, 2000);
+            settings.NoProtectionTimeoutMs = ReadInt(rows, "NO_PROTECTION_TIMEOUT_MS", settings.NoProtectionTimeoutMs, 100, 10000);
+            settings.NoProtectionTimeoutTicks = ReadInt(rows, "NO_PROTECTION_TIMEOUT_TICKS", settings.NoProtectionTimeoutTicks, 1, 200);
+            settings.RearmTimeoutMs = ReadInt(rows, "REARM_TIMEOUT_MS", settings.RearmTimeoutMs, 100, 10000);
+            settings.RearmTimeoutTicks = ReadInt(rows, "REARM_TIMEOUT_TICKS", settings.RearmTimeoutTicks, 1, 200);
+            settings.FreezeRequiresManualAcknowledge = ReadBool(rows, "FREEZE_REQUIRES_MANUAL_ACKNOWLEDGE", settings.FreezeRequiresManualAcknowledge);
+            settings.LockRequiresManualAcknowledge = ReadBool(rows, "LOCK_REQUIRES_MANUAL_ACKNOWLEDGE", settings.LockRequiresManualAcknowledge);
             string storedLicenseKey = ReadString(rows, "LICENSE_KEY", settings.LicenseKey);
             bool needsRewrite = false;
             bool decodeFailed = false;
@@ -130,6 +154,18 @@ namespace Glitch.Services
                 $"ENFORCE_UNREALIZED_FLATTEN_70_PERCENT\t{ToBoolToken(settings.EnforceUnrealizedFlatten70Percent)}",
                 $"ENFORCE_EVAL_PROFIT_TARGET_LOCK\t{ToBoolToken(settings.EnforceEvalProfitTargetLock)}",
                 $"FLATTEN_ON_CRITICAL_BUFFER_LOCK\t{ToBoolToken(settings.FlattenOnCriticalBufferLock)}",
+                $"REPLICATION_DECLARED_CAP_CONTRACTS\t{settings.ReplicationDeclaredCapContracts.ToString(CultureInfo.InvariantCulture)}",
+                $"REPLICATION_MAX_DELTA_PER_CYCLE\t{settings.ReplicationMaxDeltaPerCycle.ToString(CultureInfo.InvariantCulture)}",
+                $"REPLICATION_BURST_WINDOW_MS\t{settings.ReplicationBurstWindowMs.ToString(CultureInfo.InvariantCulture)}",
+                $"REPLICATION_BURST_FILL_COUNT_THRESHOLD\t{settings.ReplicationBurstFillCountThreshold.ToString(CultureInfo.InvariantCulture)}",
+                $"REPLICATION_BURST_QTY_JUMP_THRESHOLD\t{settings.ReplicationBurstQtyJumpThreshold.ToString(CultureInfo.InvariantCulture)}",
+                $"FOLLOWER_EMERGENCY_STOP_TICKS\t{settings.FollowerEmergencyStopTicks.ToString(CultureInfo.InvariantCulture)}",
+                $"NO_PROTECTION_TIMEOUT_MS\t{settings.NoProtectionTimeoutMs.ToString(CultureInfo.InvariantCulture)}",
+                $"NO_PROTECTION_TIMEOUT_TICKS\t{settings.NoProtectionTimeoutTicks.ToString(CultureInfo.InvariantCulture)}",
+                $"REARM_TIMEOUT_MS\t{settings.RearmTimeoutMs.ToString(CultureInfo.InvariantCulture)}",
+                $"REARM_TIMEOUT_TICKS\t{settings.RearmTimeoutTicks.ToString(CultureInfo.InvariantCulture)}",
+                $"FREEZE_REQUIRES_MANUAL_ACKNOWLEDGE\t{ToBoolToken(settings.FreezeRequiresManualAcknowledge)}",
+                $"LOCK_REQUIRES_MANUAL_ACKNOWLEDGE\t{ToBoolToken(settings.LockRequiresManualAcknowledge)}",
                 $"LICENSE_KEY\t{CleanValue(persistedLicenseValue)}",
                 $"LICENSE_API_BASE_URL\t{CleanValue(NormalizeApiBaseUrl(settings.LicenseApiBaseUrl))}",
                 $"INSTALLATION_ID\t{CleanValue(settings.InstallationId)}"
