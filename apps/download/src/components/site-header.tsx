@@ -10,6 +10,7 @@ type SiteHeaderProps = {
   affiliateUrl: string;
   docsUrl: string;
   guideUrl: string;
+  startFreeUrl: string;
   memberHubUrl: string;
   goProUrl: string;
 };
@@ -50,6 +51,7 @@ export function SiteHeaderClient({
   affiliateUrl,
   docsUrl,
   guideUrl,
+  startFreeUrl,
   memberHubUrl,
   goProUrl,
 }: SiteHeaderProps) {
@@ -99,6 +101,9 @@ export function SiteHeaderClient({
           <a href={guideUrl} className={navLinkClass}>
             Guide
           </a>
+          <a href={startFreeUrl} className={navLinkClass}>
+            Start Free
+          </a>
           <a href={memberHubUrl} className={memberHubClass}>
             Member Hub
           </a>
@@ -138,6 +143,9 @@ export function SiteHeaderClient({
               </a>
               <a href={guideUrl} className={`${mobileItemClass} ${mobileNeutralTextClass}`} onClick={closeMenu}>
                 <span>Guide</span>
+              </a>
+              <a href={startFreeUrl} className={`${mobileItemClass} ${mobileNeutralTextClass}`} onClick={closeMenu}>
+                <span>Start Free</span>
               </a>
               <a href={memberHubUrl} className={`${mobileItemClass} ${memberHubClass}`} onClick={closeMenu}>
                 <span>Member Hub</span>

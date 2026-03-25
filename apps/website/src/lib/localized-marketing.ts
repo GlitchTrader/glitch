@@ -130,7 +130,8 @@ const en: MarketingContent = {
       },
       {
         question: "How do the paid plans work?",
-        answer: "Choose Monthly / Annual for flexible billing, or Lifetime access for one payment. After checkout, Member Hub handles download, updates, and activation.",
+        answer:
+          "Choose Monthly / Annual for flexible billing, or Lifetime access for one payment. Every Pro plan includes a risk-free 7-day free trial. After checkout, Member Hub handles download, updates, and activation.",
       },
       {
         question: "Is there a marketplace coming?",
@@ -155,7 +156,8 @@ const en: MarketingContent = {
       "Journal outcomes and review metrics after the close.",
       "Iterate process weekly. Professionals review, amateurs react.",
     ],
-    premiumCheckoutNote: "Choose monthly, annual, or lifetime at checkout.",
+    premiumCheckoutNote:
+      "Every Pro plan includes a risk-free 7-day free trial. Choose monthly, annual, or lifetime at checkout.",
   },
   product: {
     metadataTitle: "Glitch Product - Risk-First Trading Assistant for NinjaTrader",
@@ -205,7 +207,8 @@ const en: MarketingContent = {
       { title: "Open workflow philosophy", body: "Bring your own indicators, automation, and strategy stack. Glitch centralizes and hardens the operation." },
     ],
     pricingTitle: "Pricing in one clean view",
-    pricingLead: "Free gets you started. Monthly / Annual gives you flexible premium access. Lifetime access is the permanent seat for traders who already know Glitch belongs in the stack.",
+    pricingLead:
+      "Free gets you started. Monthly / Annual gives you flexible premium access with a risk-free 7-day free trial on every Pro plan. Lifetime access is the permanent seat for traders who already know Glitch belongs in the stack.",
     memberHubBlurb: "is where your downloads, updates, and onboarding steps live.",
     faqTitle: "FAQ",
     faqItems: [
@@ -213,7 +216,11 @@ const en: MarketingContent = {
       { question: "Does Glitch replace my strategy?", answer: "No. Your strategy remains yours. Glitch improves execution quality and risk discipline around that strategy." },
       { question: "Can I run Glitch with automated systems?", answer: "Yes. Glitch is built to work alongside manual and automated workflows so you keep flexibility while enforcing guardrails." },
       { question: "What makes paid access worth it?", answer: "Scale, depth, and speed: higher account limits, stronger context layers, and a serious feedback loop through Journal, Metrics, and Insights." },
-      { question: "How do monthly, yearly, and lifetime access work?", answer: "Monthly and yearly sit inside the flexible paid plan. Lifetime access is the one-payment option. Both unlock the same premium Glitch stack." },
+      {
+        question: "How do monthly, yearly, and lifetime access work?",
+        answer:
+          "Monthly and annual Pro plans include a risk-free 7-day free trial. Monthly and yearly sit inside the flexible paid plan. Lifetime access is the one-payment option. Both unlock the same premium Glitch stack.",
+      },
       { question: "Do you promise payouts or profits?", answer: "No. We promise professional-grade tooling for risk and execution discipline. Outcomes depend on the trader and market." },
     ],
   },
@@ -222,7 +229,7 @@ const en: MarketingContent = {
     metadataDescription: "Compare Glitch pricing for prop traders: start free, upgrade to monthly or annual premium access, or lock in lifetime access.",
     badge: "Pricing",
     title: "Straight pricing for serious operators.",
-    lead: "Three plans. Clear trade-offs. Free gets you the guardrails. Monthly / Annual gives you the full premium stack with flexible billing. Lifetime access gives you the same premium stack without recurring charges.",
+    lead: "Three plans. Clear trade-offs. Free gets you the guardrails. Monthly / Annual gives you the full premium stack with flexible billing and a risk-free 7-day free trial on every Pro plan. Lifetime access gives you the same premium stack without recurring charges.",
     memberHubLead: "After checkout,",
     memberHubBlurb: "is where downloads, onboarding, updates, and activation steps live.",
     upgradeTitle: "What changes when you upgrade",
@@ -233,7 +240,8 @@ const en: MarketingContent = {
     paidUnlocksTitle: "Every paid plan unlocks",
     paidBestForLabel: "Best for",
     paidBestForBody: "Traders running larger account stacks, deeper analysis, and faster review loops.",
-    paidNote: "Monthly, yearly, and lifetime access all unlock the same premium stack. Only the billing model changes.",
+    paidNote:
+      "Monthly and annual Pro plans include a risk-free 7-day free trial. Monthly, yearly, and lifetime access all unlock the same premium stack. Only the billing model changes.",
     accessTitle: "How access works",
     upgradeFlowTitle: "Upgrade flow",
     upgradeFlowSteps: [
@@ -309,7 +317,11 @@ const pt: MarketingContent = {
       { question: "O Glitch funciona em diferentes modelos de prop firm?", answer: "Sim. O Glitch foi feito para fluxos cross-prop, com estruturas de regras pré-carregadas e comportamento de conformidade configurável." },
       { question: "O Glitch aguenta muitas contas?", answer: "O acesso pago suporta até 10 masters/grupos e até 100 seguidores por grupo, pensado para operações sérias com múltiplas contas." },
       { question: "O que é o Glitch Score?", answer: "O Glitch Score é a camada composta de sinal do Glitch, que consolida contexto em múltiplos timeframes para leitura mais rápida e estruturada." },
-      { question: "Como funcionam os planos pagos?", answer: "Escolha Mensal / Anual para cobrança flexível, ou Vitalício em pagamento único. Depois do checkout, o Member Hub cuida de download, updates e ativação." },
+      {
+        question: "Como funcionam os planos pagos?",
+        answer:
+          "Escolha Mensal / Anual para cobrança flexível, ou Vitalício em pagamento único. Todo plano Pro inclui um teste gratuito de 7 dias sem risco. Depois do checkout, o Member Hub cuida de download, updates e ativação.",
+      },
       { question: "Vai existir marketplace?", answer: "Sim. O roadmap inclui marketplace para indicadores de terceiros, estratégias e ofertas de prop firms parceiras." },
       { question: "O Glitch garante lucro?", answer: "Não. O Glitch melhora qualidade de processo e disciplina de risco. O resultado ainda depende da estratégia e da execução do trader." },
     ],
@@ -327,7 +339,8 @@ const pt: MarketingContent = {
       "Registre os resultados e revise métricas após o fechamento.",
       "Itere o processo semanalmente. Profissionais revisam; amadores reagem.",
     ],
-    premiumCheckoutNote: "Escolha mensal, anual ou vitalício no checkout.",
+    premiumCheckoutNote:
+      "Todo plano Pro inclui um teste gratuito de 7 dias sem risco. Escolha mensal, anual ou vitalício no checkout.",
   },
   product: {
     metadataTitle: "Oferta Glitch - Assistente de Trading com Foco em Risco para NinjaTrader",
@@ -377,7 +390,8 @@ const pt: MarketingContent = {
       { title: "Filosofia de workflow aberto", body: "Use seus próprios indicadores, automações e estratégias. O Glitch centraliza e endurece a operação." },
     ],
     pricingTitle: "Preço em uma visão limpa",
-    pricingLead: "O plano grátis coloca você em movimento. Mensal / Anual entrega acesso premium flexível. Vitalício é o assento permanente para quem já sabe que o Glitch pertence à stack.",
+    pricingLead:
+      "O plano grátis coloca você em movimento. Mensal / Anual entrega acesso premium flexível com teste gratuito de 7 dias sem risco em todo plano Pro. Vitalício é o assento permanente para quem já sabe que o Glitch pertence à stack.",
     memberHubBlurb: "é onde ficam seus downloads, atualizações e passos de onboarding.",
     faqTitle: "Perguntas frequentes",
     faqItems: [
@@ -385,7 +399,11 @@ const pt: MarketingContent = {
       { question: "O Glitch substitui minha estratégia?", answer: "Não. Sua estratégia continua sendo sua. O Glitch melhora a qualidade de execução e a disciplina de risco em torno dela." },
       { question: "Posso usar o Glitch com sistemas automáticos?", answer: "Sim. O Glitch foi feito para trabalhar ao lado de fluxos manuais e automáticos, mantendo flexibilidade com guardrails." },
       { question: "O que torna o acesso pago valioso?", answer: "Escala, profundidade e velocidade: mais contas, camadas de contexto mais fortes e um loop sério de Journal, Metrics e Insights." },
-      { question: "Como funcionam os acessos mensal, anual e vitalício?", answer: "Mensal e anual ficam dentro do plano pago flexível. Vitalício é a opção de pagamento único. Ambos destravam a mesma stack premium do Glitch." },
+      {
+        question: "Como funcionam os acessos mensal, anual e vitalício?",
+        answer:
+          "Os planos Pro mensais e anuais incluem um teste gratuito de 7 dias sem risco. Mensal e anual ficam dentro do plano pago flexível. Vitalício é a opção de pagamento único. Ambos desbloqueiam a mesma stack premium do Glitch.",
+      },
       { question: "Vocês prometem payout ou lucro?", answer: "Não. Prometemos ferramentas profissionais para disciplina de risco e execução. Os resultados dependem do trader e do mercado." },
     ],
   },
@@ -394,7 +412,7 @@ const pt: MarketingContent = {
     metadataDescription: "Compare os preços do Glitch para prop traders: comece grátis, faça upgrade para premium mensal ou anual, ou garanta acesso vitalício.",
     badge: "Preços",
     title: "Preço direto para operadores sérios.",
-    lead: "Três planos. Trade-offs claros. O grátis entrega guardrails. Mensal / Anual entrega a stack premium completa com cobrança flexível. Vitalício entrega a mesma stack sem cobrança recorrente.",
+    lead: "Três planos. Trade-offs claros. O grátis entrega guardrails. Mensal / Anual entrega a stack premium completa com cobrança flexível e teste gratuito de 7 dias sem risco em todo plano Pro. Vitalício entrega a mesma stack sem cobrança recorrente.",
     memberHubLead: "Depois do checkout,",
     memberHubBlurb: "é onde ficam downloads, onboarding, atualizações e passos de ativação.",
     upgradeTitle: "O que muda quando você faz upgrade",
@@ -405,7 +423,8 @@ const pt: MarketingContent = {
     paidUnlocksTitle: "Todo plano pago libera",
     paidBestForLabel: "Melhor para",
     paidBestForBody: "Traders rodando mais contas, análise mais profunda e ciclos de revisão mais rápidos.",
-    paidNote: "Mensal, anual e vitalício desbloqueiam a mesma stack premium. Só o modelo de cobrança muda.",
+    paidNote:
+      "Os planos Pro mensais e anuais incluem um teste gratuito de 7 dias sem risco. Mensal, anual e vitalício desbloqueiam a mesma stack premium. Só o modelo de cobrança muda.",
     accessTitle: "Como o acesso funciona",
     upgradeFlowTitle: "Fluxo de upgrade",
     upgradeFlowSteps: [
@@ -481,7 +500,11 @@ const es: MarketingContent = {
       { question: "¿Glitch funciona con distintos modelos de prop firm?", answer: "Sí. Está pensado para flujos cross-prop, con marcos de reglas precargados y comportamiento de cumplimiento configurable." },
       { question: "¿Glitch soporta muchas cuentas?", answer: "El acceso de pago admite hasta 10 masters o grupos y hasta 100 seguidores por grupo, pensado para operaciones serias de varias cuentas." },
       { question: "¿Qué es Glitch Score?", answer: "Glitch Score es la capa compuesta de señal de Glitch. Resume contexto en varios marcos temporales para que la lectura sea más rápida y estructurada." },
-      { question: "¿Cómo funcionan los planes de pago?", answer: "Puedes elegir mensual o anual para facturación flexible, o vitalicio con un único pago. Después del checkout, Member Hub concentra descarga, actualización y activación." },
+      {
+        question: "¿Cómo funcionan los planes de pago?",
+        answer:
+          "Puedes elegir mensual o anual para facturación flexible, o vitalicio con un único pago. Cada plan Pro incluye una prueba gratuita de 7 días sin riesgo. Después del checkout, Member Hub concentra descarga, actualización y activación.",
+      },
       { question: "¿Habrá marketplace?", answer: "Sí. El roadmap incluye un marketplace para indicadores de terceros, estrategias y ofertas de prop firms asociadas." },
       { question: "¿Glitch garantiza ganancias?", answer: "No. Glitch mejora la calidad del proceso y la disciplina de riesgo. El resultado sigue dependiendo de la estrategia y de la ejecución del trader." },
     ],
@@ -499,7 +522,8 @@ const es: MarketingContent = {
       "Registra resultados y revisa métricas al cierre.",
       "Itera el proceso cada semana. Los profesionales revisan; los amateurs reaccionan.",
     ],
-    premiumCheckoutNote: "Elige mensual, anual o vitalicio en el checkout.",
+    premiumCheckoutNote:
+      "Cada plan Pro incluye una prueba gratuita de 7 días sin riesgo. Elige mensual, anual o vitalicio en el checkout.",
   },
   product: {
     metadataTitle: "Oferta Glitch - Asistente de Trading con Enfoque en Riesgo para NinjaTrader",
@@ -549,7 +573,8 @@ const es: MarketingContent = {
       { title: "Filosofía de flujo abierto", body: "Trae tus indicadores, automatizaciones y estrategias. Glitch centraliza y endurece la operación." },
     ],
     pricingTitle: "Precios en una vista limpia",
-    pricingLead: "Gratis te pone en marcha. Mensual / Anual te da acceso premium flexible. Vitalicio es el asiento permanente para quien ya sabe que Glitch debe estar en su stack.",
+    pricingLead:
+      "Gratis te pone en marcha. Mensual / Anual te da acceso premium flexible con una prueba gratuita de 7 días sin riesgo en cada plan Pro. Vitalicio es el asiento permanente para quien ya sabe que Glitch debe estar en su stack.",
     memberHubBlurb: "es donde viven tus descargas, actualizaciones y pasos de onboarding.",
     faqTitle: "Preguntas frecuentes",
     faqItems: [
@@ -557,7 +582,11 @@ const es: MarketingContent = {
       { question: "¿Glitch sustituye mi estrategia?", answer: "No. Tu estrategia sigue siendo tuya. Glitch mejora la calidad de ejecución y la disciplina de riesgo alrededor de ella." },
       { question: "¿Puedo usar Glitch con sistemas automáticos?", answer: "Sí. Glitch está hecho para trabajar junto a flujos manuales y automáticos, manteniendo flexibilidad con guardrails." },
       { question: "¿Qué hace valioso el acceso de pago?", answer: "Escala, profundidad y velocidad: más cuentas, capas de contexto más fuertes y un bucle serio de Journal, Metrics e Insights." },
-      { question: "¿Cómo funcionan mensual, anual y vitalicio?", answer: "Mensual y anual forman parte del plan flexible. Vitalicio es el pago único. Ambos desbloquean la misma stack premium de Glitch." },
+      {
+        question: "¿Cómo funcionan mensual, anual y vitalicio?",
+        answer:
+          "Los planes Pro mensuales y anuales incluyen una prueba gratuita de 7 días sin riesgo. Mensual y anual forman parte del plan flexible. Vitalicio es el pago único. Ambos desbloquean la misma stack premium de Glitch.",
+      },
       { question: "¿Prometéis payouts o ganancias?", answer: "No. Prometemos herramientas serias para disciplina de riesgo y ejecución. Los resultados dependen del trader y del mercado." },
     ],
   },
@@ -566,7 +595,7 @@ const es: MarketingContent = {
     metadataDescription: "Compara los precios de Glitch para prop traders: empieza gratis, pasa a premium mensual o anual, o asegura acceso vitalicio.",
     badge: "Precios",
     title: "Precios directos para operadores serios.",
-    lead: "Tres planes. Diferencias claras. El gratis te da guardrails. Mensual / Anual te da la stack premium completa con facturación flexible. Vitalicio te da esa misma stack sin cobro recurrente.",
+    lead: "Tres planes. Diferencias claras. El gratis te da guardrails. Mensual / Anual te da la stack premium completa con facturación flexible y una prueba gratuita de 7 días sin riesgo en cada plan Pro. Vitalicio te da esa misma stack sin cobro recurrente.",
     memberHubLead: "Después del checkout,",
     memberHubBlurb: "es donde viven las descargas, el onboarding, las actualizaciones y la activación.",
     upgradeTitle: "Qué cambia cuando haces upgrade",
@@ -577,7 +606,8 @@ const es: MarketingContent = {
     paidUnlocksTitle: "Todo plan de pago desbloquea",
     paidBestForLabel: "Mejor para",
     paidBestForBody: "Traders con más cuentas, análisis más profundo y ciclos de revisión más rápidos.",
-    paidNote: "Mensual, anual y vitalicio desbloquean la misma stack premium. Solo cambia el modelo de cobro.",
+    paidNote:
+      "Los planes Pro mensuales y anuales incluyen una prueba gratuita de 7 días sin riesgo. Mensual, anual y vitalicio desbloquean la misma stack premium. Solo cambia el modelo de cobro.",
     accessTitle: "Cómo funciona el acceso",
     upgradeFlowTitle: "Flujo de upgrade",
     upgradeFlowSteps: [
@@ -653,7 +683,11 @@ const fr: MarketingContent = {
       { question: "Glitch fonctionne-t-il avec différents modèles de prop firm ?", answer: "Oui. Glitch est conçu pour des workflows cross-prop, avec des cadres de règles préchargés et un comportement de conformité configurable." },
       { question: "Glitch peut-il gérer beaucoup de comptes ?", answer: "L’accès payant prend en charge jusqu’à 10 masters ou groupes et jusqu’à 100 followers par groupe, pour des opérations multi-comptes sérieuses." },
       { question: "Qu’est-ce que Glitch Score ?", answer: "Glitch Score est la couche composite de signal de Glitch. Elle condense le contexte sur plusieurs unités de temps pour une lecture plus rapide et plus structurée." },
-      { question: "Comment fonctionnent les plans payants ?", answer: "Choisissez mensuel ou annuel pour une facturation flexible, ou à vie en paiement unique. Après le checkout, Member Hub gère téléchargement, mises à jour et activation." },
+      {
+        question: "Comment fonctionnent les plans payants ?",
+        answer:
+          "Choisissez mensuel ou annuel pour une facturation flexible, ou à vie en paiement unique. Chaque plan Pro inclut un essai gratuit de 7 jours sans risque. Après le checkout, Member Hub gère téléchargement, mises à jour et activation.",
+      },
       { question: "Un marketplace arrive-t-il ?", answer: "Oui. La feuille de route inclut un marketplace pour des indicateurs tiers, des stratégies et des offres de prop firms partenaires." },
       { question: "Glitch garantit-il des profits ?", answer: "Non. Glitch améliore la qualité du process et la discipline de risque. Les résultats dépendent toujours de la stratégie et de l’exécution du trader." },
     ],
@@ -671,7 +705,8 @@ const fr: MarketingContent = {
       "Journalisez les résultats et revoyez les métriques après la clôture.",
       "Itérez le process chaque semaine. Les pros révisent ; les amateurs réagissent.",
     ],
-    premiumCheckoutNote: "Choisissez mensuel, annuel ou à vie au checkout.",
+    premiumCheckoutNote:
+      "Chaque plan Pro inclut un essai gratuit de 7 jours sans risque. Choisissez mensuel, annuel ou à vie au checkout.",
   },
   product: {
     metadataTitle: "Offre Glitch - Assistant de Trading Axé Risque pour NinjaTrader",
@@ -721,7 +756,8 @@ const fr: MarketingContent = {
       { title: "Workflow ouvert", body: "Apportez vos indicateurs, automatisations et stratégies. Glitch centralise et durcit l’opération." },
     ],
     pricingTitle: "Le pricing dans une vue claire",
-    pricingLead: "Gratuit pour démarrer. Mensuel / Annuel pour un premium flexible. À vie pour ceux qui savent déjà que Glitch doit faire partie de la stack.",
+    pricingLead:
+      "Gratuit pour démarrer. Mensuel / Annuel pour un premium flexible avec un essai gratuit de 7 jours sans risque sur chaque plan Pro. À vie pour ceux qui savent déjà que Glitch doit faire partie de la stack.",
     memberHubBlurb: "est l’endroit où vivent vos téléchargements, mises à jour et étapes d’onboarding.",
     faqTitle: "FAQ",
     faqItems: [
@@ -729,7 +765,11 @@ const fr: MarketingContent = {
       { question: "Glitch remplace-t-il ma stratégie ?", answer: "Non. Votre stratégie reste la vôtre. Glitch améliore la qualité d’exécution et la discipline de risque autour de cette stratégie." },
       { question: "Puis-je utiliser Glitch avec des systèmes automatiques ?", answer: "Oui. Glitch est conçu pour fonctionner avec des workflows manuels comme automatiques, tout en gardant des garde-fous." },
       { question: "Qu’est-ce qui rend l’accès payant intéressant ?", answer: "Plus d’échelle, plus de profondeur et plus de vitesse : davantage de comptes, un contexte plus fort et une boucle Journal, Metrics et Insights plus sérieuse." },
-      { question: "Comment fonctionnent mensuel, annuel et à vie ?", answer: "Mensuel et annuel relèvent du plan flexible. À vie est l’option paiement unique. Les deux débloquent la même stack premium." },
+      {
+        question: "Comment fonctionnent mensuel, annuel et à vie ?",
+        answer:
+          "Les plans Pro mensuels et annuels incluent un essai gratuit de 7 jours sans risque. Mensuel et annuel relèvent du plan flexible. À vie est l’option paiement unique. Les deux débloquent la même stack premium.",
+      },
       { question: "Promettez-vous des payouts ou des profits ?", answer: "Non. Nous promettons des outils sérieux pour la discipline de risque et l’exécution. Les résultats dépendent du trader et du marché." },
     ],
   },
@@ -738,7 +778,7 @@ const fr: MarketingContent = {
     metadataDescription: "Comparez les tarifs Glitch pour prop traders : démarrez gratuitement, passez au premium mensuel ou annuel, ou sécurisez l’accès à vie.",
     badge: "Tarifs",
     title: "Des tarifs clairs pour des opérateurs sérieux.",
-    lead: "Trois plans. Des arbitrages clairs. Le gratuit vous donne les garde-fous. Le mensuel / annuel vous donne la stack premium complète avec une facturation flexible. L’accès à vie vous donne cette même stack sans récurrence.",
+    lead: "Trois plans. Des arbitrages clairs. Le gratuit vous donne les garde-fous. Le mensuel / annuel vous donne la stack premium complète avec une facturation flexible et un essai gratuit de 7 jours sans risque sur chaque plan Pro. L’accès à vie vous donne cette même stack sans récurrence.",
     memberHubLead: "Après le checkout,",
     memberHubBlurb: "est l’endroit où vivent téléchargements, onboarding, mises à jour et activation.",
     upgradeTitle: "Ce qui change quand vous passez au niveau supérieur",
@@ -749,7 +789,8 @@ const fr: MarketingContent = {
     paidUnlocksTitle: "Chaque plan payant débloque",
     paidBestForLabel: "Idéal pour",
     paidBestForBody: "Les traders qui gèrent plus de comptes, plus de profondeur d’analyse et des boucles de revue plus rapides.",
-    paidNote: "Mensuel, annuel et à vie débloquent la même stack premium. Seul le modèle de facturation change.",
+    paidNote:
+      "Les plans Pro mensuels et annuels incluent un essai gratuit de 7 jours sans risque. Mensuel, annuel et à vie débloquent la même stack premium. Seul le modèle de facturation change.",
     accessTitle: "Fonctionnement de l’accès",
     upgradeFlowTitle: "Parcours d’upgrade",
     upgradeFlowSteps: [
@@ -825,7 +866,11 @@ const ru: MarketingContent = {
       { question: "Работает ли Glitch с разными prop firm моделями?", answer: "Да. Glitch рассчитан на cross-prop workflow, с предзагруженными каркасами правил и настраиваемым поведением по соблюдению ограничений." },
       { question: "Справится ли Glitch с большим числом счетов?", answer: "Платный доступ поддерживает до 10 master-групп и до 100 follower-счетов на группу — для серьезных многоаккаунтных операций." },
       { question: "Что такое Glitch Score?", answer: "Glitch Score — это составной сигнальный слой Glitch. Он собирает контекст из нескольких таймфреймов, чтобы читать рынок быстрее и структурированнее." },
-      { question: "Как работают платные планы?", answer: "Можно выбрать месячную или годовую оплату, либо пожизненный доступ одним платежом. После checkout загрузка, обновления и активация происходят через Member Hub." },
+      {
+        question: "Как работают платные планы?",
+        answer:
+          "Можно выбрать месячную или годовую оплату, либо пожизненный доступ одним платежом. Каждый Pro-план включает безрисковый 7-дневный бесплатный пробный период. После checkout загрузка, обновления и активация происходят через Member Hub.",
+      },
       { question: "Появится ли marketplace?", answer: "Да. В roadmap входят marketplace для сторонних индикаторов, стратегий и партнерских prop firm предложений." },
       { question: "Гарантирует ли Glitch прибыль?", answer: "Нет. Glitch улучшает качество процесса и риск-дисциплину. Итог всегда зависит от стратегии и исполнения трейдера." },
     ],
@@ -843,7 +888,8 @@ const ru: MarketingContent = {
       "Занесите результаты в журнал и пересмотрите метрики после закрытия.",
       "Итерируйте процесс еженедельно. Профессионалы пересматривают, любители реагируют.",
     ],
-    premiumCheckoutNote: "На checkout можно выбрать месячный, годовой или lifetime доступ.",
+    premiumCheckoutNote:
+      "Каждый Pro-план включает безрисковый 7-дневный бесплатный пробный период. На checkout можно выбрать месячный, годовой или lifetime доступ.",
   },
   product: {
     metadataTitle: "Предложение Glitch - Риск-ориентированный Торговый Ассистент для NinjaTrader",
@@ -893,7 +939,8 @@ const ru: MarketingContent = {
       { title: "Открытая философия workflow", body: "Используйте свои индикаторы, автоматизацию и стратегии. Glitch централизует и укрепляет операцию." },
     ],
     pricingTitle: "Тарифы в одном чистом обзоре",
-    pricingLead: "Бесплатный доступ помогает стартовать. Monthly / Annual дает гибкий premium-доступ. Lifetime — постоянное место для тех, кто уже знает, что Glitch должен быть частью stack.",
+    pricingLead:
+      "Бесплатный доступ помогает стартовать. Monthly / Annual дает гибкий premium-доступ с безрисковым 7-дневным пробным периодом на каждом Pro-плане. Lifetime — постоянное место для тех, кто уже знает, что Glitch должен быть частью stack.",
     memberHubBlurb: "— место, где находятся ваши загрузки, обновления и шаги onboarding.",
     faqTitle: "FAQ",
     faqItems: [
@@ -901,7 +948,11 @@ const ru: MarketingContent = {
       { question: "Glitch заменяет мою стратегию?", answer: "Нет. Стратегия остается вашей. Glitch повышает качество исполнения и риск-дисциплину вокруг нее." },
       { question: "Можно ли использовать Glitch с автоматическими системами?", answer: "Да. Glitch создан для работы рядом с ручными и автоматическими workflow, сохраняя гибкость и guardrails." },
       { question: "Что делает платный доступ ценным?", answer: "Масштаб, глубина и скорость: больше счетов, сильнее контекст и более серьезный feedback loop через Journal, Metrics и Insights." },
-      { question: "Как работают месячный, годовой и lifetime доступ?", answer: "Месячный и годовой относятся к гибкому платному плану. Lifetime — это разовый платеж. Оба варианта открывают одну и ту же premium stack." },
+      {
+        question: "Как работают месячный, годовой и lifetime доступ?",
+        answer:
+          "Месячные и годовые Pro-планы включают безрисковый 7-дневный пробный период. Месячный и годовой относятся к гибкому платному плану. Lifetime — это разовый платеж. Оба варианта открывают одну и ту же premium stack.",
+      },
       { question: "Вы обещаете payouts или прибыль?", answer: "Нет. Мы обещаем серьезные инструменты для риск-дисциплины и исполнения. Результаты зависят от трейдера и рынка." },
     ],
   },
@@ -910,7 +961,7 @@ const ru: MarketingContent = {
     metadataDescription: "Сравните цены Glitch для prop-трейдеров: начните бесплатно, перейдите на месячный или годовой premium, либо зафиксируйте lifetime доступ.",
     badge: "Цены",
     title: "Прямые цены для серьезных операторов.",
-    lead: "Три плана. Понятные различия. Бесплатный дает guardrails. Monthly / Annual открывает полную premium stack с гибкой оплатой. Lifetime открывает ту же stack без регулярных списаний.",
+    lead: "Три плана. Понятные различия. Бесплатный дает guardrails. Monthly / Annual открывает полную premium stack с гибкой оплатой и безрисковым 7-дневным пробным периодом на каждом Pro-плане. Lifetime открывает ту же stack без регулярных списаний.",
     memberHubLead: "После checkout",
     memberHubBlurb: "находятся загрузки, onboarding, обновления и шаги активации.",
     upgradeTitle: "Что меняется после апгрейда",
@@ -921,7 +972,8 @@ const ru: MarketingContent = {
     paidUnlocksTitle: "Каждый платный план открывает",
     paidBestForLabel: "Лучше всего для",
     paidBestForBody: "Трейдеров с большим числом счетов, более глубокой аналитикой и быстрыми циклами обзора.",
-    paidNote: "Месячный, годовой и lifetime доступ открывают одну и ту же premium stack. Меняется только модель оплаты.",
+    paidNote:
+      "Месячные и годовые Pro-планы включают безрисковый 7-дневный пробный период. Месячный, годовой и lifetime доступ открывают одну и ту же premium stack. Меняется только модель оплаты.",
     accessTitle: "Как работает доступ",
     upgradeFlowTitle: "Путь апгрейда",
     upgradeFlowSteps: [
@@ -997,7 +1049,11 @@ const zh: MarketingContent = {
       { question: "Glitch 能适配不同的 prop firm 模式吗？", answer: "可以。Glitch 面向 cross-prop 工作流设计，提供预置规则框架与可配置的合规行为。"},
       { question: "Glitch 能支撑很多账户吗？", answer: "付费访问支持最多 10 个 master 或 group，每组最多 100 个 follower，适合严肃的多账户运营。"},
       { question: "什么是 Glitch Score？", answer: "Glitch Score 是 Glitch 的复合信号层。它把多个时间框架的上下文汇总起来，让你更快、更有结构地读盘。"},
-      { question: "付费方案怎么运作？", answer: "你可以选择月付、年付，或一次性终身访问。完成 checkout 后，下载、更新和激活都在 Member Hub 中完成。"},
+      {
+        question: "付费方案怎么运作？",
+        answer:
+          "你可以选择月付、年付，或一次性终身访问。每个 Pro 方案都包含无风险 7 天免费试用。完成 checkout 后，下载、更新和激活都在 Member Hub 中完成。",
+      },
       { question: "以后会有 marketplace 吗？", answer: "会。路线图里包含第三方指标、策略以及合作 prop firm 的 marketplace。"},
       { question: "Glitch 保证盈利吗？", answer: "不保证。Glitch 只是提升流程质量和风险纪律，最终结果仍取决于你的策略与执行。"},
     ],
@@ -1015,7 +1071,7 @@ const zh: MarketingContent = {
       "收盘后记录结果并复盘指标。",
       "按周迭代流程。专业交易员复盘，业余交易员只会反应。",
     ],
-    premiumCheckoutNote: "在 checkout 中可选择月付、年付或终身访问。",
+    premiumCheckoutNote: "每个 Pro 方案都包含无风险 7 天免费试用。在 checkout 中可选择月付、年付或终身访问。",
   },
   product: {
     metadataTitle: "Glitch 产品方案 - 面向 NinjaTrader 的风险优先交易助手",
@@ -1065,7 +1121,8 @@ const zh: MarketingContent = {
       { title: "开放式工作流", body: "继续使用你的指标、自动化与策略，Glitch 负责把操作层集中并加固。" },
     ],
     pricingTitle: "用一个清晰视图看定价",
-    pricingLead: "免费版让你先起步。月付 / 年付提供灵活的高级访问。终身访问则适合已经确认 Glitch 应该长期留在 stack 里的交易员。",
+    pricingLead:
+      "免费版让你先起步。月付 / 年付提供灵活的高级访问，且每个 Pro 方案均含无风险 7 天免费试用。终身访问则适合已经确认 Glitch 应该长期留在 stack 里的交易员。",
     memberHubBlurb: "里提供你的下载、更新与 onboarding 步骤。",
     faqTitle: "常见问题",
     faqItems: [
@@ -1073,7 +1130,11 @@ const zh: MarketingContent = {
       { question: "Glitch 会替代我的策略吗？", answer: "不会。策略仍然是你的。Glitch 负责提升围绕该策略的执行质量与风险纪律。"},
       { question: "Glitch 能和自动化系统一起用吗？", answer: "可以。Glitch 被设计为可与手动和自动化流程并行工作，同时保留 guardrails。"},
       { question: "付费访问的价值在哪里？", answer: "价值在于规模、深度与速度：更多账户、更强上下文，以及更严肃的 Journal、Metrics 和 Insights 反馈闭环。"},
-      { question: "月付、年付和终身访问如何区分？", answer: "月付和年付属于灵活计费方案。终身访问是一次性付款。两者解锁的是同一套高级功能栈。"},
+      {
+        question: "月付、年付和终身访问如何区分？",
+        answer:
+          "月付与年付的 Pro 方案包含无风险 7 天免费试用。月付和年付属于灵活计费方案。终身访问是一次性付款。两者解锁的是同一套高级功能栈。",
+      },
       { question: "你们承诺 payout 或利润吗？", answer: "不承诺。我们承诺的是严肃的风险与执行工具。结果仍取决于交易员和市场。"},
     ],
   },
@@ -1082,7 +1143,7 @@ const zh: MarketingContent = {
     metadataDescription: "比较 Glitch 面向 prop 交易员的定价：先免费开始，升级到月付或年付高级版，或直接锁定终身访问。",
     badge: "定价",
     title: "为严肃运营者准备的直接定价。",
-    lead: "三个方案，权衡清晰。免费版提供 guardrails。月付 / 年付提供完整高级 stack 与灵活计费。终身访问则在同一高级 stack 下取消持续收费。",
+    lead: "三个方案，权衡清晰。免费版提供 guardrails。月付 / 年付提供完整高级 stack 与灵活计费，且每个 Pro 方案均含无风险 7 天免费试用。终身访问则在同一高级 stack 下取消持续收费。",
     memberHubLead: "完成 checkout 后，",
     memberHubBlurb: "里提供下载、onboarding、更新与激活步骤。",
     upgradeTitle: "升级后有什么变化",
@@ -1093,7 +1154,7 @@ const zh: MarketingContent = {
     paidUnlocksTitle: "每个付费方案都会解锁",
     paidBestForLabel: "最适合",
     paidBestForBody: "适合管理更多账户、做更深分析并保持更快复盘节奏的交易员。",
-    paidNote: "月付、年付和终身访问解锁的是同一套高级功能栈，区别只在计费方式。",
+    paidNote: "月付与年付的 Pro 方案包含无风险 7 天免费试用。月付、年付和终身访问解锁的是同一套高级功能栈，区别只在计费方式。",
     accessTitle: "访问方式",
     upgradeFlowTitle: "升级流程",
     upgradeFlowSteps: [

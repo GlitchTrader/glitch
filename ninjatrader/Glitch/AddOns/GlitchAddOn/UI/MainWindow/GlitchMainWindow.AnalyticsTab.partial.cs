@@ -59,7 +59,7 @@ namespace Glitch.UI
         private const double AnalyticsBodyFontSize = 11.0;
         private const double AnalyticsValueFontSize = 12.0;
         private const double AnalyticsProminentValueFontSize = 13.0;
-        private const string WhopUpgradeCheckoutUrl = "https://whop.com/joined/glitchtrader/products/glitch-ninjatrader-addon/";
+        private const string WhopUpgradeCheckoutUrl = "https://whop.com/checkout/plan_G81vTccV19dNA";
         private const string WhopMemberHubUrl = "https://whop.com/joined/glitchtrader/";
         private static readonly FontWeight AnalyticsLabelFontWeight = FontWeights.Medium;
         private static readonly FontWeight AnalyticsBodyFontWeight = FontWeights.Normal;

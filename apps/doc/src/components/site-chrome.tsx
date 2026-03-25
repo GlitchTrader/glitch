@@ -3,7 +3,8 @@ import { docsSiteUrl, websiteUrl } from "@/lib/site";
 import { SiteHeaderClient } from "@/components/site-header";
 
 const defaultMemberHubUrl = "https://whop.com/joined/glitchtrader/";
-const defaultGoProUrl = "https://whop.com/joined/glitchtrader/products/glitch-ninjatrader-addon/";
+const defaultStartFreeUrl = "https://whop.com/checkout/plan_IROhfJAbF79K6";
+const defaultGoProUrl = "https://whop.com/checkout/plan_G81vTccV19dNA";
 const installationGuideUrl = "https://docs.glitchtrader.com/installation-guide-troubleshooting";
 
 function trimTrailingSlash(value: string): string {
@@ -19,6 +20,7 @@ const downloadsUrl = trimTrailingSlash(
   process.env.NEXT_PUBLIC_DOWNLOADS_URL?.trim() || "https://download.glitchtrader.com",
 );
 const memberHubUrl = process.env.NEXT_PUBLIC_WHOP_MEMBER_HUB_URL?.trim() || defaultMemberHubUrl;
+const startFreeUrl = process.env.NEXT_PUBLIC_WHOP_FREE_ACCESS_URL?.trim() || defaultStartFreeUrl;
 const goProUrl = process.env.NEXT_PUBLIC_WHOP_GO_PRO_CHECKOUT_URL?.trim() || defaultGoProUrl;
 
 export function SiteHeader() {
@@ -30,6 +32,7 @@ export function SiteHeader() {
       affiliateUrl={websitePath("/affiliate")}
       downloadsUrl={downloadsUrl}
       guideUrl={installationGuideUrl}
+      startFreeUrl={startFreeUrl}
       memberHubUrl={memberHubUrl}
       goProUrl={goProUrl}
     />

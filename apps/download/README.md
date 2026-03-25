@@ -2,6 +2,12 @@
 
 Customer-facing download portal for Glitch NinjaTrader releases.
 
+Optional environment variables (defaults match the marketing site):
+
+- `NEXT_PUBLIC_WHOP_FREE_ACCESS_URL` — Glitch Lite checkout.
+- `NEXT_PUBLIC_WHOP_GO_PRO_CHECKOUT_URL` — Glitch Pro checkout.
+- `NEXT_PUBLIC_WHOP_MEMBER_HUB_URL` — Member Hub after purchase.
+
 ## Release flow
 
 1. Place release zip files in `apps/download/public/files`.

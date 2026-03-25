@@ -1,6 +1,6 @@
 # Glitch Website
 
-Next.js marketing website for the Glitch NinjaTrader AddOn: homepage, pricing, product, affiliate, and legal pages. CTAs route to Whop product pages, affiliate dashboard, and member hub URLs from environment variables.
+Next.js marketing website for the Glitch NinjaTrader AddOn: homepage, pricing, product, affiliate, and legal pages. CTAs route to Whop checkout URLs, affiliate dashboard, and member hub URLs from environment variables.
 
 ## Internationalization (i18n)
 
@@ -22,11 +22,11 @@ All content is under a locale prefix (e.g. `/en`, `/pt`). Visiting `/` redirects
 
 Copy `.env.example` to `.env.local` and set:
 
-- `NEXT_PUBLIC_WHOP_FREE_ACCESS_URL` - Free Lite product URL.
-- `NEXT_PUBLIC_WHOP_GO_PRO_CHECKOUT_URL` - Go Pro product URL.
-- `NEXT_PUBLIC_WHOP_CHECKOUT_MONTHLY_URL` - Monthly access URL. Can point to the Go Pro product page.
-- `NEXT_PUBLIC_WHOP_CHECKOUT_ANNUAL_URL` - Annual access URL. Can point to the Go Pro product page.
-- `NEXT_PUBLIC_WHOP_CHECKOUT_LIFETIME_URL` - Lifetime access URL. Can point to the Go Pro product page.
+- `NEXT_PUBLIC_WHOP_FREE_ACCESS_URL` - Glitch Lite (free) Whop checkout URL.
+- `NEXT_PUBLIC_WHOP_GO_PRO_CHECKOUT_URL` - Glitch Pro Whop checkout URL.
+- `NEXT_PUBLIC_WHOP_CHECKOUT_MONTHLY_URL` - Monthly billing checkout. Defaults to the Pro checkout when unset.
+- `NEXT_PUBLIC_WHOP_CHECKOUT_ANNUAL_URL` - Annual billing checkout. Defaults to the Pro checkout when unset.
+- `NEXT_PUBLIC_WHOP_CHECKOUT_LIFETIME_URL` - Lifetime access checkout. Defaults to the Pro checkout when unset; override if your lifetime product uses a different Whop page.
 - `NEXT_PUBLIC_WHOP_AFFILIATE_URL` - Affiliate dashboard URL.
 - `NEXT_PUBLIC_WHOP_MEMBER_HUB_URL` - Member hub URL after purchase.
 
