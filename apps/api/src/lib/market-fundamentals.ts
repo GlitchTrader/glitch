@@ -4,8 +4,8 @@ import { readOptionalEnv } from "@/lib/env";
 const FINNHUB_BASE_URL = "https://finnhub.io/api/v1";
 const FRED_BASE_URL = "https://api.stlouisfed.org/fred";
 const MARKET_CACHE_KEY = "market_fundamentals_v1";
-const MARKET_CACHE_TTL_SECONDS = 300;
-const MARKET_CACHE_STALE_FALLBACK_SECONDS = 3600;
+const MARKET_CACHE_TTL_SECONDS = 3600;
+const MARKET_CACHE_STALE_FALLBACK_SECONDS = 21600;
 const REQUEST_TIMEOUT_MS = 9000;
 
 const globalPoolKey = "__glitchMarketFundamentalsPoolV1";

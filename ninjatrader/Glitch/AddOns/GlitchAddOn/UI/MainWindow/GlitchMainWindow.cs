@@ -1226,16 +1226,19 @@ namespace Glitch.UI
                         _licenseDeviceFingerprintHash,
                         clientVersion);
                     ApplyClientUpdateStateFromSnapshot(updateSnapshot);
+                    int nextCheckInSeconds = updateSnapshot?.NextCheckInSeconds ?? 900;
+                    nextCheckInSeconds = Math.Max(300, Math.Min(3600, nextCheckInSeconds));
+                    _nextLicenseHeartbeatUtc = nowNoKey.AddSeconds(nextCheckInSeconds);
                 }
                 catch (Exception updateError)
                 {
                     AppendJournal("System", "License", $"Update check failed without license key: {updateError.Message}");
+                    _nextLicenseHeartbeatUtc = nowNoKey.AddSeconds(300);
                 }
                 GlitchRuntimePolicyStore.SaveLicenseCache(_licenseCacheFilePath, _licenseCacheState);
                 UpdateSettingsTabLicenseStatusText();
                 UpdateAnalyticsLicenseGateOverlay();
                 UpdateJournalLicenseGateOverlay();
-                _nextLicenseHeartbeatUtc = nowNoKey.AddSeconds(30);
                 return;
             }
 
@@ -1295,7 +1298,7 @@ namespace Glitch.UI
                 UpdateAnalyticsLicenseGateOverlay();
                 UpdateJournalLicenseGateOverlay();
 
-                int nextCheckInSeconds = snapshot?.NextCheckInSeconds ?? 60;
+                int nextCheckInSeconds = snapshot?.NextCheckInSeconds ?? 900;
                 nextCheckInSeconds = Math.Max(15, Math.Min(3600, nextCheckInSeconds));
                 _nextLicenseHeartbeatUtc = nowUtc.AddSeconds(nextCheckInSeconds);
             }
@@ -1312,7 +1315,7 @@ namespace Glitch.UI
                 UpdateSettingsTabLicenseStatusText();
                 UpdateAnalyticsLicenseGateOverlay();
                 UpdateJournalLicenseGateOverlay();
-                _nextLicenseHeartbeatUtc = nowUtc.AddSeconds(60);
+                _nextLicenseHeartbeatUtc = nowUtc.AddSeconds(300);
             }
             finally
             {
