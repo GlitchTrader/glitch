@@ -1226,14 +1226,14 @@ namespace Glitch.UI
                         _licenseDeviceFingerprintHash,
                         clientVersion);
                     ApplyClientUpdateStateFromSnapshot(updateSnapshot);
-                    int nextCheckInSeconds = updateSnapshot?.NextCheckInSeconds ?? 900;
-                    nextCheckInSeconds = Math.Max(300, Math.Min(3600, nextCheckInSeconds));
+                    int nextCheckInSeconds = updateSnapshot?.NextCheckInSeconds ?? 14400;
+                    nextCheckInSeconds = Math.Max(900, Math.Min(14400, nextCheckInSeconds));
                     _nextLicenseHeartbeatUtc = nowNoKey.AddSeconds(nextCheckInSeconds);
                 }
                 catch (Exception updateError)
                 {
                     AppendJournal("System", "License", $"Update check failed without license key: {updateError.Message}");
-                    _nextLicenseHeartbeatUtc = nowNoKey.AddSeconds(300);
+                    _nextLicenseHeartbeatUtc = nowNoKey.AddSeconds(14400);
                 }
                 GlitchRuntimePolicyStore.SaveLicenseCache(_licenseCacheFilePath, _licenseCacheState);
                 UpdateSettingsTabLicenseStatusText();
@@ -1298,8 +1298,8 @@ namespace Glitch.UI
                 UpdateAnalyticsLicenseGateOverlay();
                 UpdateJournalLicenseGateOverlay();
 
-                int nextCheckInSeconds = snapshot?.NextCheckInSeconds ?? 900;
-                nextCheckInSeconds = Math.Max(15, Math.Min(3600, nextCheckInSeconds));
+                int nextCheckInSeconds = snapshot?.NextCheckInSeconds ?? 14400;
+                nextCheckInSeconds = Math.Max(15, Math.Min(14400, nextCheckInSeconds));
                 _nextLicenseHeartbeatUtc = nowUtc.AddSeconds(nextCheckInSeconds);
             }
             catch (Exception error)
@@ -1315,7 +1315,7 @@ namespace Glitch.UI
                 UpdateSettingsTabLicenseStatusText();
                 UpdateAnalyticsLicenseGateOverlay();
                 UpdateJournalLicenseGateOverlay();
-                _nextLicenseHeartbeatUtc = nowUtc.AddSeconds(300);
+                _nextLicenseHeartbeatUtc = nowUtc.AddSeconds(14400);
             }
             finally
             {

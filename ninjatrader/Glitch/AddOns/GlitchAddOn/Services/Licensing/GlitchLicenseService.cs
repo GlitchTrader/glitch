@@ -42,7 +42,7 @@ namespace Glitch.Services
         public bool LicenseValid { get; set; }
         public string LicenseStatus { get; set; } = "unknown";
         public string Reason { get; set; } = string.Empty;
-        public int NextCheckInSeconds { get; set; } = 60;
+        public int NextCheckInSeconds { get; set; } = 14400;
         public int GraceWindowSeconds { get; set; } = 86400;
         public DateTime ReceivedAtUtc { get; set; } = DateTime.UtcNow;
         public GlitchLicensePolicy Policy { get; set; } = new GlitchLicensePolicy();
@@ -165,7 +165,7 @@ namespace Glitch.Services
                 LicenseStatus = "unknown",
                 Reason = "request_failed",
                 ReceivedAtUtc = DateTime.UtcNow,
-                NextCheckInSeconds = 60,
+                NextCheckInSeconds = 14400,
                 GraceWindowSeconds = 86400,
                 Policy = new GlitchLicensePolicy(),
                 HasVerifiedToken = false,
@@ -305,7 +305,7 @@ namespace Glitch.Services
             snapshot.LicenseValid = ReadBool(license, "valid");
             snapshot.LicenseStatus = ReadString(license, "status", snapshot.LicenseValid ? "active" : "inactive");
             snapshot.Reason = ReadString(license, "reason", string.Empty);
-            snapshot.NextCheckInSeconds = ReadInt(heartbeat, "nextCheckInSeconds", 60, 15, 3600);
+            snapshot.NextCheckInSeconds = ReadInt(heartbeat, "nextCheckInSeconds", 14400, 15, 14400);
             snapshot.GraceWindowSeconds = ReadInt(license, "graceWindowSeconds", 86400, 60, 604800);
             snapshot.Policy = ParsePolicy(policy, entitlement);
             snapshot.LicenseToken = ReadString(root, "licenseToken", string.Empty);
