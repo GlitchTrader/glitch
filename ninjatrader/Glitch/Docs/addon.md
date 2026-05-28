@@ -116,6 +116,18 @@ Key UI partials include:
 
 These files keep the AddOn readable by separating operator-facing surfaces from service and persistence code.
 
+## Warnings and dashboard coloring
+
+Glitch separates operator signals by severity:
+
+- **Critical warnings** appear in the header count (orange), the Journal critical-warnings grid, and persist until dismissed. They include trading locks such as buffer critical lock, eval profit target lock, replication freeze, max contracts breach, and no-protection lock.
+- **Operational warnings** appear in the header count (white) and the critical-warnings grid. They cover replication conflicts and hard resync blocks that need attention but do not use the same dismiss-to-unlock flow as risk locks.
+- **Informational signals** (for example transient replication submit failures, protective order rejections, policy limit notices, and risk flatten fallback notices) are written to the Journal under category `Warning` only. They do not increase the header warning count and are not persisted as critical warnings.
+
+Dashboard equity coloring uses neutral text unless net-liq or intratrade drawdown warnings are active. Small negative unrealized PnL stays neutral until it reaches the intratrade drawdown warning threshold.
+
+Replication protectives are placed relative to each follower's average entry when possible, using the same tick distance as the master template. Invalid protective prices are skipped with a structured replication journal entry instead of submitting a broker order that would be rejected.
+
 ## Summary
 
 From a product review perspective, the AddOn is where Glitch becomes an operating system rather than a standalone indicator.

@@ -86,6 +86,7 @@ namespace Glitch.UI
         private const int RiskFlattenConfirmationPollMs = 25;
         private static readonly TimeSpan RiskMitigationCooldown = TimeSpan.FromSeconds(4);
         private static readonly TimeSpan ReplicationStartupWarmup = TimeSpan.FromSeconds(3);
+        private static readonly TimeSpan InformationalWarningJournalCooldown = TimeSpan.FromSeconds(60);
         private static readonly TimeSpan StrategySourceSnapshotTtl = TimeSpan.FromHours(12);
         private static readonly TimeSpan MicroContractRegexTimeout = TimeSpan.FromMilliseconds(75);
 
@@ -137,6 +138,7 @@ namespace Glitch.UI
         private readonly Dictionary<string, string> _lastPositionJournalSnapshotByKey;
         private readonly Dictionary<string, string> _lastExecutionJournalSnapshotByKey;
         private readonly Dictionary<string, DateTime> _runtimeJournalCooldownByKey;
+        private readonly Dictionary<string, DateTime> _informationalWarningJournalCooldownByKey;
         private readonly int _replicationSubmitMaxAttempts;
         private readonly int _replicationSubmitCooldownMs;
         private readonly int _protectiveSyncCooldownMs;
@@ -311,6 +313,7 @@ namespace Glitch.UI
             _lastPositionJournalSnapshotByKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             _lastExecutionJournalSnapshotByKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             _runtimeJournalCooldownByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+            _informationalWarningJournalCooldownByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
             _replicationSubmitMaxAttempts = ResolveRuntimeIntSetting("GLITCH_REPLICATION_SUBMIT_MAX_ATTEMPTS", 2, 1, 5);
             _replicationSubmitCooldownMs = ResolveRuntimeIntSetting("GLITCH_REPLICATION_SUBMIT_COOLDOWN_MS", 300, 250, 10000);
             _protectiveSyncCooldownMs = ResolveRuntimeIntSetting("GLITCH_PROTECTIVE_SYNC_COOLDOWN_MS", 750, 100, 5000);
@@ -3476,6 +3479,7 @@ namespace Glitch.UI
         {
             DateTime nowUtc = DateTime.UtcNow;
             PruneRuntimeJournalCaches(nowUtc);
+            PruneInformationalWarningJournalCooldowns(nowUtc);
             PruneTradeSourceSnapshots(nowUtc);
             MaybeRunLicenseHeartbeat(nowUtc);
 
@@ -4597,6 +4601,68 @@ namespace Glitch.UI
                 _journalEntries.RemoveAt(_journalEntries.Count - 1);
         }
 
+        private static WarningSeverity ResolveWarningSeverity(string warningType)
+        {
+            string token = string.IsNullOrWhiteSpace(warningType) ? string.Empty : warningType.Trim();
+            if (token.Length == 0)
+                return WarningSeverity.Operational;
+
+            if (token.StartsWith("ReplicationSubmit|", StringComparison.OrdinalIgnoreCase) ||
+                token.StartsWith("ProtectiveRejected|", StringComparison.OrdinalIgnoreCase) ||
+                token.StartsWith("RiskFlattenFallback", StringComparison.OrdinalIgnoreCase) ||
+                token.Equals("RiskFlattenFallback", StringComparison.OrdinalIgnoreCase) ||
+                token.StartsWith("PolicyGroupLimit", StringComparison.OrdinalIgnoreCase) ||
+                token.StartsWith("PolicyFollowerLimit", StringComparison.OrdinalIgnoreCase) ||
+                token.StartsWith("PolicyReplicationBlocked", StringComparison.OrdinalIgnoreCase))
+            {
+                return WarningSeverity.Informational;
+            }
+
+            if (token.StartsWith("ReplicationFreeze", StringComparison.OrdinalIgnoreCase) ||
+                token.StartsWith("MaxContractsBreach", StringComparison.OrdinalIgnoreCase) ||
+                token.StartsWith("NoProtectionLock", StringComparison.OrdinalIgnoreCase) ||
+                token.StartsWith("BufferCriticalLock", StringComparison.OrdinalIgnoreCase) ||
+                token.StartsWith("EvalProfitTargetLock", StringComparison.OrdinalIgnoreCase) ||
+                token.StartsWith("UnrealizedLossFlatten", StringComparison.OrdinalIgnoreCase))
+            {
+                return WarningSeverity.Critical;
+            }
+
+            if (token.StartsWith("ReplicationConflict|", StringComparison.OrdinalIgnoreCase) ||
+                token.StartsWith("ReplicationBlock|", StringComparison.OrdinalIgnoreCase))
+            {
+                return WarningSeverity.Operational;
+            }
+
+            return WarningSeverity.Operational;
+        }
+
+        private bool TryMarkInformationalWarningJournalCooldown(string warningKey, DateTime nowUtc)
+        {
+            if (string.IsNullOrWhiteSpace(warningKey))
+                return true;
+
+            if (_informationalWarningJournalCooldownByKey.TryGetValue(warningKey, out DateTime cooldownUntilUtc) &&
+                cooldownUntilUtc > nowUtc)
+            {
+                return false;
+            }
+
+            _informationalWarningJournalCooldownByKey[warningKey] = nowUtc.Add(InformationalWarningJournalCooldown);
+            return true;
+        }
+
+        private void PruneInformationalWarningJournalCooldowns(DateTime nowUtc)
+        {
+            foreach (string expiredKey in _informationalWarningJournalCooldownByKey
+                .Where(kvp => kvp.Value <= nowUtc)
+                .Select(kvp => kvp.Key)
+                .ToList())
+            {
+                _informationalWarningJournalCooldownByKey.Remove(expiredKey);
+            }
+        }
+
         private void RaiseCriticalWarning(string accountName, string message, string warningType, bool unlocksTrading)
         {
             if (!Dispatcher.CheckAccess())
@@ -4613,6 +4679,15 @@ namespace Glitch.UI
             string normalizedAccount = string.IsNullOrWhiteSpace(accountName) ? "System" : accountName.Trim();
             string normalizedType = string.IsNullOrWhiteSpace(warningType) ? "Generic" : warningType.Trim();
             string warningKey = normalizedType + "|" + normalizedAccount;
+            WarningSeverity severity = ResolveWarningSeverity(normalizedType);
+            DateTime nowUtc = DateTime.UtcNow;
+
+            if (severity == WarningSeverity.Informational)
+            {
+                if (TryMarkInformationalWarningJournalCooldown(warningKey, nowUtc))
+                    AppendJournal(normalizedAccount, "Warning", message.Trim());
+                return;
+            }
 
             bool alreadyActive = _criticalWarningEntries.Any(entry =>
                 entry != null &&
@@ -4623,11 +4698,12 @@ namespace Glitch.UI
 
             _criticalWarningEntries.Insert(0, new CriticalWarningEntry
             {
-                TimestampUtc = DateTime.UtcNow,
+                TimestampUtc = nowUtc,
                 AccountName = normalizedAccount,
                 Message = message.Trim(),
                 WarningKey = warningKey,
-                UnlocksTrading = unlocksTrading
+                UnlocksTrading = unlocksTrading,
+                Severity = severity
             });
             _hasPendingAuditWrite = true;
 
@@ -4723,9 +4799,19 @@ namespace Glitch.UI
             if (_warningCountValueText == null)
                 return;
 
-            int activeWarnings = _criticalWarningEntries.Count(entry => entry != null && !entry.IsDismissed);
-            _warningCountValueText.Text = activeWarnings.ToString("N0", CultureInfo.CurrentCulture);
-            _warningCountValueText.Foreground = activeWarnings > 0 ? OrangeAccentBrush : Brushes.White;
+            int criticalCount = _criticalWarningEntries.Count(entry =>
+                entry != null &&
+                !entry.IsDismissed &&
+                entry.Severity == WarningSeverity.Critical);
+            int operationalCount = _criticalWarningEntries.Count(entry =>
+                entry != null &&
+                !entry.IsDismissed &&
+                entry.Severity == WarningSeverity.Operational);
+            int displayCount = criticalCount + operationalCount;
+            _warningCountValueText.Text = displayCount.ToString("N0", CultureInfo.CurrentCulture);
+            _warningCountValueText.Foreground = criticalCount > 0
+                ? OrangeAccentBrush
+                : (operationalCount > 0 ? Brushes.White : Brushes.White);
         }
 
         private static double ToRiskRatio(double headroomRatio)
@@ -4990,15 +5076,21 @@ namespace Glitch.UI
                     if (persisted == null || string.IsNullOrWhiteSpace(persisted.Message))
                         continue;
 
+                    string warningKey = string.IsNullOrWhiteSpace(persisted.WarningKey) ? "Generic|System" : persisted.WarningKey;
+                    WarningSeverity severity = ResolveWarningSeverity(warningKey);
+                    if (severity == WarningSeverity.Informational)
+                        continue;
+
                     _criticalWarningEntries.Add(new CriticalWarningEntry
                     {
                         TimestampUtc = persisted.TimestampUtc == default(DateTime) ? DateTime.UtcNow : persisted.TimestampUtc,
                         AccountName = string.IsNullOrWhiteSpace(persisted.AccountName) ? "System" : persisted.AccountName,
                         Message = persisted.Message,
-                        WarningKey = string.IsNullOrWhiteSpace(persisted.WarningKey) ? "Generic|System" : persisted.WarningKey,
+                        WarningKey = warningKey,
                         UnlocksTrading = persisted.UnlocksTrading,
                         IsDismissed = persisted.IsDismissed,
-                        DismissedUtc = persisted.DismissedUtc
+                        DismissedUtc = persisted.DismissedUtc,
+                        Severity = severity
                     });
                 }
 
@@ -5034,7 +5126,10 @@ namespace Glitch.UI
                     .ToList();
 
                 var warningSnapshot = _criticalWarningEntries
-                    .Where(entry => entry != null && !string.IsNullOrWhiteSpace(entry.Message))
+                    .Where(entry =>
+                        entry != null &&
+                        !string.IsNullOrWhiteSpace(entry.Message) &&
+                        entry.Severity != WarningSeverity.Informational)
                     .Select(entry => new GlitchStateStore.CriticalWarningRecord
                     {
                         TimestampUtc = entry.TimestampUtc,
@@ -6654,10 +6749,10 @@ namespace Glitch.UI
                 headroomUsedWidth = 110.0 - headroomSafeWidth;
                 riskRatioRaw = 1.0 - clampedHeadroom;
             }
-            string equityVsSizeSign = GetEquityVsSizeSign(effectiveBalance, selectedAccountSize);
             string bufferVsMaxDdSign = GetBufferVsMaxDdSign(bufferMargin, maxDrawdown);
             bool isIntraDdWarning = GetIntraDdWarning(unrealizedPnl, intratradeDrawdown);
             bool isNetLiqWarning = GetNetLiqWarning(bufferMargin, maxDrawdown);
+            string equityVsSizeSign = GetEquityDisplaySign(isNetLiqWarning, isIntraDdWarning, effectiveBalance, selectedAccountSize, maxDrawdown, bufferMargin);
             double evalProfitTargetLockBalance =
                 string.Equals(selectedStatus, "Eval", StringComparison.OrdinalIgnoreCase) &&
                 selectedAccountSize > 0 &&
@@ -6716,7 +6811,7 @@ namespace Glitch.UI
                 UnrealizedPnl = FormatCurrency(unrealizedPnl),
                 TotalPnl = FormatCurrency(totalPnl),
                 RealizedPnlSign = GetPnlSign(realizedPnl),
-                UnrealizedPnlSign = GetPnlSign(unrealizedPnl),
+                UnrealizedPnlSign = GetUnrealizedPnlDisplaySign(unrealizedPnl, intratradeDrawdown, isIntraDdWarning),
                 TotalPnlSign = GetPnlSign(totalPnl),
                 RealizedPnlRaw = realizedPnl,
                 UnrealizedPnlRaw = unrealizedPnl,
@@ -7418,18 +7513,33 @@ namespace Glitch.UI
             return "Neutral";
         }
 
-        private static string GetEquityVsSizeSign(double equity, double accountSize)
+        private static string GetEquityDisplaySign(
+            bool isNetLiqWarning,
+            bool isIntraDdWarning,
+            double equity,
+            double accountSize,
+            double maxDrawdown,
+            double? bufferMargin)
         {
-            if (double.IsNaN(equity) || double.IsInfinity(equity) ||
-                double.IsNaN(accountSize) || double.IsInfinity(accountSize) || accountSize <= 0)
-                return "Neutral";
+            if (isNetLiqWarning || isIntraDdWarning)
+                return "Negative";
 
-            const double tolerance = 0.5;
-            double delta = equity - accountSize;
-            if (Math.Abs(delta) <= tolerance)
-                return "Neutral";
+            if (maxDrawdown > 0 && bufferMargin.HasValue && !double.IsNaN(bufferMargin.Value) && !double.IsInfinity(bufferMargin.Value))
+            {
+                double bufferRatio = bufferMargin.Value / maxDrawdown;
+                if (!double.IsNaN(bufferRatio) && !double.IsInfinity(bufferRatio) && bufferRatio < BufferCriticalLockThresholdRatio)
+                    return "Negative";
+            }
 
-            return delta > 0 ? "Positive" : "Negative";
+            if (!double.IsNaN(equity) && !double.IsInfinity(equity) &&
+                !double.IsNaN(accountSize) && !double.IsInfinity(accountSize) && accountSize > 0)
+            {
+                const double tolerance = 0.5;
+                if (equity > accountSize + tolerance)
+                    return "Positive";
+            }
+
+            return "Neutral";
         }
 
         private static double GetUnrealizedEquityCandidate(double cashValue, double unrealizedPnl)
@@ -7480,6 +7590,32 @@ namespace Glitch.UI
                 return false;
 
             return bufferMargin.Value < (0.5 * maxDrawdown);
+        }
+
+        private static string GetUnrealizedPnlDisplaySign(double unrealizedPnl, double intratradeDrawdown, bool isIntraDdWarning)
+        {
+            if (isIntraDdWarning)
+                return "Negative";
+
+            if (double.IsNaN(unrealizedPnl) || double.IsInfinity(unrealizedPnl))
+                return "Neutral";
+
+            if (unrealizedPnl > 0)
+                return "Positive";
+
+            if (unrealizedPnl < 0)
+            {
+                if (intratradeDrawdown > 0 && !double.IsNaN(intratradeDrawdown) && !double.IsInfinity(intratradeDrawdown))
+                {
+                    double unrealizedLoss = -unrealizedPnl;
+                    if (unrealizedLoss >= (0.5 * intratradeDrawdown))
+                        return "Negative";
+                }
+
+                return "Neutral";
+            }
+
+            return "Neutral";
         }
 
         private static double GetCurrentEquity(Account account, double fallbackCashValue)
@@ -7719,6 +7855,7 @@ namespace Glitch.UI
             public string Message { get; set; }
             public string WarningKey { get; set; }
             public bool UnlocksTrading { get; set; }
+            public WarningSeverity Severity { get; set; } = WarningSeverity.Operational;
 
             public DateTime? DismissedUtc
             {

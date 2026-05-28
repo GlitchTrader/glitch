@@ -338,6 +338,13 @@ namespace Glitch.UI
             FallbackAccountFlatten = 4
         }
 
+        private enum WarningSeverity
+        {
+            Critical = 0,
+            Operational = 1,
+            Informational = 2
+        }
+
         private sealed class ReplicationIntent
         {
             public string Key { get; set; }

@@ -351,11 +351,13 @@ namespace Glitch.UI
                             intent.FollowerAccount.Name,
                             "Replication",
                             $"Synced {intent.InstrumentRoot} to target {intent.TargetNetQty} contracts.");
+                        double masterAvgPrice = TryGetOpenPositionAveragePrice(intent.MasterAccount, intent.InstrumentRoot);
+                        double followerAvgPrice = TryGetOpenPositionAveragePrice(intent.FollowerAccount, intent.InstrumentRoot);
                         AppendReplicationStructuredJournal(
                             intent.FollowerAccount.Name,
                             "sync_submit",
                             "accepted",
-                            $"instrument={CleanJournalToken(intent.InstrumentRoot)}|targetFollowerQty={intent.TargetNetQty}|deltaQty={(intent.TargetNetQty - effectiveFollowerNetQty)}");
+                            $"instrument={CleanJournalToken(intent.InstrumentRoot)}|targetFollowerQty={intent.TargetNetQty}|deltaQty={(intent.TargetNetQty - effectiveFollowerNetQty)}|masterAvg={masterAvgPrice.ToString(CultureInfo.InvariantCulture)}|followerAvg={followerAvgPrice.ToString(CultureInfo.InvariantCulture)}");
                     }
                     else
                     {
@@ -1033,7 +1035,8 @@ namespace Glitch.UI
                 "present",
                 $"instrument={CleanJournalToken(intent.InstrumentRoot)}|followerQty={followerNetQty}|targetQty={intent.TargetNetQty}");
 
-            changed = EnsureFollowerProtectiveOrders(intent, template);
+            ProtectiveTemplate followerTemplate = AdjustProtectiveTemplateForFollower(intent, template);
+            changed = EnsureFollowerProtectiveOrders(intent, followerTemplate);
             if (changed)
                 MarkProtectiveSync(cooldownKey, nowUtc);
         }
@@ -1183,6 +1186,22 @@ namespace Glitch.UI
 
             if (existingOrder == null)
             {
+                if (!TryValidateProtectiveSubmitPrices(
+                        account,
+                        instrument,
+                        orderType,
+                        limitPrice,
+                        stopPrice,
+                        out string validationReason))
+                {
+                    AppendReplicationStructuredJournal(
+                        account.Name,
+                        "protective_skip",
+                        "invalid_price",
+                        $"instrument={CleanJournalToken(GetInstrumentRoot(instrument))}|signal={CleanJournalToken(signalName)}|detail={CleanJournalToken(validationReason)}");
+                    return false;
+                }
+
                 return SubmitProtectiveOrder(
                     account,
                     instrument,
@@ -1293,6 +1312,157 @@ namespace Glitch.UI
                    stateText.IndexOf("Submitted", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    stateText.IndexOf("Cancel", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    stateText.IndexOf("Change", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static double TryGetOpenPositionAveragePrice(Account account, string instrumentRoot)
+        {
+            Position position = FindOpenPositionForInstrumentRoot(account, instrumentRoot);
+            if (position == null)
+                return 0;
+
+            double averagePrice = position.AveragePrice;
+            if (averagePrice <= 0 || double.IsNaN(averagePrice) || double.IsInfinity(averagePrice))
+                return 0;
+
+            return averagePrice;
+        }
+
+        private ProtectiveTemplate AdjustProtectiveTemplateForFollower(ReplicationIntent intent, ProtectiveTemplate masterTemplate)
+        {
+            if (intent == null || masterTemplate == null)
+                return masterTemplate;
+
+            var adjusted = new ProtectiveTemplate
+            {
+                HasStop = masterTemplate.HasStop,
+                StopPrice = masterTemplate.StopPrice,
+                HasTarget = masterTemplate.HasTarget,
+                TargetPrice = masterTemplate.TargetPrice
+            };
+
+            Instrument instrument = intent.TradeInstrument;
+            if (instrument?.MasterInstrument == null)
+                return adjusted;
+
+            double tickSize = instrument.MasterInstrument.TickSize;
+            if (tickSize <= 0 || double.IsNaN(tickSize) || double.IsInfinity(tickSize))
+                return adjusted;
+
+            int followerNetQty = GetNetQuantityForInstrumentRoot(intent.FollowerAccount, intent.InstrumentRoot);
+            if (followerNetQty == 0)
+                return adjusted;
+
+            double masterAvg = TryGetOpenPositionAveragePrice(intent.MasterAccount, intent.InstrumentRoot);
+            double followerAvg = TryGetOpenPositionAveragePrice(intent.FollowerAccount, intent.InstrumentRoot);
+            if (masterAvg <= 0 || followerAvg <= 0)
+                return adjusted;
+
+            if (adjusted.HasStop && masterTemplate.StopPrice > 0)
+            {
+                double stopOffset = masterTemplate.StopPrice - masterAvg;
+                double followerStop = instrument.MasterInstrument.RoundToTickSize(followerAvg + stopOffset);
+                if (IsProtectiveStopPriceValid(followerNetQty, followerStop, followerAvg, tickSize))
+                    adjusted.StopPrice = followerStop;
+            }
+
+            if (adjusted.HasTarget && masterTemplate.TargetPrice > 0)
+            {
+                double targetOffset = masterTemplate.TargetPrice - masterAvg;
+                double followerTarget = instrument.MasterInstrument.RoundToTickSize(followerAvg + targetOffset);
+                if (IsProtectiveLimitPriceValid(followerNetQty, followerTarget, followerAvg, tickSize))
+                    adjusted.TargetPrice = followerTarget;
+            }
+
+            return adjusted;
+        }
+
+        private static bool IsProtectiveStopPriceValid(int netQty, double stopPrice, double averagePrice, double tickSize)
+        {
+            if (stopPrice <= 0 || averagePrice <= 0 || tickSize <= 0)
+                return false;
+
+            double minSeparation = tickSize * 0.5;
+            if (netQty > 0)
+                return stopPrice < averagePrice - minSeparation;
+            if (netQty < 0)
+                return stopPrice > averagePrice + minSeparation;
+
+            return false;
+        }
+
+        private static bool IsProtectiveLimitPriceValid(int netQty, double limitPrice, double averagePrice, double tickSize)
+        {
+            if (limitPrice <= 0 || averagePrice <= 0 || tickSize <= 0)
+                return false;
+
+            double minSeparation = tickSize * 0.5;
+            if (netQty > 0)
+                return limitPrice > averagePrice + minSeparation;
+            if (netQty < 0)
+                return limitPrice < averagePrice - minSeparation;
+
+            return false;
+        }
+
+        private bool TryValidateProtectiveSubmitPrices(
+            Account account,
+            Instrument instrument,
+            OrderType orderType,
+            double limitPrice,
+            double stopPrice,
+            out string validationReason)
+        {
+            validationReason = null;
+            if (account == null || instrument == null)
+            {
+                validationReason = "missing_account_or_instrument";
+                return false;
+            }
+
+            string instrumentRoot = GetInstrumentRoot(instrument);
+            int netQty = GetNetQuantityForInstrumentRoot(account, instrumentRoot);
+            if (netQty == 0)
+            {
+                validationReason = "flat_position";
+                return false;
+            }
+
+            double averagePrice = TryGetOpenPositionAveragePrice(account, instrumentRoot);
+            if (averagePrice <= 0)
+            {
+                validationReason = "missing_average_price";
+                return false;
+            }
+
+            double tickSize = instrument.MasterInstrument != null && instrument.MasterInstrument.TickSize > 0
+                ? instrument.MasterInstrument.TickSize
+                : 0;
+            if (tickSize <= 0)
+            {
+                validationReason = "missing_tick_size";
+                return false;
+            }
+
+            string typeText = orderType.ToString();
+            if (typeText.IndexOf("Stop", StringComparison.OrdinalIgnoreCase) >= 0 && stopPrice > 0)
+            {
+                if (!IsProtectiveStopPriceValid(netQty, stopPrice, averagePrice, tickSize))
+                {
+                    validationReason = "stop_on_wrong_side_of_average";
+                    return false;
+                }
+            }
+
+            if (typeText.IndexOf("Limit", StringComparison.OrdinalIgnoreCase) >= 0 && limitPrice > 0)
+            {
+                if (!IsProtectiveLimitPriceValid(netQty, limitPrice, averagePrice, tickSize))
+                {
+                    validationReason = "limit_on_wrong_side_of_average";
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private static bool TryBuildMasterProtectiveTemplate(Account masterAccount, string instrumentRoot, int masterNetQty, out ProtectiveTemplate template)
