@@ -72,7 +72,12 @@ namespace Glitch.UI
                 CanUserDeleteRows = false,
                 HeadersVisibility = DataGridHeadersVisibility.Column,
                 ItemsSource = _accountRows,
-                VerticalAlignment = VerticalAlignment.Stretch
+                VerticalAlignment = VerticalAlignment.Stretch,
+                // GL-010: row1 is Auto-height, so without a cap this grid grows to fit all
+                // connected accounts (up to 20) and crowds out the follower groups below.
+                // Capping height forces the grid's own scrollbar (ConfigureDataGridScrolling)
+                // to engage instead, keeping column headers pinned and rows fully reachable.
+                MaxHeight = 240
             };
             ConfigureDataGridScrolling(grid);
             ApplySkinResource(grid, Control.BackgroundProperty, "BackgroundMainWindow", "GridEntireBackground");
