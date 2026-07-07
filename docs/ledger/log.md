@@ -4,6 +4,9 @@ Append-only operator log. Newest first.
 
 ## 2026-07-07 — Cursor wave 1
 
+- GL-012 (WO-4): Critical vs Notice taxonomy; notice history expander; header count critical-only (`GlitchMainWindow.cs`, `Models.partial.cs`, `7ec0ac4`).
+- GL-013 (WO-3): Journal Trader Performance primary full-width; Live Feed in collapsed Expander (`JournalTab.partial.cs`, `f61bfd4`).
+- GL-010 (WO-2): `MaxHeight = 240` on per-group follower DataGrids (`GlitchMainWindow.cs` `CreateGroupMembersGrid`, `b209ad1`). Pairs with WO-1 cap; groups section ScrollViewer handles many groups.
 - GL-010 (WO-1): committed lead-approved `MaxHeight = 240` on connected-accounts DataGrid (`DashboardTab.partial.cs`, `d516250`). Backlog → partial (awaiting NT8 compile).
 
 ## 2026-07-07 — pass 7 (lead: Fable) — wave 1 delegated to Cursor/Composer 2.5
