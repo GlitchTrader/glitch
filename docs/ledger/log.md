@@ -2,6 +2,12 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-07 — pass 7 (lead: Fable) — wave 1 delegated to Cursor/Composer 2.5
+
+- Claude plan hard-rate-limited; operator redirected execution to Cursor ($60 plan, idle). Wrote `handoffs/2026-07-07-cursor-wave1.md`: WO-1…WO-11 covering GL-010/011/012/013/015 (UI calm), GL-017/018/019 (rules truth from LANE-4 findings), GL-014 design, F2 stretch fix. Branch: `glitch/bulletproof-wave1`; main stays clean; done-gate remains Alan's NT8 compile.
+- Fable schedulers retooled: lane-relaunch one-shot cancelled; 3-hourly spawner replaced with a 2-hourly monitor-only pass (reviews Cursor's branch commits + ledger entries, writes lead-review-notes.md on violations).
+- LANE-1 (replication audit) held for a future Opus window (or Cursor first-pass + Opus verify) — money-path audit deserves the strongest reasoning available.
+
 ## 2026-07-07 — pass 6 (lead: Fable) — scheduled pass; LANE-3's surviving edit reviewed
 
 - 13:14 São Paulo, still pre-reset (18:10). Discovered one surviving LANE-3 edit in the working tree: `DashboardTab.partial.cs` — `MaxHeight = 240` on the connected-accounts grid (GL-010). Lead review: APPROVED — premise verified against row layout (Auto row1 grid starving star row2 followers); uses existing `ConfigureDataGridScrolling`; also advances GL-011. **Held uncommitted pending Alan's NT8 compile** per C#-gate. GL-010 → in_progress.
