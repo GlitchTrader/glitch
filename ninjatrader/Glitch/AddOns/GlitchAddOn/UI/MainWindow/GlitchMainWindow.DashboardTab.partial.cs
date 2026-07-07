@@ -46,9 +46,8 @@ namespace Glitch.UI
         private UIElement CreateAccountsTabImpl()
         {
             var root = new Grid { Margin = new Thickness(20) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             _dashboardRootGrid = root;
             _dashboardRootGrid.SizeChanged += OnDashboardRootSizeChanged;
 
@@ -61,8 +60,6 @@ namespace Glitch.UI
             };
             BindLocalizedText(sectionHeader, "dashboard.connected_accounts", "Connected Accounts");
             ApplySkinResource(sectionHeader, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
-            Grid.SetRow(sectionHeader, 0);
-            root.Children.Add(sectionHeader);
 
             var grid = new DataGrid
             {
@@ -198,10 +195,20 @@ namespace Glitch.UI
 
             var groupsSection = CreateAccountGroupsSection(root);
             _dashboardGroupsSection = groupsSection as FrameworkElement;
+
+            var connectedAccountsPanel = new Grid();
+            connectedAccountsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            connectedAccountsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Grid.SetRow(sectionHeader, 0);
+            connectedAccountsPanel.Children.Add(sectionHeader);
             Grid.SetRow(grid, 1);
-            root.Children.Add(grid);
-            Grid.SetRow(groupsSection, 2);
+            connectedAccountsPanel.Children.Add(grid);
+
+            // GL-011: follower groups are the star — show them above Connected Accounts.
+            Grid.SetRow(groupsSection, 0);
             root.Children.Add(groupsSection);
+            Grid.SetRow(connectedAccountsPanel, 1);
+            root.Children.Add(connectedAccountsPanel);
 
             ApplyDashboardResponsiveLayout(root.ActualWidth > 0 ? root.ActualWidth : Width);
             return root;
@@ -257,12 +264,12 @@ namespace Glitch.UI
                         _dashboardNarrowLayout = narrow;
                         _dashboardRootGrid.Margin = narrow ? new Thickness(10) : new Thickness(20);
         
-                        if (_dashboardRootGrid.RowDefinitions.Count >= 3)
+                        if (_dashboardRootGrid.RowDefinitions.Count >= 2)
                         {
+                            _dashboardRootGrid.RowDefinitions[0].Height = new GridLength(1, GridUnitType.Star);
                             _dashboardRootGrid.RowDefinitions[1].Height = narrow
                                 ? new GridLength(0.45, GridUnitType.Star)
                                 : GridLength.Auto;
-                            _dashboardRootGrid.RowDefinitions[2].Height = new GridLength(1, GridUnitType.Star);
                         }
         
                         if (_dashboardGroupsSection != null)
