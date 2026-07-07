@@ -4,6 +4,13 @@ Append-only operator log. Newest first.
 
 ## 2026-07-07 — Cursor wave 1
 
+- GL-014 (WO-10): settings granularity design written to `audits/ui-calm-changes.md` (`5ae3c63`); implementation deferred.
+- GL-019 (WO-9): `copyTradingPolicy` schema + parser + Settings compliance notice (`d262a31`, JSON/parser in `d83b977`).
+- GL-018 (WO-8): Lucid rules rebuilt EOD tiers in `PropFirmRules.json` (`d83b977`).
+- GL-017 (WO-7): FundingTicks `Discontinued` + UI suffix (`d83b977`).
+- GL-015 (WO-5): ratio `ConverterCulture`, hover affordance, math tooltip (`GlitchMainWindow.cs`, `7ec0ac4`).
+- GL-011 (WO-6): followers-first dashboard row swap (`DashboardTab.partial.cs`, `2b5c52b`).
+- GL-005/F2 (WO-11): unknown point value quiet notice (`SummaryTab.partial.cs`, `bac3046`).
 - GL-012 (WO-4): Critical vs Notice taxonomy; notice history expander; header count critical-only (`GlitchMainWindow.cs`, `Models.partial.cs`, `7ec0ac4`).
 - GL-013 (WO-3): Journal Trader Performance primary full-width; Live Feed in collapsed Expander (`JournalTab.partial.cs`, `f61bfd4`).
 - GL-010 (WO-2): `MaxHeight = 240` on per-group follower DataGrids (`GlitchMainWindow.cs` `CreateGroupMembersGrid`, `b209ad1`). Pairs with WO-1 cap; groups section ScrollViewer handles many groups.
