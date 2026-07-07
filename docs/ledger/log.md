@@ -2,6 +2,11 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-07 — pass 4 (lead: Fable) — lane relaunch after limit reset
+
+- ~10:53 São Paulo: session limit confirmed reset. Relaunched all four lanes from `lane-briefs.md`: LANE-1 replication-audit (Opus), LANE-2 math-audit (Opus), LANE-3 ui-calm (Sonnet), LANE-4 external-truth (Sonnet). All running in background; outputs expected in `docs/ledger/audits/` and `docs/ledger/research/`.
+- Contingency if the limit trips again mid-flight: partial-progress notes go into lane-briefs.md and lanes restagger 2+2 on the next window.
+
 ## 2026-07-07 — pass 3 (lead: Fable) — scheduled pass, honest no-op
 
 - 10:13 São Paulo: still inside the session-limit window (resets 10:40). No lane outputs; no C# changes; nothing to integrate. No new subagents spawned (would fail against the limit and duplicate the scheduled 10:53 relaunch). Next event: one-shot lane relaunch at ~10:53 São Paulo.
