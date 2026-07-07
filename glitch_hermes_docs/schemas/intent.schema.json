@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Glitch Trade Intent",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "intent_id",
+    "instrument",
+    "action",
+    "confidence"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "glitch.intent.v1"
+    },
+    "intent_id": {
+      "type": "string"
+    },
+    "created_utc": {
+      "type": "string"
+    },
+    "instrument": {
+      "type": "string"
+    },
+    "account": {
+      "type": "string"
+    },
+    "action": {
+      "enum": [
+        "HOLD",
+        "ENTER_LONG",
+        "ENTER_SHORT",
+        "EXIT",
+        "ADJUST_STOP",
+        "PARTIAL_EXIT"
+      ]
+    },
+    "quantity": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "order_type": {
+      "enum": [
+        "MARKET",
+        "LIMIT"
+      ]
+    },
+    "limit_price": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "stop_loss": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "take_profit_1": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "reason": {
+      "type": "string"
+    },
+    "model_version": {
+      "type": "string"
+    },
+    "prompt_version": {
+      "type": "string"
+    }
+  }
+}

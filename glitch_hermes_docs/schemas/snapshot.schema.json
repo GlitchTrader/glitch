@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Glitch Snapshot",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "utc",
+    "instrument",
+    "current_price",
+    "timeframes",
+    "account",
+    "position"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "glitch.snapshot.v1"
+    },
+    "utc": {
+      "type": "string"
+    },
+    "instrument": {
+      "type": "string"
+    },
+    "current_price": {
+      "type": "number"
+    },
+    "session": {
+      "type": "object"
+    },
+    "timeframes": {
+      "type": "object"
+    },
+    "order_flow": {
+      "type": "object"
+    },
+    "account": {
+      "type": "object"
+    },
+    "position": {
+      "type": "object"
+    }
+  }
+}
