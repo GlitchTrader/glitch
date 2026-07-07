@@ -2,6 +2,10 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-07 — Cursor wave 1
+
+- GL-010 (WO-1): committed lead-approved `MaxHeight = 240` on connected-accounts DataGrid (`DashboardTab.partial.cs`, `d516250`). Backlog → partial (awaiting NT8 compile).
+
 ## 2026-07-07 — pass 7 (lead: Fable) — wave 1 delegated to Cursor/Composer 2.5
 
 - Claude plan hard-rate-limited; operator redirected execution to Cursor ($60 plan, idle). Wrote `handoffs/2026-07-07-cursor-wave1.md`: WO-1…WO-11 covering GL-010/011/012/013/015 (UI calm), GL-017/018/019 (rules truth from LANE-4 findings), GL-014 design, F2 stretch fix. Branch: `glitch/bulletproof-wave1`; main stays clean; done-gate remains Alan's NT8 compile.

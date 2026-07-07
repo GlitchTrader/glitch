@@ -1736,7 +1736,10 @@ namespace Glitch.UI
                 Margin = new Thickness(0, 8, 0, 0),
                 ItemsSource = group.Members,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Top
+                VerticalAlignment = VerticalAlignment.Top,
+                // GL-010: cap per-group follower grid so many groups × 20 rows scroll
+                // inside the group while the dashboard groups ScrollViewer handles overflow.
+                MaxHeight = 240
             };
             ConfigureDataGridScrolling(grid);
 
