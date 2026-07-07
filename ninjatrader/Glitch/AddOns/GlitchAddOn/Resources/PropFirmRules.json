@@ -1,6 +1,6 @@
 {
   "schemaVersion": "2.2.0",
-  "updatedAtUtc": "2026-03-04T00:00:00Z",
+  "updatedAtUtc": "2026-07-07T00:00:00Z",
   "globalInstrumentSizingDefaults": {
     "microContractRootRegex": "^M[A-Z0-9]+$",
     "microContractMultiplier": 10
@@ -16,6 +16,13 @@
       ],
       "lastVerifiedDate": "2026-03-04",
       "status": "Supported",
+      "copyTradingPolicy": {
+        "allowed": "conditional",
+        "sameOwnerOnly": true,
+        "maxAccounts": 20,
+        "notes": "Same-owner, single-master, same-direction replication only; ~20 account cap per trader.",
+        "sourceUrl": "https://tradedupe.com/apex-copy-trading-rules"
+      },
       "tiers": [
         {
           "accountSize": 25000,
@@ -750,6 +757,13 @@
       ],
       "lastVerifiedDate": "2026-02-15",
       "status": "Supported",
+      "copyTradingPolicy": {
+        "allowed": "unverified",
+        "sameOwnerOnly": true,
+        "maxAccounts": 5,
+        "notes": "Official Trade Copier Policy prohibits cross-account copy services; secondary sources cite a capped same-owner allowance — confirm with TPT support.",
+        "sourceUrl": "https://takeprofittraderhelp.zendesk.com/hc/en-us/articles/34431176505245-Trade-Copier-Policy"
+      },
       "tiers": [
         {
           "accountSize": 25000,
@@ -810,6 +824,12 @@
       ],
       "lastVerifiedDate": "2026-02-15",
       "status": "SupportedWithAssumptions",
+      "copyTradingPolicy": {
+        "allowed": "unverified",
+        "sameOwnerOnly": false,
+        "notes": "Conflicting secondary sources on copy-trading/automation; primary tradeday.com/rules 403-blocked — confirm with TradeDay support.",
+        "sourceUrl": "https://tradeday.com/rules"
+      },
       "tiers": [
         {
           "accountSize": 50000,
@@ -850,10 +870,18 @@
       "uiDisplayName": "FundingTicks",
       "legalName": "Funding Ticks",
       "officialSourceUrls": [
-        "https://fundingticks.com/rules"
+        "https://fundingticks.com/rules",
+        "https://www.financemagnates.com/forex/following-profit-cuts-and-trading-limits-prop-firm-fundingticks-begins-winding-down/"
       ],
-      "lastVerifiedDate": "2024-01-15",
-      "status": "Supported",
+      "lastVerifiedDate": "2026-01-31",
+      "status": "Discontinued",
+      "verificationNote": "Firm closed 2026-01; rules retained for historical accounts only.",
+      "copyTradingPolicy": {
+        "allowed": "no",
+        "sameOwnerOnly": false,
+        "notes": "Firm closed 2026-01; copy-trading policy moot.",
+        "sourceUrl": "https://www.proptradingvibes.com/news/fundingticks-shutdown"
+      },
       "tiers": [
         {
           "accountSize": 25000,
@@ -911,58 +939,53 @@
       "uiDisplayName": "Lucid",
       "legalName": "Lucid Trading",
       "officialSourceUrls": [
-        "https://lucidtrading.com/rules"
+        "https://lucidtrading.com/rules",
+        "https://proptradingvibes.com/prop-firms/lucid-trading",
+        "https://damnpropfirms.com/prop-firms/lucid-trading-rules-payouts/"
       ],
-      "lastVerifiedDate": "2024-01-15",
+      "lastVerifiedDate": "2026-07-07",
       "status": "Supported",
+      "verificationNote": "secondary sources; official pages 403-blocked; confirm with firm",
+      "copyTradingPolicy": {
+        "allowed": "conditional",
+        "sameOwnerOnly": true,
+        "notes": "Copiers and automation allowed; cross-account hedging prohibited. Per-program consistency: Flex 0% eval, Pro ~40%, Direct ~20%.",
+        "sourceUrl": "https://tradedupe.com/blog/does-lucid-allow-copy-trading-full-2026-guide"
+      },
       "tiers": [
         {
           "accountSize": 25000,
-          "maxContracts": 3,
+          "maxContracts": 2,
           "profitTarget": 1500,
-          "maxDrawdown": 1500,
-          "dailyLossLimit": 500,
-          "intratradeDrawdown": 450
+          "maxDrawdown": 1000
         },
         {
           "accountSize": 50000,
-          "maxContracts": 6,
+          "maxContracts": 4,
           "profitTarget": 3000,
-          "maxDrawdown": 2500,
-          "dailyLossLimit": 1000,
-          "intratradeDrawdown": 750
-        },
-        {
-          "accountSize": 75000,
-          "maxContracts": 9,
-          "profitTarget": 4500,
-          "maxDrawdown": 3750,
-          "dailyLossLimit": 1500,
-          "intratradeDrawdown": 1125
+          "maxDrawdown": 2000
         },
         {
           "accountSize": 100000,
-          "maxContracts": 12,
+          "maxContracts": 6,
           "profitTarget": 6000,
-          "maxDrawdown": 5000,
-          "dailyLossLimit": 2000,
-          "intratradeDrawdown": 1500
+          "maxDrawdown": 3000
         },
         {
           "accountSize": 150000,
-          "maxContracts": 15,
+          "maxContracts": 10,
           "profitTarget": 9000,
-          "maxDrawdown": 7500,
-          "dailyLossLimit": 3000,
-          "intratradeDrawdown": 2250
+          "maxDrawdown": 4500
         }
       ],
       "enforcementSemantics": {
-        "drawdownType": "Static",
-        "hasDailyLossLimit": true,
-        "allowSundayTrading": false,
+        "drawdownType": "EOD",
+        "maxLossTracking": "TrailingEod",
+        "maxLossThresholdUpdate": "EndOfDay",
+        "hasDailyLossLimit": false,
+        "allowSundayTrading": true,
         "minimumTradingDays": 0,
-        "consistencyRulePercent": 0,
+        "consistencyRulePercent": 40.0,
         "microContractRootRegex": "^M[A-Z0-9]+$",
         "microContractMultiplier": 10
       }

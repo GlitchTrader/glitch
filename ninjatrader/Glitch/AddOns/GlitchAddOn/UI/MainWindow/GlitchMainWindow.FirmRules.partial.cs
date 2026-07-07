@@ -314,7 +314,8 @@ namespace Glitch.UI
                 MicroContractRootRegex = TryReadJsonString(semantics, "microContractRootRegex") ?? defaultMicroRegex,
                 MicroContractMultiplier = TryReadJsonDouble(semantics, "microContractMultiplier") ?? defaultMicroMultiplier,
                 ProviderRules = ParseFirmProviderRulesFromJsonDictionary(firmRow),
-                Tiers = ParseFirmTiersFromJsonDictionary(firmRow)
+                Tiers = ParseFirmTiersFromJsonDictionary(firmRow),
+                CopyTradingPolicy = ParseCopyTradingPolicyFromJsonDictionary(firmRow)
             };
 
             if (string.IsNullOrWhiteSpace(metadata.MicroContractRootRegex))
@@ -393,6 +394,69 @@ namespace Glitch.UI
             }
 
             return providerRules;
+        }
+
+        private static CopyTradingPolicyMetadata ParseCopyTradingPolicyFromJsonDictionary(IDictionary firmRow)
+        {
+            IDictionary policyRow = TryReadJsonDictionary(firmRow, "copyTradingPolicy");
+            return ParseCopyTradingPolicyFromDictionary(policyRow);
+        }
+
+        private static CopyTradingPolicyMetadata ParseCopyTradingPolicy(string firmJson)
+        {
+            string policyJson = ExtractObjectJson(firmJson, "copyTradingPolicy");
+            if (string.IsNullOrWhiteSpace(policyJson))
+                return null;
+
+            return new CopyTradingPolicyMetadata
+            {
+                Allowed = ExtractStringValue(policyJson, "allowed"),
+                SameOwnerOnly = ExtractBooleanValueNullable(policyJson, "sameOwnerOnly") ?? false,
+                MaxAccounts = TryParseNullableInt(ExtractNumberValueNullable(policyJson, "maxAccounts")),
+                Notes = ExtractStringValue(policyJson, "notes"),
+                SourceUrl = ExtractStringValue(policyJson, "sourceUrl")
+            };
+        }
+
+        private static CopyTradingPolicyMetadata ParseCopyTradingPolicyFromDictionary(IDictionary policyRow)
+        {
+            if (policyRow == null)
+                return null;
+
+            return new CopyTradingPolicyMetadata
+            {
+                Allowed = TryReadJsonString(policyRow, "allowed"),
+                SameOwnerOnly = TryReadJsonBoolean(policyRow, "sameOwnerOnly") ?? false,
+                MaxAccounts = TryParseNullableInt(TryReadJsonDouble(policyRow, "maxAccounts")),
+                Notes = TryReadJsonString(policyRow, "notes"),
+                SourceUrl = TryReadJsonString(policyRow, "sourceUrl")
+            };
+        }
+
+        private static int? TryParseNullableInt(double? value)
+        {
+            if (!value.HasValue || double.IsNaN(value.Value) || double.IsInfinity(value.Value))
+                return null;
+
+            return (int)Math.Round(value.Value, MidpointRounding.AwayFromZero);
+        }
+
+        private static bool IsFirmStatusDiscontinued(string status)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+                return false;
+
+            return status.Trim().StartsWith("Discontinued", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsCopyTradingCleanlyAllowed(FirmRuleMetadata metadata)
+        {
+            if (metadata?.CopyTradingPolicy == null)
+                return false;
+
+            string allowed = metadata.CopyTradingPolicy.Allowed ?? string.Empty;
+            return allowed.Equals("yes", StringComparison.OrdinalIgnoreCase) ||
+                   allowed.Equals("allowed", StringComparison.OrdinalIgnoreCase);
         }
 
         private static object TryReadJsonValue(IDictionary source, string key)
@@ -574,7 +638,8 @@ namespace Glitch.UI
                 MicroContractRootRegex = ExtractStringValue(semanticsJson, "microContractRootRegex") ?? defaultMicroRegex,
                 MicroContractMultiplier = ExtractNumberValueNullable(semanticsJson, "microContractMultiplier") ?? defaultMicroMultiplier,
                 ProviderRules = ParseFirmProviderRules(firmJson),
-                Tiers = ParseFirmTiers(firmJson)
+                Tiers = ParseFirmTiers(firmJson),
+                CopyTradingPolicy = ParseCopyTradingPolicy(firmJson)
             };
 
             if (string.IsNullOrWhiteSpace(metadata.MicroContractRootRegex))
@@ -1017,8 +1082,11 @@ namespace Glitch.UI
 
                 if (string.Equals(firmId, "ApexTraderFunding", StringComparison.OrdinalIgnoreCase))
                     display = "Apex";
-                else if (string.Equals(firmId, "TakeProfitTrader", StringComparison.OrdinalIgnoreCase))
+                else                 if (string.Equals(firmId, "TakeProfitTrader", StringComparison.OrdinalIgnoreCase))
                     display = "TakeProfit";
+
+                if (IsFirmStatusDiscontinued(metadata?.Status))
+                    display = display + " (discontinued)";
 
                 map[firmId] = display;
             }
