@@ -341,8 +341,9 @@ namespace Glitch.UI
         private enum WarningSeverity
         {
             Critical = 0,
-            Operational = 1,
-            Informational = 2
+            Notice = 1,
+            Operational = 2,
+            Informational = 3
         }
 
         private sealed class ReplicationIntent
@@ -415,6 +416,16 @@ namespace Glitch.UI
             public double MicroContractMultiplier { get; set; }
             public List<FirmProviderRule> ProviderRules { get; set; }
             public List<FirmTierRule> Tiers { get; set; }
+            public CopyTradingPolicyMetadata CopyTradingPolicy { get; set; }
+        }
+
+        private sealed class CopyTradingPolicyMetadata
+        {
+            public string Allowed { get; set; }
+            public bool SameOwnerOnly { get; set; }
+            public int? MaxAccounts { get; set; }
+            public string Notes { get; set; }
+            public string SourceUrl { get; set; }
         }
 
         private sealed class FirmProviderRule

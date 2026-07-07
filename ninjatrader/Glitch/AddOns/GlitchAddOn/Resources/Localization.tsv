@@ -115,7 +115,9 @@ dashboard.group.create_group	+ Create Group	+ Criar Grupo	+ Crear Grupo	+ 创建
 dashboard.group.master_label_format	Group {0} | Master:	Grupo {0} | Master:	Grupo {0} | Master:	组 {0} | Master:	Groupe {0} | Master :	Группа {0} | Master:
 dashboard.group.remove	Remove	Remover	Quitar	移除	Supprimer	Удалить
 dashboard.group.remove_group	Remove Group	Remover Grupo	Quitar Grupo	移除分组	Supprimer le Groupe	Удалить Группу
-dashboard.group.select_all_tooltip	Select all followers	Selecionar todos os followers	Seleccionar todos los followers	选择所有跟随账户	Sélectionner tous les followers	Выбрать всех followers
+dashboard.group.ratio_edit_hint	Double-click to edit ratio	Clique duas vezes para editar o ratio	Doble clic para editar el ratio	双击编辑比例	Double-cliquez pour modifier le ratio	Двойной щелчок для редактирования коэффициента
+dashboard.group.ratio_math	Follower contracts = master contracts × ratio	Contratos follower = contratos master × ratio	Contratos follower = contratos master × ratio	跟随合约 = 主账户合约 × 比例	Contrats follower = contrats master × ratio	Контракты follower = контракты master × коэффициент
+dashboard.group.ratio_math_format	master {0} × ratio {1} ⇒ follower {2} contracts	master {0} × ratio {1} ⇒ follower {2} contratos	master {0} × ratio {1} ⇒ follower {2} contratos	主账户 {0} × 比例 {1} ⇒ 跟随 {2} 合约	master {0} × ratio {1} ⇒ follower {2} contrats	master {0} × ratio {1} ⇒ follower {2} контрактов
 dialog.add_follower.prompt	Pick a follower account:	Escolha uma conta follower:	Elige una cuenta follower:	选择一个跟随账户：	Choisissez un compte follower :	Выберите счет follower:
 dialog.add_follower.title	Add Follower Account	Adicionar Conta Follower	Añadir Cuenta Follower	添加跟随账户	Ajouter un Compte Follower	Добавить Счет Follower
 dialog.common.cancel	Cancel	Cancelar	Cancelar	取消	Annuler	Отмена
@@ -149,6 +151,7 @@ journal.column.type	Type	Tipo	Tipo	类型	Type	Тип
 journal.column.warning	Warning	Alerta	Alerta	预警	Alerte	Предупреждение
 journal.critical_warnings	Critical Warnings	Alertas Críticos	Alertas Críticas	关键预警	Alertes Critiques	Критические Предупреждения
 journal.title	Journal	Journal	Diario	日志	Journal	Журнал
+journal.notice_history	Notice History	Histórico de Avisos	Historial de Avisos	通知历史	Historique des Avis	История Уведомлений
 journal.trade_feed	Live Feed	Feed ao Vivo	Feed en Vivo	实时流	Flux Live	Лента Live
 journal.trader_performance	Trader Performance	Performance do Trader	Rendimiento del Trader	交易表现	Performance du Trader	Результаты Трейдера
 summary.account_trades	Account Trades	Trades por Conta	Trades por Cuenta	账户级交易	Trades Compte	Сделки по Счетам
@@ -195,6 +198,7 @@ summary.open_reason.protective_followup	Protective Follow-up	Follow-up Protetivo
 summary.open_reason.replication_sync	Replication Sync	Replication Sync	Replication Sync	复制同步	Sync Réplication	Синхронизация Репликации
 summary.open_reason.unknown	Manual / Unknown	Manual / Desconhecido	Manual / Desconocido	手动 / 未知	Manuel / Inconnu	Ручной / Неизвестно
 summary.open_time	Open Time	Hora de Abertura	Hora de Apertura	开仓时间	Heure d'Entrée	Время Открытия
+summary.point_value_unknown	Point value unknown for {0}; PnL display may be wrong.	Valor do ponto desconhecido para {0}; exibição de PnL pode estar errada.	Valor del punto desconocido para {0}; la visualización de PnL puede ser incorrecta.	{0} 的点值未知；PnL 显示可能有误。	Valeur du point inconnue pour {0} ; l'affichage du PnL peut être erroné.	Неизвестное значение пункта для {0}; отображение PnL может быть неверным.
 summary.pnl_short	PnL	PnL	PnL	PnL	PnL	PnL
 summary.profit_factor	Profit Factor	Fator de Lucro	Factor de Beneficio	盈利因子	Profit Factor	Фактор Прибыли
 summary.reason.manual_other	Manual / Other	Manual / Outro	Manual / Otro	手动 / 其他	Manuel / Autre	Ручной / Другое
@@ -223,6 +227,7 @@ tab.dashboard	Dashboard	Dashboard	Panel	仪表盘	Tableau	Панель
 tab.journal	Journal	Journal	Diario	日志	Journal	Журнал
 tab.settings	Settings	Configurações	Configuración	设置	Réglages	Настройки
 settings.title	Settings	Configurações	Configuración	设置	Réglages	Настройки
+settings.compliance.copy_trading_notice	Check {0}'s trade-copier policy — see Settings › Compliance.	Verifique a política de copiador de {0} — veja Configurações › Compliance.	Revise la política de copiador de {0} — vea Configuración › Compliance.	请核对 {0} 的跟单政策 — 见设置 › 合规。	Vérifiez la politique de copieur de {0} — voir Paramètres › Conformité.	Проверьте политику копирования {0} — см. Настройки › Compliance.
 settings.risk.title	Risk Management Rules	Regras de Gestão de Risco	Reglas de Gestión de Riesgo	风险管理规则	Règles de Gestion du Risque	Правила Управления Риском
 settings.risk.enforce_15_flatten_freeze	Flatten and freeze account when buffer falls below 15% of maximum drawdown.	Achatar e congelar conta quando o buffer cair abaixo de 15% do drawdown máximo.	Aplanar y congelar cuenta cuando el buffer baje del 15% del drawdown máximo.	当缓冲低于最大回撤的15%时，平仓并冻结账户。	Aplatir et geler le compte lorsque le buffer tombe sous 15% du drawdown max.	При падении буфера ниже 15% макс. дд — закрыть и заморозить счет.
 settings.risk.enforce_20_one_contract	Force one-contract replication when buffer falls below 20% of maximum drawdown (release at 25%).	Forçar replicação de um contrato quando o buffer cair abaixo de 20% do drawdown máximo (liberar em 25%).	Forzar replicación de un contrato cuando el buffer baje del 20% del drawdown máximo (soltar al 25%).	当缓冲低于最大回撤的20%时，强制单合约复制（25%时解除）。	Forcer la réplication un contrat quand le buffer tombe sous 20% du drawdown max (relâcher à 25%).	При буфере < 20% макс. дд — одноконтрактная репликация (снять при 25%).

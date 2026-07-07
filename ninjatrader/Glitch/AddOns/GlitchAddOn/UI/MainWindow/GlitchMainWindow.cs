@@ -159,6 +159,10 @@ namespace Glitch.UI
         private StackPanel _accountGroupsHostPanel;
         private DataGrid _accountsGrid;
         private DataGrid _criticalWarningsGrid;
+        private DataGrid _noticeWarningsGrid;
+        private Expander _journalNoticeHistoryExpander;
+        private ICollectionView _criticalWarningsView;
+        private ICollectionView _noticeWarningsView;
         private Grid _dashboardRootGrid;
         private FrameworkElement _dashboardGroupsSection;
         private Grid _journalRootGrid;
@@ -1838,20 +1842,7 @@ namespace Glitch.UI
             masterSizeColumn.MinWidth = 54;
             grid.Columns.Add(masterSizeColumn);
 
-            var ratioColumn = new DataGridTextColumn
-            {
-                Header = L("dashboard.group.column.ratio", "Ratio"),
-                Binding = new Binding(nameof(AccountGroupMemberRow.Ratio))
-                {
-                    Mode = BindingMode.TwoWay,
-                    UpdateSourceTrigger = UpdateSourceTrigger.LostFocus,
-                    StringFormat = "0.####"
-                },
-                Width = DataGridLength.Auto,
-                ElementStyle = centerTextStyle,
-                EditingElementStyle = CreateEditableRatioTextBoxStyle(context),
-                HeaderStyle = centerHeaderStyle
-            };
+            var ratioColumn = CreateEditableFollowerRatioColumn(context, centerHeaderStyle);
             ratioColumn.MinWidth = 56;
             grid.Columns.Add(ratioColumn);
 
@@ -1908,7 +1899,27 @@ namespace Glitch.UI
                 Dispatcher.BeginInvoke(new Action(refreshSelectAllHeaderState), DispatcherPriority.Background);
 
             grid.CurrentCellChanged += (s, e) => queueHeaderSelectionRefresh();
-            grid.CellEditEnding += (s, e) => queueHeaderSelectionRefresh();
+            grid.CellEditEnding += (s, e) =>
+            {
+                if (e?.Row?.Item is AccountGroupMemberRow ratioMember)
+                    e.Row.ToolTip = BuildFollowerRatioMathTooltip(ratioMember);
+                queueHeaderSelectionRefresh();
+            };
+            grid.LoadingRow += (s, e) =>
+            {
+                if (e?.Row?.Item is AccountGroupMemberRow member)
+                    e.Row.ToolTip = BuildFollowerRatioMathTooltip(member);
+            };
+            grid.PreparingCellForEdit += (s, e) =>
+            {
+                if (e?.Column is DataGridTextColumn ratioColumn &&
+                    ratioColumn.Binding is Binding ratioBinding &&
+                    string.Equals(ratioBinding.Path?.Path, nameof(AccountGroupMemberRow.Ratio), StringComparison.Ordinal) &&
+                    e.EditingElement is TextBox ratioEditor)
+                {
+                    ratioEditor.ToolTip = BuildFollowerRatioMathTooltip(e.Row?.Item as AccountGroupMemberRow);
+                }
+            };
             grid.PreviewMouseLeftButtonUp += (s, e) => queueHeaderSelectionRefresh();
             grid.PreviewKeyUp += (s, e) =>
             {
@@ -2108,6 +2119,60 @@ namespace Glitch.UI
 
             style.Setters.Add(new Setter(Control.TemplateProperty, template));
             return style;
+        }
+
+        private DataGridTextColumn CreateEditableFollowerRatioColumn(FrameworkElement context, Style centerHeaderStyle)
+        {
+            var column = new DataGridTextColumn
+            {
+                Header = L("dashboard.group.column.ratio", "Ratio"),
+                Binding = new Binding(nameof(AccountGroupMemberRow.Ratio))
+                {
+                    Mode = BindingMode.TwoWay,
+                    UpdateSourceTrigger = UpdateSourceTrigger.LostFocus,
+                    StringFormat = "0.####",
+                    ConverterCulture = CultureInfo.CurrentCulture
+                },
+                Width = DataGridLength.Auto,
+                ElementStyle = CreateEditableFollowerRatioElementStyle(context),
+                EditingElementStyle = CreateEditableRatioTextBoxStyle(context),
+                HeaderStyle = centerHeaderStyle
+            };
+            return column;
+        }
+
+        private static Style CreateEditableFollowerRatioElementStyle(FrameworkElement context)
+        {
+            var baseStyle = FindSkinStyle(context, typeof(TextBlock));
+            var style = new Style(typeof(TextBlock), baseStyle);
+            ApplySkinSetter(style, TextBlock.ForegroundProperty, context, "FontControlBrush", "FontTableBrush");
+            style.Setters.Add(new Setter(TextBlock.HorizontalAlignmentProperty, HorizontalAlignment.Center));
+            style.Setters.Add(new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Center));
+            style.Setters.Add(new Setter(TextBlock.PaddingProperty, new Thickness(6, 3, 16, 3)));
+            style.Setters.Add(new Setter(FrameworkElement.ToolTipProperty, L("dashboard.group.ratio_edit_hint", "Double-click to edit ratio")));
+            var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, new SolidColorBrush(Color.FromArgb(28, 255, 255, 255))));
+            style.Triggers.Add(hoverTrigger);
+            return style;
+        }
+
+        private static string BuildFollowerRatioMathTooltip(AccountGroupMemberRow member)
+        {
+            if (member == null)
+                return L("dashboard.group.ratio_math", "Follower contracts = master contracts × ratio");
+
+            double ratio = member.Ratio;
+            if (double.IsNaN(ratio) || double.IsInfinity(ratio) || ratio <= 0)
+                ratio = 1.0;
+
+            int exampleMaster = 2;
+            int exampleFollower = Math.Max(1, (int)Math.Round(exampleMaster * ratio, MidpointRounding.AwayFromZero));
+            return Lf(
+                "dashboard.group.ratio_math_format",
+                "master {0} × ratio {1} ⇒ follower {2} contracts",
+                exampleMaster.ToString(CultureInfo.CurrentCulture),
+                ratio.ToString("0.####", CultureInfo.CurrentCulture),
+                exampleFollower.ToString(CultureInfo.CurrentCulture));
         }
 
         private static Style CreateEditableRatioTextBoxStyle(FrameworkElement context)
@@ -3605,6 +3670,7 @@ namespace Glitch.UI
             PublishGlitchShellState(rows);
             RefreshAnalyticsDashboard(activeAccounts);
             UpdateJournalLicenseGateOverlay();
+            UpdateSettingsCopyTradingPolicyNotice();
         }
 
         private void ApplyAccountRows(IReadOnlyList<AccountGridRow> rows)
@@ -4608,7 +4674,17 @@ namespace Glitch.UI
         {
             string token = string.IsNullOrWhiteSpace(warningType) ? string.Empty : warningType.Trim();
             if (token.Length == 0)
-                return WarningSeverity.Operational;
+                return WarningSeverity.Notice;
+
+            if (token.StartsWith("BufferCriticalLock", StringComparison.OrdinalIgnoreCase) ||
+                token.StartsWith("UnrealizedLossFlatten", StringComparison.OrdinalIgnoreCase) ||
+                token.StartsWith("MaxContractsBreach", StringComparison.OrdinalIgnoreCase) ||
+                token.StartsWith("NoProtectionLock", StringComparison.OrdinalIgnoreCase) ||
+                token.StartsWith("ReplicationFreeze", StringComparison.OrdinalIgnoreCase) ||
+                token.StartsWith("EvalProfitTargetLock", StringComparison.OrdinalIgnoreCase))
+            {
+                return WarningSeverity.Critical;
+            }
 
             if (token.StartsWith("ReplicationSubmit|", StringComparison.OrdinalIgnoreCase) ||
                 token.StartsWith("ProtectiveRejected|", StringComparison.OrdinalIgnoreCase) ||
@@ -4616,28 +4692,51 @@ namespace Glitch.UI
                 token.Equals("RiskFlattenFallback", StringComparison.OrdinalIgnoreCase) ||
                 token.StartsWith("PolicyGroupLimit", StringComparison.OrdinalIgnoreCase) ||
                 token.StartsWith("PolicyFollowerLimit", StringComparison.OrdinalIgnoreCase) ||
-                token.StartsWith("PolicyReplicationBlocked", StringComparison.OrdinalIgnoreCase))
+                token.StartsWith("PolicyReplicationBlocked", StringComparison.OrdinalIgnoreCase) ||
+                token.StartsWith("PointValueUnknown|", StringComparison.OrdinalIgnoreCase))
             {
                 return WarningSeverity.Informational;
             }
 
-            if (token.StartsWith("ReplicationFreeze", StringComparison.OrdinalIgnoreCase) ||
-                token.StartsWith("MaxContractsBreach", StringComparison.OrdinalIgnoreCase) ||
-                token.StartsWith("NoProtectionLock", StringComparison.OrdinalIgnoreCase) ||
-                token.StartsWith("BufferCriticalLock", StringComparison.OrdinalIgnoreCase) ||
-                token.StartsWith("EvalProfitTargetLock", StringComparison.OrdinalIgnoreCase) ||
-                token.StartsWith("UnrealizedLossFlatten", StringComparison.OrdinalIgnoreCase))
-            {
-                return WarningSeverity.Critical;
-            }
+            return WarningSeverity.Notice;
+        }
 
-            if (token.StartsWith("ReplicationConflict|", StringComparison.OrdinalIgnoreCase) ||
-                token.StartsWith("ReplicationBlock|", StringComparison.OrdinalIgnoreCase))
-            {
-                return WarningSeverity.Operational;
-            }
+        private static bool IsNoticeOnlyWarningSeverity(WarningSeverity severity)
+        {
+            return severity == WarningSeverity.Notice ||
+                   severity == WarningSeverity.Operational ||
+                   severity == WarningSeverity.Informational;
+        }
 
-            return WarningSeverity.Operational;
+        private static WarningSeverity NormalizeWarningSeverity(WarningSeverity severity)
+        {
+            if (severity == WarningSeverity.Operational)
+                return WarningSeverity.Notice;
+            return severity;
+        }
+
+        private static bool ShouldFilterCriticalWarningEntry(object item)
+        {
+            if (!(item is CriticalWarningEntry entry) || entry == null || entry.IsDismissed)
+                return false;
+
+            WarningSeverity severity = NormalizeWarningSeverity(entry.Severity);
+            return severity == WarningSeverity.Critical;
+        }
+
+        private static bool ShouldFilterNoticeWarningEntry(object item)
+        {
+            if (!(item is CriticalWarningEntry entry) || entry == null)
+                return false;
+
+            WarningSeverity severity = NormalizeWarningSeverity(entry.Severity);
+            return severity == WarningSeverity.Notice || severity == WarningSeverity.Informational;
+        }
+
+        private void RefreshWarningCollectionViews()
+        {
+            _criticalWarningsView?.Refresh();
+            _noticeWarningsView?.Refresh();
         }
 
         private bool TryMarkInformationalWarningJournalCooldown(string warningKey, DateTime nowUtc)
@@ -4682,14 +4781,13 @@ namespace Glitch.UI
             string normalizedAccount = string.IsNullOrWhiteSpace(accountName) ? "System" : accountName.Trim();
             string normalizedType = string.IsNullOrWhiteSpace(warningType) ? "Generic" : warningType.Trim();
             string warningKey = normalizedType + "|" + normalizedAccount;
-            WarningSeverity severity = ResolveWarningSeverity(normalizedType);
+            WarningSeverity severity = NormalizeWarningSeverity(ResolveWarningSeverity(normalizedType));
             DateTime nowUtc = DateTime.UtcNow;
 
             if (severity == WarningSeverity.Informational)
             {
                 if (TryMarkInformationalWarningJournalCooldown(warningKey, nowUtc))
                     AppendJournal(normalizedAccount, "Warning", message.Trim());
-                return;
             }
 
             bool alreadyActive = _criticalWarningEntries.Any(entry =>
@@ -4714,7 +4812,9 @@ namespace Glitch.UI
             while (_criticalWarningEntries.Count > maxWarningEntries)
                 _criticalWarningEntries.RemoveAt(_criticalWarningEntries.Count - 1);
 
+            RefreshWarningCollectionViews();
             UpdateWarningCountUi();
+            RefreshWarningCollectionViews();
         }
 
         private void OnDismissSelectedWarningClick(object sender, RoutedEventArgs e)
@@ -4795,6 +4895,7 @@ namespace Glitch.UI
             }
 
             UpdateWarningCountUi();
+            RefreshWarningCollectionViews();
         }
 
         private void UpdateWarningCountUi()
@@ -4805,16 +4906,9 @@ namespace Glitch.UI
             int criticalCount = _criticalWarningEntries.Count(entry =>
                 entry != null &&
                 !entry.IsDismissed &&
-                entry.Severity == WarningSeverity.Critical);
-            int operationalCount = _criticalWarningEntries.Count(entry =>
-                entry != null &&
-                !entry.IsDismissed &&
-                entry.Severity == WarningSeverity.Operational);
-            int displayCount = criticalCount + operationalCount;
-            _warningCountValueText.Text = displayCount.ToString("N0", CultureInfo.CurrentCulture);
-            _warningCountValueText.Foreground = criticalCount > 0
-                ? OrangeAccentBrush
-                : (operationalCount > 0 ? Brushes.White : Brushes.White);
+                NormalizeWarningSeverity(entry.Severity) == WarningSeverity.Critical);
+            _warningCountValueText.Text = criticalCount.ToString("N0", CultureInfo.CurrentCulture);
+            _warningCountValueText.Foreground = Brushes.White;
         }
 
         private static double ToRiskRatio(double headroomRatio)
@@ -5080,9 +5174,7 @@ namespace Glitch.UI
                         continue;
 
                     string warningKey = string.IsNullOrWhiteSpace(persisted.WarningKey) ? "Generic|System" : persisted.WarningKey;
-                    WarningSeverity severity = ResolveWarningSeverity(warningKey);
-                    if (severity == WarningSeverity.Informational)
-                        continue;
+                    WarningSeverity severity = NormalizeWarningSeverity(ResolveWarningSeverity(warningKey.Split('|')[0]));
 
                     _criticalWarningEntries.Add(new CriticalWarningEntry
                     {
@@ -5098,6 +5190,7 @@ namespace Glitch.UI
                 }
 
                 UpdateWarningCountUi();
+                RefreshWarningCollectionViews();
             }
             catch
             {
@@ -5131,8 +5224,7 @@ namespace Glitch.UI
                 var warningSnapshot = _criticalWarningEntries
                     .Where(entry =>
                         entry != null &&
-                        !string.IsNullOrWhiteSpace(entry.Message) &&
-                        entry.Severity != WarningSeverity.Informational)
+                        !string.IsNullOrWhiteSpace(entry.Message))
                     .Select(entry => new GlitchStateStore.CriticalWarningRecord
                     {
                         TimestampUtc = entry.TimestampUtc,
@@ -7063,7 +7155,12 @@ namespace Glitch.UI
             if (string.IsNullOrWhiteSpace(displayName))
                 return "None";
 
-            if (_firmDisplayToId.TryGetValue(displayName.Trim(), out string firmId))
+            string normalized = displayName.Trim();
+            int discontinuedIndex = normalized.IndexOf("(discontinued)", StringComparison.OrdinalIgnoreCase);
+            if (discontinuedIndex >= 0)
+                normalized = normalized.Substring(0, discontinuedIndex).TrimEnd();
+
+            if (_firmDisplayToId.TryGetValue(normalized, out string firmId))
                 return firmId;
 
             return "None";
@@ -7893,8 +7990,8 @@ namespace Glitch.UI
             public string TimeText =>
                 (DismissedUtc ?? TimestampUtc).ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture);
 
-            public string StatusText => IsDismissed ? "Dismissed" : "Active";
-            public string StatusSign => IsDismissed ? "Neutral" : "Negative";
+            public string StatusText => IsDismissed ? "Dismissed" : (Severity == WarningSeverity.Critical ? "Active" : "Logged");
+            public string StatusSign => IsDismissed || Severity != WarningSeverity.Critical ? "Neutral" : "Negative";
         }
 
     }
