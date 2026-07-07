@@ -2149,14 +2149,15 @@ namespace Glitch.UI
             style.Setters.Add(new Setter(TextBlock.HorizontalAlignmentProperty, HorizontalAlignment.Center));
             style.Setters.Add(new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Center));
             style.Setters.Add(new Setter(TextBlock.PaddingProperty, new Thickness(6, 3, 16, 3)));
-            style.Setters.Add(new Setter(FrameworkElement.ToolTipProperty, L("dashboard.group.ratio_edit_hint", "Double-click to edit ratio")));
+            // ponytail: static style factory — literal fallback; row LoadingRow sets localized tooltip
+            style.Setters.Add(new Setter(FrameworkElement.ToolTipProperty, "Double-click to edit ratio"));
             var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
             hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, new SolidColorBrush(Color.FromArgb(28, 255, 255, 255))));
             style.Triggers.Add(hoverTrigger);
             return style;
         }
 
-        private static string BuildFollowerRatioMathTooltip(AccountGroupMemberRow member)
+        private string BuildFollowerRatioMathTooltip(AccountGroupMemberRow member)
         {
             if (member == null)
                 return L("dashboard.group.ratio_math", "Follower contracts = master contracts × ratio");

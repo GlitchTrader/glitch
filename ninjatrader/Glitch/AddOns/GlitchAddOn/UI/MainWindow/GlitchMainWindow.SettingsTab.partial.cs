@@ -25,6 +25,7 @@ namespace Glitch.UI
         private bool _settingsSaveFeedbackActive;
         private bool _settingsLicensePlaceholderActive;
         private bool _settingsLicenseMaskedDisplayActive;
+        private string _settingsLicenseKeyUnmaskedValue;
         private TextBlock _settingsCopyTradingPolicyNotice;
 
         private double ResolveSettingsBodyFontSize()
@@ -181,7 +182,7 @@ namespace Glitch.UI
                 return;
 
             var firmNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (AccountGridRow row in _accountRows ?? Array.Empty<AccountGridRow>())
+            foreach (AccountGridRow row in _accountRows)
             {
                 if (row == null || string.IsNullOrWhiteSpace(row.PropFirmDisplay))
                     continue;

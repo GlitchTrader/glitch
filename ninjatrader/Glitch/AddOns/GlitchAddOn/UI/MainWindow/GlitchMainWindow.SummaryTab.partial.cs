@@ -858,7 +858,7 @@ namespace Glitch.UI
             return "$0.00";
         }
 
-        private static IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> NormalizeTradesToUsd(
+        private IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> NormalizeTradesToUsd(
             IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> trades)
         {
             if (trades == null || trades.Count == 0)

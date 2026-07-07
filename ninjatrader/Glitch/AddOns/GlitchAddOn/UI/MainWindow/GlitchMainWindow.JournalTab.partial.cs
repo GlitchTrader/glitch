@@ -409,7 +409,7 @@ namespace Glitch.UI
                     grid.Columns.Add(accountColumn);
 
                     var messageColumn = CreateTextColumn(L("journal.column.warning", "Warning"), nameof(CriticalWarningEntry.Message), leftTextStyle, leftHeaderStyle);
-                    messageColumn.Width = new DataGridLength(1, GridUnitType.Star);
+                    messageColumn.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
                     messageColumn.MinWidth = 240;
                     BindLocalizedColumnHeader(messageColumn, "journal.column.warning", "Warning");
                     grid.Columns.Add(messageColumn);

@@ -11,6 +11,7 @@ Append-only operator log. Newest first.
 - GL-015 (WO-5): ratio `ConverterCulture`, hover affordance, math tooltip (`GlitchMainWindow.cs`, `7ec0ac4`).
 - GL-011 (WO-6): followers-first dashboard row swap (`DashboardTab.partial.cs`, `2b5c52b`).
 - GL-005/F2 (WO-11): unknown point value quiet notice (`SummaryTab.partial.cs`, `bac3046`).
+- **Compile fix (post-Alan F5):** restored `_settingsLicenseKeyUnmaskedValue`; fixed `GridUnitType`→`DataGridLengthUnitType` in notice grid; `L`/`Lf` out of static helpers; `NormalizeTradesToUsd` instance method for F2 notice path.
 - GL-012 (WO-4): Critical vs Notice taxonomy; notice history expander; header count critical-only (`GlitchMainWindow.cs`, `Models.partial.cs`, `7ec0ac4`).
 - GL-013 (WO-3): Journal Trader Performance primary full-width; Live Feed in collapsed Expander (`JournalTab.partial.cs`, `f61bfd4`).
 - GL-010 (WO-2): `MaxHeight = 240` on per-group follower DataGrids (`GlitchMainWindow.cs` `CreateGroupMembersGrid`, `b209ad1`). Pairs with WO-1 cap; groups section ScrollViewer handles many groups.
