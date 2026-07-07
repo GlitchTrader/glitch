@@ -48,7 +48,15 @@ Key files: `ninjatrader/Glitch/AddOns/GlitchAddOn/` — `UI/MainWindow/GlitchMai
 
 | ID | Title | Status | Notes |
 |----|-------|--------|-------|
-| GL-016 | NT8 + prop-firm rules refresh | todo | Read latest NinjaTrader 8 developer docs (order lifecycle, Account events, multi-account submission, known 8.1.x changes) and each supported firm's CURRENT published rules (Apex, TPT, TradeDay, FundingTicks, Lucid). Diff against `PropFirmRules.json` / `PropFirmRuleLoader.cs` and the compliance engine's assumptions. Output: `docs/ledger/research/nt8-propfirm-refresh-2026-07.md` with per-firm rule diffs + NT best-practice deltas. Gates GL-003 correctness. |
+| GL-016 | NT8 + prop-firm rules refresh | done (research) | **Report landed:** `research/nt8-propfirm-refresh-2026-07.md` (LANE-4, 2026-07-07, fully cited). Follow-up: re-verify 403-blocked official pages with a real browser session. Spawned GL-017/018/019 below. |
+
+## Wave 2b — Compliance truth (from GL-016 red flags — operator attention required)
+
+| ID | Title | Status | Notes |
+|----|-------|--------|-------|
+| GL-017 | Remove FundingTicks as a live firm | todo | **Firm CLOSED 2026-01** (wind-down announced 2026-01-18). `PropFirmRules.json` still ships it as `Supported` with lastVerifiedDate 2024-01-15. Remove from selectable firms / mark Discontinued in UI + rules JSON. |
+| GL-018 | Rebuild Lucid Trading rules from real data | todo | Encoded Lucid block is a **byte-identical copy-paste of the stale FundingTicks block** — fabricated data shipped under Lucid's name. Real Lucid 2026: EOD trailing drawdown, 4 programs (Flex/Pro/Direct/Maxx), 90/10 split since 2026-03, per-program consistency 0%/40%/20%. Rewrite entry from cited sources + firm confirmation. |
+| GL-019 | Encode per-firm copy-trading/automation policy; same-owner replication guard | todo | **Existential:** TPT's own Trade Copier Policy prohibits cross-account copy services ("coordinated trading"); TradeDay sources conflict (UNVERIFIED); Apex allows only same-owner, single-master, same-direction (~20 acct cap); Lucid allows copiers but bans cross-account hedging. Rules schema has NO representation of this. Add policy fields to `PropFirmRules.json`, surface in UI at firm selection, and gate replication defaults per firm. **Operator: confirm TPT + TradeDay policy in writing (support ticket) before any marketing of replication for those firms.** Also: Apex 4.0 (2026-03) tier numbers need reconciliation; Apex metals halted 2026-03-14 (no instrument-exclusion mechanism exists). |
 
 ## Dependencies
 
