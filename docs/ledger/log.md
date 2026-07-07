@@ -2,6 +2,12 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-07 — pass 5 (lead: Fable) — LANE-2 landed; limit hit again
+
+- **LANE-2 (math-audit, Opus) COMPLETE** → `audits/pnl-math-audit.md` (212 lines, 10 ranked findings). Lead spot-verified F2 (`return 1.0;` pointValue fallback at SummaryTab.partial.cs:940) — grounded. GL-005 → partial (audit done, fixes pending). Headline: arithmetic sound (screenshot reconciles to the cent) but journal PnL is gross of commissions (F1 — why Glitch ≠ NT), unknown-instrument pointValue silently 1.0 (F2 — gates GL-008), fleet-aggregated stats redefine win-rate (F3).
+- LANE-1, LANE-3, LANE-4 killed by the next session-limit window (resets 18:10 São Paulo). LANE-1 and LANE-4 died AT report-writing stage; key LANE-1 finding banked: follower-cell WPF bindings lack `ConverterCulture` (en-US parse vs pt-BR display). Progress notes updated in `lane-briefs.md`.
+- Relaunch scheduled shortly after 18:10 SP: LANE-1 + LANE-4 first (near-complete, cheap wins), LANE-3 after they land (2+2 stagger per contingency).
+
 ## 2026-07-07 — pass 4 (lead: Fable) — lane relaunch after limit reset
 
 - ~10:53 São Paulo: session limit confirmed reset. Relaunched all four lanes from `lane-briefs.md`: LANE-1 replication-audit (Opus), LANE-2 math-audit (Opus), LANE-3 ui-calm (Sonnet), LANE-4 external-truth (Sonnet). All running in background; outputs expected in `docs/ledger/audits/` and `docs/ledger/research/`.
