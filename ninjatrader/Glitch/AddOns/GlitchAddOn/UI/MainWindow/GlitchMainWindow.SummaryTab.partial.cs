@@ -906,7 +906,7 @@ namespace Glitch.UI
             };
         }
 
-        private static double ResolveInstrumentPointValue(string instrumentName)
+        private double ResolveInstrumentPointValue(string instrumentName)
         {
             foreach (string candidate in BuildInstrumentLookupCandidates(instrumentName))
             {
@@ -937,6 +937,12 @@ namespace Glitch.UI
                 }
             }
 
+            string symbol = string.IsNullOrWhiteSpace(instrumentName) ? "unknown" : instrumentName.Trim();
+            RaiseCriticalWarning(
+                "System",
+                Lf("summary.point_value_unknown", "Point value unknown for {0}; PnL display may be wrong.", symbol),
+                $"PointValueUnknown|{symbol}",
+                unlocksTrading: false);
             return 1.0;
         }
 
