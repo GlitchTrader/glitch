@@ -2,6 +2,12 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-07 — pass 6 (lead: Fable) — scheduled pass; LANE-3's surviving edit reviewed
+
+- 13:14 São Paulo, still pre-reset (18:10). Discovered one surviving LANE-3 edit in the working tree: `DashboardTab.partial.cs` — `MaxHeight = 240` on the connected-accounts grid (GL-010). Lead review: APPROVED — premise verified against row layout (Auto row1 grid starving star row2 followers); uses existing `ConfigureDataGridScrolling`; also advances GL-011. **Held uncommitted pending Alan's NT8 compile** per C#-gate. GL-010 → in_progress.
+- F1 refined earlier this window (commit `c2d00ff`): dashboard reads NT net via account items; Journal recomputes gross; "commission" absent from entire AddOn — Glitch disagrees with itself; sim masks it, funded exposes it.
+- Next event: 18:27 SP one-shot relaunches LANE-1 (opus) + LANE-3 (sonnet), incremental-write instructions.
+
 ## 2026-07-07 — pass 5 (lead: Fable) — LANE-2 landed; limit hit again
 
 - **LANE-2 (math-audit, Opus) COMPLETE** → `audits/pnl-math-audit.md` (212 lines, 10 ranked findings). Lead spot-verified F2 (`return 1.0;` pointValue fallback at SummaryTab.partial.cs:940) — grounded. GL-005 → partial (audit done, fixes pending). Headline: arithmetic sound (screenshot reconciles to the cent) but journal PnL is gross of commissions (F1 — why Glitch ≠ NT), unknown-instrument pointValue silently 1.0 (F2 — gates GL-008), fleet-aggregated stats redefine win-rate (F3).
