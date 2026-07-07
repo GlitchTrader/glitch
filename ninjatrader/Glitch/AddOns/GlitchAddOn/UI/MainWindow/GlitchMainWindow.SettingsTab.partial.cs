@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -23,7 +25,7 @@ namespace Glitch.UI
         private bool _settingsSaveFeedbackActive;
         private bool _settingsLicensePlaceholderActive;
         private bool _settingsLicenseMaskedDisplayActive;
-        private string _settingsLicenseKeyUnmaskedValue;
+        private TextBlock _settingsCopyTradingPolicyNotice;
 
         private double ResolveSettingsBodyFontSize()
         {
@@ -72,6 +74,15 @@ namespace Glitch.UI
             compliancePanel.Children.Add(BuildPolicyToggleRow(_settingsBufferOneContract20CheckBox));
             compliancePanel.Children.Add(BuildPolicyToggleRow(_settingsUnrealizedFlatten80CheckBox));
             compliancePanel.Children.Add(BuildPolicyToggleRow(_settingsEvalProfitTargetLockCheckBox));
+
+            _settingsCopyTradingPolicyNotice = new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 10, 0, 0),
+                Visibility = Visibility.Collapsed
+            };
+            ApplySkinResource(_settingsCopyTradingPolicyNotice, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
+            compliancePanel.Children.Add(_settingsCopyTradingPolicyNotice);
 
             Grid.SetRow(compliancePanel, 0);
             root.Children.Add(compliancePanel);
@@ -160,7 +171,45 @@ namespace Glitch.UI
 
             UpdateSettingsControlsFromRuntimePolicy();
             UpdateSettingsTabLicenseStatusText();
+            UpdateSettingsCopyTradingPolicyNotice();
             return root;
+        }
+
+        private void UpdateSettingsCopyTradingPolicyNotice()
+        {
+            if (_settingsCopyTradingPolicyNotice == null)
+                return;
+
+            var firmNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (AccountGridRow row in _accountRows ?? Array.Empty<AccountGridRow>())
+            {
+                if (row == null || string.IsNullOrWhiteSpace(row.PropFirmDisplay))
+                    continue;
+
+                string firmId = ToFirmId(row.PropFirmDisplay);
+                if (string.IsNullOrWhiteSpace(firmId) || firmId.Equals("None", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (!_firmRules.TryGetValue(firmId, out FirmRuleMetadata metadata) || metadata == null)
+                    continue;
+
+                if (IsFirmStatusDiscontinued(metadata.Status) || !IsCopyTradingCleanlyAllowed(metadata))
+                    firmNames.Add(ToFirmDisplayName(firmId));
+            }
+
+            if (firmNames.Count == 0)
+            {
+                _settingsCopyTradingPolicyNotice.Visibility = Visibility.Collapsed;
+                _settingsCopyTradingPolicyNotice.Text = string.Empty;
+                return;
+            }
+
+            string joined = string.Join(", ", firmNames.OrderBy(name => name, StringComparer.OrdinalIgnoreCase));
+            _settingsCopyTradingPolicyNotice.Text = Lf(
+                "settings.compliance.copy_trading_notice",
+                "Check {0}'s trade-copier policy — see Settings › Compliance.",
+                joined);
+            _settingsCopyTradingPolicyNotice.Visibility = Visibility.Visible;
         }
 
         private TextBlock BuildSectionHeader(string key, string fallback)
