@@ -5,6 +5,7 @@ Append-only operator log. Newest first.
 ## 2026-07-08 — Cursor trust-v0019
 
 - GL-020: `MarshalAccountRefreshResult` dispatcher catch → `RecordSubsystemFault("account_refresh", ex)`; finally/coalesce unchanged. Branch `glitch/trust-v0019`. (compile pending)
+- GL-021: empty-account header zeroed (PnL=0, risk=NaN); `RefreshAccountDataLight` publishes final shell snapshot before early return. (compile pending)
 
 ## 2026-07-08 — AI-program architecture pass (architect: Fable → implementer: Cursor)
 

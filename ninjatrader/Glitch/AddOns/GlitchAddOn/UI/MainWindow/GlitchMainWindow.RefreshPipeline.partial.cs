@@ -48,7 +48,10 @@ namespace Glitch.UI
         private void RefreshAccountDataLight(IReadOnlyList<Account> activeAccounts)
         {
             if (activeAccounts == null || activeAccounts.Count == 0)
+            {
+                PublishGlitchShellState();
                 return;
+            }
 
             ExecuteReplicationCycle(activeAccounts);
             PublishGlitchShellState();
@@ -211,7 +214,15 @@ namespace Glitch.UI
         private void UpdateHeaderMetricsFromRows(IReadOnlyList<AccountGridRow> rows)
         {
             if (rows == null || rows.Count == 0)
+            {
+                UpdatePnlMetricText(_totalPnlValueText, 0);
+                UpdatePnlMetricText(_paPnlValueText, 0);
+                UpdatePnlMetricText(_evalPnlValueText, 0);
+                UpdateRiskMetricText(_globalHeadroomValueText, double.NaN);
+                UpdateRiskMetricText(_paHeadroomValueText, double.NaN);
+                UpdateRiskMetricText(_evalHeadroomValueText, double.NaN);
                 return;
+            }
 
             double totalPnl = rows.Sum(r => r.TotalPnlRaw);
             double evalPnl = rows
