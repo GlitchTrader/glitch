@@ -145,6 +145,10 @@ namespace Glitch.UI
                             _accountRefreshAppliedSequence = sequence;
                         }
                     }
+                    catch (Exception ex)
+                    {
+                        RecordSubsystemFault("account_refresh", ex);
+                    }
                     finally
                     {
                         Interlocked.Exchange(ref _accountRefreshBuildInFlight, 0);
