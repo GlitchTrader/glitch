@@ -1,7 +1,7 @@
 # Handoff → Cursor — "Honest Copy" rewrite (supersedes further Wave-B work)
 
 **From:** Fable (architect) · 2026-07-08 · **Authority:** `docs/ledger/audits/fable-deep-audit.md` (read it FIRST, fully — it contains the journal-proven incident and the target architecture; also read `cursor-deep-audit.md` §6 corrections)
-**Branch:** create `glitch/honest-copy` from `main`. **All prior rules from `2026-07-08-cursor-trust-v0019.md` apply** (no compile, never write NT runtime dir, TSV localization, culture discipline, one item per commit, ledger updates, STOP-on-collision notes to `lead-review-notes.md`).
+**Branch:** create `glitch/honest-copy` from `glitch/trust-v0019` (it carries the compile-passed Wave A work and these audit docs). **All prior rules from `2026-07-08-cursor-trust-v0019.md` apply** (no compile, never write NT runtime dir, TSV localization, culture discipline, one item per commit, ledger updates, STOP-on-collision notes to `lead-review-notes.md`).
 
 **Operator decree being implemented:** by default Glitch takes NO action the user didn't initiate. Copying a user's master fill to followers at their configured ratio is the product (user initiated it by trading with Replicate ON). Everything else — freezes, flattens, protective orders, corrections — is opt-in per rule, journaled with its authorization, or does not exist.
 
