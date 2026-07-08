@@ -161,6 +161,7 @@ namespace Glitch.Services
             if (!states.TryGetValue(key, out OpenPositionState state) || state == null || Math.Abs(state.NetQty) <= Epsilon)
             {
                 states[key] = OpenPositionState.FromExecution(evt, signedQty);
+                AccumulateExecutionCommission(states[key], evt);
                 return;
             }
 
@@ -179,6 +180,7 @@ namespace Glitch.Services
                     return;
                 }
 
+                AccumulateExecutionCommission(state, evt);
                 state.AveragePrice =
                     ((Math.Abs(previousQty) * state.AveragePrice) + (Math.Abs(signedQty) * evt.Price)) /
                     Math.Abs(newQty);
@@ -193,6 +195,7 @@ namespace Glitch.Services
             }
 
             double closeQty = Math.Min(Math.Abs(previousQty), Math.Abs(signedQty));
+            AccumulateExecutionCommission(state, evt);
             double pointsPerContract = (evt.Price - state.AveragePrice) * previousSign;
             state.RealizedPoints += pointsPerContract * closeQty;
             state.ClosedContracts += closeQty;
@@ -224,6 +227,7 @@ namespace Glitch.Services
             if (fullyClosed)
             {
                 states[key] = OpenPositionState.FromRemainder(evt, remainderSign * remainder);
+                AccumulateExecutionCommission(states[key], evt);
                 return;
             }
 
@@ -231,6 +235,7 @@ namespace Glitch.Services
             if (Math.Sign(carryQty) != previousSign)
             {
                 states[key] = OpenPositionState.FromRemainder(evt, remainderSign * remainder);
+                AccumulateExecutionCommission(states[key], evt);
                 return;
             }
 
@@ -268,6 +273,7 @@ namespace Glitch.Services
                 ExitPrice = exitPrice,
                 Contracts = state.MaxAbsQty,
                 PnlPoints = state.RealizedPoints,
+                CommissionTotal = state.TotalCommission,
                 OpenReason = openReason,
                 CloseReason = closeReason,
                 TradeSource = ResolveTradeSource(state.EntrySource, state.LastExitSource),
@@ -281,6 +287,18 @@ namespace Glitch.Services
 
             trade.TradeId = BuildTradeId(trade);
             return trade;
+        }
+
+        private static void AccumulateExecutionCommission(OpenPositionState state, ExecutionEvent evt)
+        {
+            if (state == null || evt == null)
+                return;
+
+            double commission = evt.Commission;
+            if (double.IsNaN(commission) || double.IsInfinity(commission) || Math.Abs(commission) <= Epsilon)
+                return;
+
+            state.TotalCommission += Math.Abs(commission);
         }
 
         private static string BuildStateKey(string accountName, string instrument)
@@ -338,7 +356,8 @@ namespace Glitch.Services
                 out string signalName,
                 out string executionId,
                 out string executionSource,
-                out string signalTag);
+                out string signalTag,
+                out double commission);
             if (string.IsNullOrWhiteSpace(signalTag))
                 signalTag = ResolveSignalTag(signalName);
 
@@ -353,7 +372,8 @@ namespace Glitch.Services
                 SignalName = signalName,
                 ExecutionId = executionId,
                 Source = executionSource,
-                SignalTag = signalTag
+                SignalTag = signalTag,
+                Commission = commission
             };
         }
 
@@ -362,12 +382,14 @@ namespace Glitch.Services
             out string signalName,
             out string executionId,
             out string executionSource,
-            out string signalTag)
+            out string signalTag,
+            out double commission)
         {
             signalName = string.Empty;
             executionId = string.Empty;
             executionSource = string.Empty;
             signalTag = string.Empty;
+            commission = 0;
 
             string working = string.IsNullOrWhiteSpace(extras) ? string.Empty : extras.Trim();
             if (working.StartsWith("(", StringComparison.Ordinal))
@@ -409,6 +431,11 @@ namespace Glitch.Services
                 {
                     signalTag = NormalizeSignalTag(value);
                     continue;
+                }
+
+                if (key == "COMM" && TryParseFlexibleDouble(value, out double parsedCommission))
+                {
+                    commission = parsedCommission;
                 }
             }
         }
@@ -943,6 +970,7 @@ namespace Glitch.Services
             public double EntryPrice { get; set; }
             public double ExitPrice { get; set; }
             public double PnlPoints { get; set; }
+            public double CommissionTotal { get; set; }
             public string OpenReason { get; set; }
             public string CloseReason { get; set; }
             public string TradeSource { get; set; }
@@ -1032,6 +1060,7 @@ namespace Glitch.Services
             public string ExecutionId { get; set; }
             public string Source { get; set; }
             public string SignalTag { get; set; }
+            public double Commission { get; set; }
         }
 
         private sealed class OpenPositionState
@@ -1048,6 +1077,7 @@ namespace Glitch.Services
             public double MaxAbsQty { get; set; }
             public int FillCount { get; set; }
             public double RealizedPoints { get; set; }
+            public double TotalCommission { get; set; }
             public double ClosedContracts { get; set; }
             public double ClosedNotional { get; set; }
             public DateTime LastExitUtc { get; set; }
@@ -1071,6 +1101,7 @@ namespace Glitch.Services
                     MaxAbsQty = Math.Abs(signedQty),
                     FillCount = 1,
                     RealizedPoints = 0,
+                    TotalCommission = 0,
                     ClosedContracts = 0,
                     ClosedNotional = 0,
                     LastExitUtc = DateTime.MinValue,

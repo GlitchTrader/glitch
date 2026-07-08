@@ -44,7 +44,7 @@ namespace Glitch.Services
         private const int MaxLedgerRows = 200000;
         private const int MinWriteIntervalMs = 1200;
         private const string LedgerHeaderLine =
-            "# trade_id\tentry_utc_ticks\texit_utc_ticks\taccount\tinstrument\tside\tcontracts\tentry_price\texit_price\tpnl_points\topen_reason\tclose_reason\tentry_session\texit_session\ttrade_source\tentry_type\texit_type\tentry_signal\texit_signal";
+            "# trade_id\tentry_utc_ticks\texit_utc_ticks\taccount\tinstrument\tside\tcontracts\tentry_price\texit_price\tpnl_points\topen_reason\tclose_reason\tentry_session\texit_session\ttrade_source\tentry_type\texit_type\tentry_signal\texit_signal\tcommission_total";
 
         internal GlitchTradeLedgerService(string filePath)
         {
@@ -287,7 +287,8 @@ namespace Glitch.Services
                 EntryType = parts.Length >= 16 ? parts[15] : string.Empty,
                 ExitType = parts.Length >= 17 ? parts[16] : string.Empty,
                 EntrySignal = parts.Length >= 18 ? parts[17] : string.Empty,
-                ExitSignal = parts.Length >= 19 ? parts[18] : string.Empty
+                ExitSignal = parts.Length >= 19 ? parts[18] : string.Empty,
+                CommissionTotal = parts.Length >= 20 && TryParseDouble(parts[19], out double commissionTotal) ? commissionTotal : 0
             };
         }
 
@@ -322,7 +323,8 @@ namespace Glitch.Services
                 CleanToken(trade.EntryType),
                 CleanToken(trade.ExitType),
                 CleanToken(trade.EntrySignal),
-                CleanToken(trade.ExitSignal));
+                CleanToken(trade.ExitSignal),
+                trade.CommissionTotal.ToString("0.########", CultureInfo.InvariantCulture));
         }
 
         private static GlitchTradeInsightsService.TradeRoundTrip CloneTrade(GlitchTradeInsightsService.TradeRoundTrip trade)
@@ -351,7 +353,8 @@ namespace Glitch.Services
                 EntrySignal = trade.EntrySignal,
                 ExitSignal = trade.ExitSignal,
                 EntrySession = trade.EntrySession,
-                ExitSession = trade.ExitSession
+                ExitSession = trade.ExitSession,
+                CommissionTotal = trade.CommissionTotal
             };
         }
 

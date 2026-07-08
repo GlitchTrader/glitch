@@ -201,6 +201,8 @@ summary.open_reason.unknown	Manual / Unknown	Manual / Desconhecido	Manual / Desc
 summary.open_time	Open Time	Hora de Abertura	Hora de Apertura	开仓时间	Heure d'Entrée	Время Открытия
 summary.point_value_unknown	Point value unknown for {0}; PnL display may be wrong.	Valor do ponto desconhecido para {0}; exibição de PnL pode estar errada.	Valor del punto desconocido para {0}; la visualización de PnL puede ser incorrecta.	{0} 的点值未知；PnL 显示可能有误。	Valeur du point inconnue pour {0} ; l'affichage du PnL peut être erroné.	Неизвестное значение пункта для {0}; отображение PnL может быть неверным.
 summary.pnl_short	PnL	PnL	PnL	PnL	PnL	PnL
+summary.pnl_gross_commissions	gross {0} − commissions {1}	bruto {0} − comissões {1}	bruto {0} − comisiones {1}	毛 {0} − 佣金 {1}	brut {0} − commissions {1}	валовый {0} − комиссии {1}
+summary.journal_reconcile_divergence	Journal net PnL ({0}) differs from NinjaTrader realized PnL ({1}) for {2}.	PnL líquido do Journal ({0}) difere do PnL realizado do NinjaTrader ({1}) para {2}.	El PnL neto del Journal ({0}) difiere del PnL realizado de NinjaTrader ({1}) para {2}.	日记账净 PnL（{0}）与 NinjaTrader 已实现 PnL（{1}）不一致（{2}）。	Le PnL net du journal ({0}) diffère du PnL réalisé NinjaTrader ({1}) pour {2}.	Чистый PnL журнала ({0}) отличается от реализованного PnL NinjaTrader ({1}) для {2}.
 summary.profit_factor	Profit Factor	Fator de Lucro	Factor de Beneficio	盈利因子	Profit Factor	Фактор Прибыли
 summary.reason.manual_other	Manual / Other	Manual / Outro	Manual / Otro	手动 / 其他	Manuel / Autre	Ручной / Другое
 summary.reason.news_event	News Event	Evento de Notícia	Evento de Noticias	新闻事件	Événement News	Новостное Событие

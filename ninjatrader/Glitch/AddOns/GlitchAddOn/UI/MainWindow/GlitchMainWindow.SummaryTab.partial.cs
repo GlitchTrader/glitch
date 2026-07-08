@@ -297,6 +297,7 @@ namespace Glitch.UI
             grid.ColumnHeaderStyle = _accountsGrid?.ColumnHeaderStyle ?? leftHeader;
             ApplyDataGridSelectionResources(grid, grid);
             ConfigurePassiveDataGrid(grid);
+            grid.LoadingRow += OnSummaryRecentTradeRowLoading;
 
             var accountColumn = CreateTextColumn(L("summary.accounts", "Accounts"), nameof(SummaryTradeRow.Account), leftText, leftHeader);
             accountColumn.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
@@ -424,6 +425,7 @@ namespace Glitch.UI
                 _tradeLedgerService.MergeAndGetAll(currentSnapshot.ClosedTrades, nowUtc);
             _riskLockLedgerService.MergeAndGetSnapshot(warningEvents, nowUtc);
             IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> usdLedgerTrades = NormalizeTradesToUsd(ledgerTrades);
+            TryEmitJournalReconcileNotices(usdLedgerTrades);
             GlitchTradeInsightsService.TradeInsightsSnapshot accountSnapshot =
                 _tradeInsightsService.BuildSnapshotFromClosedTrades(usdLedgerTrades, warningEvents, nowUtc);
             List<FleetTradeAggregate> fleetTrades = BuildFleetTradeAggregates(usdLedgerTrades);
@@ -481,6 +483,17 @@ namespace Glitch.UI
             foreach (FleetTradeAggregate aggregate in fleetTrades.Take(MaxSummaryRecentTradesDisplayed))
             {
                 GlitchTradeInsightsService.TradeRoundTrip trade = aggregate.Trade;
+                string pnlTooltip = null;
+                if (trade.CommissionTotal > 0.0000001)
+                {
+                    double grossUsd = trade.PnlPoints + trade.CommissionTotal;
+                    pnlTooltip = Lf(
+                        "summary.pnl_gross_commissions",
+                        "gross {0} − commissions {1}",
+                        FormatSignedCurrency(grossUsd),
+                        FormatSignedCurrency(trade.CommissionTotal));
+                }
+
                 _summaryRecentTrades.Add(new SummaryTradeRow
                 {
                     OpenTime = trade.EntryUtc.ToLocalTime().ToString("MM-dd HH:mm:ss", CultureInfo.CurrentCulture),
@@ -491,6 +504,7 @@ namespace Glitch.UI
                     Contracts = FormatContracts(trade.Contracts),
                     PnlPoints = FormatSignedCurrency(trade.PnlPoints),
                     PnlSign = GetPnlSign(trade.PnlPoints),
+                    PnlTooltip = pnlTooltip,
                     Duration = FormatDuration(trade.Duration),
                     Exit = FormatCloseReasonCompact(trade.CloseReason),
                     CloseReason = LocalizeCloseReason(trade.CloseReason)
@@ -873,6 +887,53 @@ namespace Glitch.UI
             return "$0.00";
         }
 
+        private void OnSummaryRecentTradeRowLoading(object sender, DataGridRowEventArgs e)
+        {
+            if (e.Row?.Item is SummaryTradeRow row && !string.IsNullOrWhiteSpace(row.PnlTooltip))
+                e.Row.ToolTip = row.PnlTooltip;
+        }
+
+        private void TryEmitJournalReconcileNotices(IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> netUsdTrades)
+        {
+            if (netUsdTrades == null || netUsdTrades.Count == 0)
+                return;
+
+            var journalNetByAccount = netUsdTrades
+                .Where(trade => trade != null && !string.IsNullOrWhiteSpace(trade.AccountName))
+                .GroupBy(trade => trade.AccountName.Trim(), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Sum(trade => trade.PnlPoints),
+                    StringComparer.OrdinalIgnoreCase);
+
+            foreach (Account account in GetActiveAccountsSnapshot())
+            {
+                if (account == null || string.IsNullOrWhiteSpace(account.Name))
+                    continue;
+
+                string accountName = account.Name.Trim();
+                if (!journalNetByAccount.TryGetValue(accountName, out double journalNet))
+                    continue;
+
+                double ntRealized = TryGetAccountItem(account, "RealizedProfitLoss", "RealizedPnL", "RealizedProfit", "RealizedLoss");
+                if (Math.Abs(journalNet - ntRealized) <= 1.0)
+                    continue;
+
+                string warningType = string.Join("|",
+                    "journal_reconcile_divergence",
+                    "account=" + accountName,
+                    "journal=" + journalNet.ToString("0.00", CultureInfo.InvariantCulture),
+                    "nt=" + ntRealized.ToString("0.00", CultureInfo.InvariantCulture));
+                string message = Lf(
+                    "summary.journal_reconcile_divergence",
+                    "Journal net PnL ({0}) differs from NinjaTrader realized PnL ({1}) for {2}.",
+                    FormatSignedCurrency(journalNet),
+                    FormatSignedCurrency(ntRealized),
+                    accountName);
+                RaiseCriticalWarning(accountName, message, warningType, unlocksTrading: false);
+            }
+        }
+
         private IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> NormalizeTradesToUsd(
             IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> trades)
         {
@@ -886,7 +947,9 @@ namespace Glitch.UI
                     continue;
 
                 double pointValue = ResolveInstrumentPointValue(trade.Instrument);
-                normalized.Add(CloneTradeForDisplay(trade, trade.PnlPoints * pointValue));
+                double grossUsd = trade.PnlPoints * pointValue;
+                double netUsd = grossUsd - trade.CommissionTotal;
+                normalized.Add(CloneTradeForDisplay(trade, netUsd));
             }
 
             return normalized;
@@ -917,7 +980,8 @@ namespace Glitch.UI
                 EntrySignal = trade.EntrySignal,
                 ExitSignal = trade.ExitSignal,
                 EntrySession = trade.EntrySession,
-                ExitSession = trade.ExitSession
+                ExitSession = trade.ExitSession,
+                CommissionTotal = trade.CommissionTotal
             };
         }
 
@@ -1088,6 +1152,7 @@ namespace Glitch.UI
                     ExitPrice = exitPrice,
                     Contracts = totalContracts,
                     PnlPoints = pnlPoints,
+                    CommissionTotal = groupedTrades.Sum(trade => trade.CommissionTotal),
                     OpenReason = openReason,
                     CloseReason = closeReason,
                     TradeSource = tradeSource,

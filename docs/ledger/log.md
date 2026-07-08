@@ -5,7 +5,7 @@ Append-only operator log. Newest first.
 ## 2026-07-08 — Cursor trust-v0019
 
 - GL-020: `MarshalAccountRefreshResult` dispatcher catch → `RecordSubsystemFault("account_refresh", ex)`; finally/coalesce unchanged. Branch `glitch/trust-v0019`. (compile pending)
-- GL-023: gitignore `ninjatrader/Glitch/Glitch.zip` and `Glitch Screens *` working exports. (compile pending)
+- GL-024: F1 commission truth — `Execution.Commission` → journal `[COMM:]` → `CommissionTotal` on ledger rows → net USD in Journal/Analytics; fleet tooltip gross−commissions; once-per-account `journal_reconcile_divergence` notice vs NT realized (>$1). (compile pending)
 
 ## 2026-07-08 — AI-program architecture pass (architect: Fable → implementer: Cursor)
 

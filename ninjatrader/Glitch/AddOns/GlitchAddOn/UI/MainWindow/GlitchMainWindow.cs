@@ -6130,6 +6130,9 @@ namespace Glitch.UI
                 message += $" [TAG:{tagToken}]";
             if (!string.IsNullOrWhiteSpace(executionId))
                 message += $" [EID:{CleanJournalToken(executionId)}]";
+            double commission = TryGetNestedPropertyValueAsDouble(executionObject, "Commission");
+            if (!double.IsNaN(commission) && !double.IsInfinity(commission) && Math.Abs(commission) > 0.0000001)
+                message += $" [COMM:{commission.ToString("0.########", CultureInfo.InvariantCulture)}]";
             return true;
         }
 

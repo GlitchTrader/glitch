@@ -426,6 +426,7 @@ namespace Glitch.UI
             public string Contracts { get; set; }
             public string PnlPoints { get; set; }
             public string PnlSign { get; set; }
+            public string PnlTooltip { get; set; }
             public string Duration { get; set; }
             public string Exit { get; set; }
             public string CloseReason { get; set; }
