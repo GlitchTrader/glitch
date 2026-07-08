@@ -252,6 +252,19 @@ export function getDownloadsUrl(): string {
   return process.env.NEXT_PUBLIC_DOWNLOADS_URL?.trim() || defaultDownloadsUrl;
 }
 
+export function buildAbsoluteDownloadUrl(downloadPath: string, requestUrl?: string): string {
+  const configuredBase = getDownloadsUrl().replace(/\/$/, "");
+  try {
+    return new URL(downloadPath, `${configuredBase}/`).toString();
+  } catch {
+    if (!requestUrl) {
+      throw new Error("Unable to build absolute download URL.");
+    }
+
+    return new URL(downloadPath, requestUrl).toString();
+  }
+}
+
 export function formatReleaseSize(size: number): string {
   if (!Number.isFinite(size) || size <= 0) {
     return "Unknown size";

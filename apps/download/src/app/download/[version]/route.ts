@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getReleaseBySlug } from "@/lib/releases";
+import { buildAbsoluteDownloadUrl, getReleaseBySlug } from "@/lib/releases";
 
 export const dynamic = "force-dynamic";
 
@@ -22,5 +22,6 @@ export async function GET(request: Request, { params }: Props) {
     });
   }
 
-  return NextResponse.redirect(new URL(release.downloadPath, request.url), 307);
+  const targetUrl = buildAbsoluteDownloadUrl(release.downloadPath, request.url);
+  return NextResponse.redirect(targetUrl, 307);
 }

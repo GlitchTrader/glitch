@@ -1,16 +1,7 @@
 import { NextResponse } from "next/server";
-import { getDownloadsUrl, getLatestRelease } from "@/lib/releases";
+import { buildAbsoluteDownloadUrl, getLatestRelease } from "@/lib/releases";
 
 export const dynamic = "force-dynamic";
-
-function buildAbsoluteDownloadUrl(downloadPath: string, requestUrl: string): string {
-  try {
-    const configuredBase = getDownloadsUrl();
-    return new URL(downloadPath, configuredBase).toString();
-  } catch {
-    return new URL(downloadPath, requestUrl).toString();
-  }
-}
 
 export async function GET(request: Request) {
   const latestRelease = await getLatestRelease();
