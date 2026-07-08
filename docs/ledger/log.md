@@ -5,7 +5,7 @@ Append-only operator log. Newest first.
 ## 2026-07-08 — Cursor trust-v0019
 
 - GL-020: `MarshalAccountRefreshResult` dispatcher catch → `RecordSubsystemFault("account_refresh", ex)`; finally/coalesce unchanged. Branch `glitch/trust-v0019`. (compile pending)
-- GL-022: `apps/download/scripts/generate-checksums.mjs` + `npm run checksums` writes `public/files/checksums.json`; download page already displays SHA-256 per release (runtime + manifest backfill for v0.0.1.8). (compile pending)
+- GL-014: settings granularity — per-feature Sim/Eval/PA scopes + editable thresholds in Settings; granular RuntimePolicy TSV keys; ApplyRiskMitigations per account status. (compile pending)
 
 ## 2026-07-08 — AI-program architecture pass (architect: Fable → implementer: Cursor)
 

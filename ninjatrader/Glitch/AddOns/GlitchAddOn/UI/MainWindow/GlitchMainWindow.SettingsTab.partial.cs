@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -13,10 +14,20 @@ namespace Glitch.UI
     public partial class GlitchMainWindow
     {
         private Grid _settingsRootGrid;
-        private CheckBox _settingsBufferFreeze15CheckBox;
-        private CheckBox _settingsBufferOneContract20CheckBox;
-        private CheckBox _settingsUnrealizedFlatten80CheckBox;
-        private CheckBox _settingsEvalProfitTargetLockCheckBox;
+        private CheckBox _settingsBufferFreezeSimCheckBox;
+        private CheckBox _settingsBufferFreezeEvalCheckBox;
+        private CheckBox _settingsBufferFreezeApCheckBox;
+        private TextBox _settingsBufferFreezeThresholdTextBox;
+        private CheckBox _settingsOneContractSimCheckBox;
+        private CheckBox _settingsOneContractEvalCheckBox;
+        private CheckBox _settingsOneContractApCheckBox;
+        private TextBox _settingsOneContractOnThresholdTextBox;
+        private TextBox _settingsOneContractOffThresholdTextBox;
+        private CheckBox _settingsUnrealizedFlattenSimCheckBox;
+        private CheckBox _settingsUnrealizedFlattenEvalCheckBox;
+        private CheckBox _settingsUnrealizedFlattenApCheckBox;
+        private TextBox _settingsUnrealizedFlattenThresholdTextBox;
+        private CheckBox _settingsEvalProfitTargetLockEvalCheckBox;
         private TextBox _settingsLicenseKeyTextBox;
         private Border _settingsPlanBadgeBorder;
         private TextBlock _settingsPlanBadgeText;
@@ -58,23 +69,55 @@ namespace Glitch.UI
             };
             compliancePanel.Children.Add(BuildSectionHeader("settings.risk.title", "Risk Management Rules"));
 
-            _settingsBufferFreeze15CheckBox = BuildPolicyCheckBox(
+            compliancePanel.Children.Add(BuildComplianceFeatureExpander(
                 "settings.risk.enforce_15_flatten_freeze",
-                "Flatten and freeze account when buffer falls below 15% of maximum drawdown.");
-            _settingsBufferOneContract20CheckBox = BuildPolicyCheckBox(
-                "settings.risk.enforce_20_one_contract",
-                "Force one-contract replication when buffer falls below 20% of maximum drawdown (release at 25%).");
-            _settingsUnrealizedFlatten80CheckBox = BuildPolicyCheckBox(
-                "settings.risk.enforce_80_flatten",
-                "Flatten account when unrealized loss exceeds 80% of maximum intratrade loss (max loss limit).");
-            _settingsEvalProfitTargetLockCheckBox = BuildPolicyCheckBox(
-                "settings.risk.enforce_eval_lock_flatten",
-                "Flatten and lock evaluation account when equity reaches the evaluation target lock balance.");
+                "Flatten and freeze account when buffer falls below threshold.",
+                sim: out _settingsBufferFreezeSimCheckBox,
+                eval: out _settingsBufferFreezeEvalCheckBox,
+                ap: out _settingsBufferFreezeApCheckBox,
+                threshold: out _settingsBufferFreezeThresholdTextBox,
+                thresholdOff: out _,
+                includeAp: true,
+                includeOffThreshold: false,
+                defaultThreshold: 0.15));
 
-            compliancePanel.Children.Add(BuildPolicyToggleRow(_settingsBufferFreeze15CheckBox));
-            compliancePanel.Children.Add(BuildPolicyToggleRow(_settingsBufferOneContract20CheckBox));
-            compliancePanel.Children.Add(BuildPolicyToggleRow(_settingsUnrealizedFlatten80CheckBox));
-            compliancePanel.Children.Add(BuildPolicyToggleRow(_settingsEvalProfitTargetLockCheckBox));
+            compliancePanel.Children.Add(BuildComplianceFeatureExpander(
+                "settings.risk.enforce_20_one_contract",
+                "Force one-contract replication when buffer falls below on-threshold (release at off-threshold).",
+                sim: out _settingsOneContractSimCheckBox,
+                eval: out _settingsOneContractEvalCheckBox,
+                ap: out _settingsOneContractApCheckBox,
+                threshold: out _settingsOneContractOnThresholdTextBox,
+                thresholdOff: out _settingsOneContractOffThresholdTextBox,
+                includeAp: true,
+                includeOffThreshold: true,
+                defaultThreshold: 0.20,
+                defaultOffThreshold: 0.25));
+
+            compliancePanel.Children.Add(BuildComplianceFeatureExpander(
+                "settings.risk.enforce_80_flatten",
+                "Flatten account when unrealized loss exceeds threshold of maximum intratrade loss.",
+                sim: out _settingsUnrealizedFlattenSimCheckBox,
+                eval: out _settingsUnrealizedFlattenEvalCheckBox,
+                ap: out _settingsUnrealizedFlattenApCheckBox,
+                threshold: out _settingsUnrealizedFlattenThresholdTextBox,
+                thresholdOff: out _,
+                includeAp: true,
+                includeOffThreshold: false,
+                defaultThreshold: 0.80));
+
+            compliancePanel.Children.Add(BuildComplianceFeatureExpander(
+                "settings.risk.enforce_eval_lock_flatten",
+                "Flatten and lock evaluation account when equity reaches the evaluation target lock balance.",
+                sim: out _,
+                eval: out _settingsEvalProfitTargetLockEvalCheckBox,
+                ap: out _,
+                threshold: out _,
+                thresholdOff: out _,
+                includeAp: false,
+                includeOffThreshold: false,
+                defaultThreshold: 0,
+                evalOnly: true));
 
             _settingsCopyTradingPolicyNotice = new TextBlock
             {
@@ -254,6 +297,172 @@ namespace Glitch.UI
             ApplySkinResource(row, Border.BorderBrushProperty, "BorderThinBrush", "TabControlBorderBrush");
             row.Child = checkBox;
             return row;
+        }
+
+        private Expander BuildComplianceFeatureExpander(
+            string titleKey,
+            string descriptionFallback,
+            out CheckBox sim,
+            out CheckBox eval,
+            out CheckBox ap,
+            out TextBox threshold,
+            out TextBox thresholdOff,
+            bool includeAp,
+            bool includeOffThreshold,
+            double defaultThreshold,
+            double defaultOffThreshold = 0.25,
+            bool evalOnly = false)
+        {
+            sim = null;
+            eval = null;
+            ap = null;
+            threshold = null;
+            thresholdOff = null;
+
+            var panel = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(0, 4, 0, 8) };
+            var description = new TextBlock
+            {
+                Text = descriptionFallback,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 6),
+                FontSize = ResolveSettingsBodyFontSize()
+            };
+            ApplySkinResource(description, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
+            panel.Children.Add(description);
+
+            if (!evalOnly)
+            {
+                var scopeRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
+                sim = BuildScopeCheckBox("settings.risk.scope_sim", "Sim");
+                eval = BuildScopeCheckBox("settings.risk.scope_eval", "Eval");
+                scopeRow.Children.Add(sim);
+                scopeRow.Children.Add(eval);
+                if (includeAp)
+                {
+                    ap = BuildScopeCheckBox("settings.risk.scope_pa", "PA");
+                    scopeRow.Children.Add(ap);
+                }
+                panel.Children.Add(scopeRow);
+            }
+            else
+            {
+                eval = BuildScopeCheckBox("settings.risk.scope_eval", "Eval");
+                panel.Children.Add(eval);
+            }
+
+            if (!evalOnly)
+            {
+                threshold = BuildThresholdTextBox(
+                    includeOffThreshold
+                        ? L("settings.risk.threshold_on", "On threshold (ratio)")
+                        : L("settings.risk.threshold", "Threshold (ratio)"),
+                    defaultThreshold);
+                panel.Children.Add(BuildThresholdRow(threshold));
+
+                if (includeOffThreshold)
+                {
+                    thresholdOff = BuildThresholdTextBox(L("settings.risk.threshold_off", "Off threshold (ratio)"), defaultOffThreshold);
+                    panel.Children.Add(BuildThresholdRow(thresholdOff));
+                }
+
+                RoutedEventHandler syncThresholdEnabled = (sender, args) => UpdateComplianceThresholdEnabled(sim, eval, ap, threshold, thresholdOff);
+                if (sim != null) sim.Checked += syncThresholdEnabled;
+                if (sim != null) sim.Unchecked += syncThresholdEnabled;
+                if (eval != null) eval.Checked += syncThresholdEnabled;
+                if (eval != null) eval.Unchecked += syncThresholdEnabled;
+                if (ap != null) ap.Checked += syncThresholdEnabled;
+                if (ap != null) ap.Unchecked += syncThresholdEnabled;
+                UpdateComplianceThresholdEnabled(sim, eval, ap, threshold, thresholdOff);
+            }
+
+            var expander = new Expander
+            {
+                Header = L(titleKey, descriptionFallback),
+                IsExpanded = false,
+                Margin = new Thickness(0, 2, 0, 2),
+                Content = panel
+            };
+            RegisterLocalizationBinding(() => expander.Header = L(titleKey, descriptionFallback));
+            return expander;
+        }
+
+        private CheckBox BuildScopeCheckBox(string key, string fallback)
+        {
+            var checkBox = new CheckBox
+            {
+                Content = L(key, fallback),
+                Margin = new Thickness(0, 0, 14, 0),
+                Style = CreateSettingsPolicyCheckBoxStyle(_settingsRootGrid ?? this)
+            };
+            RegisterLocalizationBinding(() => checkBox.Content = L(key, fallback));
+            return checkBox;
+        }
+
+        private TextBox BuildThresholdTextBox(string label, double defaultRatio)
+        {
+            var textBox = new TextBox
+            {
+                Tag = label,
+                Text = defaultRatio.ToString("0.##", CultureInfo.InvariantCulture),
+                MinWidth = 72,
+                MaxWidth = 120,
+                Margin = new Thickness(0, 0, 0, 0),
+                FontSize = ResolveSettingsBodyFontSize(),
+                Style = CreateSettingsLicenseTextBoxStyle(_settingsRootGrid ?? this)
+            };
+            textBox.FocusVisualStyle = null;
+            return textBox;
+        }
+
+        private StackPanel BuildThresholdRow(TextBox thresholdTextBox)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
+            var label = new TextBlock
+            {
+                Text = thresholdTextBox?.Tag as string ?? L("settings.risk.threshold", "Threshold (ratio)"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0),
+                MinWidth = 150
+            };
+            ApplySkinResource(label, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
+            row.Children.Add(label);
+            if (thresholdTextBox != null)
+                row.Children.Add(thresholdTextBox);
+            return row;
+        }
+
+        private static void UpdateComplianceThresholdEnabled(
+            CheckBox sim,
+            CheckBox eval,
+            CheckBox ap,
+            TextBox threshold,
+            TextBox thresholdOff)
+        {
+            bool anyEnabled = (sim?.IsChecked == true) || (eval?.IsChecked == true) || (ap?.IsChecked == true);
+            if (threshold != null)
+                threshold.IsEnabled = anyEnabled;
+            if (thresholdOff != null)
+                thresholdOff.IsEnabled = anyEnabled;
+        }
+
+        private static bool TryReadComplianceThreshold(TextBox textBox, double fallback, double min, double max, out double value)
+        {
+            value = fallback;
+            if (textBox == null)
+                return true;
+
+            string raw = (textBox.Text ?? string.Empty).Trim();
+            if (raw.Length == 0)
+                return true;
+
+            if (!double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed) &&
+                !double.TryParse(raw, NumberStyles.Float, CultureInfo.CurrentCulture, out parsed))
+            {
+                return false;
+            }
+
+            value = Math.Max(min, Math.Min(max, parsed));
+            return true;
         }
 
         private Style CreateSettingsActionButtonStyle(FrameworkElement context)
@@ -446,10 +655,34 @@ namespace Glitch.UI
                 _runtimePolicySettings = new GlitchRuntimePolicySettings();
 
             _runtimePolicySettings.EnforceAccountLevelCompliance = false;
-            _runtimePolicySettings.EnforceBufferFreeze15Percent = _settingsBufferFreeze15CheckBox?.IsChecked == true;
-            _runtimePolicySettings.EnforceBufferOneContract30Percent = _settingsBufferOneContract20CheckBox?.IsChecked == true;
-            _runtimePolicySettings.EnforceUnrealizedFlatten70Percent = _settingsUnrealizedFlatten80CheckBox?.IsChecked == true;
-            _runtimePolicySettings.EnforceEvalProfitTargetLock = _settingsEvalProfitTargetLockCheckBox?.IsChecked == true;
+            _runtimePolicySettings.BufferFreezeScopes.Sim = _settingsBufferFreezeSimCheckBox?.IsChecked == true;
+            _runtimePolicySettings.BufferFreezeScopes.Eval = _settingsBufferFreezeEvalCheckBox?.IsChecked == true;
+            _runtimePolicySettings.BufferFreezeScopes.Ap = _settingsBufferFreezeApCheckBox?.IsChecked == true;
+            _runtimePolicySettings.BufferOneContractScopes.Sim = _settingsOneContractSimCheckBox?.IsChecked == true;
+            _runtimePolicySettings.BufferOneContractScopes.Eval = _settingsOneContractEvalCheckBox?.IsChecked == true;
+            _runtimePolicySettings.BufferOneContractScopes.Ap = _settingsOneContractApCheckBox?.IsChecked == true;
+            _runtimePolicySettings.UnrealizedFlattenScopes.Sim = _settingsUnrealizedFlattenSimCheckBox?.IsChecked == true;
+            _runtimePolicySettings.UnrealizedFlattenScopes.Eval = _settingsUnrealizedFlattenEvalCheckBox?.IsChecked == true;
+            _runtimePolicySettings.UnrealizedFlattenScopes.Ap = _settingsUnrealizedFlattenApCheckBox?.IsChecked == true;
+            _runtimePolicySettings.EvalProfitTargetLockEnabled = _settingsEvalProfitTargetLockEvalCheckBox?.IsChecked == true;
+
+            if (!TryReadComplianceThreshold(_settingsBufferFreezeThresholdTextBox, _runtimePolicySettings.BufferFreezeThresholdRatio, 0.01, 0.99, out double bufferFreezeThreshold))
+                bufferFreezeThreshold = _runtimePolicySettings.BufferFreezeThresholdRatio;
+            _runtimePolicySettings.BufferFreezeThresholdRatio = bufferFreezeThreshold;
+
+            if (!TryReadComplianceThreshold(_settingsOneContractOnThresholdTextBox, _runtimePolicySettings.BufferOneContractOnThresholdRatio, 0.01, 0.99, out double oneContractOn))
+                oneContractOn = _runtimePolicySettings.BufferOneContractOnThresholdRatio;
+            _runtimePolicySettings.BufferOneContractOnThresholdRatio = oneContractOn;
+
+            if (!TryReadComplianceThreshold(_settingsOneContractOffThresholdTextBox, _runtimePolicySettings.BufferOneContractOffThresholdRatio, oneContractOn, 0.99, out double oneContractOff))
+                oneContractOff = Math.Max(oneContractOn, _runtimePolicySettings.BufferOneContractOffThresholdRatio);
+            _runtimePolicySettings.BufferOneContractOffThresholdRatio = oneContractOff;
+
+            if (!TryReadComplianceThreshold(_settingsUnrealizedFlattenThresholdTextBox, _runtimePolicySettings.UnrealizedFlattenThresholdRatio, 0.01, 0.99, out double unrealizedThreshold))
+                unrealizedThreshold = _runtimePolicySettings.UnrealizedFlattenThresholdRatio;
+            _runtimePolicySettings.UnrealizedFlattenThresholdRatio = unrealizedThreshold;
+
+            _runtimePolicySettings.SyncLegacyComplianceFlags();
             _runtimePolicySettings.FlattenOnCriticalBufferLock = false;
             _runtimePolicySettings.LicenseKey = GetNormalizedSettingsLicenseKeyText();
             _settingsLicenseKeyUnmaskedValue = (_runtimePolicySettings.LicenseKey ?? string.Empty).Trim();
@@ -461,10 +694,7 @@ namespace Glitch.UI
             AppendJournal("System", "Policy", "Runtime settings updated by user.");
             AppendJournal("System", "Runtime", BuildRuntimePolicySummaryLogLine());
 
-            if (!_runtimePolicySettings.EnforceBufferFreeze15Percent &&
-                !_runtimePolicySettings.EnforceBufferOneContract30Percent &&
-                !_runtimePolicySettings.EnforceUnrealizedFlatten70Percent &&
-                !_runtimePolicySettings.EnforceEvalProfitTargetLock)
+            if (!_runtimePolicySettings.AnyRiskComplianceFeatureEnabled())
                 ClearComplianceEnforcementRuntimeState();
 
             _nextLicenseHeartbeatUtc = DateTime.UtcNow;
@@ -521,14 +751,56 @@ namespace Glitch.UI
             if (_runtimePolicySettings == null)
                 _runtimePolicySettings = new GlitchRuntimePolicySettings();
 
-            if (_settingsBufferFreeze15CheckBox != null)
-                _settingsBufferFreeze15CheckBox.IsChecked = _runtimePolicySettings.EnforceBufferFreeze15Percent;
-            if (_settingsBufferOneContract20CheckBox != null)
-                _settingsBufferOneContract20CheckBox.IsChecked = _runtimePolicySettings.EnforceBufferOneContract30Percent;
-            if (_settingsUnrealizedFlatten80CheckBox != null)
-                _settingsUnrealizedFlatten80CheckBox.IsChecked = _runtimePolicySettings.EnforceUnrealizedFlatten70Percent;
-            if (_settingsEvalProfitTargetLockCheckBox != null)
-                _settingsEvalProfitTargetLockCheckBox.IsChecked = _runtimePolicySettings.EnforceEvalProfitTargetLock;
+            if (_settingsBufferFreezeSimCheckBox != null)
+                _settingsBufferFreezeSimCheckBox.IsChecked = _runtimePolicySettings.BufferFreezeScopes.Sim;
+            if (_settingsBufferFreezeEvalCheckBox != null)
+                _settingsBufferFreezeEvalCheckBox.IsChecked = _runtimePolicySettings.BufferFreezeScopes.Eval;
+            if (_settingsBufferFreezeApCheckBox != null)
+                _settingsBufferFreezeApCheckBox.IsChecked = _runtimePolicySettings.BufferFreezeScopes.Ap;
+            if (_settingsBufferFreezeThresholdTextBox != null)
+                _settingsBufferFreezeThresholdTextBox.Text = _runtimePolicySettings.BufferFreezeThresholdRatio.ToString("0.##", CultureInfo.InvariantCulture);
+
+            if (_settingsOneContractSimCheckBox != null)
+                _settingsOneContractSimCheckBox.IsChecked = _runtimePolicySettings.BufferOneContractScopes.Sim;
+            if (_settingsOneContractEvalCheckBox != null)
+                _settingsOneContractEvalCheckBox.IsChecked = _runtimePolicySettings.BufferOneContractScopes.Eval;
+            if (_settingsOneContractApCheckBox != null)
+                _settingsOneContractApCheckBox.IsChecked = _runtimePolicySettings.BufferOneContractScopes.Ap;
+            if (_settingsOneContractOnThresholdTextBox != null)
+                _settingsOneContractOnThresholdTextBox.Text = _runtimePolicySettings.BufferOneContractOnThresholdRatio.ToString("0.##", CultureInfo.InvariantCulture);
+            if (_settingsOneContractOffThresholdTextBox != null)
+                _settingsOneContractOffThresholdTextBox.Text = _runtimePolicySettings.BufferOneContractOffThresholdRatio.ToString("0.##", CultureInfo.InvariantCulture);
+
+            if (_settingsUnrealizedFlattenSimCheckBox != null)
+                _settingsUnrealizedFlattenSimCheckBox.IsChecked = _runtimePolicySettings.UnrealizedFlattenScopes.Sim;
+            if (_settingsUnrealizedFlattenEvalCheckBox != null)
+                _settingsUnrealizedFlattenEvalCheckBox.IsChecked = _runtimePolicySettings.UnrealizedFlattenScopes.Eval;
+            if (_settingsUnrealizedFlattenApCheckBox != null)
+                _settingsUnrealizedFlattenApCheckBox.IsChecked = _runtimePolicySettings.UnrealizedFlattenScopes.Ap;
+            if (_settingsUnrealizedFlattenThresholdTextBox != null)
+                _settingsUnrealizedFlattenThresholdTextBox.Text = _runtimePolicySettings.UnrealizedFlattenThresholdRatio.ToString("0.##", CultureInfo.InvariantCulture);
+
+            if (_settingsEvalProfitTargetLockEvalCheckBox != null)
+                _settingsEvalProfitTargetLockEvalCheckBox.IsChecked = _runtimePolicySettings.EvalProfitTargetLockEnabled;
+
+            UpdateComplianceThresholdEnabled(
+                _settingsBufferFreezeSimCheckBox,
+                _settingsBufferFreezeEvalCheckBox,
+                _settingsBufferFreezeApCheckBox,
+                _settingsBufferFreezeThresholdTextBox,
+                null);
+            UpdateComplianceThresholdEnabled(
+                _settingsOneContractSimCheckBox,
+                _settingsOneContractEvalCheckBox,
+                _settingsOneContractApCheckBox,
+                _settingsOneContractOnThresholdTextBox,
+                _settingsOneContractOffThresholdTextBox);
+            UpdateComplianceThresholdEnabled(
+                _settingsUnrealizedFlattenSimCheckBox,
+                _settingsUnrealizedFlattenEvalCheckBox,
+                _settingsUnrealizedFlattenApCheckBox,
+                _settingsUnrealizedFlattenThresholdTextBox,
+                null);
             if (_settingsLicenseKeyTextBox != null)
             {
                 string licenseKey = (_runtimePolicySettings.LicenseKey ?? string.Empty).Trim();

@@ -9,6 +9,15 @@ using System.Text;
 
 namespace Glitch.Services
 {
+    public sealed class ComplianceAccountTypeScope
+    {
+        public bool Sim { get; set; }
+        public bool Eval { get; set; }
+        public bool Ap { get; set; }
+
+        public bool AnyEnabled => Sim || Eval || Ap;
+    }
+
     public sealed class GlitchRuntimePolicySettings
     {
         public bool EnforceAccountLevelCompliance { get; set; } = false;
@@ -16,6 +25,14 @@ namespace Glitch.Services
         public bool EnforceBufferOneContract30Percent { get; set; } = false;
         public bool EnforceUnrealizedFlatten70Percent { get; set; } = false;
         public bool EnforceEvalProfitTargetLock { get; set; } = false;
+        public ComplianceAccountTypeScope BufferFreezeScopes { get; set; } = new ComplianceAccountTypeScope();
+        public double BufferFreezeThresholdRatio { get; set; } = 0.15;
+        public ComplianceAccountTypeScope BufferOneContractScopes { get; set; } = new ComplianceAccountTypeScope();
+        public double BufferOneContractOnThresholdRatio { get; set; } = 0.20;
+        public double BufferOneContractOffThresholdRatio { get; set; } = 0.25;
+        public ComplianceAccountTypeScope UnrealizedFlattenScopes { get; set; } = new ComplianceAccountTypeScope();
+        public double UnrealizedFlattenThresholdRatio { get; set; } = 0.80;
+        public bool EvalProfitTargetLockEnabled { get; set; } = false;
         public bool FlattenOnCriticalBufferLock { get; set; } = false;
         public int ReplicationDeclaredCapContracts { get; set; } = 0;
         public int ReplicationMaxDeltaPerCycle { get; set; } = 3;
@@ -34,6 +51,71 @@ namespace Glitch.Services
         public string InstallationId { get; set; } = Guid.NewGuid().ToString("N");
         public bool LicenseKeyDecodeFailed { get; set; } = false;
         public string LicenseKeyRawStorage { get; set; } = string.Empty;
+
+        public bool AnyRiskComplianceFeatureEnabled()
+        {
+            return BufferFreezeScopes.AnyEnabled ||
+                   BufferOneContractScopes.AnyEnabled ||
+                   UnrealizedFlattenScopes.AnyEnabled ||
+                   EvalProfitTargetLockEnabled;
+        }
+
+        public bool IsBufferFreezeEnabledFor(string accountStatus)
+        {
+            return IsScopeEnabledFor(BufferFreezeScopes, accountStatus);
+        }
+
+        public bool IsBufferOneContractEnabledFor(string accountStatus)
+        {
+            return IsScopeEnabledFor(BufferOneContractScopes, accountStatus);
+        }
+
+        public bool IsUnrealizedFlattenEnabledFor(string accountStatus)
+        {
+            return IsScopeEnabledFor(UnrealizedFlattenScopes, accountStatus);
+        }
+
+        public bool IsEvalProfitTargetLockEnabledFor(string accountStatus)
+        {
+            return EvalProfitTargetLockEnabled &&
+                   string.Equals(NormalizeComplianceAccountStatus(accountStatus), "Eval", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public void SyncLegacyComplianceFlags()
+        {
+            EnforceBufferFreeze15Percent = BufferFreezeScopes.AnyEnabled;
+            EnforceBufferOneContract30Percent = BufferOneContractScopes.AnyEnabled;
+            EnforceUnrealizedFlatten70Percent = UnrealizedFlattenScopes.AnyEnabled;
+            EnforceEvalProfitTargetLock = EvalProfitTargetLockEnabled;
+        }
+
+        private static bool IsScopeEnabledFor(ComplianceAccountTypeScope scope, string accountStatus)
+        {
+            if (scope == null || !scope.AnyEnabled)
+                return false;
+
+            string normalized = NormalizeComplianceAccountStatus(accountStatus);
+            if (string.Equals(normalized, "Sim", StringComparison.OrdinalIgnoreCase))
+                return scope.Sim;
+            if (string.Equals(normalized, "Eval", StringComparison.OrdinalIgnoreCase))
+                return scope.Eval;
+            if (string.Equals(normalized, "AP", StringComparison.OrdinalIgnoreCase))
+                return scope.Ap;
+
+            return false;
+        }
+
+        private static string NormalizeComplianceAccountStatus(string accountStatus)
+        {
+            string token = (accountStatus ?? string.Empty).Trim();
+            if (token.Length == 0)
+                return "Sim";
+
+            if (token.Equals("PA", StringComparison.OrdinalIgnoreCase))
+                return "AP";
+
+            return token;
+        }
     }
 
     public sealed class GlitchLicenseCacheState
@@ -99,6 +181,8 @@ namespace Glitch.Services
             settings.EnforceUnrealizedFlatten70Percent = ReadBool(rows, "ENFORCE_UNREALIZED_FLATTEN_70_PERCENT", settings.EnforceUnrealizedFlatten70Percent);
             settings.EnforceEvalProfitTargetLock = ReadBool(rows, "ENFORCE_EVAL_PROFIT_TARGET_LOCK", settings.EnforceEvalProfitTargetLock);
             settings.FlattenOnCriticalBufferLock = ReadBool(rows, "FLATTEN_ON_CRITICAL_BUFFER_LOCK", settings.FlattenOnCriticalBufferLock);
+            LoadComplianceFeatureScopes(settings, rows);
+            settings.SyncLegacyComplianceFlags();
             settings.ReplicationDeclaredCapContracts = ReadInt(rows, "REPLICATION_DECLARED_CAP_CONTRACTS", settings.ReplicationDeclaredCapContracts, 0, 200);
             settings.ReplicationMaxDeltaPerCycle = ReadInt(rows, "REPLICATION_MAX_DELTA_PER_CYCLE", settings.ReplicationMaxDeltaPerCycle, 1, 25);
             settings.ReplicationBurstWindowMs = ReadInt(rows, "REPLICATION_BURST_WINDOW_MS", settings.ReplicationBurstWindowMs, 250, 10000);
@@ -141,6 +225,8 @@ namespace Glitch.Services
             if (string.IsNullOrWhiteSpace(settingsPath) || settings == null)
                 return;
 
+            settings.SyncLegacyComplianceFlags();
+
             if (string.IsNullOrWhiteSpace(settings.InstallationId))
                 settings.InstallationId = Guid.NewGuid().ToString("N");
 
@@ -154,6 +240,20 @@ namespace Glitch.Services
                 $"ENFORCE_UNREALIZED_FLATTEN_70_PERCENT\t{ToBoolToken(settings.EnforceUnrealizedFlatten70Percent)}",
                 $"ENFORCE_EVAL_PROFIT_TARGET_LOCK\t{ToBoolToken(settings.EnforceEvalProfitTargetLock)}",
                 $"FLATTEN_ON_CRITICAL_BUFFER_LOCK\t{ToBoolToken(settings.FlattenOnCriticalBufferLock)}",
+                $"ENFORCE_BUFFER_FREEZE_15_SIM\t{ToBoolToken(settings.BufferFreezeScopes.Sim)}",
+                $"ENFORCE_BUFFER_FREEZE_15_EVAL\t{ToBoolToken(settings.BufferFreezeScopes.Eval)}",
+                $"ENFORCE_BUFFER_FREEZE_15_AP\t{ToBoolToken(settings.BufferFreezeScopes.Ap)}",
+                $"BUFFER_FREEZE_THRESHOLD\t{settings.BufferFreezeThresholdRatio.ToString("0.####", CultureInfo.InvariantCulture)}",
+                $"ENFORCE_BUFFER_ONE_CONTRACT_SIM\t{ToBoolToken(settings.BufferOneContractScopes.Sim)}",
+                $"ENFORCE_BUFFER_ONE_CONTRACT_EVAL\t{ToBoolToken(settings.BufferOneContractScopes.Eval)}",
+                $"ENFORCE_BUFFER_ONE_CONTRACT_AP\t{ToBoolToken(settings.BufferOneContractScopes.Ap)}",
+                $"BUFFER_ONE_CONTRACT_ON_THRESHOLD\t{settings.BufferOneContractOnThresholdRatio.ToString("0.####", CultureInfo.InvariantCulture)}",
+                $"BUFFER_ONE_CONTRACT_OFF_THRESHOLD\t{settings.BufferOneContractOffThresholdRatio.ToString("0.####", CultureInfo.InvariantCulture)}",
+                $"ENFORCE_UNREALIZED_FLATTEN_SIM\t{ToBoolToken(settings.UnrealizedFlattenScopes.Sim)}",
+                $"ENFORCE_UNREALIZED_FLATTEN_EVAL\t{ToBoolToken(settings.UnrealizedFlattenScopes.Eval)}",
+                $"ENFORCE_UNREALIZED_FLATTEN_AP\t{ToBoolToken(settings.UnrealizedFlattenScopes.Ap)}",
+                $"UNREALIZED_FLATTEN_THRESHOLD\t{settings.UnrealizedFlattenThresholdRatio.ToString("0.####", CultureInfo.InvariantCulture)}",
+                $"ENFORCE_EVAL_PROFIT_TARGET_LOCK_EVAL\t{ToBoolToken(settings.EvalProfitTargetLockEnabled)}",
                 $"REPLICATION_DECLARED_CAP_CONTRACTS\t{settings.ReplicationDeclaredCapContracts.ToString(CultureInfo.InvariantCulture)}",
                 $"REPLICATION_MAX_DELTA_PER_CYCLE\t{settings.ReplicationMaxDeltaPerCycle.ToString(CultureInfo.InvariantCulture)}",
                 $"REPLICATION_BURST_WINDOW_MS\t{settings.ReplicationBurstWindowMs.ToString(CultureInfo.InvariantCulture)}",
@@ -301,6 +401,56 @@ namespace Glitch.Services
             catch
             {
             }
+        }
+
+        private static void LoadComplianceFeatureScopes(GlitchRuntimePolicySettings settings, Dictionary<string, string> rows)
+        {
+            if (settings == null)
+                return;
+
+            if (rows == null)
+                rows = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            bool legacyFreeze = settings.EnforceBufferFreeze15Percent;
+            settings.BufferFreezeScopes.Sim = ReadBool(rows, "ENFORCE_BUFFER_FREEZE_15_SIM", legacyFreeze);
+            settings.BufferFreezeScopes.Eval = ReadBool(rows, "ENFORCE_BUFFER_FREEZE_15_EVAL", legacyFreeze);
+            settings.BufferFreezeScopes.Ap = ReadBool(rows, "ENFORCE_BUFFER_FREEZE_15_AP", legacyFreeze);
+            settings.BufferFreezeThresholdRatio = ReadDouble(rows, "BUFFER_FREEZE_THRESHOLD", 0.15, 0.01, 0.99);
+
+            bool legacyOneContract = settings.EnforceBufferOneContract30Percent;
+            settings.BufferOneContractScopes.Sim = ReadBool(rows, "ENFORCE_BUFFER_ONE_CONTRACT_SIM", legacyOneContract);
+            settings.BufferOneContractScopes.Eval = ReadBool(rows, "ENFORCE_BUFFER_ONE_CONTRACT_EVAL", legacyOneContract);
+            settings.BufferOneContractScopes.Ap = ReadBool(rows, "ENFORCE_BUFFER_ONE_CONTRACT_AP", legacyOneContract);
+            settings.BufferOneContractOnThresholdRatio = ReadDouble(rows, "BUFFER_ONE_CONTRACT_ON_THRESHOLD", 0.20, 0.01, 0.99);
+            settings.BufferOneContractOffThresholdRatio = ReadDouble(
+                rows,
+                "BUFFER_ONE_CONTRACT_OFF_THRESHOLD",
+                0.25,
+                settings.BufferOneContractOnThresholdRatio,
+                0.99);
+
+            bool legacyUnrealized = settings.EnforceUnrealizedFlatten70Percent;
+            settings.UnrealizedFlattenScopes.Sim = ReadBool(rows, "ENFORCE_UNREALIZED_FLATTEN_SIM", legacyUnrealized);
+            settings.UnrealizedFlattenScopes.Eval = ReadBool(rows, "ENFORCE_UNREALIZED_FLATTEN_EVAL", legacyUnrealized);
+            settings.UnrealizedFlattenScopes.Ap = ReadBool(rows, "ENFORCE_UNREALIZED_FLATTEN_AP", legacyUnrealized);
+            settings.UnrealizedFlattenThresholdRatio = ReadDouble(rows, "UNREALIZED_FLATTEN_THRESHOLD", 0.80, 0.01, 0.99);
+
+            if (rows.ContainsKey("ENFORCE_EVAL_PROFIT_TARGET_LOCK_EVAL"))
+                settings.EvalProfitTargetLockEnabled = ReadBool(rows, "ENFORCE_EVAL_PROFIT_TARGET_LOCK_EVAL", settings.EnforceEvalProfitTargetLock);
+            else
+                settings.EvalProfitTargetLockEnabled = settings.EnforceEvalProfitTargetLock;
+        }
+
+        private static double ReadDouble(IDictionary<string, string> rows, string key, double fallback, double min, double max)
+        {
+            if (rows == null || string.IsNullOrWhiteSpace(key))
+                return fallback;
+            if (!rows.TryGetValue(key, out string raw))
+                return fallback;
+            if (!double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed))
+                return fallback;
+
+            return Math.Max(min, Math.Min(max, parsed));
         }
 
         private static bool ReadBool(IDictionary<string, string> rows, string key, bool fallback)

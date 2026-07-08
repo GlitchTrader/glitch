@@ -3792,10 +3792,7 @@ namespace Glitch.UI
                 return;
             }
 
-            if (!_runtimePolicySettings.EnforceBufferFreeze15Percent &&
-                !_runtimePolicySettings.EnforceBufferOneContract30Percent &&
-                !_runtimePolicySettings.EnforceUnrealizedFlatten70Percent &&
-                !_runtimePolicySettings.EnforceEvalProfitTargetLock)
+            if (!_runtimePolicySettings.AnyRiskComplianceFeatureEnabled())
             {
                 ClearComplianceEnforcementRuntimeState();
                 return;
@@ -3879,16 +3876,25 @@ namespace Glitch.UI
                     }
                 }
 
-                bool criticalBufferBreach = IsBufferCriticalRiskTriggered(row);
-                bool evalProfitTargetReached = IsEvalProfitTargetLockTriggered(row);
-                bool oneContractBreach = IsBufferOneContractRiskTriggered(row);
-                bool unrealizedLossBreach = IsUnrealizedLossRiskTriggered(row);
+                bool enforceBufferFreeze = _runtimePolicySettings.IsBufferFreezeEnabledFor(row.AccountStatus);
+                bool enforceOneContract = _runtimePolicySettings.IsBufferOneContractEnabledFor(row.AccountStatus);
+                bool enforceUnrealizedFlatten = _runtimePolicySettings.IsUnrealizedFlattenEnabledFor(row.AccountStatus);
+                bool enforceEvalLock = _runtimePolicySettings.IsEvalProfitTargetLockEnabledFor(row.AccountStatus);
+                double bufferFreezeThreshold = _runtimePolicySettings.BufferFreezeThresholdRatio;
+                double oneContractOnThreshold = _runtimePolicySettings.BufferOneContractOnThresholdRatio;
+                double oneContractOffThreshold = _runtimePolicySettings.BufferOneContractOffThresholdRatio;
+                double unrealizedFlattenThreshold = _runtimePolicySettings.UnrealizedFlattenThresholdRatio;
+
+                bool criticalBufferBreach = IsBufferCriticalRiskTriggered(row, bufferFreezeThreshold);
+                bool evalProfitTargetReached = enforceEvalLock && IsEvalProfitTargetLockTriggered(row);
+                bool oneContractBreach = IsBufferOneContractRiskTriggered(row, oneContractOnThreshold);
+                bool unrealizedLossBreach = IsUnrealizedLossRiskTriggered(row, unrealizedFlattenThreshold);
                 bool isRiskLocked = _riskLockedAccounts.Contains(accountName);
                 bool isEvalTargetLocked = _evalTargetLockedAccounts.Contains(accountName);
                 bool isBufferLockAcknowledged = _riskLockAcknowledgedAccounts.Contains(BuildTradingLockAckKey(accountName, "BufferCriticalLock"));
                 bool isEvalLockAcknowledged = _riskLockAcknowledgedAccounts.Contains(BuildTradingLockAckKey(accountName, "EvalProfitTargetLock"));
 
-                if (!_runtimePolicySettings.EnforceBufferFreeze15Percent)
+                if (!enforceBufferFreeze)
                 {
                     _riskLockedAccounts.Remove(accountName);
                     _riskLockAcknowledgedAccounts.Remove(BuildTradingLockAckKey(accountName, "BufferCriticalLock"));
@@ -3896,17 +3902,17 @@ namespace Glitch.UI
                     isBufferLockAcknowledged = false;
                 }
 
-                if (!_runtimePolicySettings.EnforceBufferOneContract30Percent)
+                if (!enforceOneContract)
                 {
                     _riskOneContractAccounts.Remove(accountName);
                 }
 
-                if (!_runtimePolicySettings.EnforceUnrealizedFlatten70Percent || !unrealizedLossBreach)
+                if (!enforceUnrealizedFlatten || !unrealizedLossBreach)
                 {
                     _unrealizedLossFlattenTriggeredAccounts.Remove(accountName);
                 }
 
-                if (_runtimePolicySettings.EnforceBufferFreeze15Percent && criticalBufferBreach)
+                if (enforceBufferFreeze && criticalBufferBreach)
                 {
                     if (!isRiskLocked && !isBufferLockAcknowledged)
                     {
@@ -3919,16 +3925,16 @@ namespace Glitch.UI
                                 "BufferCriticalLock",
                                 "flatten_and_lock",
                                 row.BufferMarginRaw,
-                                row.MaxDrawdownRaw * BufferCriticalLockThresholdRatio,
-                                "Buffer fell below 15% of max drawdown. Account flattened and strategy replication frozen pending manual dismiss."));
+                                row.MaxDrawdownRaw * bufferFreezeThreshold,
+                                $"Buffer fell below {FormatPercentThreshold(bufferFreezeThreshold)} of max drawdown. Account flattened and strategy replication frozen pending manual dismiss."));
                         RaiseCriticalWarning(
                             accountName,
                             BuildRuleEvent(
                                 "BufferCriticalLock",
                                 "flatten_and_lock",
                                 row.BufferMarginRaw,
-                                row.MaxDrawdownRaw * BufferCriticalLockThresholdRatio,
-                                "Critical buffer fell below 15% of max drawdown. Account flattened and strategy replication frozen pending manual dismiss."),
+                                row.MaxDrawdownRaw * bufferFreezeThreshold,
+                                $"Critical buffer fell below {FormatPercentThreshold(bufferFreezeThreshold)} of max drawdown. Account flattened and strategy replication frozen pending manual dismiss."),
                             "BufferCriticalLock",
                             unlocksTrading: true);
                         isRiskLocked = true;
@@ -3948,7 +3954,7 @@ namespace Glitch.UI
                         _riskLockedAccounts.Remove(accountName);
                 }
 
-                if (_runtimePolicySettings.EnforceEvalProfitTargetLock && evalProfitTargetReached)
+                if (enforceEvalLock && evalProfitTargetReached)
                 {
                     if (!isEvalTargetLocked && !isEvalLockAcknowledged)
                     {
@@ -3994,12 +4000,12 @@ namespace Glitch.UI
                 if (!evalProfitTargetReached)
                     _riskLockAcknowledgedAccounts.Remove(BuildTradingLockAckKey(accountName, "EvalProfitTargetLock"));
 
-                bool oneContractRecovery = IsBufferOneContractRecoveryTriggered(row);
+                bool oneContractRecovery = IsBufferOneContractRecoveryTriggered(row, oneContractOffThreshold);
                 if (IsTradingLocked(accountName))
                 {
                     _riskOneContractAccounts.Remove(accountName);
                 }
-                else if (_runtimePolicySettings.EnforceBufferOneContract30Percent && oneContractBreach)
+                else if (enforceOneContract && oneContractBreach)
                 {
                     if (_riskOneContractAccounts.Add(accountName))
                         AppendJournal(
@@ -4009,8 +4015,8 @@ namespace Glitch.UI
                                 "BufferOneContractMode",
                                 "one_contract_mode_on",
                                 row.BufferMarginRaw,
-                                row.MaxDrawdownRaw * BufferOneContractThresholdRatio,
-                                "Buffer fell below 20% of max drawdown. Replication limited to one contract."));
+                                row.MaxDrawdownRaw * oneContractOnThreshold,
+                                $"Buffer fell below {FormatPercentThreshold(oneContractOnThreshold)} of max drawdown. Replication limited to one contract."));
                 }
                 else if (_riskOneContractAccounts.Contains(accountName) && oneContractRecovery)
                 {
@@ -4022,22 +4028,22 @@ namespace Glitch.UI
                                 "BufferOneContractMode",
                                 "one_contract_mode_off",
                                 row.BufferMarginRaw,
-                                row.MaxDrawdownRaw * BufferOneContractReleaseThresholdRatio,
-                                "Buffer recovered to 25% of max drawdown or higher. One-contract replication limit removed."));
+                                row.MaxDrawdownRaw * oneContractOffThreshold,
+                                $"Buffer recovered to {FormatPercentThreshold(oneContractOffThreshold)} of max drawdown or higher. One-contract replication limit removed."));
                 }
 
                 if (!IsTradingLocked(accountName) &&
-                    _runtimePolicySettings.EnforceUnrealizedFlatten70Percent &&
+                    enforceUnrealizedFlatten &&
                     unrealizedLossBreach &&
                     !_unrealizedLossFlattenTriggeredAccounts.Contains(accountName) &&
                     accountsByName.TryGetValue(accountName, out Account unrealizedFlattenAccount))
                 {
                     _unrealizedLossFlattenTriggeredAccounts.Add(accountName);
-                    double unrealizedLossThreshold = row.IntratradeDrawdownRaw * UnrealizedLossFlattenThresholdRatio;
+                    double unrealizedLossThreshold = row.IntratradeDrawdownRaw * unrealizedFlattenThreshold;
                     if (TryFlattenAccountForRisk(
                             unrealizedFlattenAccount,
                             $"UNRLZ|{accountName}",
-                            "Unrealized loss exceeded 80% of max loss (intratrade drawdown)"))
+                            $"Unrealized loss exceeded {FormatPercentThreshold(unrealizedFlattenThreshold)} of max loss (intratrade drawdown)"))
                     {
                         RaiseCriticalWarning(
                             accountName,
@@ -4046,7 +4052,7 @@ namespace Glitch.UI
                                 "flatten",
                                 Math.Max(0, -row.UnrealizedPnlRaw),
                                 unrealizedLossThreshold,
-                                "Unrealized loss exceeded 80% of max loss (intratrade drawdown). Position flattened automatically."),
+                                $"Unrealized loss exceeded {FormatPercentThreshold(unrealizedFlattenThreshold)} of max loss (intratrade drawdown). Position flattened automatically."),
                             "UnrealizedLossFlatten",
                             unlocksTrading: false);
                     }
@@ -4093,7 +4099,7 @@ namespace Glitch.UI
                 _riskFlattenFallbackWarningCooldownByKey.Clear();
         }
 
-        private static bool IsUnrealizedLossRiskTriggered(AccountGridRow row)
+        private static bool IsUnrealizedLossRiskTriggered(AccountGridRow row, double thresholdRatio)
         {
             if (row == null || row.IntratradeDrawdownRaw <= 0 || double.IsNaN(row.IntratradeDrawdownRaw) || double.IsInfinity(row.IntratradeDrawdownRaw))
                 return false;
@@ -4101,7 +4107,7 @@ namespace Glitch.UI
                 return false;
 
             double unrealizedLoss = Math.Max(0, -row.UnrealizedPnlRaw);
-            return unrealizedLoss > (UnrealizedLossFlattenThresholdRatio * row.IntratradeDrawdownRaw);
+            return unrealizedLoss > (thresholdRatio * row.IntratradeDrawdownRaw);
         }
 
         private static bool IsEvalProfitTargetLockTriggered(AccountGridRow row)
@@ -4120,34 +4126,41 @@ namespace Glitch.UI
             return row.EquityRaw >= row.EvalProfitTargetLockBalanceRaw;
         }
 
-        private static bool IsBufferCriticalRiskTriggered(AccountGridRow row)
+        private static bool IsBufferCriticalRiskTriggered(AccountGridRow row, double thresholdRatio)
         {
             if (row == null || row.MaxDrawdownRaw <= 0 || double.IsNaN(row.MaxDrawdownRaw) || double.IsInfinity(row.MaxDrawdownRaw))
                 return false;
             if (double.IsNaN(row.BufferMarginRaw) || double.IsInfinity(row.BufferMarginRaw))
                 return false;
 
-            return row.BufferMarginRaw < (BufferCriticalLockThresholdRatio * row.MaxDrawdownRaw);
+            return row.BufferMarginRaw < (thresholdRatio * row.MaxDrawdownRaw);
         }
 
-        private static bool IsBufferOneContractRiskTriggered(AccountGridRow row)
+        private static bool IsBufferOneContractRiskTriggered(AccountGridRow row, double thresholdRatio)
         {
             if (row == null || row.MaxDrawdownRaw <= 0 || double.IsNaN(row.MaxDrawdownRaw) || double.IsInfinity(row.MaxDrawdownRaw))
                 return false;
             if (double.IsNaN(row.BufferMarginRaw) || double.IsInfinity(row.BufferMarginRaw))
                 return false;
 
-            return row.BufferMarginRaw < (BufferOneContractThresholdRatio * row.MaxDrawdownRaw);
+            return row.BufferMarginRaw < (thresholdRatio * row.MaxDrawdownRaw);
         }
 
-        private static bool IsBufferOneContractRecoveryTriggered(AccountGridRow row)
+        private static bool IsBufferOneContractRecoveryTriggered(AccountGridRow row, double releaseThresholdRatio)
         {
             if (row == null || row.MaxDrawdownRaw <= 0 || double.IsNaN(row.MaxDrawdownRaw) || double.IsInfinity(row.MaxDrawdownRaw))
                 return false;
             if (double.IsNaN(row.BufferMarginRaw) || double.IsInfinity(row.BufferMarginRaw))
                 return false;
 
-            return row.BufferMarginRaw >= (BufferOneContractReleaseThresholdRatio * row.MaxDrawdownRaw);
+            return row.BufferMarginRaw >= (releaseThresholdRatio * row.MaxDrawdownRaw);
+        }
+
+        private static string FormatPercentThreshold(double ratio)
+        {
+            if (double.IsNaN(ratio) || double.IsInfinity(ratio))
+                return "-";
+            return (ratio * 100.0).ToString("0.#", CultureInfo.InvariantCulture) + "%";
         }
 
         private static int GetTotalAbsoluteOpenContracts(Account account)
@@ -6876,7 +6889,14 @@ namespace Glitch.UI
             string bufferVsMaxDdSign = GetBufferVsMaxDdSign(bufferMargin, maxDrawdown);
             bool isIntraDdWarning = GetIntraDdWarning(unrealizedPnl, intratradeDrawdown);
             bool isNetLiqWarning = GetNetLiqWarning(bufferMargin, maxDrawdown);
-            string equityVsSizeSign = GetEquityDisplaySign(isNetLiqWarning, isIntraDdWarning, effectiveBalance, selectedAccountSize, maxDrawdown, bufferMargin);
+            string equityVsSizeSign = GetEquityDisplaySign(
+                isNetLiqWarning,
+                isIntraDdWarning,
+                effectiveBalance,
+                selectedAccountSize,
+                maxDrawdown,
+                bufferMargin,
+                _runtimePolicySettings?.BufferFreezeThresholdRatio ?? BufferCriticalLockThresholdRatio);
             double evalProfitTargetLockBalance =
                 string.Equals(selectedStatus, "Eval", StringComparison.OrdinalIgnoreCase) &&
                 selectedAccountSize > 0 &&
@@ -7631,7 +7651,8 @@ namespace Glitch.UI
             double equity,
             double accountSize,
             double maxDrawdown,
-            double? bufferMargin)
+            double? bufferMargin,
+            double bufferWarningThresholdRatio)
         {
             if (isNetLiqWarning || isIntraDdWarning)
                 return "Negative";
@@ -7639,7 +7660,7 @@ namespace Glitch.UI
             if (maxDrawdown > 0 && bufferMargin.HasValue && !double.IsNaN(bufferMargin.Value) && !double.IsInfinity(bufferMargin.Value))
             {
                 double bufferRatio = bufferMargin.Value / maxDrawdown;
-                if (!double.IsNaN(bufferRatio) && !double.IsInfinity(bufferRatio) && bufferRatio < BufferCriticalLockThresholdRatio)
+                if (!double.IsNaN(bufferRatio) && !double.IsInfinity(bufferRatio) && bufferRatio < bufferWarningThresholdRatio)
                     return "Negative";
             }
 

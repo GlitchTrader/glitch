@@ -236,6 +236,12 @@ settings.risk.enforce_15_flatten_freeze	Flatten and freeze account when buffer f
 settings.risk.enforce_20_one_contract	Force one-contract replication when buffer falls below 20% of maximum drawdown (release at 25%).	Forçar replicação de um contrato quando o buffer cair abaixo de 20% do drawdown máximo (liberar em 25%).	Forzar replicación de un contrato cuando el buffer baje del 20% del drawdown máximo (soltar al 25%).	当缓冲低于最大回撤的20%时，强制单合约复制（25%时解除）。	Forcer la réplication un contrat quand le buffer tombe sous 20% du drawdown max (relâcher à 25%).	При буфере < 20% макс. дд — одноконтрактная репликация (снять при 25%).
 settings.risk.enforce_80_flatten	Flatten account when unrealized loss exceeds 80% of maximum intratrade loss (max loss limit).	Achatar conta quando a perda não realizada exceder 80% da perda máxima intratrade.	Aplanar cuenta cuando la pérdida no realizada supere el 80% de la pérdida máxima intratrade.	当未实现亏损超过最大单笔交易亏损的80%时，平仓账户。	Aplatir le compte quand la perte non réalisée dépasse 80% de la perte max intratrade.	Закрыть счет, когда нереализов. убыток > 80% макс. внутрисделочного убытка.
 settings.risk.enforce_eval_lock_flatten	Flatten and lock evaluation account when equity reaches the evaluation target lock balance.	Achatar e bloquear conta de avaliação quando o patrimônio atingir o saldo de bloqueio da meta de avaliação.	Aplanar y bloquear cuenta de evaluación cuando el patrimonio alcance el saldo de bloqueo de la meta.	当权益达到评估目标锁定余额时，平仓并锁定评估账户。	Aplatir et verrouiller le compte d'évaluation quand l'equity atteint le solde de verrouillage cible.	Закрыть и заблокировать оценочный счет при достижении целевого баланса.
+settings.risk.scope_sim	Sim	Sim	Sim	模拟	Sim	Sim
+settings.risk.scope_eval	Eval	Eval	Eval	评估	Eval	Eval
+settings.risk.scope_pa	PA	PA	PA	PA	PA	PA
+settings.risk.threshold	Threshold (ratio)	Limite (razão)	Umbral (ratio)	阈值（比率）	Seuil (ratio)	Порог (доля)
+settings.risk.threshold_on	On threshold (ratio)	Limite ligar (razão)	Umbral activar (ratio)	开启阈值（比率）	Seuil activation (ratio)	Порог включения (доля)
+settings.risk.threshold_off	Off threshold (ratio)	Limite desligar (razão)	Umbral liberar (ratio)	关闭阈值（比率）	Seuil relâchement (ratio)	Порог отключения (доля)
 settings.license.title	License	Licença	Licencia	许可证	Licence	Лицензия
 settings.license.key	License Key	Chave de Licença	Clave de Licencia	许可证密钥	Clé de Licence	Ключ Лицензии
 settings.license.key_placeholder	Enter license key	Digite a chave de licença	Introduce la clave de licencia	输入许可证密钥	Saisir la clé de licence	Введите ключ лицензии
