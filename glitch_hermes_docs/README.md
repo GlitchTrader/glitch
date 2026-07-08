@@ -25,3 +25,7 @@ Core invariant:
 ```text
 Hermes proposes. Glitch validates, executes, journals, and protects the account.
 ```
+
+## Amendments
+
+- **2026-07-08 — Intent contract v2 (bracket mandate):** `docs/09_intent_contract_v2_brackets.md` + `schemas/intent.v2.schema.json`. Every entry intent carries mandatory SL + TP1 (optional TP2/SL2); NT holds the OCO bracket; AI never manages a loss mid-flight. v2 supersedes v1 (v1 was never implemented). Version ladder + firewall chain: `Glitch-Platform/docs/ai-program/roadmap.md`.

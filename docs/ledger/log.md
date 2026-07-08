@@ -2,6 +2,23 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-08 — AI-program architecture pass (architect: Fable → implementer: Cursor)
+
+- Operator decree: Fable architects/documents, Cursor implements exactly what is planned. Goal: improve v0.0.1.9, then v0.0.2.0+ with AI progressively integrated — more assets, better bridge/normalized analytics, then ingest → mine → backtest → learn → 5-min BUY/SELL/HOLD/NOTHING intents with **mandatory SL+TP1 (optional TP2/SL2), NT-held OCO brackets**, Glitch deterministic firewall before any order.
+- Wrote `docs/ai-program/roadmap.md` — version ladder v0.0.1.9 "Trust" → v0.0.2.0 "Eyes" → v0.0.2.1 "Voice" → v0.0.2.2 "Ears" (paper) → v0.0.2.3 "Hands-sim" → v0.0.2.4 "Hands-eval", plus Hermes H-0/H-1/H-2 and the 15-step firewall chain.
+- Wrote intent contract v2 (bracket mandate): `glitch_hermes_docs/docs/09_intent_contract_v2_brackets.md` + `schemas/intent.v2.schema.json`. AI never manages a loss mid-flight; naked positions impossible by construction.
+- Backlog: Wave 6 (GL-020…GL-024, v0.0.1.9 hardening incl. RP-1 catch + F1 commission truth) and Wave 7 (GL-025…GL-035, AI program) seeded with gates; GL-008/GL-009 become umbrellas.
+- Handoff for Cursor: `handoffs/2026-07-08-cursor-trust-v0019.md` (Wave A fully specified WO-A1…A6; Wave B preview only). Branch: `glitch/trust-v0019`.
+- ABKB glitch project profile updated with AI-program section + pointers.
+
+## 2026-07-08 — v0.0.1.8 post-publish review (lead: Fable)
+
+- Full release review: `audits/v0.0.1.8-release-review.md`. Verdict: sound; one fix recommended.
+- **RP-1 (P1):** wave-2 marshaled apply (`RefreshPipeline.partial.cs`) has `try/finally` without catch — exceptions in apply path (incl. `ExecuteReplicationCycle`) escape to WPF dispatcher; old timer-tick catch no longer covers it. Fix: catch → `RecordSubsystemFault("account_refresh", …)`.
+- **RP-2:** replication cycle can double-fire (<500ms) and heavy-tick replication timing now rides thread-pool/dispatcher scheduling — LANE-1 must verify idempotency under the new pipeline.
+- Security: shipped zip clean (compiled export only); license/HTTP surfaces pass; recommend SHA-256 next to release zips + scoped security audit before wider distribution and before Hermes servers land.
+- Hermes (GL-009): read-only prep may start now per phase ladder step 2 (telemetry server + mktintel-style ingestion runtime); intent/execution path stays gated on Waves 1–2, LANE-1, and GL-005 F1 (journal must be commission-true before Hermes learns from it).
+
 ## 2026-07-08 — Performance wave 2 (refresh pipeline)
 
 - **Light replication tick:** `heavyTabWork: false` skips `BuildAccountRow` loop — only `ExecuteReplicationCycle` + coalesced shell publish (500ms cadence no longer rebuilds all rows).

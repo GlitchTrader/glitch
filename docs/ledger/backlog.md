@@ -41,8 +41,34 @@ Key files: `ninjatrader/Glitch/AddOns/GlitchAddOn/` — `UI/MainWindow/GlitchMai
 
 | ID | Title | Status | Notes |
 |----|-------|--------|-------|
-| GL-008 | Multi-asset bridge + analytics | todo | Bridge/analytics currently MNQ-centric; normalize per-instrument (point values, sessions, regimes). Prerequisite for GL-009 breadth. |
-| GL-009 | Hermes decision layer (5-min loop: BUY/SELL/HOLD/NOTHING → deterministic Glitch checks) | todo | Contract + schemas + risk firewall + M0–M3 milestones fully designed in `glitch_hermes_docs/`. Follow the phase ladder in `north-star.md`. Paper mode first, always. |
+| GL-008 | Multi-asset bridge + analytics | todo (umbrella) | **Concretized 2026-07-08 as GL-025/GL-026 in Wave 7** — see `docs/ai-program/roadmap.md` (v0.0.2.0 "Eyes"). |
+| GL-009 | Hermes decision layer (5-min loop: BUY/SELL/HOLD/NOTHING → deterministic Glitch checks) | todo (umbrella) | **Concretized 2026-07-08 as GL-027…GL-035 in Wave 7** with version ladder in `docs/ai-program/roadmap.md`. Intent contract v2 (bracket-mandatory: SL+TP1 required, optional TP2/SL2, NT-held OCO) in `glitch_hermes_docs/docs/09_intent_contract_v2_brackets.md` + `schemas/intent.v2.schema.json`. Paper mode first, always. |
+
+## Wave 6 — v0.0.1.9 "Trust" (post-release hardening — from `audits/v0.0.1.8-release-review.md`)
+
+| ID | Title | Status | Notes |
+|----|-------|--------|-------|
+| GL-020 | RP-1: catch in marshaled account-refresh apply | todo (P1) | `RefreshPipeline.partial.cs` → `MarshalAccountRefreshResult`: dispatcher action is `try/finally` with no catch; exceptions in `ApplyFullAccountRefreshResult` (incl. `ExecuteReplicationCycle`, `ApplyRiskMitigations`) escape to the WPF dispatcher → potential NT8 crash. Fix: wrap body in try/catch → `RecordSubsystemFault("account_refresh", ex)`. Restores PA-4 degrade doctrine. Acceptance: injected throw inside apply path degrades subsystem quietly, NT stays up. |
+| GL-021 | RP-3: stale header/shell when all accounts disconnect | todo | `UpdateHeaderMetricsFromRows` early-returns on empty rows (header freezes at last PnL); `RefreshAccountDataLight` early-return skips `PublishGlitchShellState` (Chart Trader widgets hold stale replication state). Zero/neutral the header metrics and publish a final shell snapshot when active accounts drop to none. |
+| GL-022 | Release integrity: SHA-256 checksums | todo | Generate SHA-256 alongside every zip in `apps/download/public/files/` (build-time script), publish on the download page. Backfill v0.0.1.8. |
+| GL-023 | Repo hygiene: stray export artifacts | todo | gitignore `ninjatrader/Glitch/Glitch.zip` and `Glitch Screens *.{jpg,psd}` (or relocate to an untracked assets dir). Release zips live only under `apps/download/public/files/`. |
+| GL-024 | F1: commission truth — journal must match NT net PnL | todo (P1, gates v0.0.2.2) | Closes GL-005/F1 per `audits/pnl-math-audit.md`: dashboard tiles read NT account items (net when commission template set) while Journal/Analytics recompute gross from PnlPoints; "commission" appears 0× in the AddOn. Fix at the seam (audit's two options): source Journal/Analytics totals from the same NT account items as the tiles, OR feed commissions into the trade ledger. North-star: "what Glitch displays must equal what NinjaTrader reports." **Hard gate for GL-030 — Hermes must never learn from gross-vs-net-corrupted journal data.** |
+
+## Wave 7 — AI program (v0.0.2.x + Hermes; roadmap: `docs/ai-program/roadmap.md`)
+
+| ID | Title | Status | Target | Notes |
+|----|-------|--------|--------|-------|
+| GL-025 | Instrument metadata registry + multi-asset bridge normalization | todo | v0.0.2.0 | New `GlitchInstrumentMetadataService`: point value, tick size, session template, currency from NT `MasterInstrument` with cited static fallback table; **kills the F2 pointValue=1.0 silent fallback**. Bridge/FeedBus publish normalized units (ticks, ATR-relative, R-multiples) keyed by instrument root. Child of GL-008. |
+| GL-026 | Analytics panel: normalized multi-instrument view | todo | v0.0.2.0 | Analytics tab renders per-instrument normalized snapshot (same indicator set, comparable units across MNQ/NQ/ES/MES…), instrument selector, calm-by-default. Child of GL-008. |
+| GL-027 | GlitchExternalTelemetryServer (read-only) | todo | v0.0.2.1 | `HttpListener` on `127.0.0.1:8787`, bearer token (generated first-run, stored GlitchData, shown once in Settings). GET `/health` `/snapshot?instrument=` `/accounts` `/positions` `/risk` `/journal/recent`. Serves from existing snapshot builders off the UI thread. Output validates against `glitch_hermes_docs/schemas/snapshot.schema.json`. **Gate: GL-034 design review first.** |
+| GL-028 | Hermes runtime scaffold + ingestion (H-0) | todo | Hermes repo | Separate repo `projects/glitch/Hermes`, mktintel-style living-knowledge layout (observations/knowledge/experiments/operations + phase gates + AGENTS.md) + Docker `hermes-api`/`hermes-worker`/Postgres. Only job: `ingest_snapshot` every 5 min during NT sessions. No decision code. |
+| GL-029 | Pattern mining + backtest harness (H-1) | todo | Hermes repo | Mine accumulated corpus + `Glitch-Collab`/`Strategy-Research-Data` historical sets; replay harness scoring candidate rules against M0 risk profile. Output: ranked archetypes + evidence docs, mktintel campaign format. |
+| GL-030 | Intent endpoint paper mode: models v2 + AI risk firewall | todo | v0.0.2.2 | `GlitchAiIntentServer` (POST /intent), `GlitchAiIntentModels` (contract v2, bracket-mandatory), `GlitchAiRiskFirewall` (15-step deterministic chain in roadmap). Paper mode: validate + journal + respond; **no order code path exists in this version**. Gates: Waves 1–2 complete + GL-024 landed. |
+| GL-031 | GlitchAiJournalBridge | todo | v0.0.2.2 | One correlated record per intent: intent → firewall verdict (per-check) → (later) orders/fills/round-trip PnL net of commissions → snapshot hash. This is Hermes's training data; shape is contract, version it. |
+| GL-032 | GlitchAiOrderExecutor (Sim101, bracket-mandatory) | todo | v0.0.2.3 | Entry + NT-held OCO bracket submitted atomically; bracket-attach failure ⇒ entry cancelled (naked position impossible by construction). TP1 fill ⇒ Glitch moves runner stop to SL2 deterministically. Signal names `GlitchAIEntry/Stop/Target`. Sim101 only; separate from replication path entirely. Gate: ≥2 weeks clean paper intents. |
+| GL-033 | Live eval enablement (M0) | todo | v0.0.2.4 | One allowlisted eval account. M0 caps: MNQ only, 1 contract, $100/trade, $300/day, 3–5 trades/day, cooldowns, kill switch in Settings. Gates: paper-profitable per M0 criteria + operator approval + GL-034 full audit. |
+| GL-034 | Security audit (two-stage) | todo | gates GL-027, GL-033 | Stage 1 (before GL-027 ships): design review of telemetry/intent server spec — bind, auth, allowlists, DoS bounds. Stage 2 (before GL-033): full audit of apps/api license endpoints, download/update flow, both AI servers. |
+| GL-035 | Hermes decision routine (H-2, 5-min loop) | todo | Hermes repo | `suggest_trade`: reads latest snapshot, emits ≤1 intent/instrument/cycle per contract v2 with mandatory brackets. `daily_learning` post-session from GL-031 data. Gate: GL-030 live in paper mode. |
 
 ## Wave 1b — External truth (parallel with audit)
 
@@ -66,6 +92,17 @@ GL-016 → informs → GL-003 (compliance must encode CURRENT firm rules)
 GL-001/004/005 → gate → GL-007 (don't ship known-broken replication/PnL to test users)
 GL-002 + Wave 2 → gate → GL-008, GL-009
 Wave 3 (GL-010…GL-015) runs parallel with Waves 1–2 (UI-only, disjoint files)
+
+Wave 6/7 (2026-07-08, roadmap in docs/ai-program/roadmap.md):
+GL-020…GL-024 (v0.0.1.9)      → start now, no gate
+GL-025/GL-026 (v0.0.2.0)      → after v0.0.1.9 ships; read-only analytics work, allowed pre-audit
+GL-034 stage 1                → gates → GL-027 (telemetry server ship)
+GL-027 → gates → GL-028 (H-0 ingestion needs the API)
+GL-028 + ≥4 weeks corpus      → gate → GL-029
+Waves 1–2 complete + GL-024   → gate → GL-030/GL-031 (paper intents; F1 first — journal must be commission-true before Hermes learns)
+GL-030 clean ≥2 weeks         → gate → GL-032 (Sim101 execution)
+GL-032 + M0 paper-profitable + GL-034 stage 2 + operator approval → gate → GL-033 (live eval)
+GL-030 → gates → GL-035 (Hermes decision routine)
 ```
 
 ## Delegation map (2026-07-07, Fable as lead)

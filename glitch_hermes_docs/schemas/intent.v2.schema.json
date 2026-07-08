@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Glitch Trade Intent v2 (bracket-mandatory)",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "intent_id",
+    "created_utc",
+    "instrument",
+    "account",
+    "action",
+    "confidence",
+    "snapshot_hash",
+    "model_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "glitch.intent.v2"
+    },
+    "intent_id": {
+      "type": "string",
+      "description": "UUID; firewall enforces idempotency on this."
+    },
+    "created_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "instrument": {
+      "type": "string",
+      "description": "Instrument root, e.g. MNQ. Must be in the firewall allowlist."
+    },
+    "account": {
+      "type": "string",
+      "description": "Target account name. Must be in the firewall allowlist."
+    },
+    "action": {
+      "enum": [
+        "ENTER_LONG",
+        "ENTER_SHORT",
+        "HOLD",
+        "EXIT",
+        "NOTHING"
+      ],
+      "description": "BUY=ENTER_LONG, SELL=ENTER_SHORT, DO-NOTHING=NOTHING. ADJUST_STOP/PARTIAL_EXIT reserved for M1."
+    },
+    "quantity": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Required > 0 for ENTER_*. Firewall caps (M0: 1)."
+    },
+    "order_type": {
+      "enum": [
+        "MARKET",
+        "LIMIT"
+      ],
+      "default": "MARKET"
+    },
+    "limit_price": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Required when order_type=LIMIT. Tick-rounded."
+    },
+    "stop_loss": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "MANDATORY for ENTER_*. Loss side of entry, tick-rounded. Defines trade risk."
+    },
+    "take_profit_1": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "MANDATORY for ENTER_*. Profit side of entry, tick-rounded."
+    },
+    "take_profit_2": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Optional runner target beyond TP1. Requires quantity >= 2 and quantity_tp1."
+    },
+    "stop_loss_2": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Optional post-TP1 stop for the runner. Must be tighter than stop_loss relative to entry (risk-reducing only). Requires take_profit_2."
+    },
+    "quantity_tp1": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1,
+      "description": "Contracts closed at TP1 when TP2 present. Remainder (quantity - quantity_tp1 >= 1) runs to TP2."
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "reason": {
+      "type": "string",
+      "description": "Human-readable rationale; journaled verbatim."
+    },
+    "snapshot_hash": {
+      "type": "string",
+      "description": "Hash of the telemetry snapshot the decision was based on. Firewall rejects if it does not match a snapshot <= 90s old."
+    },
+    "model_version": {
+      "type": "string"
+    },
+    "prompt_version": {
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "enum": [
+              "ENTER_LONG",
+              "ENTER_SHORT"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "quantity",
+          "stop_loss",
+          "take_profit_1"
+        ],
+        "properties": {
+          "quantity": {
+            "minimum": 1
+          },
+          "stop_loss": {
+            "type": "number"
+          },
+          "take_profit_1": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "take_profit_2"
+        ],
+        "properties": {
+          "take_profit_2": {
+            "type": "number"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "quantity_tp1"
+        ],
+        "properties": {
+          "quantity": {
+            "minimum": 2
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "stop_loss_2"
+        ],
+        "properties": {
+          "stop_loss_2": {
+            "type": "number"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "take_profit_2"
+        ],
+        "properties": {
+          "take_profit_2": {
+            "type": "number"
+          }
+        }
+      }
+    }
+  ]
+}
