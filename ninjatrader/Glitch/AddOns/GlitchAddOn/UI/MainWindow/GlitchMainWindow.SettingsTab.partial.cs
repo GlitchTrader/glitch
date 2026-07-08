@@ -365,14 +365,20 @@ namespace Glitch.UI
                     panel.Children.Add(BuildThresholdRow(thresholdOff));
                 }
 
-                RoutedEventHandler syncThresholdEnabled = (sender, args) => UpdateComplianceThresholdEnabled(sim, eval, ap, threshold, thresholdOff);
-                if (sim != null) sim.Checked += syncThresholdEnabled;
-                if (sim != null) sim.Unchecked += syncThresholdEnabled;
-                if (eval != null) eval.Checked += syncThresholdEnabled;
-                if (eval != null) eval.Unchecked += syncThresholdEnabled;
-                if (ap != null) ap.Checked += syncThresholdEnabled;
-                if (ap != null) ap.Unchecked += syncThresholdEnabled;
-                UpdateComplianceThresholdEnabled(sim, eval, ap, threshold, thresholdOff);
+                CheckBox simLocal = sim;
+                CheckBox evalLocal = eval;
+                CheckBox apLocal = ap;
+                TextBox thresholdLocal = threshold;
+                TextBox thresholdOffLocal = thresholdOff;
+                RoutedEventHandler syncThresholdEnabled = (sender, args) =>
+                    UpdateComplianceThresholdEnabled(simLocal, evalLocal, apLocal, thresholdLocal, thresholdOffLocal);
+                if (simLocal != null) simLocal.Checked += syncThresholdEnabled;
+                if (simLocal != null) simLocal.Unchecked += syncThresholdEnabled;
+                if (evalLocal != null) evalLocal.Checked += syncThresholdEnabled;
+                if (evalLocal != null) evalLocal.Unchecked += syncThresholdEnabled;
+                if (apLocal != null) apLocal.Checked += syncThresholdEnabled;
+                if (apLocal != null) apLocal.Unchecked += syncThresholdEnabled;
+                UpdateComplianceThresholdEnabled(simLocal, evalLocal, apLocal, thresholdLocal, thresholdOffLocal);
             }
 
             var expander = new Expander
@@ -386,13 +392,18 @@ namespace Glitch.UI
             return expander;
         }
 
+        private FrameworkElement GetSettingsStyleContext()
+        {
+            return _settingsRootGrid != null ? _settingsRootGrid : (FrameworkElement)this;
+        }
+
         private CheckBox BuildScopeCheckBox(string key, string fallback)
         {
             var checkBox = new CheckBox
             {
                 Content = L(key, fallback),
                 Margin = new Thickness(0, 0, 14, 0),
-                Style = CreateSettingsPolicyCheckBoxStyle(_settingsRootGrid ?? this)
+                Style = CreateSettingsPolicyCheckBoxStyle(GetSettingsStyleContext())
             };
             RegisterLocalizationBinding(() => checkBox.Content = L(key, fallback));
             return checkBox;
@@ -408,7 +419,7 @@ namespace Glitch.UI
                 MaxWidth = 120,
                 Margin = new Thickness(0, 0, 0, 0),
                 FontSize = ResolveSettingsBodyFontSize(),
-                Style = CreateSettingsLicenseTextBoxStyle(_settingsRootGrid ?? this)
+                Style = CreateSettingsLicenseTextBoxStyle(GetSettingsStyleContext())
             };
             textBox.FocusVisualStyle = null;
             return textBox;
