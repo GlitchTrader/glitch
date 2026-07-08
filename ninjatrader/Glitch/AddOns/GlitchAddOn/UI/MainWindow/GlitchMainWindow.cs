@@ -210,6 +210,9 @@ namespace Glitch.UI
         private bool _hasLoggedStartupRuntimeSettings;
         private bool _isWindowClosed;
         private TextBlock _totalPnlValueText;
+        private TextBlock _headerPnlTitleText;
+        private ComboBox _headerPnlScopeComboBox;
+        private HeaderPnlScope _headerPnlScope = HeaderPnlScope.Master;
         private TextBlock _evalPnlValueText;
         private TextBlock _paPnlValueText;
         private TextBlock _evalHeadroomValueText;
@@ -964,9 +967,60 @@ namespace Glitch.UI
             string action,
             double observedValue,
             double thresholdValue,
-            string detail)
+            string authorizingSetting,
+            string detail = null)
         {
-            return $"Rule={ruleId}; Action={action}; Observed={observedValue:F2}; Threshold={thresholdValue:F2}; Detail={detail}";
+            return GlitchRiskMitigationEngine.BuildRuleJournalEvent(
+                ruleId,
+                action,
+                observedValue,
+                thresholdValue,
+                authorizingSetting,
+                detail);
+        }
+
+        private static AccountRiskRowSnapshot ToRiskRowSnapshot(AccountGridRow row)
+        {
+            if (row == null)
+                return null;
+
+            return new AccountRiskRowSnapshot
+            {
+                AccountStatus = row.AccountStatus,
+                BufferMarginRaw = row.BufferMarginRaw,
+                MaxDrawdownRaw = row.MaxDrawdownRaw,
+                IntratradeDrawdownRaw = row.IntratradeDrawdownRaw,
+                UnrealizedPnlRaw = row.UnrealizedPnlRaw,
+                EquityRaw = row.EquityRaw,
+                EvalProfitTargetLockBalanceRaw = row.EvalProfitTargetLockBalanceRaw,
+                MaxContractsRaw = row.MaxContractsRaw
+            };
+        }
+
+        private void ApplyRiskMitigations(IReadOnlyList<AccountGridRow> rows, IReadOnlyList<Account> activeAccounts)
+        {
+            if (!_isReplicatingUi ||
+                _runtimePolicySettings == null)
+            {
+                ClearComplianceEnforcementRuntimeState();
+                return;
+            }
+
+            if (!_runtimePolicySettings.AnyRiskComplianceFeatureEnabled())
+            {
+                ClearComplianceEnforcementRuntimeState();
+                return;
+            }
+
+            ComputeRiskState(rows, activeAccounts);
+            ApplyEnabledRiskActions(rows, activeAccounts);
+        }
+
+        private void ComputeRiskState(IReadOnlyList<AccountGridRow> rows, IReadOnlyList<Account> activeAccounts)
+        {
+            // ponytail: pure trigger evaluation only; side effects stay in ApplyEnabledRiskActions.
+            _ = rows;
+            _ = activeAccounts;
         }
 
         private bool IsFreeLitePlan()
@@ -3790,21 +3844,8 @@ namespace Glitch.UI
                 textBlock.Foreground = TealAccentBrush;
         }
 
-        private void ApplyRiskMitigations(IReadOnlyList<AccountGridRow> rows, IReadOnlyList<Account> activeAccounts)
+        private void ApplyEnabledRiskActions(IReadOnlyList<AccountGridRow> rows, IReadOnlyList<Account> activeAccounts)
         {
-            if (!_isReplicatingUi ||
-                _runtimePolicySettings == null)
-            {
-                ClearComplianceEnforcementRuntimeState();
-                return;
-            }
-
-            if (!_runtimePolicySettings.AnyRiskComplianceFeatureEnabled())
-            {
-                ClearComplianceEnforcementRuntimeState();
-                return;
-            }
-
             var rowsSnapshot = rows ?? Array.Empty<AccountGridRow>();
             var accountsByName = (activeAccounts ?? Array.Empty<Account>())
                 .Where(account => account != null && !string.IsNullOrWhiteSpace(account.Name))
@@ -3813,8 +3854,6 @@ namespace Glitch.UI
 
             DateTime nowUtc = DateTime.UtcNow;
             PruneRiskMitigationCooldowns(nowUtc);
-            HashSet<string> strategyComplianceAccounts = BuildStrategyComplianceAccountSet(activeAccounts, nowUtc);
-            bool enforceStrategyComplianceActions = _runtimePolicySettings.EnforceStrategyComplianceActions;
 
             var seenAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (AccountGridRow row in rowsSnapshot)
@@ -3824,60 +3863,66 @@ namespace Glitch.UI
 
                 string accountName = row.DisplayName.Trim();
                 seenAccounts.Add(accountName);
-                bool enforceForStrategy = strategyComplianceAccounts.Contains(accountName);
-                if (!enforceForStrategy)
-                {
-                    _riskLockedAccounts.Remove(accountName);
-                    _evalTargetLockedAccounts.Remove(accountName);
-                    _riskOneContractAccounts.Remove(accountName);
-                    _unrealizedLossFlattenTriggeredAccounts.Remove(accountName);
-                    _replicationFrozenKeys.Remove(accountName);
-                    _riskLockAcknowledgedAccounts.Remove(BuildTradingLockAckKey(accountName, "BufferCriticalLock"));
-                    _riskLockAcknowledgedAccounts.Remove(BuildTradingLockAckKey(accountName, "EvalProfitTargetLock"));
-                    continue;
-                }
+                AccountRiskRowSnapshot riskRow = ToRiskRowSnapshot(row);
+                GlitchRiskMitigationEngine.RiskMitigationTriggers triggers =
+                    GlitchRiskMitigationEngine.ComputeTriggers(_runtimePolicySettings, riskRow);
 
-                if (enforceStrategyComplianceActions &&
-                    accountsByName.TryGetValue(accountName, out Account liveAccount))
+                if (accountsByName.TryGetValue(accountName, out Account liveAccount))
                 {
-                    int declaredCap = row.MaxContractsRaw > 0
-                        ? Math.Max(1, (int)Math.Round(row.MaxContractsRaw, MidpointRounding.AwayFromZero))
-                        : (_runtimePolicySettings != null ? Math.Max(0, _runtimePolicySettings.ReplicationDeclaredCapContracts) : 0);
-                    int currentAbsContracts = GetTotalAbsoluteOpenContracts(liveAccount);
-                    if (declaredCap > 0 && currentAbsContracts > declaredCap)
+                    if (_runtimePolicySettings.IsMaxContractsFlattenEnabledFor(row.AccountStatus))
                     {
-                        _riskLockedAccounts.Add(accountName);
-                        _riskOneContractAccounts.Remove(accountName);
-                        _replicationFrozenKeys.Add(accountName);
-                        AppendJournal(
-                            accountName,
-                            "Risk",
-                            $"SYNC|event=local_compliance_breach|reason={ComplianceBreachReason.MaxContractsExceeded}|current={currentAbsContracts}|cap={declaredCap}");
-                        RaiseCriticalWarning(
-                            accountName,
-                            $"Max contracts breach detected ({currentAbsContracts} > {declaredCap}). Trading locked until manual dismiss.",
-                            "MaxContractsBreach",
-                            unlocksTrading: _runtimePolicySettings == null || _runtimePolicySettings.LockRequiresManualAcknowledge);
-                        TryFlattenAccountForRisk(
-                            liveAccount,
-                            $"MAXQTY|{accountName}",
-                            "Max contracts breach");
+                        int declaredCap = row.MaxContractsRaw > 0
+                            ? Math.Max(1, (int)Math.Round(row.MaxContractsRaw, MidpointRounding.AwayFromZero))
+                            : Math.Max(0, _runtimePolicySettings.ReplicationDeclaredCapContracts);
+                        int currentAbsContracts = GetTotalAbsoluteOpenContracts(liveAccount);
+                        if (declaredCap > 0 && currentAbsContracts > declaredCap)
+                        {
+                            string settingKey = GlitchRiskMitigationEngine.ResolveScopeSettingKey(
+                                "ENFORCE_MAX_CONTRACTS_FLATTEN",
+                                row.AccountStatus);
+                            _riskLockedAccounts.Add(accountName);
+                            _riskOneContractAccounts.Remove(accountName);
+                            string journalLine = GlitchRiskMitigationEngine.BuildRuleJournalEvent(
+                                "MaxContractsFlatten",
+                                "flatten_and_lock",
+                                currentAbsContracts,
+                                declaredCap,
+                                settingKey,
+                                $"Max contracts breach ({currentAbsContracts} > {declaredCap}).");
+                            AppendJournal(accountName, "Risk", journalLine);
+                            RaiseCriticalWarning(
+                                accountName,
+                                journalLine,
+                                "MaxContractsBreach",
+                                unlocksTrading: _runtimePolicySettings.LockRequiresManualAcknowledge);
+                            TryFlattenAccountForRisk(
+                                liveAccount,
+                                $"MAXQTY|{accountName}",
+                                "Max contracts breach");
+                        }
                     }
 
-                    if (TryDetectNoProtectionBreach(liveAccount, nowUtc, out string breachedInstrumentRoot, out string breachDetail))
+                    if (_runtimePolicySettings.IsNoProtectionFlattenEnabledFor(row.AccountStatus) &&
+                        TryDetectNoProtectionBreach(liveAccount, nowUtc, out string breachedInstrumentRoot, out string breachDetail))
                     {
+                        string settingKey = GlitchRiskMitigationEngine.ResolveScopeSettingKey(
+                            "ENFORCE_NO_PROTECTION_FLATTEN",
+                            row.AccountStatus);
                         _riskLockedAccounts.Add(accountName);
                         _riskOneContractAccounts.Remove(accountName);
-                        _replicationFrozenKeys.Add(accountName);
-                        AppendJournal(
-                            accountName,
-                            "Risk",
-                            $"SYNC|event=local_compliance_breach|reason={ComplianceBreachReason.NoProtectionDetected}|instrument={CleanJournalToken(breachedInstrumentRoot)}|detail={CleanJournalToken(breachDetail)}");
+                        string journalLine = GlitchRiskMitigationEngine.BuildRuleJournalEvent(
+                            "NoProtectionFlatten",
+                            "flatten_and_lock",
+                            1,
+                            0,
+                            settingKey,
+                            $"instrument={CleanJournalToken(breachedInstrumentRoot)}|{CleanJournalToken(breachDetail)}");
+                        AppendJournal(accountName, "Risk", journalLine);
                         RaiseCriticalWarning(
                             accountName,
                             $"No protection breach on {CleanJournalToken(breachedInstrumentRoot)}. {breachDetail}. Trading locked until manual dismiss.",
                             "NoProtectionLock",
-                            unlocksTrading: _runtimePolicySettings == null || _runtimePolicySettings.LockRequiresManualAcknowledge);
+                            unlocksTrading: _runtimePolicySettings.LockRequiresManualAcknowledge);
                         TryFlattenAccountForRisk(
                             liveAccount,
                             $"NAKED|{accountName}",
@@ -3885,19 +3930,19 @@ namespace Glitch.UI
                     }
                 }
 
-                bool enforceBufferFreeze = _runtimePolicySettings.IsBufferFreezeEnabledFor(row.AccountStatus);
-                bool enforceOneContract = _runtimePolicySettings.IsBufferOneContractEnabledFor(row.AccountStatus);
-                bool enforceUnrealizedFlatten = _runtimePolicySettings.IsUnrealizedFlattenEnabledFor(row.AccountStatus);
-                bool enforceEvalLock = _runtimePolicySettings.IsEvalProfitTargetLockEnabledFor(row.AccountStatus);
-                double bufferFreezeThreshold = _runtimePolicySettings.BufferFreezeThresholdRatio;
-                double oneContractOnThreshold = _runtimePolicySettings.BufferOneContractOnThresholdRatio;
-                double oneContractOffThreshold = _runtimePolicySettings.BufferOneContractOffThresholdRatio;
-                double unrealizedFlattenThreshold = _runtimePolicySettings.UnrealizedFlattenThresholdRatio;
+                bool enforceBufferFreeze = triggers.EnforceBufferFreeze;
+                bool enforceOneContract = triggers.EnforceOneContract;
+                bool enforceUnrealizedFlatten = triggers.EnforceUnrealizedFlatten;
+                bool enforceEvalLock = triggers.EnforceEvalLock;
+                double bufferFreezeThreshold = triggers.BufferFreezeThreshold;
+                double oneContractOnThreshold = triggers.OneContractOnThreshold;
+                double oneContractOffThreshold = triggers.OneContractOffThreshold;
+                double unrealizedFlattenThreshold = triggers.UnrealizedFlattenThreshold;
 
-                bool criticalBufferBreach = IsBufferCriticalRiskTriggered(row, bufferFreezeThreshold);
-                bool evalProfitTargetReached = enforceEvalLock && IsEvalProfitTargetLockTriggered(row);
-                bool oneContractBreach = IsBufferOneContractRiskTriggered(row, oneContractOnThreshold);
-                bool unrealizedLossBreach = IsUnrealizedLossRiskTriggered(row, unrealizedFlattenThreshold);
+                bool criticalBufferBreach = triggers.CriticalBufferBreach;
+                bool evalProfitTargetReached = triggers.EvalProfitTargetReached;
+                bool oneContractBreach = triggers.OneContractBreach;
+                bool unrealizedLossBreach = triggers.UnrealizedLossBreach;
                 bool isRiskLocked = _riskLockedAccounts.Contains(accountName);
                 bool isEvalTargetLocked = _evalTargetLockedAccounts.Contains(accountName);
                 bool isBufferLockAcknowledged = _riskLockAcknowledgedAccounts.Contains(BuildTradingLockAckKey(accountName, "BufferCriticalLock"));
@@ -3925,6 +3970,11 @@ namespace Glitch.UI
                 {
                     if (!isRiskLocked && !isBufferLockAcknowledged)
                     {
+                        string bufferSetting = GlitchRiskMitigationEngine.ResolveScopeSettingKey(
+                            "ENFORCE_BUFFER_FREEZE_15",
+                            row.AccountStatus);
+                        string bufferDetail =
+                            $"Buffer fell below {FormatPercentThreshold(bufferFreezeThreshold)} of max drawdown. Account flattened and locked pending manual dismiss.";
                         _riskLockedAccounts.Add(accountName);
                         _riskOneContractAccounts.Remove(accountName);
                         AppendJournal(
@@ -3935,15 +3985,11 @@ namespace Glitch.UI
                                 "flatten_and_lock",
                                 row.BufferMarginRaw,
                                 row.MaxDrawdownRaw * bufferFreezeThreshold,
-                                $"Buffer fell below {FormatPercentThreshold(bufferFreezeThreshold)} of max drawdown. Account flattened and strategy replication frozen pending manual dismiss."));
+                                bufferSetting,
+                                bufferDetail));
                         RaiseCriticalWarning(
                             accountName,
-                            BuildRuleEvent(
-                                "BufferCriticalLock",
-                                "flatten_and_lock",
-                                row.BufferMarginRaw,
-                                row.MaxDrawdownRaw * bufferFreezeThreshold,
-                                $"Critical buffer fell below {FormatPercentThreshold(bufferFreezeThreshold)} of max drawdown. Account flattened and strategy replication frozen pending manual dismiss."),
+                            bufferDetail,
                             "BufferCriticalLock",
                             unlocksTrading: true);
                         isRiskLocked = true;
@@ -3967,6 +4013,9 @@ namespace Glitch.UI
                 {
                     if (!isEvalTargetLocked && !isEvalLockAcknowledged)
                     {
+                        const string evalSetting = "ENFORCE_EVAL_PROFIT_TARGET_LOCK_EVAL";
+                        string evalDetail =
+                            "Evaluation equity reached the target lock balance. Account flattened and trading locked pending manual dismiss.";
                         _evalTargetLockedAccounts.Add(accountName);
                         _riskOneContractAccounts.Remove(accountName);
                         AppendJournal(
@@ -3977,15 +4026,11 @@ namespace Glitch.UI
                                 "flatten_and_lock",
                                 row.EquityRaw,
                                 row.EvalProfitTargetLockBalanceRaw,
-                                "Evaluation equity reached the target lock balance. Account flattened and trading locked pending manual dismiss."));
+                                evalSetting,
+                                evalDetail));
                         RaiseCriticalWarning(
                             accountName,
-                            BuildRuleEvent(
-                                "EvalProfitTargetLock",
-                                "flatten_and_lock",
-                                row.EquityRaw,
-                                row.EvalProfitTargetLockBalanceRaw,
-                                "Evaluation equity reached the target lock balance. Account flattened and trading locked pending manual dismiss."),
+                            evalDetail,
                             "EvalProfitTargetLock",
                             unlocksTrading: true);
                         isEvalTargetLocked = true;
@@ -4009,7 +4054,7 @@ namespace Glitch.UI
                 if (!evalProfitTargetReached)
                     _riskLockAcknowledgedAccounts.Remove(BuildTradingLockAckKey(accountName, "EvalProfitTargetLock"));
 
-                bool oneContractRecovery = IsBufferOneContractRecoveryTriggered(row, oneContractOffThreshold);
+                bool oneContractRecovery = triggers.OneContractRecovery;
                 if (IsTradingLocked(accountName))
                 {
                     _riskOneContractAccounts.Remove(accountName);
@@ -4017,6 +4062,10 @@ namespace Glitch.UI
                 else if (enforceOneContract && oneContractBreach)
                 {
                     if (_riskOneContractAccounts.Add(accountName))
+                    {
+                        string oneContractSetting = GlitchRiskMitigationEngine.ResolveScopeSettingKey(
+                            "ENFORCE_BUFFER_ONE_CONTRACT",
+                            row.AccountStatus);
                         AppendJournal(
                             accountName,
                             "Risk",
@@ -4025,11 +4074,17 @@ namespace Glitch.UI
                                 "one_contract_mode_on",
                                 row.BufferMarginRaw,
                                 row.MaxDrawdownRaw * oneContractOnThreshold,
+                                oneContractSetting,
                                 $"Buffer fell below {FormatPercentThreshold(oneContractOnThreshold)} of max drawdown. Replication limited to one contract."));
+                    }
                 }
                 else if (_riskOneContractAccounts.Contains(accountName) && oneContractRecovery)
                 {
                     if (_riskOneContractAccounts.Remove(accountName))
+                    {
+                        string oneContractSetting = GlitchRiskMitigationEngine.ResolveScopeSettingKey(
+                            "ENFORCE_BUFFER_ONE_CONTRACT",
+                            row.AccountStatus);
                         AppendJournal(
                             accountName,
                             "Risk",
@@ -4038,7 +4093,9 @@ namespace Glitch.UI
                                 "one_contract_mode_off",
                                 row.BufferMarginRaw,
                                 row.MaxDrawdownRaw * oneContractOffThreshold,
+                                oneContractSetting,
                                 $"Buffer recovered to {FormatPercentThreshold(oneContractOffThreshold)} of max drawdown or higher. One-contract replication limit removed."));
+                    }
                 }
 
                 if (!IsTradingLocked(accountName) &&
@@ -4054,6 +4111,11 @@ namespace Glitch.UI
                             $"UNRLZ|{accountName}",
                             $"Unrealized loss exceeded {FormatPercentThreshold(unrealizedFlattenThreshold)} of max loss (intratrade drawdown)"))
                     {
+                        string unrealizedSetting = GlitchRiskMitigationEngine.ResolveScopeSettingKey(
+                            "ENFORCE_UNREALIZED_FLATTEN",
+                            row.AccountStatus);
+                        string unrealizedDetail =
+                            $"Unrealized loss exceeded {FormatPercentThreshold(unrealizedFlattenThreshold)} of max loss (intratrade drawdown). Position flattened automatically.";
                         RaiseCriticalWarning(
                             accountName,
                             BuildRuleEvent(
@@ -4061,7 +4123,8 @@ namespace Glitch.UI
                                 "flatten",
                                 Math.Max(0, -row.UnrealizedPnlRaw),
                                 unrealizedLossThreshold,
-                                $"Unrealized loss exceeded {FormatPercentThreshold(unrealizedFlattenThreshold)} of max loss (intratrade drawdown). Position flattened automatically."),
+                                unrealizedSetting,
+                                unrealizedDetail),
                             "UnrealizedLossFlatten",
                             unlocksTrading: false);
                     }

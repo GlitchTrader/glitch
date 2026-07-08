@@ -34,6 +34,8 @@ namespace Glitch.Services
         public double BufferOneContractOffThresholdRatio { get; set; } = 0.25;
         public ComplianceAccountTypeScope UnrealizedFlattenScopes { get; set; } = new ComplianceAccountTypeScope();
         public double UnrealizedFlattenThresholdRatio { get; set; } = 0.80;
+        public ComplianceAccountTypeScope MaxContractsFlattenScopes { get; set; } = new ComplianceAccountTypeScope();
+        public ComplianceAccountTypeScope NoProtectionFlattenScopes { get; set; } = new ComplianceAccountTypeScope();
         public bool EvalProfitTargetLockEnabled { get; set; } = false;
         public bool FlattenOnCriticalBufferLock { get; set; } = false;
         public int ReplicationDeclaredCapContracts { get; set; } = 0;
@@ -59,6 +61,8 @@ namespace Glitch.Services
             return BufferFreezeScopes.AnyEnabled ||
                    BufferOneContractScopes.AnyEnabled ||
                    UnrealizedFlattenScopes.AnyEnabled ||
+                   MaxContractsFlattenScopes.AnyEnabled ||
+                   NoProtectionFlattenScopes.AnyEnabled ||
                    EvalProfitTargetLockEnabled;
         }
 
@@ -81,6 +85,16 @@ namespace Glitch.Services
         {
             return EvalProfitTargetLockEnabled &&
                    string.Equals(NormalizeComplianceAccountStatus(accountStatus), "Eval", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public bool IsMaxContractsFlattenEnabledFor(string accountStatus)
+        {
+            return IsScopeEnabledFor(MaxContractsFlattenScopes, accountStatus);
+        }
+
+        public bool IsNoProtectionFlattenEnabledFor(string accountStatus)
+        {
+            return IsScopeEnabledFor(NoProtectionFlattenScopes, accountStatus);
         }
 
         public void SyncLegacyComplianceFlags()
@@ -260,6 +274,12 @@ namespace Glitch.Services
                 $"ENFORCE_UNREALIZED_FLATTEN_AP\t{ToBoolToken(settings.UnrealizedFlattenScopes.Ap)}",
                 $"UNREALIZED_FLATTEN_THRESHOLD\t{settings.UnrealizedFlattenThresholdRatio.ToString("0.####", CultureInfo.InvariantCulture)}",
                 $"ENFORCE_EVAL_PROFIT_TARGET_LOCK_EVAL\t{ToBoolToken(settings.EvalProfitTargetLockEnabled)}",
+                $"ENFORCE_MAX_CONTRACTS_FLATTEN_SIM\t{ToBoolToken(settings.MaxContractsFlattenScopes.Sim)}",
+                $"ENFORCE_MAX_CONTRACTS_FLATTEN_EVAL\t{ToBoolToken(settings.MaxContractsFlattenScopes.Eval)}",
+                $"ENFORCE_MAX_CONTRACTS_FLATTEN_AP\t{ToBoolToken(settings.MaxContractsFlattenScopes.Ap)}",
+                $"ENFORCE_NO_PROTECTION_FLATTEN_SIM\t{ToBoolToken(settings.NoProtectionFlattenScopes.Sim)}",
+                $"ENFORCE_NO_PROTECTION_FLATTEN_EVAL\t{ToBoolToken(settings.NoProtectionFlattenScopes.Eval)}",
+                $"ENFORCE_NO_PROTECTION_FLATTEN_AP\t{ToBoolToken(settings.NoProtectionFlattenScopes.Ap)}",
                 $"REPLICATION_DECLARED_CAP_CONTRACTS\t{settings.ReplicationDeclaredCapContracts.ToString(CultureInfo.InvariantCulture)}",
                 $"REPLICATION_MAX_DELTA_PER_CYCLE\t{settings.ReplicationMaxDeltaPerCycle.ToString(CultureInfo.InvariantCulture)}",
                 $"REPLICATION_BURST_WINDOW_MS\t{settings.ReplicationBurstWindowMs.ToString(CultureInfo.InvariantCulture)}",
@@ -445,6 +465,13 @@ namespace Glitch.Services
                 settings.EvalProfitTargetLockEnabled = ReadBool(rows, "ENFORCE_EVAL_PROFIT_TARGET_LOCK_EVAL", settings.EnforceEvalProfitTargetLock);
             else
                 settings.EvalProfitTargetLockEnabled = settings.EnforceEvalProfitTargetLock;
+
+            settings.MaxContractsFlattenScopes.Sim = ReadBool(rows, "ENFORCE_MAX_CONTRACTS_FLATTEN_SIM", false);
+            settings.MaxContractsFlattenScopes.Eval = ReadBool(rows, "ENFORCE_MAX_CONTRACTS_FLATTEN_EVAL", false);
+            settings.MaxContractsFlattenScopes.Ap = ReadBool(rows, "ENFORCE_MAX_CONTRACTS_FLATTEN_AP", false);
+            settings.NoProtectionFlattenScopes.Sim = ReadBool(rows, "ENFORCE_NO_PROTECTION_FLATTEN_SIM", false);
+            settings.NoProtectionFlattenScopes.Eval = ReadBool(rows, "ENFORCE_NO_PROTECTION_FLATTEN_EVAL", false);
+            settings.NoProtectionFlattenScopes.Ap = ReadBool(rows, "ENFORCE_NO_PROTECTION_FLATTEN_AP", false);
         }
 
         private static double ReadDouble(IDictionary<string, string> rows, string key, double fallback, double min, double max)

@@ -2,6 +2,13 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-08 — Cursor honest-copy Phase 2–3 (compile pending)
+
+- **P2-1:** `GlitchRiskMitigationEngine` — pure trigger evaluation; `ApplyRiskMitigations` → `ComputeRiskState` + `ApplyEnabledRiskActions`.
+- **P2-2:** Max-contracts and no-protection flatten are per-account-type opt-ins (`ENFORCE_MAX_CONTRACTS_FLATTEN_*`, `ENFORCE_NO_PROTECTION_FLATTEN_*`); strategy heuristic gating removed from risk path; no replication freeze on compliance breach.
+- **P2-3:** Risk journal schema `rule=...|action=...|observed=...|threshold=...|setting=...|detail=...`.
+- **P3-1:** Header PnL scope selector (Master / Group / Fleet); default Master; basis label `realized+unrealized`.
+
 ## 2026-07-08 — Cursor honest-copy Phase 1 (compile pending)
 
 - **Alan Phase 0 verify (same day):** sell 1/2/3 + Flatten OK (minor variation); sell 2/4/6 + Flatten OK; sell 2/4/6 + protective SL closed all three. Mid-flight PnL oscillation noted (101≈102, 103 ~2× — inconsistent with 2×/3× ratios).

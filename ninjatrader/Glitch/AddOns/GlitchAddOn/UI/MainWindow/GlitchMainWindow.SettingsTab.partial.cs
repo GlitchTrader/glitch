@@ -28,6 +28,12 @@ namespace Glitch.UI
         private CheckBox _settingsUnrealizedFlattenApCheckBox;
         private TextBox _settingsUnrealizedFlattenThresholdTextBox;
         private CheckBox _settingsEvalProfitTargetLockEvalCheckBox;
+        private CheckBox _settingsMaxContractsFlattenSimCheckBox;
+        private CheckBox _settingsMaxContractsFlattenEvalCheckBox;
+        private CheckBox _settingsMaxContractsFlattenApCheckBox;
+        private CheckBox _settingsNoProtectionFlattenSimCheckBox;
+        private CheckBox _settingsNoProtectionFlattenEvalCheckBox;
+        private CheckBox _settingsNoProtectionFlattenApCheckBox;
         private TextBox _settingsLicenseKeyTextBox;
         private Border _settingsPlanBadgeBorder;
         private TextBlock _settingsPlanBadgeText;
@@ -118,6 +124,32 @@ namespace Glitch.UI
                 includeOffThreshold: false,
                 defaultThreshold: 0,
                 evalOnly: true));
+
+            compliancePanel.Children.Add(BuildComplianceFeatureExpander(
+                "settings.risk.enforce_max_contracts_flatten",
+                "Flatten and lock account when open contracts exceed the configured max-contracts limit.",
+                sim: out _settingsMaxContractsFlattenSimCheckBox,
+                eval: out _settingsMaxContractsFlattenEvalCheckBox,
+                ap: out _settingsMaxContractsFlattenApCheckBox,
+                threshold: out _,
+                thresholdOff: out _,
+                includeAp: true,
+                includeOffThreshold: false,
+                defaultThreshold: 0,
+                scopesOnly: true));
+
+            compliancePanel.Children.Add(BuildComplianceFeatureExpander(
+                "settings.risk.enforce_no_protection_flatten",
+                "Flatten and lock account when an open position has no working protective stop within the configured timeout.",
+                sim: out _settingsNoProtectionFlattenSimCheckBox,
+                eval: out _settingsNoProtectionFlattenEvalCheckBox,
+                ap: out _settingsNoProtectionFlattenApCheckBox,
+                threshold: out _,
+                thresholdOff: out _,
+                includeAp: true,
+                includeOffThreshold: false,
+                defaultThreshold: 0,
+                scopesOnly: true));
 
             _settingsCopyTradingPolicyNotice = new TextBlock
             {
@@ -311,7 +343,8 @@ namespace Glitch.UI
             bool includeOffThreshold,
             double defaultThreshold,
             double defaultOffThreshold = 0.25,
-            bool evalOnly = false)
+            bool evalOnly = false,
+            bool scopesOnly = false)
         {
             sim = null;
             eval = null;
@@ -350,7 +383,7 @@ namespace Glitch.UI
                 panel.Children.Add(eval);
             }
 
-            if (!evalOnly)
+            if (!evalOnly && !scopesOnly)
             {
                 threshold = BuildThresholdTextBox(
                     includeOffThreshold
@@ -676,6 +709,12 @@ namespace Glitch.UI
             _runtimePolicySettings.UnrealizedFlattenScopes.Eval = _settingsUnrealizedFlattenEvalCheckBox?.IsChecked == true;
             _runtimePolicySettings.UnrealizedFlattenScopes.Ap = _settingsUnrealizedFlattenApCheckBox?.IsChecked == true;
             _runtimePolicySettings.EvalProfitTargetLockEnabled = _settingsEvalProfitTargetLockEvalCheckBox?.IsChecked == true;
+            _runtimePolicySettings.MaxContractsFlattenScopes.Sim = _settingsMaxContractsFlattenSimCheckBox?.IsChecked == true;
+            _runtimePolicySettings.MaxContractsFlattenScopes.Eval = _settingsMaxContractsFlattenEvalCheckBox?.IsChecked == true;
+            _runtimePolicySettings.MaxContractsFlattenScopes.Ap = _settingsMaxContractsFlattenApCheckBox?.IsChecked == true;
+            _runtimePolicySettings.NoProtectionFlattenScopes.Sim = _settingsNoProtectionFlattenSimCheckBox?.IsChecked == true;
+            _runtimePolicySettings.NoProtectionFlattenScopes.Eval = _settingsNoProtectionFlattenEvalCheckBox?.IsChecked == true;
+            _runtimePolicySettings.NoProtectionFlattenScopes.Ap = _settingsNoProtectionFlattenApCheckBox?.IsChecked == true;
 
             if (!TryReadComplianceThreshold(_settingsBufferFreezeThresholdTextBox, _runtimePolicySettings.BufferFreezeThresholdRatio, 0.01, 0.99, out double bufferFreezeThreshold))
                 bufferFreezeThreshold = _runtimePolicySettings.BufferFreezeThresholdRatio;
@@ -793,6 +832,18 @@ namespace Glitch.UI
 
             if (_settingsEvalProfitTargetLockEvalCheckBox != null)
                 _settingsEvalProfitTargetLockEvalCheckBox.IsChecked = _runtimePolicySettings.EvalProfitTargetLockEnabled;
+            if (_settingsMaxContractsFlattenSimCheckBox != null)
+                _settingsMaxContractsFlattenSimCheckBox.IsChecked = _runtimePolicySettings.MaxContractsFlattenScopes.Sim;
+            if (_settingsMaxContractsFlattenEvalCheckBox != null)
+                _settingsMaxContractsFlattenEvalCheckBox.IsChecked = _runtimePolicySettings.MaxContractsFlattenScopes.Eval;
+            if (_settingsMaxContractsFlattenApCheckBox != null)
+                _settingsMaxContractsFlattenApCheckBox.IsChecked = _runtimePolicySettings.MaxContractsFlattenScopes.Ap;
+            if (_settingsNoProtectionFlattenSimCheckBox != null)
+                _settingsNoProtectionFlattenSimCheckBox.IsChecked = _runtimePolicySettings.NoProtectionFlattenScopes.Sim;
+            if (_settingsNoProtectionFlattenEvalCheckBox != null)
+                _settingsNoProtectionFlattenEvalCheckBox.IsChecked = _runtimePolicySettings.NoProtectionFlattenScopes.Eval;
+            if (_settingsNoProtectionFlattenApCheckBox != null)
+                _settingsNoProtectionFlattenApCheckBox.IsChecked = _runtimePolicySettings.NoProtectionFlattenScopes.Ap;
 
             UpdateComplianceThresholdEnabled(
                 _settingsBufferFreezeSimCheckBox,

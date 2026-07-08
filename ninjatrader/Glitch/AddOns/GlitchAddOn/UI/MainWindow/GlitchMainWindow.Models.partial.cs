@@ -66,6 +66,13 @@ namespace Glitch.UI
             public double Ratio { get; set; }
         }
 
+        private enum HeaderPnlScope
+        {
+            Master = 0,
+            Group = 1,
+            Fleet = 2
+        }
+
         private sealed class AccountGroupDefinition
         {
             public string GroupId { get; set; }

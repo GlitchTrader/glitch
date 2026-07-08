@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -227,7 +228,7 @@ namespace Glitch.UI
                 return;
             }
 
-            double totalPnl = rows.Sum(r => r.TotalPnlRaw);
+            double totalPnl = ResolveScopedHeaderPnl(rows);
             double evalPnl = rows
                 .Where(r => string.Equals(r.AccountStatus, "Eval", StringComparison.OrdinalIgnoreCase))
                 .Sum(r => r.TotalPnlRaw);
@@ -249,6 +250,70 @@ namespace Glitch.UI
             UpdateRiskMetricText(_globalHeadroomValueText, globalRisk);
             UpdateRiskMetricText(_paHeadroomValueText, paRisk);
             UpdateRiskMetricText(_evalHeadroomValueText, evalRisk);
+        }
+
+        private double ResolveScopedHeaderPnl(IReadOnlyList<AccountGridRow> rows)
+        {
+            if (rows == null || rows.Count == 0)
+                return 0;
+
+            switch (_headerPnlScope)
+            {
+                case HeaderPnlScope.Fleet:
+                    return rows.Sum(r => r.TotalPnlRaw);
+                case HeaderPnlScope.Group:
+                {
+                    HashSet<string> groupAccounts = BuildPrimaryGroupAccountNames();
+                    if (groupAccounts.Count == 0)
+                        return 0;
+
+                    return rows
+                        .Where(r => r != null && groupAccounts.Contains(r.DisplayName?.Trim() ?? string.Empty))
+                        .Sum(r => r.TotalPnlRaw);
+                }
+                default:
+                {
+                    string masterName = ResolvePrimaryMasterAccountName();
+                    if (string.IsNullOrWhiteSpace(masterName))
+                        return 0;
+
+                    AccountGridRow masterRow = rows.FirstOrDefault(r =>
+                        r != null &&
+                        string.Equals(r.DisplayName?.Trim(), masterName, StringComparison.OrdinalIgnoreCase));
+                    return masterRow?.TotalPnlRaw ?? 0;
+                }
+            }
+        }
+
+        private string ResolvePrimaryMasterAccountName()
+        {
+            AccountGroupDefinition group = (_accountGroups ?? new ObservableCollection<AccountGroupDefinition>())
+                .FirstOrDefault(g => g != null && !string.IsNullOrWhiteSpace(g.MasterAccount));
+            return group?.MasterAccount?.Trim() ?? string.Empty;
+        }
+
+        private HashSet<string> BuildPrimaryGroupAccountNames()
+        {
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            AccountGroupDefinition group = (_accountGroups ?? new ObservableCollection<AccountGroupDefinition>())
+                .FirstOrDefault(g => g != null && !string.IsNullOrWhiteSpace(g.MasterAccount));
+            if (group == null)
+                return names;
+
+            if (!string.IsNullOrWhiteSpace(group.MasterAccount))
+                names.Add(group.MasterAccount.Trim());
+
+            if (group.Members == null)
+                return names;
+
+            foreach (AccountGroupMemberRow member in group.Members)
+            {
+                if (member == null || string.IsNullOrWhiteSpace(member.FollowerAccount))
+                    continue;
+                names.Add(member.FollowerAccount.Trim());
+            }
+
+            return names;
         }
 
         private sealed class AccountRefreshBuildResult
