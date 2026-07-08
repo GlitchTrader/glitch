@@ -119,7 +119,7 @@ namespace Glitch.UI
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(4),
                 Padding = new Thickness(10, 6, 10, 6),
-                Margin = new Thickness(0, 8, 0, 0),
+                Margin = new Thickness(0, 0, 0, 0),
                 Visibility = Visibility.Collapsed,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Top
@@ -134,7 +134,49 @@ namespace Glitch.UI
                 Foreground = OrangeAccentBrush
             };
             _headerNewsLockoutBanner.Child = _headerNewsLockoutText;
-            _headerRootGrid.Children.Add(_headerNewsLockoutBanner);
+
+            _headerReplicationDriftBanner = new Border
+            {
+                BorderBrush = OrangeAccentBrush,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(10, 6, 10, 6),
+                Margin = new Thickness(0, 8, 0, 0),
+                Visibility = Visibility.Collapsed,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Top
+            };
+            ApplySkinResource(_headerReplicationDriftBanner, Border.BackgroundProperty, "BackgroundMainWindow", "GridEntireBackground", "BackgroundTextInput");
+
+            _headerReplicationDriftText = new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            ApplySkinResource(_headerReplicationDriftText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
+
+            _headerReplicationDriftSyncButton = new Button
+            {
+                Content = L("header.button.sync_now", "Sync now"),
+                MinWidth = 88,
+                Margin = new Thickness(12, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            _headerReplicationDriftSyncButton.Click += OnReplicationDriftSyncButtonClick;
+
+            var driftPanel = new StackPanel { Orientation = Orientation.Horizontal };
+            driftPanel.Children.Add(_headerReplicationDriftText);
+            driftPanel.Children.Add(_headerReplicationDriftSyncButton);
+            _headerReplicationDriftBanner.Child = driftPanel;
+
+            _headerAlertsStack = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                Margin = new Thickness(0, 8, 0, 0)
+            };
+            _headerAlertsStack.Children.Add(_headerNewsLockoutBanner);
+            _headerAlertsStack.Children.Add(_headerReplicationDriftBanner);
+            _headerRootGrid.Children.Add(_headerAlertsStack);
 
             _headerRootGrid.Loaded += (sender, args) =>
             {
@@ -192,11 +234,11 @@ namespace Glitch.UI
                     Grid.SetColumn(_headerMetricHostGrid, 0);
                     Grid.SetRow(_headerActionsGrid, 0);
                     Grid.SetColumn(_headerActionsGrid, 1);
-                    if (_headerNewsLockoutBanner != null)
+                    if (_headerAlertsStack != null)
                     {
-                        Grid.SetRow(_headerNewsLockoutBanner, 1);
-                        Grid.SetColumn(_headerNewsLockoutBanner, 0);
-                        Grid.SetColumnSpan(_headerNewsLockoutBanner, 2);
+                        Grid.SetRow(_headerAlertsStack, 1);
+                        Grid.SetColumn(_headerAlertsStack, 0);
+                        Grid.SetColumnSpan(_headerAlertsStack, 2);
                     }
 
                     _headerActionsGrid.HorizontalAlignment = HorizontalAlignment.Right;
@@ -214,11 +256,11 @@ namespace Glitch.UI
                 Grid.SetColumn(_headerMetricHostGrid, 0);
                 Grid.SetRow(_headerActionsGrid, 1);
                 Grid.SetColumn(_headerActionsGrid, 0);
-                if (_headerNewsLockoutBanner != null)
+                if (_headerAlertsStack != null)
                 {
-                    Grid.SetRow(_headerNewsLockoutBanner, 2);
-                    Grid.SetColumn(_headerNewsLockoutBanner, 0);
-                    Grid.SetColumnSpan(_headerNewsLockoutBanner, 1);
+                    Grid.SetRow(_headerAlertsStack, 2);
+                    Grid.SetColumn(_headerAlertsStack, 0);
+                    Grid.SetColumnSpan(_headerAlertsStack, 1);
                 }
 
                 if (mode == 1)

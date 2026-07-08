@@ -127,6 +127,8 @@ namespace Glitch.UI
         private readonly HashSet<string> _riskOneContractAccounts;
         private readonly HashSet<string> _unrealizedLossFlattenTriggeredAccounts;
         private readonly HashSet<string> _replicationFrozenKeys;
+        private readonly GlitchCopyEngine _copyEngine;
+        private ReplicationDriftNotice _replicationDriftNotice;
         private readonly Dictionary<string, ReplicationBurstState> _replicationBurstStateByKey;
         private readonly Dictionary<string, DateTime> _noProtectionDetectedSinceByKey;
         private readonly Dictionary<string, DateTime> _riskMitigationCooldownByKey;
@@ -154,6 +156,10 @@ namespace Glitch.UI
         private WrapPanel _headerMetricBoxesPanel;
         private Grid _headerActionsGrid;
         private Border _headerNewsLockoutBanner;
+        private StackPanel _headerAlertsStack;
+        private Border _headerReplicationDriftBanner;
+        private TextBlock _headerReplicationDriftText;
+        private Button _headerReplicationDriftSyncButton;
         private TextBlock _headerNewsLockoutText;
         private ComboBox _analyticsInstrumentCombo;
         private StackPanel _accountGroupsHostPanel;
@@ -303,6 +309,12 @@ namespace Glitch.UI
             _riskOneContractAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _unrealizedLossFlattenTriggeredAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _replicationFrozenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _copyEngine = new GlitchCopyEngine
+            {
+                Journal = (accountName, message) => AppendJournal(accountName, "Replication", message),
+                RaiseCritical = (accountName, message, key) =>
+                    RaiseCriticalWarning(accountName, message, key, unlocksTrading: false)
+            };
             _replicationBurstStateByKey = new Dictionary<string, ReplicationBurstState>(StringComparer.OrdinalIgnoreCase);
             _noProtectionDetectedSinceByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
             _riskMitigationCooldownByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
@@ -781,6 +793,7 @@ namespace Glitch.UI
 
             _isReplicatingUi = !_isReplicatingUi;
             _lastUiRefreshUtc = DateTime.MinValue;
+            List<Account> activeAccounts = GetActiveAccountsSnapshot();
             if (_isReplicatingUi)
             {
                 AppendJournal("System", "Replication", "replication_enabled|origin=user_click");
@@ -794,7 +807,12 @@ namespace Glitch.UI
                 ClearProtectiveSyncCooldowns();
                 ClearComplianceEnforcementRuntimeState();
                 _replicationWarmupUntilUtc = DateTime.MinValue;
+                CancelGlitchWorkingOrdersOnFollowers(activeAccounts);
+                _replicationDriftNotice = null;
+                UpdateReplicationDriftBanner();
             }
+
+            RefreshCopyEngineConfiguration(activeAccounts);
 
             AppendJournal(
                 "System",
@@ -3448,6 +3466,8 @@ namespace Glitch.UI
             _isFlattenAllInProgress = false;
             _isReplicatingUi = false;
             _replicationWarmupUntilUtc = DateTime.MinValue;
+            _copyEngine?.Configure(false, null);
+            _replicationDriftNotice = null;
             PublishGlitchShellState();
             GlitchShellBridge.UnregisterMainWindow(this);
 
@@ -3478,6 +3498,11 @@ namespace Glitch.UI
             {
                 _flattenAllButton.Click -= OnFlattenAllButtonClick;
                 _flattenAllButton = null;
+            }
+            if (_headerReplicationDriftSyncButton != null)
+            {
+                _headerReplicationDriftSyncButton.Click -= OnReplicationDriftSyncButtonClick;
+                _headerReplicationDriftSyncButton = null;
             }
             if (_analyticsInstrumentCombo != null)
             {
@@ -5652,6 +5677,7 @@ namespace Glitch.UI
 
                 CaptureTradeSourceFromRuntimeEvent(eventName, account, eventArgs, nowUtc);
                 TryAppendRuntimeEventJournalEntry(eventName, account, eventArgs);
+                TryProcessCopyExecutionFromRuntimeEvent(eventName, account, eventArgs);
             }
             catch
             {
@@ -5739,6 +5765,7 @@ namespace Glitch.UI
 
             string token = signalName.Trim();
             return token.StartsWith(ReplicationSignalName, StringComparison.OrdinalIgnoreCase) ||
+                   token.StartsWith(GlitchCopyEngine.CopySignalName, StringComparison.OrdinalIgnoreCase) ||
                    token.StartsWith(ProtectiveStopSignalName, StringComparison.OrdinalIgnoreCase) ||
                    token.StartsWith(ProtectiveTargetSignalName, StringComparison.OrdinalIgnoreCase);
         }
@@ -6738,12 +6765,10 @@ namespace Glitch.UI
             double cashValue = TryGetAccountItem(account, "CashValue");
             double realizedPnl = TryGetAccountItem(account, "RealizedProfitLoss", "RealizedPnL", "RealizedProfit", "RealizedLoss");
             double unrealizedPnl = TryGetAccountItem(account, "UnrealizedProfitLoss", "UnrealizedPnL");
-            double totalPnl = TryGetAccountItem(account, "TotalProfitLoss", "TotalPnL");
+            // ponytail: stable mid-flight PnL — always sum NT components; drop TotalProfitLoss ≈0 flip (fable D-5)
+            double totalPnl = realizedPnl + unrealizedPnl;
             bool hasSelectionOverride = selectionOverride != null;
             bool hasManualOverride = hasSelectionOverride && selectionOverride.IsManual;
-
-            if (Math.Abs(totalPnl) < 0.0000001)
-                totalPnl = realizedPnl + unrealizedPnl;
 
             string inferredFirmId = InferPropFirmId(account, out _);
             string selectedFirmId = hasManualOverride ? selectionOverride.PropFirmId : null;

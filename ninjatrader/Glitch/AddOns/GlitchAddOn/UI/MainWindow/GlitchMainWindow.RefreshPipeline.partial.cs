@@ -197,6 +197,9 @@ namespace Glitch.UI
             ApplyRiskMitigations(rows, activeAccounts);
             RefreshGroupMasterDropdownOptionsIfNeeded(rows);
             ExecuteReplicationCycle(activeAccounts);
+            if (_isReplicatingUi)
+                RefreshCopyEngineConfiguration(activeAccounts);
+            EvaluateReplicationDrift(activeAccounts);
             UpdateHeaderMetricsFromRows(rows);
             PublishGlitchShellState(rows);
 

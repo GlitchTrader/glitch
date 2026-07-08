@@ -31,6 +31,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Windows;
 using Glitch.Services;
 using NinjaTrader.Cbi;
 
@@ -47,6 +48,9 @@ namespace Glitch.UI
 
         private void ExecuteReplicationCycle(IReadOnlyList<Account> activeAccounts)
         {
+            if (!UseLegacyReplicationEngine())
+                return;
+
             if (!_isReplicatingUi || _isFlattenAllInProgress)
                 return;
             if (_accountGroups == null || _accountGroups.Count == 0)
@@ -2176,6 +2180,299 @@ namespace Glitch.UI
         private static async Task<bool> WaitForAllAccountsFlatAsync(IReadOnlyList<Account> accounts, TimeSpan timeout)
         {
             return await GlitchReplicationEngine.WaitForAllAccountsFlatAsync(accounts, timeout);
+        }
+
+        private bool UseLegacyReplicationEngine()
+        {
+            return _runtimePolicySettings != null && _runtimePolicySettings.UseLegacyReplicationEngine;
+        }
+
+        private void RefreshCopyEngineConfiguration(IReadOnlyList<Account> activeAccounts)
+        {
+            if (_copyEngine == null)
+                return;
+
+            if (!_isReplicatingUi || UseLegacyReplicationEngine())
+            {
+                _copyEngine.Configure(false, null);
+                return;
+            }
+
+            var accountsByName = (activeAccounts ?? Array.Empty<Account>())
+                .Where(account => account != null && !string.IsNullOrWhiteSpace(account.Name))
+                .GroupBy(account => account.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
+
+            var routes = new List<GlitchCopyFollowerRoute>();
+            foreach (AccountGroupDefinition group in _accountGroups ?? new ObservableCollection<AccountGroupDefinition>())
+            {
+                if (group == null || string.IsNullOrWhiteSpace(group.MasterAccount) || group.Members == null)
+                    continue;
+
+                string masterName = group.MasterAccount.Trim();
+                foreach (AccountGroupMemberRow member in group.Members)
+                {
+                    if (member == null || !member.IsEnabled || string.IsNullOrWhiteSpace(member.FollowerAccount))
+                        continue;
+                    if (double.IsNaN(member.Ratio) || double.IsInfinity(member.Ratio) || member.Ratio <= 0)
+                        continue;
+                    if (!accountsByName.TryGetValue(member.FollowerAccount.Trim(), out Account followerAccount) || followerAccount == null)
+                        continue;
+
+                    routes.Add(new GlitchCopyFollowerRoute
+                    {
+                        MasterAccount = masterName,
+                        FollowerAccount = followerAccount,
+                        Ratio = member.Ratio
+                    });
+                }
+            }
+
+            _copyEngine.Configure(true, routes);
+        }
+
+        private void TryProcessCopyExecutionFromRuntimeEvent(string eventName, Account account, object eventArgs)
+        {
+            if (account == null || eventArgs == null || _copyEngine == null)
+                return;
+            if (!_isReplicatingUi || UseLegacyReplicationEngine())
+                return;
+            if (!string.Equals(eventName, "ExecutionUpdate", StringComparison.OrdinalIgnoreCase))
+                return;
+            if (!TryBuildCopyExecutionContext(eventArgs, out GlitchCopyExecutionContext context))
+                return;
+
+            _copyEngine.ProcessMasterExecution(account, context);
+        }
+
+        private bool TryBuildCopyExecutionContext(object eventArgs, out GlitchCopyExecutionContext context)
+        {
+            context = null;
+            object executionObject = TryGetNestedPropertyValue(eventArgs, "Execution") ?? eventArgs;
+            if (executionObject == null)
+                return false;
+
+            string executionId = TryGetNestedPropertyValueAsString(executionObject, "ExecutionId", "Id");
+            string quantityText = TryGetNestedPropertyValueAsString(executionObject, "Quantity");
+            if (!int.TryParse(quantityText, NumberStyles.Integer, CultureInfo.InvariantCulture, out int quantity) || quantity <= 0)
+                return false;
+
+            Instrument instrument = TryGetNestedPropertyValue(executionObject, "Instrument") as Instrument;
+            if (instrument == null)
+                return false;
+
+            Order order = TryGetNestedPropertyValue(executionObject, "Order") as Order;
+            string signalName = order?.Name;
+            if (IsReplicationInternalSignal(signalName) ||
+                (!string.IsNullOrWhiteSpace(signalName) &&
+                 signalName.StartsWith(GlitchCopyEngine.CopySignalName, StringComparison.OrdinalIgnoreCase)))
+            {
+                return false;
+            }
+
+            OrderAction action;
+            if (order != null)
+            {
+                action = order.OrderAction;
+            }
+            else if (!TryParseOrderActionToken(
+                         TryGetNestedPropertyValueAsString(executionObject, "Order.OrderAction", "OrderAction", "MarketPosition"),
+                         out action))
+            {
+                return false;
+            }
+
+            context = new GlitchCopyExecutionContext
+            {
+                ExecutionId = executionId,
+                Instrument = instrument,
+                Action = action,
+                Quantity = quantity,
+                OrderSignalName = signalName
+            };
+            return true;
+        }
+
+        private static bool TryParseOrderActionToken(string actionToken, out OrderAction action)
+        {
+            action = OrderAction.Buy;
+            if (string.IsNullOrWhiteSpace(actionToken))
+                return false;
+
+            string normalized = actionToken.Trim();
+            if (normalized.Equals("Buy", StringComparison.OrdinalIgnoreCase))
+            {
+                action = OrderAction.Buy;
+                return true;
+            }
+
+            if (normalized.Equals("Sell", StringComparison.OrdinalIgnoreCase))
+            {
+                action = OrderAction.Sell;
+                return true;
+            }
+
+            if (normalized.Equals("SellShort", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Sell Short", StringComparison.OrdinalIgnoreCase))
+            {
+                action = OrderAction.SellShort;
+                return true;
+            }
+
+            if (normalized.Equals("BuyToCover", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Buy To Cover", StringComparison.OrdinalIgnoreCase))
+            {
+                action = OrderAction.BuyToCover;
+                return true;
+            }
+
+            return Enum.TryParse(normalized, true, out action);
+        }
+
+        private void CancelGlitchWorkingOrdersOnFollowers(IReadOnlyList<Account> activeAccounts)
+        {
+            foreach (Account account in activeAccounts ?? Array.Empty<Account>())
+            {
+                if (account == null)
+                    continue;
+
+                try
+                {
+                    foreach (Order order in account.Orders.ToArray())
+                    {
+                        if (order == null || string.IsNullOrWhiteSpace(order.Name))
+                            continue;
+                        if (!IsGlitchOwnedWorkingOrder(order))
+                            continue;
+                        if (!GlitchReplicationEngine.IsWorkingOrderState(order.OrderState))
+                            continue;
+
+                        account.Cancel(new[] { order });
+                    }
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        private static bool IsGlitchOwnedWorkingOrder(Order order)
+        {
+            if (order == null || string.IsNullOrWhiteSpace(order.Name))
+                return false;
+
+            string name = order.Name.Trim();
+            return name.StartsWith(GlitchCopyEngine.CopySignalName, StringComparison.OrdinalIgnoreCase) ||
+                   name.StartsWith("GLT-SYNC", StringComparison.OrdinalIgnoreCase) ||
+                   name.StartsWith("GLT-PROT-", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void EvaluateReplicationDrift(IReadOnlyList<Account> activeAccounts)
+        {
+            _replicationDriftNotice = null;
+            if (!_isReplicatingUi || UseLegacyReplicationEngine() || _accountGroups == null || _accountGroups.Count == 0)
+            {
+                UpdateReplicationDriftBanner();
+                return;
+            }
+
+            var accountsByName = (activeAccounts ?? Array.Empty<Account>())
+                .Where(account => account != null && !string.IsNullOrWhiteSpace(account.Name))
+                .GroupBy(account => account.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (AccountGroupDefinition group in _accountGroups)
+            {
+                if (group == null || string.IsNullOrWhiteSpace(group.MasterAccount) || group.Members == null)
+                    continue;
+                if (!accountsByName.TryGetValue(group.MasterAccount.Trim(), out Account masterAccount) || masterAccount == null)
+                    continue;
+
+                foreach (AccountGroupMemberRow member in group.Members)
+                {
+                    if (member == null || !member.IsEnabled || string.IsNullOrWhiteSpace(member.FollowerAccount))
+                        continue;
+                    if (double.IsNaN(member.Ratio) || double.IsInfinity(member.Ratio) || member.Ratio <= 0)
+                        continue;
+                    if (!accountsByName.TryGetValue(member.FollowerAccount.Trim(), out Account followerAccount) || followerAccount == null)
+                        continue;
+
+                    foreach (string instrumentRoot in GetSyncInstrumentRoots(masterAccount, followerAccount))
+                    {
+                        if (string.IsNullOrWhiteSpace(instrumentRoot))
+                            continue;
+
+                        int masterNetQty = GetNetQuantityForInstrumentRoot(masterAccount, instrumentRoot);
+                        int expectedQty = (int)Math.Round(
+                            masterNetQty * member.Ratio,
+                            MidpointRounding.AwayFromZero);
+                        int actualQty = GetNetQuantityForInstrumentRoot(followerAccount, instrumentRoot);
+                        if (actualQty == expectedQty)
+                            continue;
+
+                        _replicationDriftNotice = new ReplicationDriftNotice
+                        {
+                            FollowerAccount = followerAccount.Name?.Trim(),
+                            MasterAccount = masterAccount,
+                            FollowerAccountRef = followerAccount,
+                            InstrumentRoot = instrumentRoot,
+                            ActualQty = actualQty,
+                            ExpectedQty = expectedQty,
+                            Ratio = member.Ratio
+                        };
+                        UpdateReplicationDriftBanner();
+                        return;
+                    }
+                }
+            }
+
+            UpdateReplicationDriftBanner();
+        }
+
+        private void OnReplicationDriftSyncButtonClick(object sender, RoutedEventArgs e)
+        {
+            if (_replicationDriftNotice == null)
+                return;
+
+            ReplicationDriftNotice notice = _replicationDriftNotice;
+            Instrument instrument = FindInstrumentForInstrumentRoot(notice.FollowerAccountRef, notice.InstrumentRoot);
+            if (instrument == null)
+                return;
+
+            int deltaQty = notice.ExpectedQty - notice.ActualQty;
+            if (deltaQty == 0)
+                return;
+
+            DeltaSubmitResult result = SubmitDeltaOrder(notice.FollowerAccountRef, instrument, deltaQty, out string failureReason);
+            AppendJournal(
+                notice.FollowerAccount,
+                "Replication",
+                $"user_sync|origin=user_sync_button|instrument={CleanJournalToken(notice.InstrumentRoot)}|actual={notice.ActualQty}|expected={notice.ExpectedQty}|delta={deltaQty}|result={result}");
+            if (result != DeltaSubmitResult.Accepted)
+            {
+                RaiseCriticalWarning(
+                    notice.FollowerAccount,
+                    $"Manual sync failed on {notice.InstrumentRoot}: {failureReason ?? result.ToString()}",
+                    $"UserSyncFailed|{CleanJournalToken(notice.InstrumentRoot)}",
+                    unlocksTrading: false);
+            }
+        }
+
+        private void UpdateReplicationDriftBanner()
+        {
+            if (_headerReplicationDriftBanner == null || _headerReplicationDriftText == null)
+                return;
+
+            if (_replicationDriftNotice == null)
+            {
+                _headerReplicationDriftBanner.Visibility = Visibility.Collapsed;
+                _headerReplicationDriftText.Text = string.Empty;
+                return;
+            }
+
+            _headerReplicationDriftText.Text =
+                $"Follower {_replicationDriftNotice.FollowerAccount} differs from ratio target (has {_replicationDriftNotice.ActualQty}, ratio implies {_replicationDriftNotice.ExpectedQty}) on {CleanJournalToken(_replicationDriftNotice.InstrumentRoot)}.";
+            _headerReplicationDriftBanner.Visibility = Visibility.Visible;
         }
     }
 }

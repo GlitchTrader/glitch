@@ -2,12 +2,20 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-08 — Cursor honest-copy Phase 1 (compile pending)
+
+- **Alan Phase 0 verify (same day):** sell 1/2/3 + Flatten OK (minor variation); sell 2/4/6 + Flatten OK; sell 2/4/6 + protective SL closed all three. Mid-flight PnL oscillation noted (101≈102, 103 ~2× — inconsistent with 2×/3× ratios).
+- **P1-1 (compile pending):** `Services/Trading/GlitchCopyEngine.cs` — master `ExecutionUpdate` fan-out, `GLT-COPY` market orders, ExecutionId LRU, structured `copy|execId|...` journal rows; skips all `GLT-*` master fills.
+- **P1-2 (compile pending):** `USE_LEGACY_REPLICATION_ENGINE` default **false** — `ExecuteReplicationCycle` no-ops; no absolute sync / protective mirror / emergency stop on the poll path when off.
+- **P1-3 (compile pending):** Drift monitor (read-only banner + **Sync now** → one-shot delta, `user_sync|origin=user_sync_button`). Replication OFF cancels Glitch `GLT-*` working orders on followers.
+- **P1-4 (compile pending):** PnL display hardening — `TotalPnlRaw = realized + unrealized` always; removed `TotalProfitLoss` ≈0 fallback flip (fable D-5 partial).
+
 ## 2026-07-08 — Cursor honest-copy Phase 0
 
-- **P0-1 (compile pending):** `TryExecuteFlattenAllAsync` uses `account.Flatten(instruments)` per account only; journals `flatten_all|origin=user_button|result=...`; incomplete flatten raises Critical `FlattenAllIncomplete` without resubmit.
-- **P0-2 (compile pending):** `EnforceStrategyComplianceActions` setting (default false, persisted); max-contracts and no-protection strategy-path flattens/freeze only when enabled.
-- **P0-3 (compile pending):** Replication starts OFF each session (`_isReplicatingUi` forced false on load); user click journals `replication_enabled|origin=user_click`.
-- **P0-4 (compile pending):** `ClampReplicationDelta` returns full delta; burst detection journals `burst_notice` only (no freeze).
+- **P0-1 (Alan verified):** `TryExecuteFlattenAllAsync` uses `account.Flatten(instruments)` per account only; journals `flatten_all|origin=user_button|result=...`; incomplete flatten raises Critical `FlattenAllIncomplete` without resubmit.
+- **P0-2 (Alan verified):** `EnforceStrategyComplianceActions` setting (default false, persisted); max-contracts and no-protection strategy-path flattens/freeze only when enabled.
+- **P0-3 (Alan verified):** Replication starts OFF each session (`_isReplicatingUi` forced false on load); user click journals `replication_enabled|origin=user_click`.
+- **P0-4 (Alan verified):** `ClampReplicationDelta` returns full delta; burst detection journals `burst_notice` only (no freeze).
 
 ## 2026-07-08 — INCIDENT + deep audit → "Honest Copy" rewrite ordered (architect: Fable)
 - **Incident (sim, journal-proven):** Flatten All left the user's ATM Stop1 working → filled → Sim101 long 2 unsolicited → 500ms absolute sync bought 4+6 on followers + planted emergency stops → header showed unlabeled fleet PnL (+$72 unrealized → +$2 realized). Full reconstruction: `audits/fable-deep-audit.md` §1.

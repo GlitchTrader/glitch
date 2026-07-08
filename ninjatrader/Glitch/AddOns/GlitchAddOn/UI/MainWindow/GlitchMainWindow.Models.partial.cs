@@ -55,6 +55,17 @@ namespace Glitch.UI
             public DateTime UpdatedUtc { get; set; }
         }
 
+        private sealed class ReplicationDriftNotice
+        {
+            public string FollowerAccount { get; set; }
+            public Account MasterAccount { get; set; }
+            public Account FollowerAccountRef { get; set; }
+            public string InstrumentRoot { get; set; }
+            public int ActualQty { get; set; }
+            public int ExpectedQty { get; set; }
+            public double Ratio { get; set; }
+        }
+
         private sealed class AccountGroupDefinition
         {
             public string GroupId { get; set; }

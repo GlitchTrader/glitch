@@ -26,6 +26,7 @@ namespace Glitch.Services
         public bool EnforceUnrealizedFlatten70Percent { get; set; } = false;
         public bool EnforceEvalProfitTargetLock { get; set; } = false;
         public bool EnforceStrategyComplianceActions { get; set; } = false;
+        public bool UseLegacyReplicationEngine { get; set; } = false;
         public ComplianceAccountTypeScope BufferFreezeScopes { get; set; } = new ComplianceAccountTypeScope();
         public double BufferFreezeThresholdRatio { get; set; } = 0.15;
         public ComplianceAccountTypeScope BufferOneContractScopes { get; set; } = new ComplianceAccountTypeScope();
@@ -182,6 +183,7 @@ namespace Glitch.Services
             settings.EnforceUnrealizedFlatten70Percent = ReadBool(rows, "ENFORCE_UNREALIZED_FLATTEN_70_PERCENT", settings.EnforceUnrealizedFlatten70Percent);
             settings.EnforceEvalProfitTargetLock = ReadBool(rows, "ENFORCE_EVAL_PROFIT_TARGET_LOCK", settings.EnforceEvalProfitTargetLock);
             settings.EnforceStrategyComplianceActions = ReadBool(rows, "ENFORCE_STRATEGY_COMPLIANCE_ACTIONS", settings.EnforceStrategyComplianceActions);
+            settings.UseLegacyReplicationEngine = ReadBool(rows, "USE_LEGACY_REPLICATION_ENGINE", settings.UseLegacyReplicationEngine);
             settings.FlattenOnCriticalBufferLock = ReadBool(rows, "FLATTEN_ON_CRITICAL_BUFFER_LOCK", settings.FlattenOnCriticalBufferLock);
             LoadComplianceFeatureScopes(settings, rows);
             settings.SyncLegacyComplianceFlags();
@@ -242,6 +244,7 @@ namespace Glitch.Services
                 $"ENFORCE_UNREALIZED_FLATTEN_70_PERCENT\t{ToBoolToken(settings.EnforceUnrealizedFlatten70Percent)}",
                 $"ENFORCE_EVAL_PROFIT_TARGET_LOCK\t{ToBoolToken(settings.EnforceEvalProfitTargetLock)}",
                 $"ENFORCE_STRATEGY_COMPLIANCE_ACTIONS\t{ToBoolToken(settings.EnforceStrategyComplianceActions)}",
+                $"USE_LEGACY_REPLICATION_ENGINE\t{ToBoolToken(settings.UseLegacyReplicationEngine)}",
                 $"FLATTEN_ON_CRITICAL_BUFFER_LOCK\t{ToBoolToken(settings.FlattenOnCriticalBufferLock)}",
                 $"ENFORCE_BUFFER_FREEZE_15_SIM\t{ToBoolToken(settings.BufferFreezeScopes.Sim)}",
                 $"ENFORCE_BUFFER_FREEZE_15_EVAL\t{ToBoolToken(settings.BufferFreezeScopes.Eval)}",
