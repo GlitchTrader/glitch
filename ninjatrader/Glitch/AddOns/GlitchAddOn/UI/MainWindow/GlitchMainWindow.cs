@@ -783,6 +783,7 @@ namespace Glitch.UI
             _lastUiRefreshUtc = DateTime.MinValue;
             if (_isReplicatingUi)
             {
+                AppendJournal("System", "Replication", "replication_enabled|origin=user_click");
                 _replicationWarmupUntilUtc = DateTime.UtcNow.Add(ReplicationStartupWarmup);
                 ClearReplicationSubmitCooldowns();
                 ClearProtectiveSyncCooldowns();
@@ -3404,7 +3405,9 @@ namespace Glitch.UI
             if (_restoreMaximizedOnLoad)
                 WindowState = WindowState.Maximized;
 
-            _replicationWarmupUntilUtc = DateTime.UtcNow.Add(ReplicationStartupWarmup);
+            _isReplicatingUi = false;
+            _replicationWarmupUntilUtc = DateTime.MinValue;
+            UpdateReplicateButtonState();
             ApplyPlanLimitsToAccountGroups("startup");
             LogStartupRuntimeSettingsOnce();
             RefreshAccountData(preferSynchronous: true);

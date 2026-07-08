@@ -6,9 +6,10 @@ Append-only operator log. Newest first.
 
 - **P0-1 (compile pending):** `TryExecuteFlattenAllAsync` uses `account.Flatten(instruments)` per account only; journals `flatten_all|origin=user_button|result=...`; incomplete flatten raises Critical `FlattenAllIncomplete` without resubmit.
 - **P0-2 (compile pending):** `EnforceStrategyComplianceActions` setting (default false, persisted); max-contracts and no-protection strategy-path flattens/freeze only when enabled.
+- **P0-3 (compile pending):** Replication starts OFF each session (`_isReplicatingUi` forced false on load); user click journals `replication_enabled|origin=user_click`.
 
 ## 2026-07-08 — INCIDENT + deep audit → "Honest Copy" rewrite ordered (architect: Fable)
- Flatten All left the user's ATM Stop1 working → filled → Sim101 long 2 unsolicited → 500ms absolute sync bought 4+6 on followers + planted emergency stops → header showed unlabeled fleet PnL (+$72 unrealized → +$2 realized). Full reconstruction: `audits/fable-deep-audit.md` §1.
+- **Incident (sim, journal-proven):** Flatten All left the user's ATM Stop1 working → filled → Sim101 long 2 unsolicited → 500ms absolute sync bought 4+6 on followers + planted emergency stops → header showed unlabeled fleet PnL (+$72 unrealized → +$2 realized). Full reconstruction: `audits/fable-deep-audit.md` §1.
 - Census: 257 fallback occurrences, 80 empty catch blocks, ~30 distinct order-path compensating mechanisms, 2,367-line replication partial on an 8,133-line god window. Verified Cursor's `cursor-deep-audit.md` and corrected it (missed: flatten-leaves-brackets root cause, frozen-account live stops, confirmed_Working bug, runtime/source drift).
 - Operator decree recorded: **no Glitch-initiated action without user initiation or explicit granular opt-in; compliance = display math by default; every automatic action journaled with its authorizing setting.**
 - Decision: stop patching guards; rewrite order path event-driven (GlitchCopyEngine), one flatten primitive (`account.Flatten`), drift reported never auto-corrected. Backlog Wave 8 (GL-036…041); **Wave 7 AI program frozen until GL-041 verification gate passes.** Handoff: `handoffs/2026-07-08-cursor-honest-copy.md` (Phase 0 same-day).
