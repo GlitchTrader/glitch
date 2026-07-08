@@ -2,6 +2,14 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-08 — Performance wave 2 (refresh pipeline)
+
+- **Light replication tick:** `heavyTabWork: false` skips `BuildAccountRow` loop — only `ExecuteReplicationCycle` + coalesced shell publish (500ms cadence no longer rebuilds all rows).
+- **Background row build:** full refresh snapshots selection overrides, builds rows on thread pool, marshals apply/risk/replication/header to UI at `Background` priority; coalesces overlapping ticks; synchronous path for startup, flatten, grid edit, subsystem degrade.
+- **Lock hardening:** `_peakStatesByAccount` and trade-source snapshots → `ConcurrentDictionary`; removed `_peakStateLock` / `_tradeSourceLock`.
+- New: `GlitchMainWindow.RefreshPipeline.partial.cs`.
+- Deployed to NT bin for F5.
+
 ## 2026-07-08 — Performance hardening PA-1…PA-9
 
 - Implemented against current codebase (not blind handoff): HTTP 5s policy, fundamentals snapshot lock shrink, background ledger flush, subsystem fault auto-degrade, flatten submit metric, live-feed virtualization, timer Background priority + reentrancy guard, header metric skip-if-unchanged, collection caps.

@@ -26,6 +26,7 @@
 
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -113,9 +114,8 @@ namespace Glitch.UI
         private GlitchRuntimePolicySettings _runtimePolicySettings;
         private GlitchLicenseCacheState _licenseCacheState;
         private readonly DispatcherTimer _refreshTimer;
-        private readonly Dictionary<string, PeakState> _peakStatesByAccount;
+        private readonly ConcurrentDictionary<string, PeakState> _peakStatesByAccount;
         private readonly Dictionary<string, List<EventBridgeSubscription>> _accountEventSubscriptions;
-        private readonly object _peakStateLock = new object();
         private readonly Dictionary<string, DateTime> _replicationSubmitCooldownByKey;
         private readonly Dictionary<string, ReplicationPendingSubmitState> _replicationPendingSubmitByKey;
         private readonly object _replicationOrderLock = new object();
@@ -132,9 +132,8 @@ namespace Glitch.UI
         private readonly Dictionary<string, DateTime> _riskMitigationCooldownByKey;
         private readonly Dictionary<string, DateTime> _riskFlattenFallbackWarningCooldownByKey;
         private readonly object _riskFlattenFallbackWarningLock = new object();
-        private readonly Dictionary<string, TradeSourceKind> _tradeSourceByAccountInstrument;
-        private readonly Dictionary<string, DateTime> _tradeSourceObservedUtcByAccountInstrument;
-        private readonly object _tradeSourceLock = new object();
+        private readonly ConcurrentDictionary<string, TradeSourceKind> _tradeSourceByAccountInstrument;
+        private readonly ConcurrentDictionary<string, DateTime> _tradeSourceObservedUtcByAccountInstrument;
         private readonly Dictionary<string, string> _lastOrderJournalSnapshotByKey;
         private readonly Dictionary<string, string> _lastPositionJournalSnapshotByKey;
         private readonly Dictionary<string, string> _lastExecutionJournalSnapshotByKey;
@@ -187,7 +186,7 @@ namespace Glitch.UI
         private bool _isFlattenAllInProgress;
         private bool _isReplicatingUi;
         private bool _restoreMaximizedOnLoad;
-        private bool _hasPendingPeakStateWrite;
+        private volatile bool _hasPendingPeakStateWrite;
         private bool _hasPendingAuditWrite;
         private string _groupMasterOptionsSnapshot;
         private string _analyticsInstrumentOptionsSnapshot;
@@ -293,7 +292,7 @@ namespace Glitch.UI
             GlitchRuntimePolicyStore.EnsureTemplatesExist(_runtimePolicyFilePath, _licenseCacheFilePath);
             _runtimePolicySettings = GlitchRuntimePolicyStore.LoadSettings(_runtimePolicyFilePath);
             _licenseCacheState = GlitchRuntimePolicyStore.LoadLicenseCache(_licenseCacheFilePath);
-            _peakStatesByAccount = new Dictionary<string, PeakState>(StringComparer.OrdinalIgnoreCase);
+            _peakStatesByAccount = new ConcurrentDictionary<string, PeakState>(StringComparer.OrdinalIgnoreCase);
             _accountEventSubscriptions = new Dictionary<string, List<EventBridgeSubscription>>(StringComparer.OrdinalIgnoreCase);
             _replicationSubmitCooldownByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
             _replicationPendingSubmitByKey = new Dictionary<string, ReplicationPendingSubmitState>(StringComparer.OrdinalIgnoreCase);
@@ -308,8 +307,8 @@ namespace Glitch.UI
             _noProtectionDetectedSinceByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
             _riskMitigationCooldownByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
             _riskFlattenFallbackWarningCooldownByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
-            _tradeSourceByAccountInstrument = new Dictionary<string, TradeSourceKind>(StringComparer.OrdinalIgnoreCase);
-            _tradeSourceObservedUtcByAccountInstrument = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+            _tradeSourceByAccountInstrument = new ConcurrentDictionary<string, TradeSourceKind>(StringComparer.OrdinalIgnoreCase);
+            _tradeSourceObservedUtcByAccountInstrument = new ConcurrentDictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
             _lastOrderJournalSnapshotByKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             _lastPositionJournalSnapshotByKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             _lastExecutionJournalSnapshotByKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -1494,7 +1493,7 @@ namespace Glitch.UI
                     ClearReplicationSubmitCooldowns();
                     ClearProtectiveSyncCooldowns();
                     AppendJournal("System", "Risk", "Flatten All executed successfully.");
-                    RefreshAccountData();
+                    RefreshAccountData(preferSynchronous: true);
                 }
 
                 return flattened;
@@ -3429,7 +3428,7 @@ namespace Glitch.UI
             _replicationWarmupUntilUtc = DateTime.UtcNow.Add(ReplicationStartupWarmup);
             ApplyPlanLimitsToAccountGroups("startup");
             LogStartupRuntimeSettingsOnce();
-            RefreshAccountData();
+            RefreshAccountData(preferSynchronous: true);
             _refreshTimer.Start();
             _ = RefreshLicenseStateAsync(useValidateEndpoint: true, force: true);
         }
@@ -3651,7 +3650,7 @@ namespace Glitch.UI
                     }
 
                     SaveSelectionOverridesToDisk();
-                    RefreshAccountData();
+                    RefreshAccountData(preferSynchronous: true);
                 }
                 finally
                 {
@@ -3670,61 +3669,6 @@ namespace Glitch.UI
                 return;
 
             _isEditingAccountsGrid = false;
-        }
-
-        private void RefreshAccountData(bool heavyTabWork = true)
-        {
-            ApplyPlanLimitsToAccountGroups("refresh");
-
-            List<Account> activeAccounts = GetActiveAccountsSnapshot();
-            SyncAccountRuntimeEventSubscriptionsThrottled(activeAccounts);
-
-            var rows = activeAccounts
-                .Select(account =>
-                {
-                    _selectionOverrides.TryGetValue(account.Name, out AccountSelectionOverride selectionOverride);
-                    return BuildAccountRow(account, selectionOverride);
-                })
-                .ToList();
-
-            ApplyAccountRows(rows);
-
-            ApplyRiskMitigations(rows, activeAccounts);
-            RefreshGroupMasterDropdownOptionsIfNeeded(rows);
-            ExecuteReplicationCycle(activeAccounts);
-
-            double totalPnl = rows.Sum(r => r.TotalPnlRaw);
-            double evalPnl = rows
-                .Where(r => string.Equals(r.AccountStatus, "Eval", StringComparison.OrdinalIgnoreCase))
-                .Sum(r => r.TotalPnlRaw);
-            double paPnl = rows
-                .Where(r => string.Equals(r.AccountStatus, "AP", StringComparison.OrdinalIgnoreCase))
-                .Sum(r => r.TotalPnlRaw);
-            UpdatePnlMetricText(_totalPnlValueText, totalPnl);
-            UpdatePnlMetricText(_paPnlValueText, paPnl);
-            UpdatePnlMetricText(_evalPnlValueText, evalPnl);
-
-            double evalHeadroom = ComputeAggregateHeadroomRatio(rows, "Eval");
-            double paHeadroom = ComputeAggregateHeadroomRatio(rows, "AP");
-            double globalHeadroom = ComputeAggregateHeadroomRatio(rows, null);
-
-            double globalRisk = ToRiskRatio(globalHeadroom);
-            double paRisk = ToRiskRatio(paHeadroom);
-            double evalRisk = ToRiskRatio(evalHeadroom);
-
-            UpdateRiskMetricText(_globalHeadroomValueText, globalRisk);
-            UpdateRiskMetricText(_paHeadroomValueText, paRisk);
-            UpdateRiskMetricText(_evalHeadroomValueText, evalRisk);
-            PublishGlitchShellState(rows);
-            if (heavyTabWork)
-            {
-                if (IsAnalyticsUiActive())
-                    RefreshAnalyticsDashboard(activeAccounts);
-                if (GetSelectedMainTabIndex() == MainTabJournal)
-                    UpdateJournalLicenseGateOverlay();
-                if (GetSelectedMainTabIndex() == MainTabSettings)
-                    UpdateSettingsCopyTradingPolicyNotice();
-            }
         }
 
         private void ApplyAccountRows(IReadOnlyList<AccountGridRow> rows)
@@ -5543,23 +5487,20 @@ namespace Glitch.UI
         {
             try
             {
-                lock (_peakStateLock)
+                _peakStatesByAccount.Clear();
+                Dictionary<string, GlitchStateStore.PeakStateRecord> persisted = GlitchStateStore.LoadPeakStates(_peakStateFilePath);
+                foreach (var kvp in persisted)
                 {
-                    _peakStatesByAccount.Clear();
-                    Dictionary<string, GlitchStateStore.PeakStateRecord> persisted = GlitchStateStore.LoadPeakStates(_peakStateFilePath);
-                    foreach (var kvp in persisted)
-                    {
-                        if (string.IsNullOrWhiteSpace(kvp.Key) || kvp.Value == null || kvp.Value.PeakEquity <= 0)
-                            continue;
+                    if (string.IsNullOrWhiteSpace(kvp.Key) || kvp.Value == null || kvp.Value.PeakEquity <= 0)
+                        continue;
 
-                        _peakStatesByAccount[kvp.Key] = new PeakState
-                        {
-                            AccountName = kvp.Value.AccountName,
-                            PeakEquity = kvp.Value.PeakEquity,
-                            LastEquity = kvp.Value.LastEquity,
-                            UpdatedUtc = kvp.Value.UpdatedUtc
-                        };
-                    }
+                    _peakStatesByAccount[kvp.Key] = new PeakState
+                    {
+                        AccountName = kvp.Value.AccountName,
+                        PeakEquity = kvp.Value.PeakEquity,
+                        LastEquity = kvp.Value.LastEquity,
+                        UpdatedUtc = kvp.Value.UpdatedUtc
+                    };
                 }
             }
             catch
@@ -5571,31 +5512,27 @@ namespace Glitch.UI
         {
             try
             {
-                List<PeakState> snapshot;
                 DateTime now = DateTime.UtcNow;
 
-                lock (_peakStateLock)
+                if (!force)
                 {
-                    if (!force)
-                    {
-                        if (!_hasPendingPeakStateWrite)
-                            return;
-                        if ((now - _lastPeakStateWriteUtc).TotalSeconds < 2.0)
-                            return;
-                    }
-
-                    snapshot = _peakStatesByAccount.Values
-                        .Where(p => p != null && !string.IsNullOrWhiteSpace(p.AccountName) && p.PeakEquity > 0)
-                        .OrderBy(p => p.AccountName, StringComparer.OrdinalIgnoreCase)
-                        .Select(p => new PeakState
-                        {
-                            AccountName = p.AccountName,
-                            PeakEquity = p.PeakEquity,
-                            LastEquity = p.LastEquity,
-                            UpdatedUtc = p.UpdatedUtc
-                        })
-                        .ToList();
+                    if (!_hasPendingPeakStateWrite)
+                        return;
+                    if ((now - _lastPeakStateWriteUtc).TotalSeconds < 2.0)
+                        return;
                 }
+
+                List<PeakState> snapshot = _peakStatesByAccount.Values
+                    .Where(p => p != null && !string.IsNullOrWhiteSpace(p.AccountName) && p.PeakEquity > 0)
+                    .OrderBy(p => p.AccountName, StringComparer.OrdinalIgnoreCase)
+                    .Select(p => new PeakState
+                    {
+                        AccountName = p.AccountName,
+                        PeakEquity = p.PeakEquity,
+                        LastEquity = p.LastEquity,
+                        UpdatedUtc = p.UpdatedUtc
+                    })
+                    .ToList();
 
                 GlitchStateStore.SavePeakStates(
                     _peakStateFilePath,
@@ -5607,11 +5544,8 @@ namespace Glitch.UI
                         UpdatedUtc = state.UpdatedUtc
                     }).ToList());
 
-                lock (_peakStateLock)
-                {
-                    _hasPendingPeakStateWrite = false;
-                    _lastPeakStateWriteUtc = now;
-                }
+                _hasPendingPeakStateWrite = false;
+                _lastPeakStateWriteUtc = now;
             }
             catch
             {
@@ -5748,11 +5682,8 @@ namespace Glitch.UI
             if (string.IsNullOrWhiteSpace(key))
                 return;
 
-            lock (_tradeSourceLock)
-            {
-                _tradeSourceByAccountInstrument[key] = sourceKind;
-                _tradeSourceObservedUtcByAccountInstrument[key] = nowUtc;
-            }
+            _tradeSourceByAccountInstrument[key] = sourceKind;
+            _tradeSourceObservedUtcByAccountInstrument[key] = nowUtc;
         }
 
         private static bool TryResolveTradeSourceFromEvent(object eventArgs, out string instrumentRoot, out TradeSourceKind sourceKind)
@@ -5833,16 +5764,13 @@ namespace Glitch.UI
 
         private void PruneTradeSourceSnapshots(DateTime nowUtc)
         {
-            lock (_tradeSourceLock)
+            foreach (string staleKey in _tradeSourceObservedUtcByAccountInstrument
+                         .Where(kvp => (nowUtc - kvp.Value) > StrategySourceSnapshotTtl)
+                         .Select(kvp => kvp.Key)
+                         .ToList())
             {
-                foreach (string staleKey in _tradeSourceObservedUtcByAccountInstrument
-                             .Where(kvp => (nowUtc - kvp.Value) > StrategySourceSnapshotTtl)
-                             .Select(kvp => kvp.Key)
-                             .ToList())
-                {
-                    _tradeSourceObservedUtcByAccountInstrument.Remove(staleKey);
-                    _tradeSourceByAccountInstrument.Remove(staleKey);
-                }
+                _tradeSourceObservedUtcByAccountInstrument.TryRemove(staleKey, out _);
+                _tradeSourceByAccountInstrument.TryRemove(staleKey, out _);
             }
         }
 
@@ -5860,33 +5788,30 @@ namespace Glitch.UI
             if (string.IsNullOrWhiteSpace(key))
                 return false;
 
-            lock (_tradeSourceLock)
+            if (!_tradeSourceByAccountInstrument.TryGetValue(key, out TradeSourceKind source))
+                return false;
+
+            if (!_tradeSourceObservedUtcByAccountInstrument.TryGetValue(key, out DateTime observedUtc))
             {
-                if (!_tradeSourceByAccountInstrument.TryGetValue(key, out TradeSourceKind source))
-                    return false;
-
-                if (!_tradeSourceObservedUtcByAccountInstrument.TryGetValue(key, out DateTime observedUtc))
-                {
-                    _tradeSourceByAccountInstrument.Remove(key);
-                    return false;
-                }
-
-                if ((nowUtc - observedUtc) > StrategySourceSnapshotTtl)
-                {
-                    _tradeSourceByAccountInstrument.Remove(key);
-                    _tradeSourceObservedUtcByAccountInstrument.Remove(key);
-                    return false;
-                }
-
-                if (netQty == 0 && source != TradeSourceKind.Strategy)
-                {
-                    _tradeSourceByAccountInstrument.Remove(key);
-                    _tradeSourceObservedUtcByAccountInstrument.Remove(key);
-                    return false;
-                }
-
-                return source == TradeSourceKind.Strategy && netQty != 0;
+                _tradeSourceByAccountInstrument.TryRemove(key, out _);
+                return false;
             }
+
+            if ((nowUtc - observedUtc) > StrategySourceSnapshotTtl)
+            {
+                _tradeSourceByAccountInstrument.TryRemove(key, out _);
+                _tradeSourceObservedUtcByAccountInstrument.TryRemove(key, out _);
+                return false;
+            }
+
+            if (netQty == 0 && source != TradeSourceKind.Strategy)
+            {
+                _tradeSourceByAccountInstrument.TryRemove(key, out _);
+                _tradeSourceObservedUtcByAccountInstrument.TryRemove(key, out _);
+                return false;
+            }
+
+            return source == TradeSourceKind.Strategy && netQty != 0;
         }
 
         private bool HasStrategyWorkingOrdersForInstrumentRoot(Account account, string instrumentRoot)
@@ -6804,7 +6729,10 @@ namespace Glitch.UI
             return 0;
         }
 
-        private AccountGridRow BuildAccountRow(Account account, AccountSelectionOverride selectionOverride)
+        private AccountGridRow BuildAccountRow(
+            Account account,
+            AccountSelectionOverride selectionOverride,
+            IDictionary<string, AccountSelectionOverride> deferredAutoOverrides = null)
         {
             double accountSizeRaw = GetAccountSizeFromNt(account);
             double cashValue = TryGetAccountItem(account, "CashValue");
@@ -6855,13 +6783,18 @@ namespace Glitch.UI
                 !string.IsNullOrWhiteSpace(account.Name) &&
                 selectedAccountSize > 0)
             {
-                _selectionOverrides[account.Name] = new AccountSelectionOverride
+                var inferredOverride = new AccountSelectionOverride
                 {
                     AccountStatus = selectedStatus,
                     PropFirmId = selectedFirmId,
                     AccountSize = selectedAccountSize,
                     IsManual = false
                 };
+
+                if (deferredAutoOverrides != null)
+                    deferredAutoOverrides[account.Name] = inferredOverride;
+                else
+                    _selectionOverrides[account.Name] = inferredOverride;
             }
 
             _firmRules.TryGetValue(selectedFirmId, out FirmRuleMetadata selectedFirmRule);
@@ -7814,11 +7747,8 @@ namespace Glitch.UI
 
             UpdatePeakState(accountName, currentEquity);
 
-            lock (_peakStateLock)
-            {
-                if (_peakStatesByAccount.TryGetValue(accountName, out PeakState state) && state != null && state.PeakEquity > 0)
-                    return state.PeakEquity;
-            }
+            if (_peakStatesByAccount.TryGetValue(accountName, out PeakState state) && state != null && state.PeakEquity > 0)
+                return state.PeakEquity;
 
             return currentEquity;
         }
@@ -7830,34 +7760,47 @@ namespace Glitch.UI
             accountName = accountName.Trim();
 
             DateTime now = DateTime.UtcNow;
-            lock (_peakStateLock)
-            {
-                if (!_peakStatesByAccount.TryGetValue(accountName, out PeakState state) || state == null)
+            bool peakChanged = false;
+            _peakStatesByAccount.AddOrUpdate(
+                accountName,
+                _ =>
                 {
-                    _peakStatesByAccount[accountName] = new PeakState
+                    _hasPendingPeakStateWrite = true;
+                    return new PeakState
                     {
                         AccountName = accountName,
                         PeakEquity = currentEquity,
                         LastEquity = currentEquity,
                         UpdatedUtc = now
                     };
-                    _hasPendingPeakStateWrite = true;
-                    return;
-                }
-
-                state.LastEquity = currentEquity;
-                bool peakChanged = false;
-                if (currentEquity > state.PeakEquity)
+                },
+                (_, state) =>
                 {
-                    state.PeakEquity = currentEquity;
-                    peakChanged = true;
-                }
+                    if (state == null)
+                    {
+                        peakChanged = true;
+                        return new PeakState
+                        {
+                            AccountName = accountName,
+                            PeakEquity = currentEquity,
+                            LastEquity = currentEquity,
+                            UpdatedUtc = now
+                        };
+                    }
 
-                state.UpdatedUtc = now;
-                _peakStatesByAccount[accountName] = state;
-                if (peakChanged)
-                    _hasPendingPeakStateWrite = true;
-            }
+                    state.LastEquity = currentEquity;
+                    if (currentEquity > state.PeakEquity)
+                    {
+                        state.PeakEquity = currentEquity;
+                        peakChanged = true;
+                    }
+
+                    state.UpdatedUtc = now;
+                    return state;
+                });
+
+            if (peakChanged)
+                _hasPendingPeakStateWrite = true;
         }
 
         private static double? CalculateMinMargin(

@@ -147,3 +147,27 @@ MainWindow 12, Replication 12, FeedBus 16, Fundamentals 17, ShellBridge 5, ledge
 
 - **Alan:** F5 compile + smoke (Journal scroll, Live Feed expand, Flatten All → check Journal for `METRIC|flatten_submit_ms=...`).
 - **Not run here:** NT8 compile, Market Replay adversarial, 12h soak.
+
+---
+
+## Wave 2 — refresh pipeline (2026-07-08)
+
+Structural UI-thread relief before publish.
+
+| Change | Behavior |
+|--------|----------|
+| Light tick | `RefreshAccountData(heavyTabWork: false)` → replication + shell publish only |
+| Heavy tick | Row build on `Task.Run`, UI apply via `Dispatcher.BeginInvoke(Background)` |
+| Coalesce | One background build in flight; trailing tick re-queues |
+| Sync path | Startup, flatten success, grid edit, `account_refresh` subsystem degrade |
+| Locks | `ConcurrentDictionary` for peak state + trade-source snapshots |
+
+### Files
+
+- `UI/MainWindow/GlitchMainWindow.RefreshPipeline.partial.cs` (new)
+- `UI/MainWindow/GlitchMainWindow.cs` (concurrent peak/trade-source, `BuildAccountRow` deferred overrides)
+
+### Operator gate
+
+- F5 compile + replication smoke (master/follower delta while UI responsive).
+- Optional: compare UI hitch during 500ms replication vs pre-wave-2.
