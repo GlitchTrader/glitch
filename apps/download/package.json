@@ -9,6 +9,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "checksums": "node ./scripts/generate-checksums.mjs",
     "sync:release-dates": "node ./scripts/sync-release-dates.mjs"
   },
   "dependencies": {
