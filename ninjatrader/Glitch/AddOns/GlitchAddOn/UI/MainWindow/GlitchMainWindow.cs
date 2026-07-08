@@ -1422,63 +1422,34 @@ namespace Glitch.UI
 
                 foreach (Account account in accounts)
                 {
-                    foreach (Instrument instrument in GetOpenPositionInstruments(account))
+                    if (account == null || string.IsNullOrWhiteSpace(account.Name))
+                        continue;
+
+                    string accountName = account.Name.Trim();
+                    List<Instrument> instruments = GetOpenPositionInstruments(account);
+                    string resultToken;
+                    if (instruments.Count == 0)
                     {
-                        string instrumentToken = CleanJournalToken(GetInstrumentRoot(instrument));
-                        const string flattenAllReason = "flatten_all_manual";
-                        AppendJournal(
-                            account.Name,
-                            "Risk",
-                            $"SYNC|event=flatten_attempt|reason={flattenAllReason}|instrument={instrumentToken}|signal={RiskFlattenBufferSignalName}");
-
-                        bool namedConfirmed = TrySubmitNamedRiskFlattenOrder(
-                            account,
-                            instrument,
-                            RiskFlattenBufferSignalName,
-                            out string namedResult,
-                            out Order submittedOrder);
-                        if (namedConfirmed)
-                        {
-                            flattenSubmitCount++;
-                            AppendJournal(
-                                account.Name,
-                                "Risk",
-                                $"SYNC|event=flatten_named_result|reason={flattenAllReason}|instrument={instrumentToken}|signal={RiskFlattenBufferSignalName}|origin={FlattenOrigin.AddonGovernor}|result=confirmed|cause={CleanJournalToken(namedResult)}");
-                            AppendJournal(
-                                account.Name,
-                                "Risk",
-                                $"SYNC|event=flatten_origin|reason={flattenAllReason}|origin={FlattenOrigin.AddonGovernor}|signal={RiskFlattenBufferSignalName}|instrument={instrumentToken}");
-                            continue;
-                        }
-
-                        if (submittedOrder != null)
-                        {
-                            flattenSubmitCount++;
-                            AppendJournal(
-                                account.Name,
-                                "Risk",
-                                $"SYNC|event=flatten_named_result|reason={flattenAllReason}|instrument={instrumentToken}|signal={RiskFlattenBufferSignalName}|origin={FlattenOrigin.Unknown}|result=pending|cause={CleanJournalToken(namedResult)}");
-                            ScheduleNamedRiskFlattenConfirmationFallback(
-                                account,
-                                instrument,
-                                submittedOrder,
-                                RiskFlattenBufferSignalName,
-                                flattenAllReason,
-                                mitigationKey: "FLATTENALL|" + CleanJournalToken(account.Name) + "|" + instrumentToken,
-                                allowFallbackWarning: false);
-                            continue;
-                        }
-
-                        TryIssueInstrumentFlattenFallback(
-                            account,
-                            instrument,
-                            RiskFlattenBufferSignalName,
-                            flattenAllReason,
-                            namedResult,
-                            mitigationKey: "FLATTENALL|" + CleanJournalToken(account.Name) + "|" + instrumentToken,
-                            allowFallbackWarning: false);
-                        flattenSubmitCount++;
+                        resultToken = "skipped_no_exposure";
                     }
+                    else
+                    {
+                        try
+                        {
+                            account.Flatten(instruments.ToArray());
+                            flattenSubmitCount++;
+                            resultToken = "issued";
+                        }
+                        catch (Exception ex)
+                        {
+                            resultToken = "failed_" + CleanJournalToken(ex.GetType().Name);
+                        }
+                    }
+
+                    AppendJournal(
+                        accountName,
+                        "Risk",
+                        $"flatten_all|origin=user_button|result={resultToken}|instruments={instruments.Count}");
                 }
 
                 flattenStopwatch.Stop();
@@ -1494,6 +1465,14 @@ namespace Glitch.UI
                     ClearProtectiveSyncCooldowns();
                     AppendJournal("System", "Risk", "Flatten All executed successfully.");
                     RefreshAccountData(preferSynchronous: true);
+                }
+                else
+                {
+                    RaiseCriticalWarning(
+                        "System",
+                        "Flatten All completed but one or more accounts still have open positions or working orders. No additional flatten orders were submitted.",
+                        "FlattenAllIncomplete",
+                        unlocksTrading: false);
                 }
 
                 return flattened;
