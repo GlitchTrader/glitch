@@ -70,11 +70,6 @@ namespace Glitch.UI
         private const string ReplicationSignalName = "GLT-SYNC";
         private const string ProtectiveStopSignalName = "GLT-PROT-STP";
         private const string ProtectiveTargetSignalName = "GLT-PROT-TGT";
-        private const string RiskFlattenUnrealizedSignalName = "GLT-RISK-FLAT-UNRLZ";
-        private const string RiskFlattenBufferSignalName = "GLT-RISK-FLAT-BUFFER";
-        private const string RiskFlattenMaxQtySignalName = "GLT-RISK-FLAT-MAXQTY";
-        private const string RiskFlattenNakedSignalName = "GLT-RISK-FLAT-NAKED";
-        private const string RiskFlattenDailyLimitSignalName = "GLT-RISK-FLAT-DAILYLIMIT";
         private const string CurrentClientVersion = "addon-0.0.1.2";
         private const string DefaultLatestDownloadUrl = "https://download.glitchtrader.com/latest";
         private const double UnrealizedLossFlattenThresholdRatio = 0.80;
@@ -84,12 +79,8 @@ namespace Glitch.UI
         private const double DefaultMicroContractMultiplier = 10.0;
         private const string DefaultMicroContractRootRegex = "^M[A-Z0-9]+$";
         private const int MaxMicroContractRegexLength = 128;
-        private const int RiskFlattenConfirmationTimeoutMs = 500;
-        private const int RiskFlattenConfirmationPollMs = 25;
         private static readonly TimeSpan RiskMitigationCooldown = TimeSpan.FromSeconds(4);
-        private static readonly TimeSpan ReplicationStartupWarmup = TimeSpan.FromSeconds(3);
         private static readonly TimeSpan InformationalWarningJournalCooldown = TimeSpan.FromSeconds(60);
-        private static readonly TimeSpan StrategySourceSnapshotTtl = TimeSpan.FromHours(12);
         private static readonly TimeSpan MicroContractRegexTimeout = TimeSpan.FromMilliseconds(75);
 
         private readonly ObservableCollection<AccountGridRow> _accountRows;
@@ -116,34 +107,20 @@ namespace Glitch.UI
         private readonly DispatcherTimer _refreshTimer;
         private readonly ConcurrentDictionary<string, PeakState> _peakStatesByAccount;
         private readonly Dictionary<string, List<EventBridgeSubscription>> _accountEventSubscriptions;
-        private readonly Dictionary<string, DateTime> _replicationSubmitCooldownByKey;
-        private readonly Dictionary<string, ReplicationPendingSubmitState> _replicationPendingSubmitByKey;
-        private readonly object _replicationOrderLock = new object();
-        private readonly Dictionary<string, DateTime> _protectiveSyncCooldownByKey;
-        private readonly object _protectiveOrderLock = new object();
         private readonly HashSet<string> _riskLockedAccounts;
         private readonly HashSet<string> _evalTargetLockedAccounts;
         private readonly HashSet<string> _riskLockAcknowledgedAccounts;
         private readonly HashSet<string> _riskOneContractAccounts;
         private readonly HashSet<string> _unrealizedLossFlattenTriggeredAccounts;
-        private readonly HashSet<string> _replicationFrozenKeys;
         private readonly GlitchCopyEngine _copyEngine;
         private ReplicationDriftNotice _replicationDriftNotice;
-        private readonly Dictionary<string, ReplicationBurstState> _replicationBurstStateByKey;
         private readonly Dictionary<string, DateTime> _noProtectionDetectedSinceByKey;
         private readonly Dictionary<string, DateTime> _riskMitigationCooldownByKey;
-        private readonly Dictionary<string, DateTime> _riskFlattenFallbackWarningCooldownByKey;
-        private readonly object _riskFlattenFallbackWarningLock = new object();
-        private readonly ConcurrentDictionary<string, TradeSourceKind> _tradeSourceByAccountInstrument;
-        private readonly ConcurrentDictionary<string, DateTime> _tradeSourceObservedUtcByAccountInstrument;
         private readonly Dictionary<string, string> _lastOrderJournalSnapshotByKey;
         private readonly Dictionary<string, string> _lastPositionJournalSnapshotByKey;
         private readonly Dictionary<string, string> _lastExecutionJournalSnapshotByKey;
         private readonly Dictionary<string, DateTime> _runtimeJournalCooldownByKey;
         private readonly Dictionary<string, DateTime> _informationalWarningJournalCooldownByKey;
-        private readonly int _replicationSubmitMaxAttempts;
-        private readonly int _replicationSubmitCooldownMs;
-        private readonly int _protectiveSyncCooldownMs;
         private readonly GlitchAnalyticsEngine _analyticsEngine;
         private readonly GlitchFundamentalAnalysisService _fundamentalAnalysisService;
         private readonly Dictionary<int, AnalyticsDialVisual> _analyticsDialVisuals;
@@ -206,7 +183,6 @@ namespace Glitch.UI
         private DateTime _lastPeakStateWriteUtc;
         private DateTime _lastAuditWriteUtc;
         private DateTime _lastUiRefreshUtc;
-        private DateTime _replicationWarmupUntilUtc;
         private bool _hasLoggedStartupRuntimeSettings;
         private bool _isWindowClosed;
         private TextBlock _totalPnlValueText;
@@ -259,13 +235,6 @@ namespace Glitch.UI
         private FrameworkElement _analyticsFundamentalCard;
         private NTWindow _analyticsDetachedWindow;
 
-        private enum TradeSourceKind
-        {
-            Unknown = 0,
-            Manual = 1,
-            Strategy = 2
-        }
-
         static GlitchMainWindow()
         {
             TealAccentBrush.Freeze();
@@ -303,41 +272,29 @@ namespace Glitch.UI
             _licenseCacheState = GlitchRuntimePolicyStore.LoadLicenseCache(_licenseCacheFilePath);
             _peakStatesByAccount = new ConcurrentDictionary<string, PeakState>(StringComparer.OrdinalIgnoreCase);
             _accountEventSubscriptions = new Dictionary<string, List<EventBridgeSubscription>>(StringComparer.OrdinalIgnoreCase);
-            _replicationSubmitCooldownByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
-            _replicationPendingSubmitByKey = new Dictionary<string, ReplicationPendingSubmitState>(StringComparer.OrdinalIgnoreCase);
-            _protectiveSyncCooldownByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
             _riskLockedAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _evalTargetLockedAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _riskLockAcknowledgedAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _riskOneContractAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _unrealizedLossFlattenTriggeredAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            _replicationFrozenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _copyEngine = new GlitchCopyEngine
             {
                 Journal = (accountName, message) => AppendJournal(accountName, "Replication", message),
                 RaiseCritical = (accountName, message, key) =>
                     RaiseCriticalWarning(accountName, message, key, unlocksTrading: false)
             };
-            _replicationBurstStateByKey = new Dictionary<string, ReplicationBurstState>(StringComparer.OrdinalIgnoreCase);
             _noProtectionDetectedSinceByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
             _riskMitigationCooldownByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
-            _riskFlattenFallbackWarningCooldownByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
-            _tradeSourceByAccountInstrument = new ConcurrentDictionary<string, TradeSourceKind>(StringComparer.OrdinalIgnoreCase);
-            _tradeSourceObservedUtcByAccountInstrument = new ConcurrentDictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
             _lastOrderJournalSnapshotByKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             _lastPositionJournalSnapshotByKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             _lastExecutionJournalSnapshotByKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             _runtimeJournalCooldownByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
             _informationalWarningJournalCooldownByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
-            _replicationSubmitMaxAttempts = ResolveRuntimeIntSetting("GLITCH_REPLICATION_SUBMIT_MAX_ATTEMPTS", 2, 1, 5);
-            _replicationSubmitCooldownMs = ResolveRuntimeIntSetting("GLITCH_REPLICATION_SUBMIT_COOLDOWN_MS", 300, 250, 10000);
-            _protectiveSyncCooldownMs = ResolveRuntimeIntSetting("GLITCH_PROTECTIVE_SYNC_COOLDOWN_MS", 750, 100, 5000);
             _analyticsEngine = new GlitchAnalyticsEngine();
             _fundamentalAnalysisService = new GlitchFundamentalAnalysisService();
             _analyticsDialVisuals = new Dictionary<int, AnalyticsDialVisual>();
             _analyticsTimeframeVisuals = new Dictionary<int, AnalyticsTimeframeMetricVisual>();
             _lastUiRefreshUtc = DateTime.MinValue;
-            _replicationWarmupUntilUtc = DateTime.MinValue;
             _nextLicenseHeartbeatUtc = DateTime.UtcNow;
             _licenseDeviceFingerprintHash = ComputeDeviceFingerprintHash();
             _isClientUpdateAvailable = false;
@@ -800,16 +757,10 @@ namespace Glitch.UI
             if (_isReplicatingUi)
             {
                 AppendJournal("System", "Replication", "replication_enabled|origin=user_click");
-                _replicationWarmupUntilUtc = DateTime.UtcNow.Add(ReplicationStartupWarmup);
-                ClearReplicationSubmitCooldowns();
-                ClearProtectiveSyncCooldowns();
             }
             else
             {
-                ClearReplicationSubmitCooldowns();
-                ClearProtectiveSyncCooldowns();
                 ClearComplianceEnforcementRuntimeState();
-                _replicationWarmupUntilUtc = DateTime.MinValue;
                 CancelGlitchWorkingOrdersOnFollowers(activeAccounts);
                 _replicationDriftNotice = null;
                 UpdateReplicationDriftBanner();
@@ -821,7 +772,7 @@ namespace Glitch.UI
                 "System",
                 "Replication",
                 _isReplicatingUi
-                    ? $"Replication gate opened. Warm-up {ReplicationStartupWarmup.TotalSeconds:0}s."
+                    ? "Replication gate opened."
                     : "Replication gate closed.");
             UpdateReplicateButtonState();
             UpdateRefreshTimerCadence();
@@ -1534,8 +1485,6 @@ namespace Glitch.UI
                 bool flattened = await WaitForAllAccountsFlatAsync(accounts, TimeSpan.FromSeconds(5));
                 if (flattened)
                 {
-                    ClearReplicationSubmitCooldowns();
-                    ClearProtectiveSyncCooldowns();
                     AppendJournal("System", "Risk", "Flatten All executed successfully.");
                     RefreshAccountData(preferSynchronous: true);
                 }
@@ -3478,7 +3427,6 @@ namespace Glitch.UI
                 WindowState = WindowState.Maximized;
 
             _isReplicatingUi = false;
-            _replicationWarmupUntilUtc = DateTime.MinValue;
             UpdateReplicateButtonState();
             ApplyPlanLimitsToAccountGroups("startup");
             LogStartupRuntimeSettingsOnce();
@@ -3493,10 +3441,6 @@ namespace Glitch.UI
                 return;
 
             _hasLoggedStartupRuntimeSettings = true;
-            AppendJournal(
-                "System",
-                "Runtime",
-                $"Replication settings active: attempts={_replicationSubmitMaxAttempts}, submitCooldown={_replicationSubmitCooldownMs}ms, protectiveCooldown={_protectiveSyncCooldownMs}ms.");
             AppendJournal(
                 "System",
                 "Runtime",
@@ -3515,11 +3459,8 @@ namespace Glitch.UI
             SavePeakStatesToDisk(force: true);
             SaveAuditFeedsToDisk(force: true);
             SaveWindowPlacementToDisk();
-            ClearReplicationSubmitCooldowns();
-            ClearProtectiveSyncCooldowns();
             _isFlattenAllInProgress = false;
             _isReplicatingUi = false;
-            _replicationWarmupUntilUtc = DateTime.MinValue;
             _copyEngine?.Configure(false, null);
             _replicationDriftNotice = null;
             PublishGlitchShellState();
@@ -3642,7 +3583,6 @@ namespace Glitch.UI
             DateTime nowUtc = DateTime.UtcNow;
             PruneRuntimeJournalCaches(nowUtc);
             PruneInformationalWarningJournalCooldowns(nowUtc);
-            PruneTradeSourceSnapshots(nowUtc);
             PruneAccountItemUpdateThrottle(nowUtc);
             MaybeRunLicenseHeartbeat(nowUtc);
 
@@ -4147,9 +4087,6 @@ namespace Glitch.UI
             foreach (string stale in _unrealizedLossFlattenTriggeredAccounts.Where(name => !seenAccounts.Contains(name)).ToList())
                 _unrealizedLossFlattenTriggeredAccounts.Remove(stale);
 
-            foreach (string stale in _replicationFrozenKeys.Where(name => !seenAccounts.Contains(name)).ToList())
-                _replicationFrozenKeys.Remove(stale);
-
             foreach (string stale in _riskLockAcknowledgedAccounts
                          .Where(key => !seenAccounts.Contains(ExtractTradingLockAckAccountName(key)))
                          .ToList())
@@ -4163,12 +4100,8 @@ namespace Glitch.UI
             _riskOneContractAccounts.Clear();
             _unrealizedLossFlattenTriggeredAccounts.Clear();
             _riskLockAcknowledgedAccounts.Clear();
-            _replicationFrozenKeys.Clear();
-            _replicationBurstStateByKey.Clear();
             _noProtectionDetectedSinceByKey.Clear();
             _riskMitigationCooldownByKey.Clear();
-            lock (_riskFlattenFallbackWarningLock)
-                _riskFlattenFallbackWarningCooldownByKey.Clear();
         }
 
         private static bool IsUnrealizedLossRiskTriggered(AccountGridRow row, double thresholdRatio)
@@ -4324,8 +4257,9 @@ namespace Glitch.UI
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                RecordSubsystemFault("no_protection_detect", ex);
                 return false;
             }
 
@@ -4358,359 +4292,27 @@ namespace Glitch.UI
             if (instruments.Count == 0)
                 return false;
 
-            string flattenSignalName = ResolveRiskFlattenSignalName(mitigationKey);
             string reasonToken = CleanJournalToken(reason);
-            bool flattenIssued = false;
-            foreach (Instrument instrument in instruments)
-            {
-                string instrumentToken = CleanJournalToken(GetInstrumentRoot(instrument));
-                AppendJournal(
-                    account.Name,
-                    "Risk",
-                    $"SYNC|event=flatten_attempt|reason={reasonToken}|instrument={instrumentToken}|signal={flattenSignalName}");
-
-                bool namedConfirmed;
-                string namedResult;
-                Order submittedOrder;
-                try
-                {
-                    namedConfirmed = TrySubmitNamedRiskFlattenOrder(account, instrument, flattenSignalName, out namedResult, out submittedOrder);
-                }
-                catch (Exception ex)
-                {
-                    namedConfirmed = false;
-                    namedResult = "named_submit_exception_" + ex.GetType().Name;
-                    submittedOrder = null;
-                }
-
-                if (namedConfirmed)
-                {
-                    flattenIssued = true;
-                    AppendJournal(
-                        account.Name,
-                        "Risk",
-                        $"SYNC|event=flatten_named_result|reason={reasonToken}|instrument={instrumentToken}|signal={flattenSignalName}|origin={FlattenOrigin.AddonGovernor}|result=confirmed|cause={CleanJournalToken(namedResult)}");
-                    AppendJournal(
-                        account.Name,
-                        "Risk",
-                        $"SYNC|event=flatten_origin|reason={reasonToken}|origin={FlattenOrigin.AddonGovernor}|signal={flattenSignalName}|instrument={instrumentToken}");
-                    continue;
-                }
-
-                if (submittedOrder != null)
-                {
-                    flattenIssued = true;
-                    AppendJournal(
-                        account.Name,
-                        "Risk",
-                        $"SYNC|event=flatten_named_result|reason={reasonToken}|instrument={instrumentToken}|signal={flattenSignalName}|origin={FlattenOrigin.Unknown}|result=pending|cause={CleanJournalToken(namedResult)}");
-                    ScheduleNamedRiskFlattenConfirmationFallback(
-                        account,
-                        instrument,
-                        submittedOrder,
-                        flattenSignalName,
-                        reasonToken,
-                        mitigationKey,
-                        allowFallbackWarning: true);
-                    continue;
-                }
-
-                bool fallbackIssued = TryIssueInstrumentFlattenFallback(
-                    account,
-                    instrument,
-                    flattenSignalName,
-                    reasonToken,
-                    namedResult,
-                    mitigationKey,
-                    allowFallbackWarning: true);
-                AppendJournal(
-                    account.Name,
-                    "Risk",
-                    $"SYNC|event=flatten_named_result|reason={reasonToken}|instrument={instrumentToken}|signal={flattenSignalName}|origin={FlattenOrigin.Unknown}|result=failed|cause={CleanJournalToken(namedResult)}");
-                if (fallbackIssued)
-                    flattenIssued = true;
-            }
-
-            if (!flattenIssued)
-                return false;
-
-            MarkRiskMitigation(mitigationKey, nowUtc);
-            AppendJournal(account.Name, "Risk", reason + ". Flatten issued.");
-            return true;
-        }
-
-        private static string ResolveRiskFlattenSignalName(string mitigationKey)
-        {
-            string key = string.IsNullOrWhiteSpace(mitigationKey) ? string.Empty : mitigationKey.Trim().ToUpperInvariant();
-            if (key.StartsWith("UNRLZ", StringComparison.OrdinalIgnoreCase))
-                return RiskFlattenUnrealizedSignalName;
-            if (key.StartsWith("MAXQTY", StringComparison.OrdinalIgnoreCase))
-                return RiskFlattenMaxQtySignalName;
-            if (key.StartsWith("NAKED", StringComparison.OrdinalIgnoreCase))
-                return RiskFlattenNakedSignalName;
-            if (key.StartsWith("DAILYLIMIT", StringComparison.OrdinalIgnoreCase))
-                return RiskFlattenDailyLimitSignalName;
-            if (key.StartsWith("LOCK", StringComparison.OrdinalIgnoreCase) || key.StartsWith("EVAL", StringComparison.OrdinalIgnoreCase))
-                return RiskFlattenBufferSignalName;
-
-            return RiskFlattenBufferSignalName;
-        }
-
-        private bool TryIssueInstrumentFlattenFallback(
-            Account account,
-            Instrument instrument,
-            string flattenSignalName,
-            string reasonToken,
-            string cause,
-            string mitigationKey,
-            bool allowFallbackWarning)
-        {
-            if (account == null || instrument == null)
-                return false;
-
-            string instrumentToken = CleanJournalToken(GetInstrumentRoot(instrument));
-            string fallbackCause = string.IsNullOrWhiteSpace(cause) ? "named_unconfirmed" : cause;
-            bool fallbackIssued = false;
             try
             {
-                account.Flatten(new[] { instrument });
-                fallbackIssued = true;
+                account.Flatten(instruments.ToArray());
+                MarkRiskMitigation(mitigationKey, nowUtc);
+                AppendJournal(
+                    account.Name,
+                    "Risk",
+                    $"risk_flatten|action=flatten|reason={reasonToken}|instruments={instruments.Count}|origin=enabled_rule");
+                AppendJournal(account.Name, "Risk", reason + ". Flatten issued.");
+                return true;
             }
             catch (Exception ex)
             {
-                fallbackCause = fallbackCause + ";fallback_exception_" + ex.GetType().Name;
-            }
-
-            AppendJournal(
-                account.Name,
-                "Risk",
-                $"SYNC|event=flatten_fallback_used|reason={CleanJournalToken(reasonToken)}|instrument={instrumentToken}|signal={flattenSignalName}|origin={FlattenOrigin.FallbackAccountFlatten}|result={(fallbackIssued ? "issued" : "failed")}|cause={CleanJournalToken(fallbackCause)}");
-            if (!fallbackIssued)
-                return false;
-
-            AppendJournal(
-                account.Name,
-                "Risk",
-                $"SYNC|event=flatten_origin|reason={CleanJournalToken(reasonToken)}|origin={FlattenOrigin.FallbackAccountFlatten}|signal={flattenSignalName}|instrument={instrumentToken}");
-            if (allowFallbackWarning)
-                RaiseRiskFlattenFallbackWarningIfNeeded(account.Name, mitigationKey, flattenSignalName, CleanJournalToken(reasonToken));
-
-            return true;
-        }
-
-        private void RaiseRiskFlattenFallbackWarningIfNeeded(string accountName, string mitigationKey, string flattenSignalName, string reasonToken)
-        {
-            if (_isWindowClosed)
-                return;
-
-            DateTime nowUtc = DateTime.UtcNow;
-            if (!TryMarkRiskFlattenFallbackWarning(mitigationKey, nowUtc))
-                return;
-
-            RaiseCriticalWarning(
-                accountName,
-                "Risk flatten fallback used. Review connection health and broker attribution.",
-                "RiskFlattenFallback",
-                unlocksTrading: false);
-            AppendJournal(
-                accountName,
-                "Risk",
-                $"SYNC|event=flatten_fallback_used|reason={CleanJournalToken(reasonToken)}|instrument=ALL|signal={flattenSignalName}|origin={FlattenOrigin.FallbackAccountFlatten}|result=warning_raised|cause=manual_review_required");
-        }
-
-        private bool TryMarkRiskFlattenFallbackWarning(string mitigationKey, DateTime nowUtc)
-        {
-            string key = string.IsNullOrWhiteSpace(mitigationKey)
-                ? "GLOBAL"
-                : mitigationKey.Trim();
-
-            lock (_riskFlattenFallbackWarningLock)
-            {
-                if (_riskFlattenFallbackWarningCooldownByKey.TryGetValue(key, out DateTime cooldownUntilUtc) &&
-                    cooldownUntilUtc > nowUtc)
-                {
-                    return false;
-                }
-
-                _riskFlattenFallbackWarningCooldownByKey[key] = nowUtc.Add(RiskMitigationCooldown);
-                return true;
-            }
-        }
-
-        private void ScheduleNamedRiskFlattenConfirmationFallback(
-            Account account,
-            Instrument instrument,
-            Order submittedOrder,
-            string flattenSignalName,
-            string reasonToken,
-            string mitigationKey,
-            bool allowFallbackWarning)
-        {
-            if (_isWindowClosed || account == null || instrument == null || submittedOrder == null)
-                return;
-
-            string accountName = account.Name ?? "System";
-            string instrumentToken = CleanJournalToken(GetInstrumentRoot(instrument));
-            string normalizedReason = CleanJournalToken(reasonToken);
-
-            _ = Task.Run(async () =>
-            {
-                if (_isWindowClosed)
-                    return;
-
-                try
-                {
-                    string confirmationResult = await ConfirmNamedRiskFlattenOrderAsync(submittedOrder).ConfigureAwait(false);
-                    bool confirmed = confirmationResult.StartsWith("confirmed_", StringComparison.OrdinalIgnoreCase);
-                    if (confirmed)
-                    {
-                        AppendJournal(
-                            accountName,
-                            "Risk",
-                            $"SYNC|event=flatten_named_result|reason={normalizedReason}|instrument={instrumentToken}|signal={flattenSignalName}|origin={FlattenOrigin.AddonGovernor}|result=confirmed_async|cause={CleanJournalToken(confirmationResult)}");
-                        AppendJournal(
-                            accountName,
-                            "Risk",
-                            $"SYNC|event=flatten_origin|reason={normalizedReason}|origin={FlattenOrigin.AddonGovernor}|signal={flattenSignalName}|instrument={instrumentToken}");
-                        return;
-                    }
-
-                    AppendJournal(
-                        accountName,
-                        "Risk",
-                        $"SYNC|event=flatten_named_result|reason={normalizedReason}|instrument={instrumentToken}|signal={flattenSignalName}|origin={FlattenOrigin.Unknown}|result=failed_async|cause={CleanJournalToken(confirmationResult)}");
-                    TryIssueInstrumentFlattenFallback(
-                        account,
-                        instrument,
-                        flattenSignalName,
-                        normalizedReason,
-                        confirmationResult,
-                        mitigationKey,
-                        allowFallbackWarning);
-                }
-                catch
-                {
-                }
-            });
-        }
-
-        private static bool TrySubmitNamedRiskFlattenOrder(Account account, Instrument instrument, string signalName, out string result, out Order submittedOrder)
-        {
-            result = "unknown";
-            submittedOrder = null;
-            if (account == null || instrument == null)
-            {
-                result = "invalid_account_or_instrument";
+                RecordSubsystemFault("risk_flatten", ex);
+                AppendJournal(
+                    account.Name,
+                    "Risk",
+                    $"risk_flatten|action=flatten|reason={reasonToken}|result=failed_{CleanJournalToken(ex.GetType().Name)}");
                 return false;
             }
-
-            Position position = null;
-            try
-            {
-                position = account.Positions.FirstOrDefault(p =>
-                    p != null &&
-                    p.Instrument != null &&
-                    string.Equals(GetInstrumentRoot(p.Instrument), GetInstrumentRoot(instrument), StringComparison.OrdinalIgnoreCase) &&
-                    p.MarketPosition != MarketPosition.Flat);
-            }
-            catch
-            {
-                result = "position_lookup_failed";
-                return false;
-            }
-
-            if (position == null || position.MarketPosition == MarketPosition.Flat)
-            {
-                result = "no_open_position";
-                return false;
-            }
-
-            int qty = Math.Abs(position.Quantity);
-            if (qty <= 0)
-            {
-                result = "invalid_qty";
-                return false;
-            }
-
-            OrderAction action = position.MarketPosition == MarketPosition.Long
-                ? OrderAction.Sell
-                : OrderAction.BuyToCover;
-
-            try
-            {
-                Order order = account.CreateOrder(
-                    instrument,
-                    action,
-                    OrderType.Market,
-                    GetPreferredFollowerOrderEntry(),
-                    TimeInForce.Day,
-                    qty,
-                    0.0,
-                    0.0,
-                    string.Empty,
-                    signalName ?? RiskFlattenBufferSignalName,
-                    DateTime.MaxValue,
-                    null);
-                if (order == null)
-                {
-                    result = "create_order_null";
-                    return false;
-                }
-
-                account.Submit(new[] { order });
-                OrderState state = order.OrderState;
-                if (state == OrderState.Accepted ||
-                    state == OrderState.Working ||
-                    state == OrderState.PartFilled ||
-                    state == OrderState.Filled)
-                {
-                    result = "confirmed_" + state;
-                    return true;
-                }
-
-                if (state == OrderState.Cancelled || state == OrderState.Rejected)
-                {
-                    result = "failed_" + state;
-                    return false;
-                }
-
-                submittedOrder = order;
-                result = "pending_" + state;
-                return false;
-            }
-            catch
-            {
-                result = "submit_exception";
-                return false;
-            }
-        }
-
-        private static async Task<string> ConfirmNamedRiskFlattenOrderAsync(Order order)
-        {
-            if (order == null)
-                return "failed_order_null";
-
-            DateTime deadlineUtc = DateTime.UtcNow.AddMilliseconds(RiskFlattenConfirmationTimeoutMs);
-            while (DateTime.UtcNow <= deadlineUtc)
-            {
-                OrderState state = order.OrderState;
-                if (state == OrderState.Accepted ||
-                    state == OrderState.Working ||
-                    state == OrderState.PartFilled ||
-                    state == OrderState.Filled)
-                {
-                    return "confirmed_" + state;
-                }
-
-                if (state == OrderState.Cancelled || state == OrderState.Rejected)
-                {
-                    return "failed_" + state;
-                }
-
-                await Task.Delay(RiskFlattenConfirmationPollMs).ConfigureAwait(false);
-            }
-
-            return "failed_timeout_" + order.OrderState;
         }
 
         private bool IsRiskMitigationCoolingDown(string mitigationKey, DateTime nowUtc)
@@ -4738,17 +4340,6 @@ namespace Glitch.UI
                 .ToList())
             {
                 _riskMitigationCooldownByKey.Remove(stale);
-            }
-
-            lock (_riskFlattenFallbackWarningLock)
-            {
-                foreach (string stale in _riskFlattenFallbackWarningCooldownByKey
-                    .Where(kvp => kvp.Value <= nowUtc)
-                    .Select(kvp => kvp.Key)
-                    .ToList())
-                {
-                    _riskFlattenFallbackWarningCooldownByKey.Remove(stale);
-                }
             }
         }
 
@@ -4787,7 +4378,6 @@ namespace Glitch.UI
                 token.StartsWith("UnrealizedLossFlatten", StringComparison.OrdinalIgnoreCase) ||
                 token.StartsWith("MaxContractsBreach", StringComparison.OrdinalIgnoreCase) ||
                 token.StartsWith("NoProtectionLock", StringComparison.OrdinalIgnoreCase) ||
-                token.StartsWith("ReplicationFreeze", StringComparison.OrdinalIgnoreCase) ||
                 token.StartsWith("EvalProfitTargetLock", StringComparison.OrdinalIgnoreCase))
             {
                 return WarningSeverity.Critical;
@@ -4974,16 +4564,10 @@ namespace Glitch.UI
                 {
                     removedAnyLock = _evalTargetLockedAccounts.Remove(accountName);
                 }
-                else if (warningKey.StartsWith("ReplicationFreeze|", StringComparison.OrdinalIgnoreCase))
-                {
-                    removedAnyLock = _replicationFrozenKeys.Remove(accountName);
-                }
                 else if (warningKey.StartsWith("MaxContractsBreach|", StringComparison.OrdinalIgnoreCase) ||
                          warningKey.StartsWith("NoProtectionLock|", StringComparison.OrdinalIgnoreCase))
                 {
                     removedAnyLock = _riskLockedAccounts.Remove(accountName);
-                    if (_replicationFrozenKeys.Remove(accountName))
-                        removedAnyLock = true;
                 }
                 else
                 {
@@ -5738,87 +5322,13 @@ namespace Glitch.UI
                     UpdatePeakState(BuildPeakStateKey(account.Name, "TrailingEod"), eodReference);
                 }
 
-                CaptureTradeSourceFromRuntimeEvent(eventName, account, eventArgs, nowUtc);
                 TryAppendRuntimeEventJournalEntry(eventName, account, eventArgs);
                 TryProcessCopyExecutionFromRuntimeEvent(eventName, account, eventArgs);
             }
-            catch
+            catch (Exception ex)
             {
+                RecordSubsystemFault("account_runtime_event", ex);
             }
-        }
-
-        private void CaptureTradeSourceFromRuntimeEvent(string eventName, Account account, object eventArgs, DateTime nowUtc)
-        {
-            if (account == null || string.IsNullOrWhiteSpace(account.Name) || string.IsNullOrWhiteSpace(eventName))
-                return;
-
-            string normalizedEvent = eventName.Trim();
-            if (!normalizedEvent.Equals("ExecutionUpdate", StringComparison.OrdinalIgnoreCase) &&
-                !normalizedEvent.Equals("OrderUpdate", StringComparison.OrdinalIgnoreCase))
-            {
-                return;
-            }
-
-            if (!TryResolveTradeSourceFromEvent(eventArgs, out string instrumentRoot, out TradeSourceKind sourceKind))
-                return;
-            if (sourceKind != TradeSourceKind.Manual && sourceKind != TradeSourceKind.Strategy)
-                return;
-
-            string key = BuildAccountInstrumentKey(account.Name, instrumentRoot);
-            if (string.IsNullOrWhiteSpace(key))
-                return;
-
-            _tradeSourceByAccountInstrument[key] = sourceKind;
-            _tradeSourceObservedUtcByAccountInstrument[key] = nowUtc;
-        }
-
-        private static bool TryResolveTradeSourceFromEvent(object eventArgs, out string instrumentRoot, out TradeSourceKind sourceKind)
-        {
-            instrumentRoot = null;
-            sourceKind = TradeSourceKind.Unknown;
-
-            object executionObject = TryGetNestedPropertyValue(eventArgs, "Execution");
-            object orderObject = TryGetNestedPropertyValue(eventArgs, "Order");
-            object sourceObject = executionObject ?? orderObject ?? eventArgs;
-            if (sourceObject == null)
-                return false;
-
-            string instrumentToken =
-                TryGetNestedPropertyValueAsString(sourceObject, "Instrument.MasterInstrument.Name", "Instrument.FullName", "Instrument") ??
-                TryGetNestedPropertyValueAsString(orderObject, "Instrument.MasterInstrument.Name", "Instrument.FullName", "Instrument");
-            string normalizedInstrument = NormalizeExecutionInstrumentToken(instrumentToken);
-            if (string.IsNullOrWhiteSpace(normalizedInstrument) || normalizedInstrument == "-")
-                return false;
-
-            string signalName =
-                TryGetNestedPropertyValueAsString(sourceObject, "Order.Name", "Name") ??
-                TryGetNestedPropertyValueAsString(orderObject, "Name");
-            if (IsReplicationInternalSignal(signalName))
-                return false;
-
-            string orderEntryToken =
-                TryGetNestedPropertyValueAsString(sourceObject, "Order.OrderEntry", "OrderEntry", "Order.Entry") ??
-                TryGetNestedPropertyValueAsString(orderObject, "OrderEntry", "Entry");
-            sourceKind = ClassifyTradeSource(orderEntryToken, signalName);
-            if (sourceKind == TradeSourceKind.Unknown)
-                return false;
-
-            instrumentRoot = normalizedInstrument;
-            return true;
-        }
-
-        private static TradeSourceKind ClassifyTradeSource(string orderEntryToken, string signalName)
-        {
-            if (ContainsText(orderEntryToken, "Automated") || ContainsText(orderEntryToken, "Strategy"))
-                return TradeSourceKind.Strategy;
-            if (ContainsText(orderEntryToken, "Manual"))
-                return TradeSourceKind.Manual;
-
-            // Fallback only for explicit manual marker to avoid false strategy positives.
-            if (ContainsText(signalName, "Manual"))
-                return TradeSourceKind.Manual;
-
-            return TradeSourceKind.Unknown;
         }
 
         private static bool IsReplicationInternalSignal(string signalName)
@@ -5831,140 +5341,6 @@ namespace Glitch.UI
                    token.StartsWith(GlitchCopyEngine.CopySignalName, StringComparison.OrdinalIgnoreCase) ||
                    token.StartsWith(ProtectiveStopSignalName, StringComparison.OrdinalIgnoreCase) ||
                    token.StartsWith(ProtectiveTargetSignalName, StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool ContainsText(string value, string token)
-        {
-            if (string.IsNullOrWhiteSpace(value) || string.IsNullOrWhiteSpace(token))
-                return false;
-
-            return value.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
-        private static string BuildAccountInstrumentKey(string accountName, string instrumentRoot)
-        {
-            if (string.IsNullOrWhiteSpace(accountName) || string.IsNullOrWhiteSpace(instrumentRoot))
-                return string.Empty;
-
-            return accountName.Trim() + "|" + instrumentRoot.Trim().ToUpperInvariant();
-        }
-
-        private void PruneTradeSourceSnapshots(DateTime nowUtc)
-        {
-            foreach (string staleKey in _tradeSourceObservedUtcByAccountInstrument
-                         .Where(kvp => (nowUtc - kvp.Value) > StrategySourceSnapshotTtl)
-                         .Select(kvp => kvp.Key)
-                         .ToList())
-            {
-                _tradeSourceObservedUtcByAccountInstrument.TryRemove(staleKey, out _);
-                _tradeSourceByAccountInstrument.TryRemove(staleKey, out _);
-            }
-        }
-
-        private bool IsStrategyDrivenMasterInstrument(Account masterAccount, string instrumentRoot, DateTime nowUtc)
-        {
-            if (masterAccount == null || string.IsNullOrWhiteSpace(masterAccount.Name) || string.IsNullOrWhiteSpace(instrumentRoot))
-                return false;
-
-            string normalizedRoot = instrumentRoot.Trim().ToUpperInvariant();
-            if (HasStrategyWorkingOrdersForInstrumentRoot(masterAccount, normalizedRoot))
-                return true;
-
-            int netQty = GetNetQuantityForInstrumentRoot(masterAccount, normalizedRoot);
-            string key = BuildAccountInstrumentKey(masterAccount.Name, normalizedRoot);
-            if (string.IsNullOrWhiteSpace(key))
-                return false;
-
-            if (!_tradeSourceByAccountInstrument.TryGetValue(key, out TradeSourceKind source))
-                return false;
-
-            if (!_tradeSourceObservedUtcByAccountInstrument.TryGetValue(key, out DateTime observedUtc))
-            {
-                _tradeSourceByAccountInstrument.TryRemove(key, out _);
-                return false;
-            }
-
-            if ((nowUtc - observedUtc) > StrategySourceSnapshotTtl)
-            {
-                _tradeSourceByAccountInstrument.TryRemove(key, out _);
-                _tradeSourceObservedUtcByAccountInstrument.TryRemove(key, out _);
-                return false;
-            }
-
-            if (netQty == 0 && source != TradeSourceKind.Strategy)
-            {
-                _tradeSourceByAccountInstrument.TryRemove(key, out _);
-                _tradeSourceObservedUtcByAccountInstrument.TryRemove(key, out _);
-                return false;
-            }
-
-            return source == TradeSourceKind.Strategy && netQty != 0;
-        }
-
-        private bool HasStrategyWorkingOrdersForInstrumentRoot(Account account, string instrumentRoot)
-        {
-            if (account == null || string.IsNullOrWhiteSpace(instrumentRoot))
-                return false;
-
-            try
-            {
-                foreach (Order order in GetWorkingOrdersForInstrumentRoot(account, instrumentRoot))
-                {
-                    if (order == null || IsReplicatedEntryOrder(order) || IsReplicatedProtectiveOrder(order))
-                        continue;
-
-                    string orderEntryText = TryGetNestedPropertyValueAsString(order, "OrderEntry", "Entry");
-                    if (ContainsText(orderEntryText, "Automated") || ContainsText(orderEntryText, "Strategy"))
-                        return true;
-                }
-            }
-            catch
-            {
-            }
-
-            return false;
-        }
-
-        private HashSet<string> BuildStrategyComplianceAccountSet(IReadOnlyList<Account> activeAccounts, DateTime nowUtc)
-        {
-            var enforceAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (!_isReplicatingUi || _accountGroups == null || _accountGroups.Count == 0)
-                return enforceAccounts;
-
-            var accountsByName = (activeAccounts ?? Array.Empty<Account>())
-                .Where(account => account != null && !string.IsNullOrWhiteSpace(account.Name))
-                .GroupBy(account => account.Name.Trim(), StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
-
-            foreach (AccountGroupDefinition group in _accountGroups)
-            {
-                if (group == null || string.IsNullOrWhiteSpace(group.MasterAccount) || group.Members == null || group.Members.Count == 0)
-                    continue;
-                if (!accountsByName.TryGetValue(group.MasterAccount.Trim(), out Account masterAccount) || masterAccount == null)
-                    continue;
-
-                foreach (AccountGroupMemberRow member in group.Members)
-                {
-                    if (member == null || !member.IsEnabled || string.IsNullOrWhiteSpace(member.FollowerAccount))
-                        continue;
-                    if (!accountsByName.TryGetValue(member.FollowerAccount.Trim(), out Account followerAccount) || followerAccount == null)
-                        continue;
-
-                    foreach (string instrumentRoot in GetSyncInstrumentRoots(masterAccount, followerAccount))
-                    {
-                        if (string.IsNullOrWhiteSpace(instrumentRoot))
-                            continue;
-
-                        if (IsStrategyDrivenMasterInstrument(masterAccount, instrumentRoot, nowUtc))
-                        {
-                            enforceAccounts.Add(followerAccount.Name.Trim());
-                            break;
-                        }
-                    }
-                }
-            }
-
-            return enforceAccounts;
         }
 
         private void TryAppendRuntimeEventJournalEntry(string eventName, Account account, object eventArgs)

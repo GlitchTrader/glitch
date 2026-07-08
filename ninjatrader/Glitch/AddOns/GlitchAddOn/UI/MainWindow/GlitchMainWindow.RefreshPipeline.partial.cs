@@ -54,7 +54,6 @@ namespace Glitch.UI
                 return;
             }
 
-            ExecuteReplicationCycle(activeAccounts);
             PublishGlitchShellState();
         }
 
@@ -197,7 +196,6 @@ namespace Glitch.UI
             ApplyAccountRows(rows);
             ApplyRiskMitigations(rows, activeAccounts);
             RefreshGroupMasterDropdownOptionsIfNeeded(rows);
-            ExecuteReplicationCycle(activeAccounts);
             if (_isReplicatingUi)
                 RefreshCopyEngineConfiguration(activeAccounts);
             EvaluateReplicationDrift(activeAccounts);

@@ -2,6 +2,13 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-08 — Cursor honest-copy Phase 4 (compile pending)
+
+- **P4-1:** `GlitchMainWindow.Replication.partial.cs` shrunk to honest-copy shim (~550 LOC): copy engine wiring, drift monitor, user Sync now (`GLT-SYNC`), legacy flag warns once.
+- **P4-2:** Deleted polling replication body, protective mirror, emergency stop, strategy trade-source tree, replication freeze/burst/cooldown state.
+- **P4-3:** Risk auto-flatten uses `account.Flatten` only (named-flatten chain removed).
+- **P4-4:** Money-path empty catches on replication submit, cancel, runtime bridge, no-protection detect → `RecordSubsystemFault`.
+
 ## 2026-07-08 — Cursor honest-copy Phase 2–3 (compile pending)
 
 - **P2-1:** `GlitchRiskMitigationEngine` — pure trigger evaluation; `ApplyRiskMitigations` → `ComputeRiskState` + `ApplyEnabledRiskActions`.

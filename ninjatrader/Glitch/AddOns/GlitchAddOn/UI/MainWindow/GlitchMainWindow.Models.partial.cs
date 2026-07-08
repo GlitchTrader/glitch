@@ -274,76 +274,12 @@ namespace Glitch.UI
             public double SignedAgreementScore { get; set; }
         }
 
-        private enum ReplicationVetoReason
-        {
-            None = 0,
-            MasterCapExceeded = 1,
-            FollowerCapExceeded = 2,
-            TradingLocked = 3,
-            BurstDetected = 4,
-            LocalComplianceBreach = 5,
-            MissingMasterProtective = 6,
-            Unknown = 7
-        }
-
-        private enum ComplianceBreachReason
-        {
-            None = 0,
-            BufferCriticalLock = 1,
-            EvalProfitTargetLock = 2,
-            UnrealizedLossFlatten = 3,
-            MaxContractsExceeded = 4,
-            NoProtectionDetected = 5
-        }
-
-        private enum FlattenOrigin
-        {
-            Unknown = 0,
-            StrategyRisk = 1,
-            AddonGovernor = 2,
-            ReplicationHardResync = 3,
-            FallbackAccountFlatten = 4
-        }
-
         private enum WarningSeverity
         {
             Critical = 0,
             Notice = 1,
             Operational = 2,
             Informational = 3
-        }
-
-        private sealed class ReplicationIntent
-        {
-            public string Key { get; set; }
-            public Account MasterAccount { get; set; }
-            public Account FollowerAccount { get; set; }
-            public string InstrumentRoot { get; set; }
-            public Instrument TradeInstrument { get; set; }
-            public int TargetNetQty { get; set; }
-            public bool EnforceStrategyCompliance { get; set; }
-        }
-
-        private sealed class ReplicationBurstState
-        {
-            public DateTime WindowStartUtc { get; set; }
-            public int LastObservedQty { get; set; }
-            public int QtyChangeCount { get; set; }
-        }
-
-        private sealed class ReplicationPendingSubmitState
-        {
-            public int TargetNetQty { get; set; }
-            public int FollowerNetQtyAtSubmit { get; set; }
-            public DateTime ExpiresUtc { get; set; }
-        }
-
-        private sealed class ProtectiveTemplate
-        {
-            public bool HasStop { get; set; }
-            public double StopPrice { get; set; }
-            public bool HasTarget { get; set; }
-            public double TargetPrice { get; set; }
         }
 
         private sealed class EventBridgeSubscription
