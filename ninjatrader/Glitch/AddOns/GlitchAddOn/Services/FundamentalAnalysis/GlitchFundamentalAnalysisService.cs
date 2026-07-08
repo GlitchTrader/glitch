@@ -50,7 +50,7 @@ namespace Glitch.Services
 
     internal sealed partial class GlitchFundamentalAnalysisService : IDisposable
     {
-        private const int HttpTimeoutMs = 12000;
+        private const int HttpTimeoutMs = GlitchNetworkPolicy.HttpTimeoutMs;
         private const int MaxHeadlineAgeDays = 7;
         private const int MaxHeadlinesPerSymbol = 220;
         private const int LockoutMinutesBefore = 5;
@@ -791,85 +791,139 @@ namespace Glitch.Services
 
         private GlitchFundamentalAnalysisSnapshot BuildSnapshot(string instrumentRoot, DateTime nowUtc)
         {
+            SnapshotScratch scratch = CaptureSnapshotScratch(instrumentRoot);
+
+            NewsComposite composite = BuildNewsComposite(
+                scratch.SymbolWeights,
+                scratch.HeadlinesBySymbol,
+                null,
+                scratch.Carry,
+                nowUtc);
+            QuoteComposite quoteComposite = BuildQuoteComposite(
+                scratch.SymbolWeights,
+                scratch.QuotesBySymbol,
+                scratch.QuoteCarry,
+                nowUtc);
+            double mag7InfluenceScore = BuildMag7InfluenceScore(composite, quoteComposite);
+
+            NewsLockoutState lockoutState = BuildLockoutState(scratch.InstrumentRoot, scratch.EconomicEvents, nowUtc);
+            List<string> officialNewsLines = BuildOfficialNewsLines(
+                scratch.EconomicEvents,
+                scratch.InstrumentRoot,
+                nowUtc,
+                scratch.LastCalendarStatus,
+                scratch.LastCalendarSuccessUtc,
+                scratch.HasFred);
+            string officialNewsText = BuildOfficialNewsText(officialNewsLines);
+            string earningsText = BuildEarningsText(
+                scratch.SymbolWeights,
+                scratch.ValuationBySymbol,
+                scratch.NextEarningsBySymbol,
+                scratch.LastValuationStatus,
+                scratch.HasFinnhub,
+                scratch.Profile.SupportsEarnings);
+            List<string> mag7ScoreLines = BuildMag7ScoreLines(scratch.SymbolWeights, composite, quoteComposite);
+            List<string> latestHeadlineLines = BuildLatestHeadlineLines(scratch.SymbolWeights, nowUtc);
+
+            string newsSentimentText = BuildNewsSentimentText(
+                scratch.Profile.CompositeLabel,
+                composite,
+                scratch.LastNewsStatus,
+                scratch.LastNewsSuccessUtc,
+                scratch.HasFinnhub);
+            if (scratch.HasFinnhub)
+            {
+                newsSentimentText +=
+                    " | " +
+                    scratch.Profile.InfluenceLabel +
+                    " influence " +
+                    mag7InfluenceScore.ToString("+0.00;-0.00;0.00", CultureInfo.CurrentCulture);
+            }
+
+            CommitSnapshotCarryForward(scratch.InstrumentRoot, nowUtc, composite.CompositeScore, quoteComposite.CompositeScore);
+
+            return new GlitchFundamentalAnalysisSnapshot
+            {
+                NewsSentiment = newsSentimentText,
+                EarningsAnalysis = earningsText,
+                OfficialNews = officialNewsText,
+                ScoreSectionTitle = scratch.Profile.ScoreSectionTitle,
+                IsNewsLockoutActive = lockoutState.IsActive,
+                NewsLockoutText = lockoutState.Message,
+                Mag7InfluenceScore = mag7InfluenceScore,
+                Mag7ScoreLines = mag7ScoreLines,
+                LatestHeadlineLines = latestHeadlineLines,
+                OfficialNewsLines = officialNewsLines
+            };
+        }
+
+        private sealed class SnapshotScratch
+        {
+            public string InstrumentRoot;
+            public bool HasFinnhub;
+            public bool HasFred;
+            public InstrumentFundamentalProfile Profile;
+            public Dictionary<string, double> SymbolWeights;
+            public CarryForwardState Carry;
+            public CarryForwardState QuoteCarry;
+            public Dictionary<string, List<NewsHeadline>> HeadlinesBySymbol;
+            public Dictionary<string, SymbolQuoteState> QuotesBySymbol;
+            public Dictionary<string, ValuationMetrics> ValuationBySymbol;
+            public Dictionary<string, EarningsEvent> NextEarningsBySymbol;
+            public List<EconomicEvent> EconomicEvents;
+            public string LastCalendarStatus;
+            public DateTime LastCalendarSuccessUtc;
+            public string LastNewsStatus;
+            public DateTime LastNewsSuccessUtc;
+            public string LastValuationStatus;
+        }
+
+        private SnapshotScratch CaptureSnapshotScratch(string instrumentRoot)
+        {
             lock (_syncRoot)
             {
+                string normalizedRoot = instrumentRoot ?? string.Empty;
                 bool hasFinnhub = HasInternalApiContext();
-                bool hasFred = hasFinnhub;
                 InstrumentFundamentalProfile profile = ResolveInstrumentProfile(instrumentRoot);
-                Dictionary<string, double> symbolWeights = new Dictionary<string, double>(profile.SymbolWeights, StringComparer.OrdinalIgnoreCase);
-                _carryForwardByInstrument.TryGetValue(instrumentRoot ?? string.Empty, out CarryForwardState carry);
-                _quoteCarryForwardByInstrument.TryGetValue(instrumentRoot ?? string.Empty, out CarryForwardState quoteCarry);
+                _carryForwardByInstrument.TryGetValue(normalizedRoot, out CarryForwardState carry);
+                _quoteCarryForwardByInstrument.TryGetValue(normalizedRoot, out CarryForwardState quoteCarry);
 
-                NewsComposite composite = BuildNewsComposite(
-                    symbolWeights,
-                    _headlinesBySymbol,
-                    null,
-                    carry,
-                    nowUtc);
-                QuoteComposite quoteComposite = BuildQuoteComposite(
-                    symbolWeights,
-                    _quotesBySymbol,
-                    quoteCarry,
-                    nowUtc);
-                double mag7InfluenceScore = BuildMag7InfluenceScore(composite, quoteComposite);
+                return new SnapshotScratch
+                {
+                    InstrumentRoot = normalizedRoot,
+                    HasFinnhub = hasFinnhub,
+                    HasFred = hasFinnhub,
+                    Profile = profile,
+                    SymbolWeights = new Dictionary<string, double>(profile.SymbolWeights, StringComparer.OrdinalIgnoreCase),
+                    Carry = carry,
+                    QuoteCarry = quoteCarry,
+                    HeadlinesBySymbol = new Dictionary<string, List<NewsHeadline>>(_headlinesBySymbol, StringComparer.OrdinalIgnoreCase),
+                    QuotesBySymbol = new Dictionary<string, SymbolQuoteState>(_quotesBySymbol, StringComparer.OrdinalIgnoreCase),
+                    ValuationBySymbol = new Dictionary<string, ValuationMetrics>(_valuationBySymbol, StringComparer.OrdinalIgnoreCase),
+                    NextEarningsBySymbol = new Dictionary<string, EarningsEvent>(_nextEarningsBySymbol, StringComparer.OrdinalIgnoreCase),
+                    EconomicEvents = new List<EconomicEvent>(_economicEvents),
+                    LastCalendarStatus = _lastCalendarStatus,
+                    LastCalendarSuccessUtc = _lastCalendarSuccessUtc,
+                    LastNewsStatus = _lastNewsStatus,
+                    LastNewsSuccessUtc = _lastNewsSuccessUtc,
+                    LastValuationStatus = _lastValuationStatus
+                };
+            }
+        }
 
-                NewsLockoutState lockoutState = BuildLockoutState(instrumentRoot, _economicEvents, nowUtc);
-                List<string> officialNewsLines = BuildOfficialNewsLines(
-                    _economicEvents,
-                    instrumentRoot,
-                    nowUtc,
-                    _lastCalendarStatus,
-                    _lastCalendarSuccessUtc,
-                    hasFred);
-                string officialNewsText = BuildOfficialNewsText(officialNewsLines);
-                string earningsText = BuildEarningsText(
-                    symbolWeights,
-                    _valuationBySymbol,
-                    _nextEarningsBySymbol,
-                    _lastValuationStatus,
-                    hasFinnhub,
-                    profile.SupportsEarnings);
-                List<string> mag7ScoreLines = BuildMag7ScoreLines(symbolWeights, composite, quoteComposite);
-                List<string> latestHeadlineLines = BuildLatestHeadlineLines(symbolWeights, nowUtc);
-
+        private void CommitSnapshotCarryForward(string instrumentRoot, DateTime nowUtc, double compositeScore, double quoteCompositeScore)
+        {
+            lock (_syncRoot)
+            {
                 _carryForwardByInstrument[instrumentRoot ?? string.Empty] = new CarryForwardState
                 {
-                    Score = composite.CompositeScore,
+                    Score = compositeScore,
                     UpdatedUtc = nowUtc
                 };
                 _quoteCarryForwardByInstrument[instrumentRoot ?? string.Empty] = new CarryForwardState
                 {
-                    Score = quoteComposite.CompositeScore,
+                    Score = quoteCompositeScore,
                     UpdatedUtc = nowUtc
-                };
-
-                string newsSentimentText = BuildNewsSentimentText(
-                    profile.CompositeLabel,
-                    composite,
-                    _lastNewsStatus,
-                    _lastNewsSuccessUtc,
-                    hasFinnhub);
-                if (hasFinnhub)
-                {
-                    newsSentimentText +=
-                        " | " +
-                        profile.InfluenceLabel +
-                        " influence " +
-                        mag7InfluenceScore.ToString("+0.00;-0.00;0.00", CultureInfo.CurrentCulture);
-                }
-
-                return new GlitchFundamentalAnalysisSnapshot
-                {
-                    NewsSentiment = newsSentimentText,
-                    EarningsAnalysis = earningsText,
-                    OfficialNews = officialNewsText,
-                    ScoreSectionTitle = profile.ScoreSectionTitle,
-                    IsNewsLockoutActive = lockoutState.IsActive,
-                    NewsLockoutText = lockoutState.Message,
-                    Mag7InfluenceScore = mag7InfluenceScore,
-                    Mag7ScoreLines = mag7ScoreLines,
-                    LatestHeadlineLines = latestHeadlineLines,
-                    OfficialNewsLines = officialNewsLines
                 };
             }
         }

@@ -2,14 +2,29 @@
 
 Branch: `glitch/bulletproof-wave1`. All items **partial (awaiting NT8 compile)** until Alan presses F5 and verifies acceptance.
 
+## Layout model (2026-07-07 accordion pass)
+
+| Layer | Behavior |
+|-------|----------|
+| Tab chrome | Header stats + footer tabs fixed (unchanged) |
+| Tab body | One `ScrollViewer` (page scroll) |
+| Sections | `Expander` stack; primary section expanded on open |
+| Section content | Padded inner `ScrollViewer`; `MaxHeight` from viewport on resize/expand |
+| Grids | No fixed pixel caps; `ConfigureDataGridScrolling` for horizontal overflow |
+
+**Alan verify:** Dashboard — Replication Groups expanded, Connected Accounts collapsed; Journal — expand Live Feed, scrollbar inside section; open all sections — page scroll reaches everything.
+
+---
+
 ## GL-010 — Scrollable panels (WO-1, WO-2)
 
 | Area | Files | Lines (approx) |
 |------|-------|----------------|
-| Connected Accounts cap | `GlitchMainWindow.DashboardTab.partial.cs` | `MaxHeight = 240` on accounts DataGrid |
-| Follower group cap | `GlitchMainWindow.cs` `CreateGroupMembersGrid` | `MaxHeight = 240` per-group DataGrid |
+| Page + section scroll | `GlitchMainWindow.AccordionLayout.partial.cs` | Shared accordion helpers |
+| Dashboard sections | `GlitchMainWindow.DashboardTab.partial.cs` | Replication Groups + Connected Accounts |
+| Journal sections | `GlitchMainWindow.JournalTab.partial.cs` | Performance + warnings/notice/feed |
 
-**Alan verify:** At 1280×900 with 20 connected accounts and 20 followers in one group (and multiple groups), all rows reachable via grid scrollbars; follower groups section `ScrollViewer` still scrolls when many groups exist.
+**Alan verify:** At 1280×900 with 20 connected accounts and 20 followers, all rows reachable via section scroll and/or page scroll when multiple sections expanded.
 
 **Not done:** `SummaryTab.partial.cs` — no list overflow issue found in this wave.
 
@@ -66,16 +81,30 @@ Branch: `glitch/bulletproof-wave1`. All items **partial (awaiting NT8 compile)**
 
 ---
 
-## GL-011 — Followers first (WO-6)
+## GL-011 — Followers first (WO-6) — iteration 2 (post-Alan feedback)
 
 | Change | File |
 |--------|------|
-| Follower groups row 0 (star); Connected Accounts row 1 (auto, capped) | `GlitchMainWindow.DashboardTab.partial.cs` |
-| Responsive row weights swapped | same |
+| Single star row: follower groups fill viewport | `GlitchMainWindow.DashboardTab.partial.cs` |
+| Connected Accounts in **collapsed-by-default Expander** (not fixed bottom tier) | same |
+| Grid still `MaxHeight = 240` with internal scroll when expander opened | same |
+| Removed narrow-layout `0.45 Star` second row (was fighting followers) | same |
 
-**Alan verify:** On open at 1280×900, follower groups visible without scrolling; connected accounts below with internal scroll if many rows.
+**Rationale:** Alan: 20 accounts in a fixed bottom panel leaves no room for follower tables. Followers own the star row; accounts are opt-in via expander + scroll cap.
+
+**Alan verify:** On open, follower groups dominate; Connected Accounts is a collapsed chevron at bottom; expanding shows scrollable grid, not a permanent height steal.
 
 ---
+
+## GL-013 — Journal polish (iteration 2)
+
+| Change | File |
+|--------|------|
+| Expander headers via `BindLocalizedHeader` (fixes `System.Windows.Controls.TextBlock` display) | `GlitchMainWindow.JournalTab.partial.cs` |
+| Warnings + Notice History + Live Feed in bottom `StackPanel` with 10–12px rhythm | same |
+| Critical warnings grid row `Auto` + `MaxHeight` only (no `Star` / forced `MinHeight`) | same |
+
+**Alan verify:** Notice History and Live Feed show human labels; sections not crushed together; Trader Performance still star row.
 
 ## GL-017 — FundingTicks discontinued (WO-7)
 

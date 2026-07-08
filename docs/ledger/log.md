@@ -2,6 +2,40 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-08 — Performance hardening PA-1…PA-9
+
+- Implemented against current codebase (not blind handoff): HTTP 5s policy, fundamentals snapshot lock shrink, background ledger flush, subsystem fault auto-degrade, flatten submit metric, live-feed virtualization, timer Background priority + reentrancy guard, header metric skip-if-unchanged, collection caps.
+- Evidence: `docs/ledger/audits/performance-hardening-pa1-pa9.md`.
+- **Alan NT8 compile: PASS** (EarningsEvent type fix on snapshot scratch).
+- Operator gates open: PA-5 adversarial replay numbers, PA-9 12h soak, network-pull freeze test, flatten `METRIC|flatten_submit_ms` smoke.
+
+## 2026-07-07 — Runtime performance pass 2
+
+- `AccountGridRow` INotifyPropertyChanged + `ApplyFrom` (stops ObservableCollection row replacement every PnL tick).
+- Replication: 500ms light refresh + 3s full; dropped `AccountItemUpdate` subscription; journal batch inserts; analytics 8s throttle; account subscription resync 20s; typed `Position` scan.
+- Deployed to NT bin for F5.
+
+## 2026-07-07 — Runtime performance audit + fixes
+
+- Operator: NT slowdown/crash pressure with Glitch open; paused accordion layout iteration.
+- Audit: `docs/ledger/audits/runtime-performance-audit.md`.
+- Fixes: tab-gated refresh (analytics/journal/settings), hidden-window light tick, 2s replication UI cadence, `AccountItemUpdate` throttle, shell publish coalesce, Chart Trader style once, single page-scroll accordion (removed nested scroll/MaxHeight layout), `CanContentScroll=false` on grids, localization slim-down.
+- Deployed to NT bin for F5.
+
+## 2026-07-07 — Accordion page layout (Dashboard + Journal)
+
+- Structural redesign per operator: one **page scroll** per tab, standardized **Expander** sections (primary expanded by default), each section has **inner scroll** with viewport-based `MaxHeight`.
+- New `GlitchMainWindow.AccordionLayout.partial.cs`; Dashboard groups + Connected Accounts; Journal Performance + Critical / Notice / Live Feed.
+- Removed magic `MaxHeight`/`MinHeight` on accordion-hosted grids; follower per-group cap removed (section scroll owns overflow).
+- Localization: `dashboard.replication_groups`.
+
+## 2026-07-07 — Cursor wave 1 (post-compile UX iteration)
+
+- **Alan NT8 compile pass** on `glitch/bulletproof-wave1` after compile-fix `aa251da` (CS0120 static/instance, `GridUnitType`, missing field).
+- **Post-compile UX feedback (Alan):** (1) Dashboard two-tier layout still wrong — fixed bottom Connected Accounts steals height from followers when many accounts; wants **one pane**, followers star, accounts **collapse or scroll**, not compete. (2) Journal bottom sections stack tight; Expander headers show **`System.Windows.Controls.TextBlock`** (NT8 Expander renders `Header.ToString()` when Header is a TextBlock — use `BindLocalizedHeader` string headers).
+- **Iteration (uncommitted):** Dashboard — single star row; groups fill; Connected Accounts in **collapsed Expander** with capped grid (`DashboardTab.partial.cs`). Journal — `BindLocalizedHeader` on Notice History + Live Feed expanders; bottom `StackPanel` with spacing; critical grid row `Auto` not `Star`; removed forced `MinHeight` on empty critical grid (`JournalTab.partial.cs`).
+- **Acceptance still open:** Alan recompile + smoke per `audits/ui-calm-changes.md` before any `done` flip.
+
 ## 2026-07-07 — Cursor wave 1
 
 - GL-014 (WO-10): settings granularity design written to `audits/ui-calm-changes.md` (`5ae3c63`); implementation deferred.

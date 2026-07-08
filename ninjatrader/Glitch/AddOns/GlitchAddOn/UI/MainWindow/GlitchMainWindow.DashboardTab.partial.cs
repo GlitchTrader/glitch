@@ -47,19 +47,10 @@ namespace Glitch.UI
         {
             var root = new Grid { Margin = new Thickness(20) };
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.VerticalAlignment = VerticalAlignment.Stretch;
+            root.HorizontalAlignment = HorizontalAlignment.Stretch;
             _dashboardRootGrid = root;
             _dashboardRootGrid.SizeChanged += OnDashboardRootSizeChanged;
-
-            var sectionHeader = new TextBlock
-            {
-                Text = L("dashboard.connected_accounts", "Connected Accounts"),
-                FontWeight = UiHeadingFontWeight,
-                Margin = new Thickness(0, 0, 0, 8),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            BindLocalizedText(sectionHeader, "dashboard.connected_accounts", "Connected Accounts");
-            ApplySkinResource(sectionHeader, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
 
             var grid = new DataGrid
             {
@@ -69,14 +60,9 @@ namespace Glitch.UI
                 CanUserDeleteRows = false,
                 HeadersVisibility = DataGridHeadersVisibility.Column,
                 ItemsSource = _accountRows,
-                VerticalAlignment = VerticalAlignment.Stretch,
-                // GL-010: row1 is Auto-height, so without a cap this grid grows to fit all
-                // connected accounts (up to 20) and crowds out the follower groups below.
-                // Capping height forces the grid's own scrollbar (ConfigureDataGridScrolling)
-                // to engage instead, keeping column headers pinned and rows fully reachable.
-                MaxHeight = 240
+                VerticalAlignment = VerticalAlignment.Top
             };
-            ConfigureDataGridScrolling(grid);
+            ConfigureDataGridForPageScroll(grid, allowHorizontalScroll: true);
             ApplySkinResource(grid, Control.BackgroundProperty, "BackgroundMainWindow", "GridEntireBackground");
             ApplySkinResource(grid, Control.ForegroundProperty, "FontControlBrush", "FontTableBrush");
             ApplySkinResource(grid, Control.BorderBrushProperty, "BorderThinBrush", "TabControlBorderBrush");
@@ -193,51 +179,39 @@ namespace Glitch.UI
             BindLocalizedColumnHeader(totalColumn, "dashboard.column.pnl", "PnL");
             grid.Columns.Add(totalColumn);
 
-            var groupsSection = CreateAccountGroupsSection(root);
-            _dashboardGroupsSection = groupsSection as FrameworkElement;
+            var groupsContent = CreateAccountGroupsSection(root);
+            _dashboardGroupsSection = groupsContent as FrameworkElement;
 
-            var connectedAccountsPanel = new Grid();
-            connectedAccountsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            connectedAccountsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            Grid.SetRow(sectionHeader, 0);
-            connectedAccountsPanel.Children.Add(sectionHeader);
-            Grid.SetRow(grid, 1);
-            connectedAccountsPanel.Children.Add(grid);
+            var accordionStack = new StackPanel();
+            _dashboardReplicationExpander = CreateAccordionExpander(root, "dashboard.replication_groups", "Replication Groups");
+            _dashboardReplicationExpander.IsExpanded = true;
+            _dashboardReplicationExpander.Content = WrapAccordionSectionContent(groupsContent);
+            accordionStack.Children.Add(_dashboardReplicationExpander);
 
-            // GL-011: follower groups are the star — show them above Connected Accounts.
-            Grid.SetRow(groupsSection, 0);
-            root.Children.Add(groupsSection);
-            Grid.SetRow(connectedAccountsPanel, 1);
-            root.Children.Add(connectedAccountsPanel);
+            _dashboardConnectedAccountsExpander = CreateAccordionExpander(root, "dashboard.connected_accounts", "Connected Accounts");
+            _dashboardConnectedAccountsExpander.IsExpanded = false;
+            _dashboardConnectedAccountsExpander.Content = WrapAccordionSectionContent(grid);
+            accordionStack.Children.Add(_dashboardConnectedAccountsExpander);
+
+            _dashboardPageScroll = CreateAccordionPageScrollHost(accordionStack);
+            Grid.SetRow(_dashboardPageScroll, 0);
+            root.Children.Add(_dashboardPageScroll);
 
             ApplyDashboardResponsiveLayout(root.ActualWidth > 0 ? root.ActualWidth : Width);
-            return root;
+            return WrapTabBodyForScroll(root);
         }
 
 
         private UIElement CreateAccountGroupsSection(FrameworkElement context)
                 {
-                    var sectionRoot = new Grid { Margin = new Thickness(0, 14, 0, 0), Background = Brushes.Transparent };
-                    sectionRoot.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        
-                    var scroll = new ScrollViewer
-                    {
-                        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
-                    };
-                    scroll.Background = Brushes.Transparent;
-        
                     _accountGroupsHostPanel = new StackPanel
                     {
-                        Orientation = Orientation.Vertical
+                        Orientation = Orientation.Vertical,
+                        Background = Brushes.Transparent
                     };
-                    scroll.Content = _accountGroupsHostPanel;
-        
-                    Grid.SetRow(scroll, 0);
-                    sectionRoot.Children.Add(scroll);
-        
+
                     RebuildAccountGroupsUi();
-                    return sectionRoot;
+                    return _accountGroupsHostPanel;
                 }
         
                 private void OnDashboardRootSizeChanged(object sender, SizeChangedEventArgs e)
@@ -263,17 +237,9 @@ namespace Glitch.UI
 
                         _dashboardNarrowLayout = narrow;
                         _dashboardRootGrid.Margin = narrow ? new Thickness(10) : new Thickness(20);
-        
-                        if (_dashboardRootGrid.RowDefinitions.Count >= 2)
-                        {
-                            _dashboardRootGrid.RowDefinitions[0].Height = new GridLength(1, GridUnitType.Star);
-                            _dashboardRootGrid.RowDefinitions[1].Height = narrow
-                                ? new GridLength(0.45, GridUnitType.Star)
-                                : GridLength.Auto;
-                        }
-        
+
                         if (_dashboardGroupsSection != null)
-                            _dashboardGroupsSection.Margin = narrow ? new Thickness(0, 10, 0, 0) : new Thickness(0, 14, 0, 0);
+                            _dashboardGroupsSection.Margin = new Thickness(0);
                     }
                     finally
                     {
@@ -288,7 +254,7 @@ namespace Glitch.UI
         
                     grid.SetValue(ScrollViewer.HorizontalScrollBarVisibilityProperty, ScrollBarVisibility.Auto);
                     grid.SetValue(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Auto);
-                    grid.SetValue(ScrollViewer.CanContentScrollProperty, true);
+                    grid.SetValue(ScrollViewer.CanContentScrollProperty, false);
                     grid.SetValue(VirtualizingPanel.IsVirtualizingProperty, true);
                     grid.SetValue(VirtualizingPanel.VirtualizationModeProperty, VirtualizationMode.Recycling);
                 }

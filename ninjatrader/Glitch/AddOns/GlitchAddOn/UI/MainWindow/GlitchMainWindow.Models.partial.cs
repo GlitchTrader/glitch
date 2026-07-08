@@ -39,57 +39,6 @@ namespace Glitch.UI
 {
     public partial class GlitchMainWindow
     {
-        private sealed class AccountGridRow
-        {
-            public string DisplayName { get; set; }
-            public string AccountStatus { get; set; }
-            public string PropFirmId { get; set; }
-            public List<string> AccountStatusOptions { get; set; }
-            public string PropFirmDisplay { get; set; }
-            public List<string> PropFirmOptions { get; set; }
-            public string AccountSizeSelection { get; set; }
-            public List<string> AccountSizeOptions { get; set; }
-            public string CashValue { get; set; }
-            public string MaxDrawdown { get; set; }
-            public string IntratradeDrawdown { get; set; }
-            public string MinMargin { get; set; }
-            public string BufferMargin { get; set; }
-            public double AccountSizeRaw { get; set; }
-            public double ProfitTargetRaw { get; set; }
-            public double DailyLossLimitRaw { get; set; }
-            public double EvalProfitTargetLockBalanceRaw { get; set; }
-            public double EquityRaw { get; set; }
-            public double NetLiqRaw { get; set; }
-            public double BufferMarginRaw { get; set; }
-            public double MaxDrawdownRaw { get; set; }
-            public double IntratradeDrawdownRaw { get; set; }
-            public string RiskDisplay { get; set; }
-            public string RiskSign { get; set; }
-            public double HeadroomSafeWidth { get; set; }
-            public double HeadroomUsedWidth { get; set; }
-            public double MaxContractsRaw { get; set; }
-            public double MaxMicrosRaw { get; set; }
-            public string MaxContracts { get; set; }
-            public string MicroContractRootRegex { get; set; }
-            public double MicroContractMultiplier { get; set; }
-            public string Position { get; set; }
-            public string EquityVsSizeSign { get; set; }
-            public string BufferVsMaxDdSign { get; set; }
-            public bool IsIntraDdWarning { get; set; }
-            public bool IsNetLiqWarning { get; set; }
-            public string RealizedPnl { get; set; }
-            public string UnrealizedPnl { get; set; }
-            public string TotalPnl { get; set; }
-            public string RealizedPnlSign { get; set; }
-            public string UnrealizedPnlSign { get; set; }
-            public string TotalPnlSign { get; set; }
-            public double RealizedPnlRaw { get; set; }
-            public double UnrealizedPnlRaw { get; set; }
-            public double TotalPnlRaw { get; set; }
-            public bool IsManualSelection { get; set; }
-            public string SnapshotKey { get; set; }
-        }
-
         private sealed class AccountSelectionOverride
         {
             public string AccountStatus { get; set; }

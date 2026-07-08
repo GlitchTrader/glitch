@@ -381,7 +381,8 @@ namespace NinjaTrader.NinjaScript.AddOns
                 return;
 
             var snapshot = GlitchShellBridge.GetSnapshot();
-            host.ReplicateButton.Style = CreateChartTraderReplicateButtonStyle(host.WidgetRoot);
+            if (host.ReplicateButton.Style == null)
+                host.ReplicateButton.Style = CreateChartTraderReplicateButtonStyle(host.WidgetRoot);
             host.ReplicateButton.Tag = snapshot.IsReplicating ? "Running" : "Stopped";
 
             string selectedAccount = ResolveChartTraderSelectedAccount(host.AccountCombo);

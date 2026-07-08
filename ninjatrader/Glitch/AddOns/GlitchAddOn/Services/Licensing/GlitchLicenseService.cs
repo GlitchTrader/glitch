@@ -190,8 +190,8 @@ namespace Glitch.Services
                 var request = (HttpWebRequest)WebRequest.Create(requestUrl);
                 request.Method = "POST";
                 request.ContentType = "application/json";
-                request.Timeout = 8000;
-                request.ReadWriteTimeout = 8000;
+                request.Timeout = GlitchNetworkPolicy.HttpTimeoutMs;
+                request.ReadWriteTimeout = GlitchNetworkPolicy.HttpTimeoutMs;
 
                 byte[] bodyBytes = Encoding.UTF8.GetBytes(requestBody);
                 using (Stream requestStream = await request.GetRequestStreamAsync().ConfigureAwait(false))

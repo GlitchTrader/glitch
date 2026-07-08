@@ -381,6 +381,21 @@ namespace Glitch.UI
             _summaryLastExecutionTicks = newestExecutionTicks;
             _summaryLastWarningCount = warningCount;
 
+            if (IsSubsystemDegraded("journal_insights"))
+                return;
+
+            try
+            {
+                RefreshSummaryInsightsCore(nowUtc, executionEntries);
+            }
+            catch (Exception error)
+            {
+                RecordSubsystemFault("journal_insights", error);
+            }
+        }
+
+        private void RefreshSummaryInsightsCore(DateTime nowUtc, List<JournalEntry> executionEntries)
+        {
             var journalEvents = (_journalEntries ?? new ObservableCollection<JournalEntry>())
                 .Where(entry => entry != null && !string.IsNullOrWhiteSpace(entry.Message))
                 .Select(entry => new GlitchTradeInsightsService.TradeJournalEvent
@@ -463,7 +478,7 @@ namespace Glitch.UI
                 _summaryReasonLines.Add($"{LocalizeCloseReason(reason.CloseReason)}: {reason.Trades.ToString("N0", CultureInfo.CurrentCulture)} | {reason.WinRate.ToString("P1", CultureInfo.CurrentCulture)} | {FormatSignedCurrency(reason.AvgPoints)}");
 
             _summaryRecentTrades.Clear();
-            foreach (FleetTradeAggregate aggregate in fleetTrades.Take(50))
+            foreach (FleetTradeAggregate aggregate in fleetTrades.Take(MaxSummaryRecentTradesDisplayed))
             {
                 GlitchTradeInsightsService.TradeRoundTrip trade = aggregate.Trade;
                 _summaryRecentTrades.Add(new SummaryTradeRow

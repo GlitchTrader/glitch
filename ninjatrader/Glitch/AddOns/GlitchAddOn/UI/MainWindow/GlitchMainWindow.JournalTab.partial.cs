@@ -51,13 +51,13 @@ namespace Glitch.UI
         private UIElement CreateJournalTabImpl()
         {
             var root = new Grid { Margin = new Thickness(20) };
+            root.VerticalAlignment = VerticalAlignment.Stretch;
+            root.HorizontalAlignment = HorizontalAlignment.Stretch;
             _journalRootGrid = root;
             _journalRootGrid.SizeChanged += OnJournalRootSizeChanged;
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.65, GridUnitType.Star) });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
             var header = new Grid { Margin = new Thickness(0, 0, 0, 10) };
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -114,95 +114,46 @@ namespace Glitch.UI
             Grid.SetRow(cards, 1);
             root.Children.Add(cards);
 
-            var metricsPanel = new Grid();
-            metricsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            metricsPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            _journalMetricsPanel = metricsPanel;
-            var metricsHeader = new TextBlock
-            {
-                Text = L("journal.trader_performance", "Trader Performance"),
-                FontWeight = UiHeadingFontWeight,
-                Margin = new Thickness(0, 0, 0, 8)
-            };
-            BindLocalizedText(metricsHeader, "journal.trader_performance", "Trader Performance");
-            ApplySkinResource(metricsHeader, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
-            Grid.SetRow(metricsHeader, 0);
-            metricsPanel.Children.Add(metricsHeader);
-
             var metricsGrid = CreateSummaryPerformanceGrid(root);
             _summaryPerformanceGrid = metricsGrid;
-            Grid.SetRow(metricsGrid, 1);
-            metricsPanel.Children.Add(metricsGrid);
-            Grid.SetRow(metricsPanel, 2);
-            root.Children.Add(metricsPanel);
+            ClearGridAccordionHeightConstraints(metricsGrid);
+            ConfigureDataGridForPageScroll(metricsGrid);
+
+            var accordionStack = new StackPanel();
+            _journalPerformanceExpander = CreateAccordionExpander(root, "journal.trader_performance", "Trader Performance");
+            _journalPerformanceExpander.IsExpanded = true;
+            _journalPerformanceExpander.Content = WrapAccordionSectionContent(metricsGrid);
+            accordionStack.Children.Add(_journalPerformanceExpander);
             _journalTopGrid = null;
 
-            var warningsHeaderRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
-            warningsHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var warningsHeader = new TextBlock
-            {
-                Text = L("journal.critical_warnings", "Critical Warnings"),
-                FontWeight = UiHeadingFontWeight,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            BindLocalizedText(warningsHeader, "journal.critical_warnings", "Critical Warnings");
-            ApplySkinResource(warningsHeader, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
-            warningsHeaderRow.Children.Add(warningsHeader);
-            _journalWarningsHeaderText = warningsHeader;
-            _journalWarningsHeaderRow = warningsHeaderRow;
-
-            var warningsPanel = new Grid();
-            warningsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            warningsPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            _journalWarningsPanel = warningsPanel;
-            Grid.SetRow(warningsHeaderRow, 0);
-            warningsPanel.Children.Add(warningsHeaderRow);
-
             _criticalWarningsGrid = CreateCriticalWarningsGrid(root);
-            Grid.SetRow(_criticalWarningsGrid, 1);
-            warningsPanel.Children.Add(_criticalWarningsGrid);
+            ClearGridAccordionHeightConstraints(_criticalWarningsGrid);
+            ConfigureDataGridForPageScroll(_criticalWarningsGrid);
+            _journalCriticalWarningsExpander = CreateAccordionExpander(root, "journal.critical_warnings", "Critical Warnings");
+            _journalCriticalWarningsExpander.IsExpanded = false;
+            _journalCriticalWarningsExpander.Content = WrapAccordionSectionContent(_criticalWarningsGrid);
+            accordionStack.Children.Add(_journalCriticalWarningsExpander);
 
-            _journalNoticeHistoryExpander = new Expander
-            {
-                IsExpanded = false,
-                Margin = new Thickness(0, 8, 0, 0)
-            };
-            var noticeHeader = new TextBlock
-            {
-                Text = L("journal.notice_history", "Notice History"),
-                FontWeight = UiHeadingFontWeight
-            };
-            BindLocalizedText(noticeHeader, "journal.notice_history", "Notice History");
-            ApplySkinResource(noticeHeader, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
-            _journalNoticeHistoryExpander.Header = noticeHeader;
+            _journalNoticeHistoryExpander = CreateAccordionExpander(root, "journal.notice_history", "Notice History");
+            _journalNoticeHistoryExpander.IsExpanded = false;
             _noticeWarningsGrid = CreateNoticeWarningsGrid(root);
-            _journalNoticeHistoryExpander.Content = _noticeWarningsGrid;
-            warningsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            Grid.SetRow(_journalNoticeHistoryExpander, 2);
-            warningsPanel.Children.Add(_journalNoticeHistoryExpander);
-
-            Grid.SetRow(warningsPanel, 3);
-            root.Children.Add(warningsPanel);
-
-            var liveFeedExpander = new Expander
-            {
-                IsExpanded = false,
-                Margin = new Thickness(0, 8, 0, 0)
-            };
-            var liveFeedHeader = new TextBlock
-            {
-                Text = L("journal.trade_feed", "Live Feed"),
-                FontWeight = UiHeadingFontWeight
-            };
-            BindLocalizedText(liveFeedHeader, "journal.trade_feed", "Live Feed");
-            ApplySkinResource(liveFeedHeader, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
-            liveFeedExpander.Header = liveFeedHeader;
+            ClearGridAccordionHeightConstraints(_noticeWarningsGrid);
+            ConfigureDataGridForPageScroll(_noticeWarningsGrid);
+            _journalNoticeHistoryExpander.Content = WrapAccordionSectionContent(_noticeWarningsGrid);
+            accordionStack.Children.Add(_journalNoticeHistoryExpander);
 
             var tradeFeedGrid = CreateSummaryRecentTradesGrid(root);
             _summaryRecentTradesGrid = tradeFeedGrid;
-            liveFeedExpander.Content = tradeFeedGrid;
-            Grid.SetRow(liveFeedExpander, 4);
-            root.Children.Add(liveFeedExpander);
+            ClearGridAccordionHeightConstraints(tradeFeedGrid);
+            ConfigureDataGridForPageScroll(tradeFeedGrid, allowHorizontalScroll: true, enableRowVirtualization: true);
+            _journalLiveFeedExpander = CreateAccordionExpander(root, "journal.trade_feed", "Live Feed");
+            _journalLiveFeedExpander.IsExpanded = false;
+            _journalLiveFeedExpander.Content = WrapAccordionSectionContent(tradeFeedGrid);
+            accordionStack.Children.Add(_journalLiveFeedExpander);
+
+            _journalAccordionScroll = CreateAccordionPageScrollHost(accordionStack);
+            Grid.SetRow(_journalAccordionScroll, 2);
+            root.Children.Add(_journalAccordionScroll);
 
             _journalLicenseGateOverlay = CreateJournalLicenseGateOverlay(root);
             Thickness journalContentMargin = root.Margin;
@@ -212,14 +163,18 @@ namespace Glitch.UI
                 -journalContentMargin.Right,
                 -journalContentMargin.Bottom);
             Grid.SetRow(_journalLicenseGateOverlay, 0);
-            Grid.SetRowSpan(_journalLicenseGateOverlay, 5);
+            Grid.SetRowSpan(_journalLicenseGateOverlay, 3);
             Panel.SetZIndex(_journalLicenseGateOverlay, 1000);
             root.Children.Add(_journalLicenseGateOverlay);
             UpdateJournalLicenseGateOverlay();
 
             ApplyJournalResponsiveLayout(root.ActualWidth > 0 ? root.ActualWidth : Width);
-            RegisterLocalizationBinding(() => RefreshSummaryInsightsIfNeeded(DateTime.UtcNow, true));
-            return root;
+            RegisterLocalizationBinding(() =>
+            {
+                if (GetSelectedMainTabIndex() == MainTabJournal)
+                    RefreshSummaryInsightsIfNeeded(DateTime.UtcNow, true);
+            });
+            return WrapTabBodyForScroll(root);
         }
 
 
@@ -321,8 +276,7 @@ namespace Glitch.UI
                         ItemsSource = _criticalWarningsView,
                         VerticalAlignment = VerticalAlignment.Stretch,
                         SelectionUnit = DataGridSelectionUnit.FullRow,
-                        SelectionMode = DataGridSelectionMode.Single,
-                        MaxHeight = 140
+                        SelectionMode = DataGridSelectionMode.Single
                     };
                     ConfigureDataGridScrolling(grid);
                     ApplySkinResource(grid, Control.BackgroundProperty, "BackgroundMainWindow", "GridEntireBackground");
@@ -381,8 +335,7 @@ namespace Glitch.UI
                         ItemsSource = _noticeWarningsView,
                         VerticalAlignment = VerticalAlignment.Stretch,
                         SelectionUnit = DataGridSelectionUnit.FullRow,
-                        SelectionMode = DataGridSelectionMode.Single,
-                        MaxHeight = 180
+                        SelectionMode = DataGridSelectionMode.Single
                     };
                     ConfigureDataGridScrolling(grid);
                     ApplySkinResource(grid, Control.BackgroundProperty, "BackgroundMainWindow", "GridEntireBackground");
@@ -542,10 +495,10 @@ namespace Glitch.UI
                 {
                     ApplyJournalResponsiveLayout(e.NewSize.Width);
                 }
-        
+
                 private void ApplyJournalResponsiveLayout(double width)
                 {
-                    if (_journalRootGrid == null || _journalWarningsHeaderRow == null || _journalWarningsHeaderText == null)
+                    if (_journalRootGrid == null)
                         return;
                     if (_isApplyingJournalResponsiveLayout)
                         return;
@@ -565,13 +518,6 @@ namespace Glitch.UI
                         }
 
                         UpdateSummaryCardsPanelLayout(usableWidth);
-
-                        if (_summaryPerformanceGrid != null)
-                            _summaryPerformanceGrid.MinHeight = narrow ? 180 : 220;
-                        if (_summaryRecentTradesGrid != null)
-                            _summaryRecentTradesGrid.MinHeight = narrow ? 160 : 200;
-                        if (_criticalWarningsGrid != null)
-                            _criticalWarningsGrid.MinHeight = narrow ? 100 : 120;
                     }
                     finally
                     {

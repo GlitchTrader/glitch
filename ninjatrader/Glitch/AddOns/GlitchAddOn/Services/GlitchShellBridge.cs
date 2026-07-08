@@ -88,12 +88,17 @@ namespace Glitch.Services
 
         internal static void Publish(GlitchShellSnapshot snapshot)
         {
+            GlitchShellSnapshot incoming = CloneSnapshot(snapshot);
+            bool shouldRaise;
             lock (Sync)
             {
-                _snapshot = CloneSnapshot(snapshot);
+                shouldRaise = !ShellSnapshotsEquivalent(_snapshot, incoming);
+                if (shouldRaise)
+                    _snapshot = incoming;
             }
 
-            RaiseStateChanged();
+            if (shouldRaise)
+                RaiseStateChanged();
         }
 
         internal static GlitchShellSnapshot GetSnapshot()
@@ -171,6 +176,37 @@ namespace Glitch.Services
 
             clone.GroupsByMaster = summaries;
             return clone;
+        }
+
+        private static bool ShellSnapshotsEquivalent(GlitchShellSnapshot left, GlitchShellSnapshot right)
+        {
+            if (ReferenceEquals(left, right))
+                return true;
+            if (left == null || right == null)
+                return false;
+            if (left.IsReplicating != right.IsReplicating)
+                return false;
+
+            IReadOnlyDictionary<string, GlitchGroupRuntimeSummary> leftGroups = left.GroupsByMaster;
+            IReadOnlyDictionary<string, GlitchGroupRuntimeSummary> rightGroups = right.GroupsByMaster;
+            if (leftGroups == null && rightGroups == null)
+                return true;
+            if (leftGroups == null || rightGroups == null || leftGroups.Count != rightGroups.Count)
+                return false;
+
+            foreach (KeyValuePair<string, GlitchGroupRuntimeSummary> entry in leftGroups)
+            {
+                if (!rightGroups.TryGetValue(entry.Key, out GlitchGroupRuntimeSummary other) || other == null || entry.Value == null)
+                    return false;
+
+                if (entry.Value.EnabledFollowerCount != other.EnabledFollowerCount)
+                    return false;
+
+                if (Math.Abs(entry.Value.GroupPnlRaw - other.GroupPnlRaw) > 0.01)
+                    return false;
+            }
+
+            return true;
         }
 
         private static void RaiseStateChanged()

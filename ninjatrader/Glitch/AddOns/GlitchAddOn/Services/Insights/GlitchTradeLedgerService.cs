@@ -26,6 +26,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Glitch.Services
 {
@@ -37,6 +39,7 @@ namespace Glitch.Services
         private bool _loaded;
         private bool _dirty;
         private DateTime _lastWriteUtc;
+        private int _backgroundFlushActive;
 
         private const int MaxLedgerRows = 200000;
         private const int MinWriteIntervalMs = 1200;
@@ -85,21 +88,58 @@ namespace Glitch.Services
                 }
 
                 NormalizeExactDuplicateTradesUnsafe();
-                FlushUnsafe(nowUtc, force: false);
+                bool queueFlush = _dirty;
 
-                return _ledgerById.Values
+                var snapshot = _ledgerById.Values
                     .OrderByDescending(trade => trade.ExitUtc)
                     .ToList();
+
+                if (queueFlush)
+                    QueueBackgroundFlush(nowUtc, force: false);
+
+                return snapshot;
             }
         }
 
         internal void Flush(DateTime nowUtc, bool force)
         {
-            lock (_sync)
+            if (force)
             {
-                EnsureLoadedUnsafe();
-                FlushUnsafe(nowUtc, force);
+                lock (_sync)
+                {
+                    EnsureLoadedUnsafe();
+                    FlushUnsafe(nowUtc, force: true);
+                }
+
+                return;
             }
+
+            QueueBackgroundFlush(nowUtc, force: false);
+        }
+
+        private void QueueBackgroundFlush(DateTime nowUtc, bool force)
+        {
+            if (Interlocked.CompareExchange(ref _backgroundFlushActive, 1, 0) != 0)
+                return;
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    lock (_sync)
+                    {
+                        EnsureLoadedUnsafe();
+                        FlushUnsafe(nowUtc, force);
+                    }
+                }
+                catch
+                {
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _backgroundFlushActive, 0);
+                }
+            });
         }
 
         internal void Reset(DateTime nowUtc)

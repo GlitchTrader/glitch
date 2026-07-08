@@ -29,6 +29,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -146,7 +147,7 @@ namespace Glitch.UI
         private readonly GlitchFundamentalAnalysisService _fundamentalAnalysisService;
         private readonly Dictionary<int, AnalyticsDialVisual> _analyticsDialVisuals;
         private readonly Dictionary<int, AnalyticsTimeframeMetricVisual> _analyticsTimeframeVisuals;
-        private static readonly TimeSpan ReplicationUiRefreshInterval = TimeSpan.FromSeconds(1);
+        private static readonly TimeSpan ReplicationUiRefreshInterval = TimeSpan.FromSeconds(3);
         private Button _flattenAllButton;
         private Button _replicateButton;
         private Grid _headerRootGrid;
@@ -167,10 +168,6 @@ namespace Glitch.UI
         private FrameworkElement _dashboardGroupsSection;
         private Grid _journalRootGrid;
         private Grid _journalTopGrid;
-        private FrameworkElement _journalMetricsPanel;
-        private FrameworkElement _journalWarningsPanel;
-        private Grid _journalWarningsHeaderRow;
-        private TextBlock _journalWarningsHeaderText;
         private int _headerResponsiveMode = -1;
         private bool? _dashboardNarrowLayout;
         private bool? _journalNarrowLayout;
@@ -339,7 +336,10 @@ namespace Glitch.UI
             LoadAccountGroupsFromDisk();
             LoadAuditFeedsFromDisk();
             RestoreWindowPlacementFromDisk();
-            _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _refreshTimer = new DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background)
+            {
+                Interval = TimeSpan.FromSeconds(1)
+            };
             _refreshTimer.Tick += OnRefreshTimerTick;
             GlitchShellBridge.RegisterMainWindow(this);
 
@@ -484,6 +484,7 @@ namespace Glitch.UI
             BindLocalizedHeader(settingsTab, "tab.settings", "Settings");
             tabs.Items.Add(settingsTab);
             tabs.SelectedIndex = 0;
+            tabs.SelectionChanged += OnMainTabSelectionChanged;
 
             Grid.SetRow(tabs, 1);
             root.Children.Add(tabs);
@@ -830,8 +831,8 @@ namespace Glitch.UI
                 return;
 
             _refreshTimer.Interval = _isReplicatingUi
-                ? TimeSpan.FromMilliseconds(250)
-                : TimeSpan.FromSeconds(1);
+                ? TimeSpan.FromMilliseconds(500)
+                : (IsGlitchShellUiActive() ? TimeSpan.FromSeconds(1.5) : IdleBackgroundUiRefreshInterval);
         }
 
         private string BuildRuntimePolicySummaryLogLine()
@@ -1412,6 +1413,8 @@ namespace Glitch.UI
                 return false;
 
             _isFlattenAllInProgress = true;
+            var flattenStopwatch = Stopwatch.StartNew();
+            int flattenSubmitCount = 0;
             try
             {
                 var accounts = GetActiveAccountsSnapshot();
@@ -1437,6 +1440,7 @@ namespace Glitch.UI
                             out Order submittedOrder);
                         if (namedConfirmed)
                         {
+                            flattenSubmitCount++;
                             AppendJournal(
                                 account.Name,
                                 "Risk",
@@ -1450,6 +1454,7 @@ namespace Glitch.UI
 
                         if (submittedOrder != null)
                         {
+                            flattenSubmitCount++;
                             AppendJournal(
                                 account.Name,
                                 "Risk",
@@ -1473,8 +1478,15 @@ namespace Glitch.UI
                             namedResult,
                             mitigationKey: "FLATTENALL|" + CleanJournalToken(account.Name) + "|" + instrumentToken,
                             allowFallbackWarning: false);
+                        flattenSubmitCount++;
                     }
                 }
+
+                flattenStopwatch.Stop();
+                AppendJournal(
+                    "System",
+                    "Perf",
+                    $"METRIC|flatten_submit_ms={flattenStopwatch.ElapsedMilliseconds}|orders={flattenSubmitCount}");
 
                 bool flattened = await WaitForAllAccountsFlatAsync(accounts, TimeSpan.FromSeconds(5));
                 if (flattened)
@@ -1740,12 +1752,9 @@ namespace Glitch.UI
                 Margin = new Thickness(0, 8, 0, 0),
                 ItemsSource = group.Members,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Top,
-                // GL-010: cap per-group follower grid so many groups × 20 rows scroll
-                // inside the group while the dashboard groups ScrollViewer handles overflow.
-                MaxHeight = 240
+                VerticalAlignment = VerticalAlignment.Top
             };
-            ConfigureDataGridScrolling(grid);
+            ConfigureDataGridForPageScroll(grid);
 
             ApplySkinResource(grid, Control.BackgroundProperty, "BackgroundMainWindow", "GridEntireBackground");
             ApplySkinResource(grid, Control.ForegroundProperty, "FontControlBrush", "FontTableBrush");
@@ -3154,11 +3163,8 @@ namespace Glitch.UI
             style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
             style.Setters.Add(new Setter(Control.FocusVisualStyleProperty, null));
             style.Setters.Add(new Setter(FrameworkElement.SnapsToDevicePixelsProperty, true));
-            style.Setters.Add(new Setter(FrameworkElement.WidthProperty, 11d));
-            style.Setters.Add(new Setter(FrameworkElement.HeightProperty, 11d));
-            style.Setters.Add(new Setter(FrameworkElement.MinWidthProperty, 11d));
-            style.Setters.Add(new Setter(FrameworkElement.MinHeightProperty, 11d));
 
+            // ponytail: only pin the cross-axis; forcing both Width and Height to 11px collapses vertical tracks.
             var verticalTrigger = new Trigger
             {
                 Property = System.Windows.Controls.Primitives.ScrollBar.OrientationProperty,
@@ -3166,6 +3172,9 @@ namespace Glitch.UI
             };
             verticalTrigger.Setters.Add(new Setter(FrameworkElement.WidthProperty, 11d));
             verticalTrigger.Setters.Add(new Setter(FrameworkElement.MinWidthProperty, 11d));
+            verticalTrigger.Setters.Add(new Setter(FrameworkElement.MaxWidthProperty, 11d));
+            verticalTrigger.Setters.Add(new Setter(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Right));
+            verticalTrigger.Setters.Add(new Setter(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Stretch));
             style.Triggers.Add(verticalTrigger);
 
             var horizontalTrigger = new Trigger
@@ -3175,6 +3184,9 @@ namespace Glitch.UI
             };
             horizontalTrigger.Setters.Add(new Setter(FrameworkElement.HeightProperty, 11d));
             horizontalTrigger.Setters.Add(new Setter(FrameworkElement.MinHeightProperty, 11d));
+            horizontalTrigger.Setters.Add(new Setter(FrameworkElement.MaxHeightProperty, 11d));
+            horizontalTrigger.Setters.Add(new Setter(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Stretch));
+            horizontalTrigger.Setters.Add(new Setter(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Bottom));
             style.Triggers.Add(horizontalTrigger);
 
             return style;
@@ -3517,10 +3529,7 @@ namespace Glitch.UI
             _dashboardGroupsSection = null;
             _journalRootGrid = null;
             _journalTopGrid = null;
-            _journalMetricsPanel = null;
-            _journalWarningsPanel = null;
-            _journalWarningsHeaderRow = null;
-            _journalWarningsHeaderText = null;
+            ClearAccordionLayoutRefs();
             _summaryRootGrid = null;
             _analyticsRoot = null;
             _headerResponsiveMode = -1;
@@ -3540,22 +3549,59 @@ namespace Glitch.UI
             _tradeLedgerService?.Flush(DateTime.UtcNow, force: true);
             _riskLockLedgerService?.Flush(DateTime.UtcNow, force: true);
 
+            if (_mainTabControl != null)
+                _mainTabControl.SelectionChanged -= OnMainTabSelectionChanged;
+            _mainTabControl = null;
+
             Loaded -= OnWindowLoaded;
             Closed -= OnWindowClosed;
         }
 
         private void OnRefreshTimerTick(object sender, EventArgs e)
         {
+            if (_isWindowClosed || _refreshTimerTickInFlight)
+                return;
+
+            _refreshTimerTickInFlight = true;
+            try
+            {
+                OnRefreshTimerTickCore();
+            }
+            catch (Exception error)
+            {
+                RecordSubsystemFault("refresh_timer", error);
+            }
+            finally
+            {
+                _refreshTimerTickInFlight = false;
+            }
+        }
+
+        private void OnRefreshTimerTickCore()
+        {
             DateTime nowUtc = DateTime.UtcNow;
             PruneRuntimeJournalCaches(nowUtc);
             PruneInformationalWarningJournalCooldowns(nowUtc);
             PruneTradeSourceSnapshots(nowUtc);
+            PruneAccountItemUpdateThrottle(nowUtc);
             MaybeRunLicenseHeartbeat(nowUtc);
 
             if (_isEditingAccountsGrid || _isCommittingAccountsGridEdit)
             {
                 SavePeakStatesToDisk(force: false);
                 SaveAuditFeedsToDisk(force: false);
+                return;
+            }
+
+            bool uiActive = IsGlitchShellUiActive();
+            if (!uiActive)
+            {
+                if (_isReplicatingUi)
+                    RefreshAccountData(heavyTabWork: false);
+
+                SavePeakStatesToDisk(force: false);
+                SaveAuditFeedsToDisk(force: false);
+                FlushPendingJournalEntries();
                 return;
             }
 
@@ -3566,18 +3612,19 @@ namespace Glitch.UI
 
             if (shouldRunFullUiRefresh)
             {
-                RefreshAccountData();
-                RefreshSummaryInsightsIfNeeded(nowUtc);
+                RefreshAccountData(heavyTabWork: true);
+                if (GetSelectedMainTabIndex() == MainTabJournal)
+                    RefreshSummaryInsightsIfNeeded(nowUtc);
                 _lastUiRefreshUtc = nowUtc;
             }
             else
             {
-                // Keep replication responsive without rebuilding full UI rows every heartbeat.
-                ExecuteReplicationCycle(GetActiveAccountsSnapshot());
+                RefreshAccountData(heavyTabWork: false);
             }
 
             SavePeakStatesToDisk(force: false);
             SaveAuditFeedsToDisk(force: false);
+            FlushPendingJournalEntries();
         }
 
         private void OnAccountsGridBeginningEdit(object sender, DataGridBeginningEditEventArgs e)
@@ -3625,12 +3672,12 @@ namespace Glitch.UI
             _isEditingAccountsGrid = false;
         }
 
-        private void RefreshAccountData()
+        private void RefreshAccountData(bool heavyTabWork = true)
         {
             ApplyPlanLimitsToAccountGroups("refresh");
 
             List<Account> activeAccounts = GetActiveAccountsSnapshot();
-            SyncAccountRuntimeEventSubscriptions(activeAccounts);
+            SyncAccountRuntimeEventSubscriptionsThrottled(activeAccounts);
 
             var rows = activeAccounts
                 .Select(account =>
@@ -3669,9 +3716,15 @@ namespace Glitch.UI
             UpdateRiskMetricText(_paHeadroomValueText, paRisk);
             UpdateRiskMetricText(_evalHeadroomValueText, evalRisk);
             PublishGlitchShellState(rows);
-            RefreshAnalyticsDashboard(activeAccounts);
-            UpdateJournalLicenseGateOverlay();
-            UpdateSettingsCopyTradingPolicyNotice();
+            if (heavyTabWork)
+            {
+                if (IsAnalyticsUiActive())
+                    RefreshAnalyticsDashboard(activeAccounts);
+                if (GetSelectedMainTabIndex() == MainTabJournal)
+                    UpdateJournalLicenseGateOverlay();
+                if (GetSelectedMainTabIndex() == MainTabSettings)
+                    UpdateSettingsCopyTradingPolicyNotice();
+            }
         }
 
         private void ApplyAccountRows(IReadOnlyList<AccountGridRow> rows)
@@ -3695,9 +3748,7 @@ namespace Glitch.UI
                     _accountRows.Move(existingIndex, targetIndex);
 
                 AccountGridRow currentRow = _accountRows[targetIndex];
-                bool hasChanged = !string.Equals(currentRow.SnapshotKey, nextRow.SnapshotKey, StringComparison.Ordinal);
-                if (hasChanged)
-                    _accountRows[targetIndex] = nextRow;
+                currentRow.ApplyFrom(nextRow);
 
                 targetIndex++;
             }
@@ -3728,8 +3779,22 @@ namespace Glitch.UI
             if (textBlock == null)
                 return;
 
-            textBlock.Text = FormatCurrency(pnlValue);
+            string brushKey;
             if (double.IsNaN(pnlValue) || double.IsInfinity(pnlValue) || Math.Abs(pnlValue) < 0.0000001)
+                brushKey = "neutral";
+            else
+                brushKey = pnlValue < 0 ? "negative" : "positive";
+
+            string signature = FormatCurrency(pnlValue) + "|" + brushKey;
+            if (_headerMetricSignatures.TryGetValue(textBlock, out string existing) &&
+                string.Equals(existing, signature, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _headerMetricSignatures[textBlock] = signature;
+            textBlock.Text = FormatCurrency(pnlValue);
+            if (brushKey == "neutral")
             {
                 ApplySkinResource(textBlock, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush", "GridRowForeground");
                 return;
@@ -3743,19 +3808,35 @@ namespace Glitch.UI
             if (textBlock == null)
                 return;
 
-            textBlock.Text = FormatPercentOrDash(riskRatio);
+            string brushKey;
             if (double.IsNaN(riskRatio) || double.IsInfinity(riskRatio))
+                brushKey = "neutral";
+            else if (riskRatio > 0.70)
+                brushKey = "negative";
+            else if (riskRatio < 0.70)
+                brushKey = "positive";
+            else
+                brushKey = "neutral";
+
+            string signature = FormatPercentOrDash(riskRatio) + "|" + brushKey;
+            if (_headerMetricSignatures.TryGetValue(textBlock, out string existing) &&
+                string.Equals(existing, signature, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _headerMetricSignatures[textBlock] = signature;
+            textBlock.Text = FormatPercentOrDash(riskRatio);
+            if (brushKey == "neutral")
             {
                 ApplySkinResource(textBlock, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush", "GridRowForeground");
                 return;
             }
 
-            if (riskRatio > 0.70)
+            if (brushKey == "negative")
                 textBlock.Foreground = OrangeAccentBrush;
-            else if (riskRatio < 0.70)
-                textBlock.Foreground = TealAccentBrush;
             else
-                ApplySkinResource(textBlock, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush", "GridRowForeground");
+                textBlock.Foreground = TealAccentBrush;
         }
 
         private void ApplyRiskMitigations(IReadOnlyList<AccountGridRow> rows, IReadOnlyList<Account> activeAccounts)
@@ -4657,7 +4738,7 @@ namespace Glitch.UI
             if (string.IsNullOrWhiteSpace(message))
                 return;
 
-            _journalEntries.Insert(0, new JournalEntry
+            QueueJournalEntry(new JournalEntry
             {
                 TimestampUtc = DateTime.UtcNow,
                 AccountName = accountName.Trim(),
@@ -4665,10 +4746,6 @@ namespace Glitch.UI
                 Message = message.Trim()
             });
             _hasPendingAuditWrite = true;
-
-            const int maxJournalEntries = 800;
-            while (_journalEntries.Count > maxJournalEntries)
-                _journalEntries.RemoveAt(_journalEntries.Count - 1);
         }
 
         private static WarningSeverity ResolveWarningSeverity(string warningType)
@@ -4815,7 +4892,6 @@ namespace Glitch.UI
 
             RefreshWarningCollectionViews();
             UpdateWarningCountUi();
-            RefreshWarningCollectionViews();
         }
 
         private void OnDismissSelectedWarningClick(object sender, RoutedEventArgs e)
@@ -5014,23 +5090,28 @@ namespace Glitch.UI
                         position = string.IsNullOrWhiteSpace(row.Position) ? "0" : row.Position;
                     }
 
-                    member.Pnl = pnlDisplay;
-                    member.PnlSign = pnlSign;
-                    member.MaxDd = maxDd;
-                    member.MaxL = maxL;
-                    member.MaxContracts = maxContracts;
-                    member.Position = position;
+                    if (!string.Equals(member.Pnl, pnlDisplay, StringComparison.Ordinal))
+                        member.Pnl = pnlDisplay;
+                    if (!string.Equals(member.PnlSign, pnlSign, StringComparison.Ordinal))
+                        member.PnlSign = pnlSign;
+                    if (!string.Equals(member.MaxDd, maxDd, StringComparison.Ordinal))
+                        member.MaxDd = maxDd;
+                    if (!string.Equals(member.MaxL, maxL, StringComparison.Ordinal))
+                        member.MaxL = maxL;
+                    if (!string.Equals(member.MaxContracts, maxContracts, StringComparison.Ordinal))
+                        member.MaxContracts = maxContracts;
+                    if (!string.Equals(member.Position, position, StringComparison.Ordinal))
+                        member.Position = position;
                 }
             }
         }
 
         private void PublishGlitchShellState(IReadOnlyList<AccountGridRow> rows = null)
         {
-            GlitchShellBridge.Publish(new GlitchShellSnapshot
-            {
-                IsReplicating = _isReplicatingUi,
-                GroupsByMaster = BuildGlitchShellGroupSummaries(rows)
-            });
+            if (!TryPrepareShellSnapshotPublish(rows, out GlitchShellSnapshot snapshot))
+                return;
+
+            GlitchShellBridge.Publish(snapshot);
         }
 
         private IReadOnlyDictionary<string, GlitchGroupRuntimeSummary> BuildGlitchShellGroupSummaries(IReadOnlyList<AccountGridRow> rows)
@@ -5572,7 +5653,7 @@ namespace Glitch.UI
             }
 
             var subscriptions = new List<EventBridgeSubscription>();
-            string[] eventNames = { "AccountItemUpdate", "ExecutionUpdate", "PositionUpdate", "OrderUpdate", "AccountStatusUpdate" };
+            string[] eventNames = { "ExecutionUpdate", "PositionUpdate", "OrderUpdate", "AccountStatusUpdate" };
 
             foreach (string eventName in eventNames)
             {
@@ -5614,20 +5695,31 @@ namespace Glitch.UI
                 if (account == null || string.IsNullOrWhiteSpace(account.Name))
                     return;
 
-                double fallbackCash = TryGetAccountItem(account, "CashValue");
-                double equity = GetCurrentEquity(account, fallbackCash);
-                if (TryExtractEquityFromAccountItemEvent(eventArgs, account, fallbackCash, out double eventEquity) && eventEquity > 0)
-                    equity = eventEquity;
-                double unrealizedSnapshot = TryGetAccountItem(account, "UnrealizedProfitLoss", "UnrealizedPnL");
-                double unrealizedEquityCandidate = GetUnrealizedEquityCandidate(fallbackCash, unrealizedSnapshot);
-                if (unrealizedEquityCandidate > equity)
-                    equity = unrealizedEquityCandidate;
-                UpdatePeakState(BuildPeakStateKey(account.Name, "TrailingUnrealized"), equity);
+                DateTime nowUtc = DateTime.UtcNow;
+                bool isAccountItemUpdate = string.Equals(eventName, "AccountItemUpdate", StringComparison.OrdinalIgnoreCase);
+                if (isAccountItemUpdate)
+                {
+                    if (ShouldThrottleAccountItemUpdate(account.Name, nowUtc))
+                        return;
+                }
 
-                double eodReference = fallbackCash > 0 ? fallbackCash : equity;
-                UpdatePeakState(BuildPeakStateKey(account.Name, "TrailingEod"), eodReference);
+                if (!isAccountItemUpdate)
+                {
+                    double fallbackCash = TryGetAccountItem(account, "CashValue");
+                    double equity = GetCurrentEquity(account, fallbackCash);
+                    if (TryExtractEquityFromAccountItemEvent(eventArgs, account, fallbackCash, out double eventEquity) && eventEquity > 0)
+                        equity = eventEquity;
+                    double unrealizedSnapshot = TryGetAccountItem(account, "UnrealizedProfitLoss", "UnrealizedPnL");
+                    double unrealizedEquityCandidate = GetUnrealizedEquityCandidate(fallbackCash, unrealizedSnapshot);
+                    if (unrealizedEquityCandidate > equity)
+                        equity = unrealizedEquityCandidate;
+                    UpdatePeakState(BuildPeakStateKey(account.Name, "TrailingUnrealized"), equity);
 
-                CaptureTradeSourceFromRuntimeEvent(eventName, account, eventArgs, DateTime.UtcNow);
+                    double eodReference = fallbackCash > 0 ? fallbackCash : equity;
+                    UpdatePeakState(BuildPeakStateKey(account.Name, "TrailingEod"), eodReference);
+                }
+
+                CaptureTradeSourceFromRuntimeEvent(eventName, account, eventArgs, nowUtc);
                 TryAppendRuntimeEventJournalEntry(eventName, account, eventArgs);
             }
             catch
@@ -6870,7 +6962,7 @@ namespace Glitch.UI
                 DisplayName = account.Name,
                 AccountStatus = selectedStatus,
                 PropFirmId = selectedFirmId,
-                AccountStatusOptions = new List<string>(_accountStatusOptions),
+                AccountStatusOptions = _accountStatusOptions,
                 PropFirmDisplay = propFirmDisplay,
                 PropFirmOptions = propFirmOptions,
                 AccountSizeSelection = FormatAccountSize(selectedAccountSize),
@@ -6985,34 +7077,17 @@ namespace Glitch.UI
 
             try
             {
-                object positionsObject = TryGetNestedPropertyValue(account, "Positions");
-                if (!(positionsObject is System.Collections.IEnumerable positions))
-                    return 0;
-
                 double signedContracts = 0;
-                foreach (object positionObject in positions)
+                foreach (Position position in account.Positions)
                 {
-                    if (positionObject == null)
+                    if (position == null || position.MarketPosition == MarketPosition.Flat)
                         continue;
 
-                    object marketPositionObject = TryGetNestedPropertyValue(positionObject, "MarketPosition");
-                    if (marketPositionObject == null)
-                        continue;
-
-                    string marketPosition = marketPositionObject.ToString();
-                    if (string.IsNullOrWhiteSpace(marketPosition))
-                        continue;
-
-                    double quantity = 0;
-                    object quantityObject = TryGetNestedPropertyValue(positionObject, "Quantity");
-                    if (quantityObject != null)
-                        TryConvertToDouble(quantityObject, out quantity);
-
-                    double absoluteContracts = Math.Abs(quantity);
-                    if (marketPosition.Equals("Long", StringComparison.OrdinalIgnoreCase))
-                        signedContracts += absoluteContracts;
-                    else if (marketPosition.Equals("Short", StringComparison.OrdinalIgnoreCase))
-                        signedContracts -= absoluteContracts;
+                    double quantity = Math.Abs(position.Quantity);
+                    if (position.MarketPosition == MarketPosition.Long)
+                        signedContracts += quantity;
+                    else if (position.MarketPosition == MarketPosition.Short)
+                        signedContracts -= quantity;
                 }
 
                 return signedContracts;

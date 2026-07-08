@@ -122,9 +122,6 @@ namespace Glitch.UI
             }
             UpdateReplicateButtonState();
             UpdateGlobalNewsLockoutBanner(_isGlobalNewsLockoutActive, _globalNewsLockoutRawText);
-
-            RebuildAccountGroupsUi();
-            RefreshAnalyticsDashboard(GetActiveAccountsSnapshot());
         }
 
         private UIElement CreateLanguageSwitcher(FrameworkElement context)

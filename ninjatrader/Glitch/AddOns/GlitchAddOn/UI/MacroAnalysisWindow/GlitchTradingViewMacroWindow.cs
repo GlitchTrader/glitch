@@ -932,10 +932,6 @@ namespace Glitch.UI
             style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
             style.Setters.Add(new Setter(Control.FocusVisualStyleProperty, null));
             style.Setters.Add(new Setter(FrameworkElement.SnapsToDevicePixelsProperty, true));
-            style.Setters.Add(new Setter(FrameworkElement.WidthProperty, 11d));
-            style.Setters.Add(new Setter(FrameworkElement.HeightProperty, 11d));
-            style.Setters.Add(new Setter(FrameworkElement.MinWidthProperty, 11d));
-            style.Setters.Add(new Setter(FrameworkElement.MinHeightProperty, 11d));
 
             var verticalTrigger = new Trigger
             {
@@ -944,6 +940,9 @@ namespace Glitch.UI
             };
             verticalTrigger.Setters.Add(new Setter(FrameworkElement.WidthProperty, 11d));
             verticalTrigger.Setters.Add(new Setter(FrameworkElement.MinWidthProperty, 11d));
+            verticalTrigger.Setters.Add(new Setter(FrameworkElement.MaxWidthProperty, 11d));
+            verticalTrigger.Setters.Add(new Setter(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Right));
+            verticalTrigger.Setters.Add(new Setter(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Stretch));
             style.Triggers.Add(verticalTrigger);
 
             var horizontalTrigger = new Trigger
@@ -953,6 +952,9 @@ namespace Glitch.UI
             };
             horizontalTrigger.Setters.Add(new Setter(FrameworkElement.HeightProperty, 11d));
             horizontalTrigger.Setters.Add(new Setter(FrameworkElement.MinHeightProperty, 11d));
+            horizontalTrigger.Setters.Add(new Setter(FrameworkElement.MaxHeightProperty, 11d));
+            horizontalTrigger.Setters.Add(new Setter(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Stretch));
+            horizontalTrigger.Setters.Add(new Setter(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Bottom));
             style.Triggers.Add(horizontalTrigger);
 
             return style;

@@ -102,6 +102,7 @@ dashboard.column.size	Size	Tamanho	Tamaño	规模	Taille	Размер
 dashboard.column.status	Status	Status	Estado	状态	Statut	Статус
 dashboard.column.unrealized_pnl	U PnL	U PnL	U PnL	U PnL	U PnL	U PnL
 dashboard.connected_accounts	Connected Accounts	Contas Conectadas	Cuentas Conectadas	已连接账户	Comptes Connectés	Подключенные Счета
+dashboard.replication_groups	Replication Groups	Grupos de Replicação	Grupos de Replicación	复制分组	Groupes de Réplication	Группы Репликации
 dashboard.group.add_account	+ Add Account	+ Adicionar Conta	+ Añadir Cuenta	+ 添加账户	+ Ajouter un Compte	+ Добавить Счет
 dashboard.group.column.enable	Enable	Ativar	Activar	启用	Activer	Вкл
 dashboard.group.column.follower_account	Follower Account	Conta Follower	Cuenta Follower	跟随账户	Compte Follower	Счет Follower

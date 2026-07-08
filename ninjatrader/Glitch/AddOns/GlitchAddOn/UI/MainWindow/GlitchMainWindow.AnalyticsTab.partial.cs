@@ -1870,6 +1870,9 @@ namespace Glitch.UI
                         UpdateTechnicalFeedStatusText(null);
                             return;
                     }
+
+                    if (ShouldSkipAnalyticsRefresh(instrument))
+                        return;
         
             _selectedAnalyticsInstrument = instrument;
             UpdateAnalyticsDetachedWindowButtonVisibility();
@@ -1916,6 +1919,7 @@ namespace Glitch.UI
                         }
                         catch (Exception ex)
                         {
+                            RecordSubsystemFault("analytics_fundamentals", ex);
                             string errorLabel = L("analytics.fundamental.error", "Fundamental feed error");
                             snapshot.NewsSentiment = errorLabel;
                             snapshot.EarningsAnalysis = errorLabel;
