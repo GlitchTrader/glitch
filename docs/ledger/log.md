@@ -2,6 +2,24 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-08 — INCIDENT + deep audit → "Honest Copy" rewrite ordered (architect: Fable)
+
+- **Incident (sim, journal-proven):** Flatten All left the user's ATM Stop1 working → filled → Sim101 long 2 unsolicited → 500ms absolute sync bought 4+6 on followers + planted emergency stops → header showed unlabeled fleet PnL (+$72 unrealized → +$2 realized). Full reconstruction: `audits/fable-deep-audit.md` §1.
+- Census: 257 fallback occurrences, 80 empty catch blocks, ~30 distinct order-path compensating mechanisms, 2,367-line replication partial on an 8,133-line god window. Verified Cursor's `cursor-deep-audit.md` and corrected it (missed: flatten-leaves-brackets root cause, frozen-account live stops, confirmed_Working bug, runtime/source drift).
+- Operator decree recorded: **no Glitch-initiated action without user initiation or explicit granular opt-in; compliance = display math by default; every automatic action journaled with its authorizing setting.**
+- Decision: stop patching guards; rewrite order path event-driven (GlitchCopyEngine), one flatten primitive (`account.Flatten`), drift reported never auto-corrected. Backlog Wave 8 (GL-036…041); **Wave 7 AI program frozen until GL-041 verification gate passes.** Handoff: `handoffs/2026-07-08-cursor-honest-copy.md` (Phase 0 same-day).
+- Process finding D-10: running NT binary ≠ workspace HEAD (emergency_stop fired live but has no callers in source). All verification must state the binary's commit.
+
+## 2026-07-08 — Replication storm RCA + hotfix (Sim101/102/103)
+
+- **Incident:** Manual 2 MNQ on Sim101 + replicate (2×/3×) + Flatten All produced ~5 follower SL round-trips and ~$520 loss vs expected ~$39–52 scaled loss. Journal + TradeLedger prove buy → missing-master-protective emergency stop → freeze cleared on compliance refresh → rebuy loop.
+- **RCA:** `docs/ledger/audits/replication-storm-rca-2026-07-08.md`. Root: `_replicationFrozenKeys` cleared by `ClearComplianceEnforcementRuntimeState` when compliance off; emergency stop on manual copy without master bracket; RP-2 double `ExecuteReplicationCycle`.
+- **Fix (deployed to bin\\Custom source):** split `_replicationEngineFrozenKeys`; skip protective breach on manual copy; replication on light ticks only; F2/F4; **group Size/Master live-sync**; burst/protective/in-flight fixes; indicator publish throttle. **Operator:** recompile AddOn + Indicator; run Scenario A–D in `ponytail-audit-2026-07-08.md`.
+
+## 2026-07-08 — Tradovate/Apex instrument universe (operator)
+
+- Captured 148 Tradovate/Apex symbols (108 futures, 40 spreads) for future bridge/normalize/ingest/mining work. Operator intent: export ~2y normalized history via bridge (same units as realtime), mine, then connect live ingest. Catalog: `docs/ai-program/tradovate-apex-instrument-universe.md`.
+
 ## 2026-07-08 — Cursor trust-v0019
 
 - **NT8 compile: PASS** (Alan, 2026-07-08) on branch `glitch/trust-v0019` after GL-014 CS1628/CS0019 fix (`6d2d716`). Runtime acceptance per `audits/trust-v0019-changes.md` still open.

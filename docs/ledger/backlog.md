@@ -54,7 +54,22 @@ Key files: `ninjatrader/Glitch/AddOns/GlitchAddOn/` — `UI/MainWindow/GlitchMai
 | GL-023 | Repo hygiene: stray export artifacts | partial (awaiting NT8 compile) | gitignore `ninjatrader/Glitch/Glitch.zip` and `Glitch Screens *.{jpg,psd}` (or relocate to an untracked assets dir). Release zips live only under `apps/download/public/files/`. |
 | GL-024 | F1: commission truth — journal must match NT net PnL | partial (awaiting NT8 compile) | Closes GL-005/F1 per `audits/pnl-math-audit.md`: dashboard tiles read NT account items (net when commission template set) while Journal/Analytics recompute gross from PnlPoints; "commission" appears 0× in the AddOn. Fix at the seam (audit's two options): source Journal/Analytics totals from the same NT account items as the tiles, OR feed commissions into the trade ledger. North-star: "what Glitch displays must equal what NinjaTrader reports." **Hard gate for GL-030 — Hermes must never learn from gross-vs-net-corrupted journal data.** |
 
-## Wave 7 — AI program (v0.0.2.x + Hermes; roadmap: `docs/ai-program/roadmap.md`)
+## Wave 8 — "Honest Copy" rewrite (P0 — SUPERSEDES all other NT-side work; audits: `fable-deep-audit.md` + `cursor-deep-audit.md`)
+
+> 2026-07-08 incident (journal-proven): Flatten All left the user's ATM stop working → it filled → master long 2 unsolicited → absolute sync amplified to 12 fleet contracts + planted emergency stops. Operator decree: **no Glitch action without user initiation or explicit per-rule opt-in.** Replication is rewritten event-driven; risk actions become consent-gated; PnL gets scope truth. Handoff: `handoffs/2026-07-08-cursor-honest-copy.md`.
+
+| ID | Title | Status | Notes |
+|----|-------|--------|-------|
+| GL-036 | Phase 0 stop-bleeding: Flatten All via `account.Flatten` (cancels brackets); strategy-path enforcement default-OFF; replication OFF at startup; clamp/burst-freeze disabled | todo (P0, same-day) | Kills incident causes D-2/D-6 exposure. Compile + protocol §7.3/§7.5 gate. |
+| GL-037 | GlitchCopyEngine: event-driven copy (ExecutionUpdate → ratio fan-out, ExecutionId idempotent, GLT-COPY signal) + read-only drift banner with user-clicked Sync now | todo (P0) | Replaces `ExecuteReplicationCycle` (legacy behind default-false flag, then deleted). Kills D-1/D-3/D-4/D-7. |
+| GL-038 | Risk action consent matrix: `ComputeRiskState()` display-only + `ApplyEnabledRiskActions()` per-rule × per-account-type opt-ins; journal `rule\|threshold\|observed\|authorizing_setting`; delete strategy heuristics tree | todo (P0) | Operator rule: compliance engine = UI math unless user opts in. Extends GL-014 UI. |
+| GL-039 | PnL scope truth: header scope selector (Master/Group/Fleet) + basis labels; delete ≈0 realized+unrealized substitution; tie-out vs TradeLedger/NT | todo (P1) | Proven mechanism of "+$72→+$2" (audit D-5). Pairs with GL-024. |
+| GL-040 | Deletion pass: ~30 order-path workarounds, named-flatten chain, emergency stop, baselines, burst/clamp/cooldowns; money-path empty catches (80 repo-wide) → `RecordSubsystemFault` | todo (P1) | Replication partial → <300 LOC or gone. |
+| GL-041 | Live verification protocol as release gate (fable-deep-audit §7) | todo | Run by Alan on 3 sim accounts before ANY release from this branch. |
+
+Gates: GL-036 → compile+verify → GL-037 → compile+full §7 → GL-038/039 → GL-040 → GL-041 gates release. **Wave-7 AI items are frozen until GL-041 passes** (an AI intent path cannot sit on an order layer that trades unsolicited). Wave-6 GL-020/021/024 remain valid (disjoint); GL-014 folds into GL-038.
+
+## Wave 7 — AI program (v0.0.2.x + Hermes; roadmap: `docs/ai-program/roadmap.md`) — **FROZEN until GL-041**
 
 | ID | Title | Status | Target | Notes |
 |----|-------|--------|--------|-------|
