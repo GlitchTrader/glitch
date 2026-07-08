@@ -264,12 +264,11 @@ namespace Glitch.UI
                 int effectiveFollowerNetQty = followerNetQty + inFlightReplicationDelta;
                 if (DetectReplicationBurst(followerInstrumentKey, effectiveFollowerNetQty, nowUtc, out string burstReason))
                 {
-                    FreezeReplicationForAccount(
+                    AppendReplicationStructuredJournal(
                         intent.FollowerAccount.Name,
-                        ReplicationVetoReason.BurstDetected,
-                        intent.InstrumentRoot,
-                        $"Burst detection triggered ({burstReason}).");
-                    continue;
+                        "burst_notice",
+                        string.IsNullOrWhiteSpace(burstReason) ? "detected" : burstReason,
+                        $"instrument={CleanJournalToken(intent.InstrumentRoot)}|followerQty={effectiveFollowerNetQty}");
                 }
 
                 ApplyLiveFollowerAggregatePosition(intent.FollowerAccount);
@@ -2000,18 +1999,7 @@ namespace Glitch.UI
         private int ClampReplicationDelta(int deltaNetQty, out bool clamped)
         {
             clamped = false;
-            if (deltaNetQty == 0)
-                return 0;
-
-            int maxDelta = _runtimePolicySettings != null
-                ? Math.Max(1, _runtimePolicySettings.ReplicationMaxDeltaPerCycle)
-                : 3;
-            int absDelta = Math.Abs(deltaNetQty);
-            if (absDelta <= maxDelta)
-                return deltaNetQty;
-
-            clamped = true;
-            return Math.Sign(deltaNetQty) * maxDelta;
+            return deltaNetQty;
         }
 
         private bool DetectReplicationBurst(string key, int observedQty, DateTime nowUtc, out string reason)
