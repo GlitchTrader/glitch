@@ -1,7 +1,7 @@
 # Trust v0.0.1.9 — Wave A change doc (Cursor)
 
 **Branch:** `glitch/trust-v0019` · **Date:** 2026-07-08 · **Implementer:** Cursor  
-**Compile status:** pending Alan NT8 F5 on all AddOn items (GL-020…024)
+**Compile status:** pending Alan NT8 F5 on all AddOn items (GL-020…024, GL-014)
 
 ---
 
@@ -67,7 +67,10 @@
 
 | | |
 |---|---|
-| **Status** | **Deferred** — A1–A5 prioritized; design in `ui-calm-changes.md` §GL-014 requires `GlitchRuntimePolicyStore` schema extension + `ApplyRiskMitigations` per-(feature, account-type) reads + Settings matrix UI. Implement after Wave A NT8 compile review to avoid policy-path collision with LANE-1. |
+| **Files** | `GlitchRuntimePolicyStore.cs`, `GlitchMainWindow.SettingsTab.partial.cs`, `GlitchMainWindow.cs` (`ApplyRiskMitigations`), `Localization.tsv` |
+| **Change** | Four risk features → expanders with Sim/Eval/PA checkboxes + ratio threshold textboxes (one-contract has on/off). Granular TSV keys (`ENFORCE_BUFFER_FREEZE_15_SIM`, `BUFFER_FREEZE_THRESHOLD`, etc.). Legacy four globals migrated/synced. `ApplyRiskMitigations` gates per `row.AccountStatus`. |
+| **Alan verify** | Toggle scopes independently per account type; save/reload preserves; thresholds drive breach messages (not hardcoded 15/20/80%); Eval lock Eval-only. |
+| **Not done** | Account-level compliance matrix (GL-003 umbrella) beyond these four features. |
 
 ---
 
@@ -80,6 +83,8 @@ GL-021: stale header and shell on last-account disconnect
 GL-023: gitignore stray NinjaTrader export artifacts
 GL-024: F1 commission truth for journal net PnL
 GL-022: SHA-256 release checksum manifest
+docs: trust-v0019 Wave A change doc
+GL-014: per-account-type compliance settings granularity
 ```
 
 ## Skipped validation
