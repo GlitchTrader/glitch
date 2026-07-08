@@ -5,6 +5,7 @@ Append-only operator log. Newest first.
 ## 2026-07-08 — Cursor honest-copy Phase 0
 
 - **P0-1 (compile pending):** `TryExecuteFlattenAllAsync` uses `account.Flatten(instruments)` per account only; journals `flatten_all|origin=user_button|result=...`; incomplete flatten raises Critical `FlattenAllIncomplete` without resubmit.
+- **P0-2 (compile pending):** `EnforceStrategyComplianceActions` setting (default false, persisted); max-contracts and no-protection strategy-path flattens/freeze only when enabled.
 
 ## 2026-07-08 — INCIDENT + deep audit → "Honest Copy" rewrite ordered (architect: Fable)
  Flatten All left the user's ATM Stop1 working → filled → Sim101 long 2 unsolicited → 500ms absolute sync bought 4+6 on followers + planted emergency stops → header showed unlabeled fleet PnL (+$72 unrealized → +$2 realized). Full reconstruction: `audits/fable-deep-audit.md` §1.

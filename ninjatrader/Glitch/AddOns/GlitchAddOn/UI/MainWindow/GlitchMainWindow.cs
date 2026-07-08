@@ -3786,6 +3786,7 @@ namespace Glitch.UI
             DateTime nowUtc = DateTime.UtcNow;
             PruneRiskMitigationCooldowns(nowUtc);
             HashSet<string> strategyComplianceAccounts = BuildStrategyComplianceAccountSet(activeAccounts, nowUtc);
+            bool enforceStrategyComplianceActions = _runtimePolicySettings.EnforceStrategyComplianceActions;
 
             var seenAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (AccountGridRow row in rowsSnapshot)
@@ -3808,7 +3809,8 @@ namespace Glitch.UI
                     continue;
                 }
 
-                if (accountsByName.TryGetValue(accountName, out Account liveAccount))
+                if (enforceStrategyComplianceActions &&
+                    accountsByName.TryGetValue(accountName, out Account liveAccount))
                 {
                     int declaredCap = row.MaxContractsRaw > 0
                         ? Math.Max(1, (int)Math.Round(row.MaxContractsRaw, MidpointRounding.AwayFromZero))
