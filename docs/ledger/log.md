@@ -2,6 +2,10 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-08 — Cursor trust-v0019
+
+- GL-020: `MarshalAccountRefreshResult` dispatcher catch → `RecordSubsystemFault("account_refresh", ex)`; finally/coalesce unchanged. Branch `glitch/trust-v0019`. (compile pending)
+
 ## 2026-07-08 — AI-program architecture pass (architect: Fable → implementer: Cursor)
 
 - Operator decree: Fable architects/documents, Cursor implements exactly what is planned. Goal: improve v0.0.1.9, then v0.0.2.0+ with AI progressively integrated — more assets, better bridge/normalized analytics, then ingest → mine → backtest → learn → 5-min BUY/SELL/HOLD/NOTHING intents with **mandatory SL+TP1 (optional TP2/SL2), NT-held OCO brackets**, Glitch deterministic firewall before any order.
