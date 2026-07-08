@@ -1,7 +1,7 @@
 # Trust v0.0.1.9 — Wave A change doc (Cursor)
 
 **Branch:** `glitch/trust-v0019` · **Date:** 2026-07-08 · **Implementer:** Cursor  
-**Compile status:** pending Alan NT8 F5 on all AddOn items (GL-020…024, GL-014)
+**Compile status:** **NT8 F5 PASS** (2026-07-08, Alan) — runtime acceptance per item below still pending
 
 ---
 

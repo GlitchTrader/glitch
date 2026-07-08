@@ -4,8 +4,13 @@ Append-only operator log. Newest first.
 
 ## 2026-07-08 — Cursor trust-v0019
 
-- GL-020: `MarshalAccountRefreshResult` dispatcher catch → `RecordSubsystemFault("account_refresh", ex)`; finally/coalesce unchanged. Branch `glitch/trust-v0019`. (compile pending)
-- GL-014: settings granularity — per-feature Sim/Eval/PA scopes + editable thresholds in Settings; granular RuntimePolicy TSV keys; ApplyRiskMitigations per account status. (compile pending)
+- **NT8 compile: PASS** (Alan, 2026-07-08) on branch `glitch/trust-v0019` after GL-014 CS1628/CS0019 fix (`6d2d716`). Runtime acceptance per `audits/trust-v0019-changes.md` still open.
+- GL-020: `MarshalAccountRefreshResult` dispatcher catch → `RecordSubsystemFault("account_refresh", ex)`; finally/coalesce unchanged.
+- GL-021: empty-account header zeroed; final shell publish on no accounts.
+- GL-023: gitignore export artifacts.
+- GL-024: F1 commission truth (net journal PnL + reconcile notice).
+- GL-022: SHA-256 checksum manifest + `npm run checksums`.
+- GL-014: per-account-type compliance settings granularity.
 
 ## 2026-07-08 — AI-program architecture pass (architect: Fable → implementer: Cursor)
 
