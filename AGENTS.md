@@ -32,6 +32,10 @@ This repo is shared between multiple agents. Work like a responsible teammate.
 - Docs must be derived from code that exists today. Do not document `apps/app` as a real product, and do not assume an `apps/docs` app exists until it actually does.
 - Strategies are not part of normal AddOn or Indicator maintenance and should never be bundled into deploys unless explicitly requested.
 
+## Patch finish
+
+When a bounded patch should be visible: skill `ab-patch-finish` → `abkb/projects/glitch/deploy-routine.md` (full AddOn folder deploy, then NT recompile). Commit in this repo before saying done.
+
 ## Coding discipline
 
 Ponytail (lazy senior dev): `d:/ab/projects/abkb/knowledge/llm/engineering-discipline.md` + `d:/ab/.cursor/rules/ponytail.mdc`. Repo-specific: workspace-only edits; never `bin\Custom`; smallest scoped diff per package map above.

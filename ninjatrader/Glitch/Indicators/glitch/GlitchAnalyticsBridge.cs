@@ -59,7 +59,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         private EMA[] _ema200ByBip;
         private ATR[] _atrByBip;
         private ADX[] _adxByBip;
-        private DMI[] _dmiByBip;
+        private DM[] _dmByBip;
         private RSI[] _rsiByBip;
         private Stochastics[] _stochByBip;
         private StochRSI[] _stochRsiByBip;
@@ -257,7 +257,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 _ema50ByBip = null;
                 _ema100ByBip = null;
                 _ema200ByBip = null;
-                _dmiByBip = null;
+                _dmByBip = null;
                 _stochRsiByBip = null;
                 _macdByBip = null;
                 _cciByBip = null;
@@ -685,7 +685,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             signal = default(SignalSnapshot);
 
-            bool useFastIntraBarPath = PerformanceMode && !isBoundaryTick;
+            // ponytail: predictive fast path is chart-color only; published feed always gets a full rebuild
+            bool useFastIntraBarPath = PerformanceMode && !isBoundaryTick && !includeOrderFlowHint;
 
             if (!useFastIntraBarPath)
             {
@@ -1004,7 +1005,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             _ema200ByBip = new EMA[seriesCount];
             _atrByBip = new ATR[seriesCount];
             _adxByBip = new ADX[seriesCount];
-            _dmiByBip = new DMI[seriesCount];
+            _dmByBip = new DM[seriesCount];
             _rsiByBip = new RSI[seriesCount];
             _stochByBip = new Stochastics[seriesCount];
             _stochRsiByBip = new StochRSI[seriesCount];
@@ -1035,7 +1036,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 _ema200ByBip[bip] = EMA(BarsArray[bip], 200);
                 _atrByBip[bip] = ATR(BarsArray[bip], 14);
                 _adxByBip[bip] = ADX(BarsArray[bip], 14);
-                _dmiByBip[bip] = DMI(BarsArray[bip], 14);
+                _dmByBip[bip] = DM(BarsArray[bip], 14);
                 _rsiByBip[bip] = RSI(BarsArray[bip], 14, 3);
                 _stochByBip[bip] = Stochastics(BarsArray[bip], 14, 3, 3);
                 _stochRsiByBip[bip] = StochRSI(BarsArray[bip], 14);
@@ -1109,15 +1110,22 @@ namespace NinjaTrader.NinjaScript.Indicators
                 ? Clamp((close - Closes[bip][5]) / (denominator * 2.8), -1, 1)
                 : 0;
             bool hasDmiSignal =
-                _dmiByBip != null &&
-                bip < _dmiByBip.Length &&
-                _dmiByBip[bip] != null &&
+                _dmByBip != null &&
+                bip < _dmByBip.Length &&
+                _dmByBip[bip] != null &&
                 CurrentBars[bip] >= 14;
-            double dmiSignal = hasDmiSignal
-                ? Clamp(_dmiByBip[bip][0], -1, 1)
-                : 0;
+            double diDirection = 0;
+            if (hasDmiSignal)
+            {
+                double diPlus = _dmByBip[bip].DiPlus[0];
+                double diMinus = _dmByBip[bip].DiMinus[0];
+                double diSum = diPlus + diMinus;
+                if (diSum > 1e-8)
+                    diDirection = Clamp((diPlus - diMinus) / diSum, -1, 1);
+            }
+
             double adxDirectionalSignal = hasDmiSignal
-                ? Clamp(dmiSignal * Clamp((adx - 12.0) / 20.0, 0, 1), -1, 1)
+                ? Clamp(diDirection * Clamp((adx - 12.0) / 20.0, 0, 1), -1, 1)
                 : 0;
             bool hasCciSignal =
                 _cciByBip != null &&
@@ -1146,7 +1154,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 ? Clamp(_momentumByBip[bip][0] / (denominator * 3.2), -1, 1)
                 : 0;
             double williamsRSignal = hasWilliamsRSignal
-                ? Clamp((_williamsRByBip[bip][0] + 50.0) / 35.0, -1, 1)
+                ? Clamp((-50.0 - _williamsRByBip[bip][0]) / 50.0, -1, 1)
                 : 0;
             double ultimateSignal = hasUltimateSignal
                 ? Clamp((_ultimateOscillatorByBip[bip][0] - 50.0) / 23.0, -1, 1)
@@ -1310,10 +1318,6 @@ namespace NinjaTrader.NinjaScript.Indicators
                 AccumulateDirectionalFactor(ref weightedCore, ref weightSum, aoSignal, 0.05);
             if (hasBullBearSignal)
                 AccumulateDirectionalFactor(ref weightedCore, ref weightSum, bullBearSignal, 0.05);
-            if (totalOscillatorVotes > 0)
-                AccumulateDirectionalFactor(ref weightedCore, ref weightSum, tvOscillatorCompositeSignal, 0.07);
-            if (totalMaVotes > 0)
-                AccumulateDirectionalFactor(ref weightedCore, ref weightSum, tvMaCompositeSignal, 0.16);
 
             double directionalCore = weightSum > 1e-8
                 ? Clamp(weightedCore / weightSum, -1, 1)
@@ -1602,7 +1606,17 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (State == State.Historical)
                 return CurrentBars[bip] >= BarsArray[bip].Count - 1;
 
-            // Live mode: publish on every eligible tick so all timeframe dials stay near real-time.
+            int intervalMs = PublishIntervalMs;
+            if (intervalMs <= 0)
+                return IsFirstTickOfBar;
+
+            DateTime nowUtc = DateTime.UtcNow;
+            DateTime lastPublishUtc;
+            if (_lastPublishUtcByMinutes.TryGetValue(minutes, out lastPublishUtc) &&
+                (nowUtc - lastPublishUtc).TotalMilliseconds < intervalMs)
+                return false;
+
+            _lastPublishUtcByMinutes[minutes] = nowUtc;
             return true;
         }
 

@@ -51,10 +51,6 @@ namespace Glitch.UI
         private const double AnalyticsDialNeutralHalfWidth = 0.10;
         private const double AnalyticsUnifiedNeutralThreshold = 0.10;
         private const double AnalyticsFactorVisualGamma = 0.82;
-        private const double AnalyticsComponentRawWeight = 0.35;
-        private const double AnalyticsComponentMaWeight = 0.30;
-        private const double AnalyticsComponentOscWeight = 0.20;
-        private const double AnalyticsComponentOrderFlowWeight = 0.15;
         private const double AnalyticsLabelFontSize = 11.0;
         private const double AnalyticsBodyFontSize = 11.0;
         private const double AnalyticsValueFontSize = 12.0;
@@ -1981,7 +1977,7 @@ namespace Glitch.UI
                         reading.SignalLabel = GlitchSignalScale.ToLabel(reading.Score);
                     }
         
-                    snapshot.CompositeScore = ComputeWeightedCompositeScore(activeReadings);
+                    snapshot.CompositeScore = GlitchAnalyticsEngine.ComputeCompositeScore(activeReadings);
                     snapshot.CompositeSignal = GlitchSignalScale.ToLabel(snapshot.CompositeScore);
                 }
         
@@ -1994,44 +1990,6 @@ namespace Glitch.UI
                     if (minutes <= 15)
                         return 0.16;
                     return 0.12;
-                }
-        
-                private double ComputeWeightedCompositeScore(IEnumerable<GlitchTimeframeReading> readings)
-                {
-                    if (readings == null)
-                        return 0;
-        
-                    double weighted = 0;
-                    double total = 0;
-                    foreach (GlitchTimeframeReading reading in readings)
-                    {
-                        if (reading == null)
-                            continue;
-        
-                        double weight = ResolveCompositeWeight(reading.Minutes);
-                        if (weight <= 0)
-                            continue;
-        
-                        AnalyticsDecisionComponentScore components = BuildDecisionComponentScore(reading);
-                        weighted += components.EffectiveScore * weight;
-                        total += weight;
-                    }
-        
-                    if (total <= 1e-8)
-                        return 0;
-        
-                    return weighted / total;
-                }
-        
-                private static double ResolveCompositeWeight(int minutes)
-                {
-                    if (minutes <= 1)
-                        return 0.45;
-                    if (minutes <= 5)
-                        return 0.30;
-                    if (minutes <= 15)
-                        return 0.17;
-                    return 0.08;
                 }
         
                 private static double ClampScore(double value, double min, double max)
@@ -2440,8 +2398,9 @@ namespace Glitch.UI
                         return;
                     }
         
-                    visual.SignalText.Text = ResolveDisplaySignalLabel(reading.SignalLabel, reading.Score);
-                    visual.SignalText.Foreground = ResolveAnalyticsSignalBrush(reading.Score);
+                    double displayScore = BuildDecisionComponentScore(reading).EffectiveScore;
+                    visual.SignalText.Text = ResolveDisplaySignalLabel(reading.SignalLabel, displayScore);
+                    visual.SignalText.Foreground = ResolveAnalyticsSignalBrush(displayScore);
         
                     visual.AveragePriceValueText.Text = FormatAnalyticsPriceWhole(reading.AveragePrice);
                     visual.AveragePriceHintText.Text = string.Empty;
@@ -3454,110 +3413,13 @@ namespace Glitch.UI
                     if (reading == null)
                         return default(AnalyticsDecisionComponentScore);
 
-                    double finalScore = NormalizeDecisionScore(reading.Score);
-                    double rawScore = NormalizeDecisionScore(reading.RawScore);
-                    bool hasMa = reading.MaCompositeScore.HasValue;
-                    bool hasOsc = reading.OscillatorCompositeScore.HasValue;
-                    bool hasOrderFlow = reading.OrderFlowScore.HasValue;
-
-                    double maScore = hasMa ? NormalizeDecisionScore(reading.MaCompositeScore.Value) : 0;
-                    double oscScore = hasOsc ? NormalizeDecisionScore(reading.OscillatorCompositeScore.Value) : 0;
-                    double orderFlowScore = hasOrderFlow ? NormalizeDecisionScore(reading.OrderFlowScore.Value) : 0;
-                    double orderFlowReliability = hasOrderFlow
-                        ? ClampAnalyticsUnitScore(reading.OrderFlowReliability ?? 0.50)
-                        : 0;
-
-                    double rawWeight = AnalyticsComponentRawWeight;
-                    double maWeight = hasMa ? AnalyticsComponentMaWeight : 0;
-                    double oscWeight = hasOsc ? AnalyticsComponentOscWeight : 0;
-                    double orderFlowWeight = hasOrderFlow
-                        ? AnalyticsComponentOrderFlowWeight * (0.60 + (0.40 * orderFlowReliability))
-                        : 0;
-
-                    double technicalScore = ComputeDecisionWeightedScore(
-                        rawScore, rawWeight,
-                        maScore, maWeight,
-                        oscScore, oscWeight,
-                        orderFlowScore, orderFlowWeight);
-
-                    double netScore =
-                        (rawScore * rawWeight) +
-                        (maScore * maWeight) +
-                        (oscScore * oscWeight) +
-                        (orderFlowScore * orderFlowWeight);
-                    int directionSign = Math.Sign(netScore);
-
-                    double alignedWeight = 0;
-                    double opposedWeight = 0;
-                    double weightedMagnitude = 0;
-                    if (rawWeight > 0)
-                    {
-                        weightedMagnitude += Math.Abs(rawScore) * rawWeight;
-                        if (directionSign != 0)
-                        {
-                            alignedWeight += Math.Max(0, directionSign * rawScore) * rawWeight;
-                            opposedWeight += Math.Max(0, -directionSign * rawScore) * rawWeight;
-                        }
-                    }
-                    if (maWeight > 0)
-                    {
-                        weightedMagnitude += Math.Abs(maScore) * maWeight;
-                        if (directionSign != 0)
-                        {
-                            alignedWeight += Math.Max(0, directionSign * maScore) * maWeight;
-                            opposedWeight += Math.Max(0, -directionSign * maScore) * maWeight;
-                        }
-                    }
-                    if (oscWeight > 0)
-                    {
-                        weightedMagnitude += Math.Abs(oscScore) * oscWeight;
-                        if (directionSign != 0)
-                        {
-                            alignedWeight += Math.Max(0, directionSign * oscScore) * oscWeight;
-                            opposedWeight += Math.Max(0, -directionSign * oscScore) * oscWeight;
-                        }
-                    }
-                    if (orderFlowWeight > 0)
-                    {
-                        weightedMagnitude += Math.Abs(orderFlowScore) * orderFlowWeight;
-                        if (directionSign != 0)
-                        {
-                            alignedWeight += Math.Max(0, directionSign * orderFlowScore) * orderFlowWeight;
-                            opposedWeight += Math.Max(0, -directionSign * orderFlowScore) * orderFlowWeight;
-                        }
-                    }
-
-                    double activeWeight = rawWeight + maWeight + oscWeight + orderFlowWeight;
-                    double maxWeight =
-                        AnalyticsComponentRawWeight +
-                        AnalyticsComponentMaWeight +
-                        AnalyticsComponentOscWeight +
-                        AnalyticsComponentOrderFlowWeight;
-                    double coherence = (alignedWeight + opposedWeight) > 1e-8
-                        ? alignedWeight / (alignedWeight + opposedWeight)
-                        : 0.50;
-                    double strength = activeWeight > 1e-8
-                        ? ClampAnalyticsUnitScore(weightedMagnitude / activeWeight)
-                        : 0;
-                    double coverage = ClampAnalyticsUnitScore(activeWeight / maxWeight);
-                    double agreementScore = directionSign == 0
-                        ? 0
-                        : ClampAnalyticsUnitScore(
-                            ((coherence * 0.70) + (strength * 0.30)) *
-                            ((coverage * 0.65) + 0.35));
-                    double signedAgreement = directionSign == 0 ? 0 : (agreementScore * directionSign);
-
-                    double effectiveScore = NormalizeDecisionScore(
-                        (finalScore * 0.55) +
-                        (technicalScore * 0.30) +
-                        (signedAgreement * 0.15));
-
+                    double canonical = GlitchAnalyticsEngine.ResolveCanonicalTimeframeScore(reading);
                     return new AnalyticsDecisionComponentScore
                     {
-                        EffectiveScore = effectiveScore,
-                        TechnicalScore = technicalScore,
-                        AgreementScore = agreementScore,
-                        SignedAgreementScore = signedAgreement
+                        EffectiveScore = canonical,
+                        TechnicalScore = canonical,
+                        AgreementScore = 0,
+                        SignedAgreementScore = 0
                     };
                 }
         
@@ -4241,7 +4103,7 @@ namespace Glitch.UI
 
                     if (!string.IsNullOrWhiteSpace(snapshot.CompositeSignal) &&
                         snapshot.CompositeSignal.StartsWith("Retained", StringComparison.OrdinalIgnoreCase))
-                        return true;
+                        return false;
 
                     foreach (GlitchTimeframeReading reading in snapshot.TimeframeReadings)
                     {

@@ -12,7 +12,7 @@ For AddOn deploys, live deployment is full-folder only: copy the entire `GlitchA
 
 ## Guardrails
 
-- Source of truth: `D:\click-blue\trading\glitch-platform\ninjatrader\Glitch`
+- Source of truth: `D:\ab\projects\glitch\Glitch-Platform\ninjatrader\Glitch`
 - Never edit or patch `C:\Users\alan\Documents\NinjaTrader 8\bin\Custom` directly.
 - AddOn live deploys must copy the full `ninjatrader\Glitch\AddOns\GlitchAddOn` tree.
 - Do not cherry-pick AddOn files for live deploy.
@@ -25,7 +25,7 @@ Use the approved deploy script in one invocation with the full recursive `Glitch
 
 ```powershell
 @'
-$sourceRoot = 'D:\click-blue\trading\glitch-platform\ninjatrader\Glitch\AddOns\GlitchAddOn'
+$sourceRoot = 'D:\ab\projects\glitch\Glitch-Platform\ninjatrader\Glitch\AddOns\GlitchAddOn'
 $files = Get-ChildItem -Path $sourceRoot -Recurse -File | Select-Object -ExpandProperty FullName
 & 'C:\Users\alan\.codex\skills\deploy-glitch-safely\scripts\deploy_glitch_files.ps1' -SourceFiles $files
 '@ | powershell -ExecutionPolicy Bypass -Command -

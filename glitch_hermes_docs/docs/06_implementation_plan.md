@@ -122,9 +122,11 @@ Start with Hermes native cron jobs, not a daemon and not a Docker service stack.
 Minimum jobs:
 
 ```text
-snapshot_sanity   script-only/no-LLM; validates freshness and handoff health
-suggest_trade     5-minute LLM cron; emits one strict JSON intent or NOTHING
-daily_learning    post-session review; emits candidate lessons only
+snapshot_sanity        script-only/no-LLM; validates freshness and handoff health
+suggest_trade          5-minute LLM cron; emits one strict JSON intent or NOTHING
+portfolio_risk_review  hourly review; emits risk posture recommendations only
+learning_pass          6-hour review; emits candidate lessons/archetypes only
+daily_learning         post-session trader journal; emits candidate lessons only
 ```
 
 Deferred until measured need:

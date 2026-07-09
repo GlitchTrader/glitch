@@ -22,4 +22,5 @@ Contract docs to read after memory load:
 ```text
 docs/09_intent_contract_v2_brackets.md
 docs/10_hermes_operator_contract.md
+docs/11_snapshot_ingestion_learning_pipeline.md
 ```

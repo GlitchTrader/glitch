@@ -34,10 +34,16 @@ namespace Glitch.UI
         private static readonly TimeSpan MaxFeedAge = TimeSpan.FromMinutes(2);
         private static readonly TimeSpan MaxBridgePresenceAge = TimeSpan.FromMinutes(2);
         private static readonly TimeSpan SnapshotRetentionAge = TimeSpan.FromDays(7);
-        private const double CompositeRawWeight = 0.35;
-        private const double CompositeMaWeight = 0.30;
-        private const double CompositeOscWeight = 0.20;
-        private const double CompositeOrderFlowWeight = 0.15;
+
+        internal static double ResolveCanonicalTimeframeScore(GlitchTimeframeReading reading)
+        {
+            return ResolveCompositeInputScore(reading);
+        }
+
+        internal static double ComputeCompositeScore(IEnumerable<GlitchTimeframeReading> readings)
+        {
+            return ComputeWeightedCompositeScore(readings);
+        }
 
         public IReadOnlyList<string> BuildInstrumentOptions(IEnumerable<Account> accounts, string selectedInstrument)
         {
@@ -96,7 +102,7 @@ namespace Glitch.UI
             }
 
             bool isLiveFeed = GlitchAnalyticsFeedBus.IsSnapshotFresh(sourceSnapshot, nowUtc, MaxFeedAge);
-            if (!isLiveFeed && !GlitchAnalyticsFeedBus.IsSnapshotFresh(sourceSnapshot, nowUtc, SnapshotRetentionAge))
+            if (!isLiveFeed && !GlitchAnalyticsFeedBus.HasReadingWithinAge(sourceSnapshot, nowUtc, SnapshotRetentionAge))
                 return BuildEmptySnapshot(normalizedInstrument, sessionWindow, nowUtc);
 
             GlitchAnalyticsSnapshot built = BuildSnapshotFromSource(
@@ -139,7 +145,8 @@ namespace Glitch.UI
                 {
                     GlitchTimeframeReading reading = ToTimeframeReading(timeframe, sourceReading);
                     timeframeReadings.Add(reading);
-                    activeReadings.Add(reading);
+                    if (IsReadingFresh(sourceReading, nowUtc, MaxFeedAge))
+                        activeReadings.Add(reading);
                     continue;
                 }
 
@@ -209,148 +216,19 @@ namespace Glitch.UI
             if (reading == null)
                 return 0;
 
-            double finalScore = NormalizeCompositeSignal(reading.Score);
-            double rawScore = NormalizeCompositeSignal(reading.RawScore);
-            bool hasMa = reading.MaCompositeScore.HasValue;
-            bool hasOsc = reading.OscillatorCompositeScore.HasValue;
-            bool hasOrderFlow = reading.OrderFlowScore.HasValue;
-            double maScore = hasMa ? NormalizeCompositeSignal(reading.MaCompositeScore.Value) : 0;
-            double oscScore = hasOsc ? NormalizeCompositeSignal(reading.OscillatorCompositeScore.Value) : 0;
-            double orderFlowScore = hasOrderFlow ? NormalizeCompositeSignal(reading.OrderFlowScore.Value) : 0;
-            double orderFlowReliability = hasOrderFlow
-                ? ClampUnit(reading.OrderFlowReliability ?? 0.50)
-                : 0;
-
-            double rawWeight = CompositeRawWeight;
-            double maWeight = hasMa ? CompositeMaWeight : 0;
-            double oscWeight = hasOsc ? CompositeOscWeight : 0;
-            double orderFlowWeight = hasOrderFlow
-                ? CompositeOrderFlowWeight * (0.60 + (0.40 * orderFlowReliability))
-                : 0;
-
-            double technicalScore = ComputeWeightedAverage(
-                rawScore, rawWeight,
-                maScore, maWeight,
-                oscScore, oscWeight,
-                orderFlowScore, orderFlowWeight);
-
-            double netScore =
-                (rawScore * rawWeight) +
-                (maScore * maWeight) +
-                (oscScore * oscWeight) +
-                (orderFlowScore * orderFlowWeight);
-            int directionSign = Math.Sign(netScore);
-
-            double alignedWeight = 0;
-            double opposedWeight = 0;
-            double weightedMagnitude = 0;
-            if (rawWeight > 0)
-            {
-                weightedMagnitude += Math.Abs(rawScore) * rawWeight;
-                if (directionSign != 0)
-                {
-                    alignedWeight += Math.Max(0, directionSign * rawScore) * rawWeight;
-                    opposedWeight += Math.Max(0, -directionSign * rawScore) * rawWeight;
-                }
-            }
-            if (maWeight > 0)
-            {
-                weightedMagnitude += Math.Abs(maScore) * maWeight;
-                if (directionSign != 0)
-                {
-                    alignedWeight += Math.Max(0, directionSign * maScore) * maWeight;
-                    opposedWeight += Math.Max(0, -directionSign * maScore) * maWeight;
-                }
-            }
-            if (oscWeight > 0)
-            {
-                weightedMagnitude += Math.Abs(oscScore) * oscWeight;
-                if (directionSign != 0)
-                {
-                    alignedWeight += Math.Max(0, directionSign * oscScore) * oscWeight;
-                    opposedWeight += Math.Max(0, -directionSign * oscScore) * oscWeight;
-                }
-            }
-            if (orderFlowWeight > 0)
-            {
-                weightedMagnitude += Math.Abs(orderFlowScore) * orderFlowWeight;
-                if (directionSign != 0)
-                {
-                    alignedWeight += Math.Max(0, directionSign * orderFlowScore) * orderFlowWeight;
-                    opposedWeight += Math.Max(0, -directionSign * orderFlowScore) * orderFlowWeight;
-                }
-            }
-
-            double activeWeight = rawWeight + maWeight + oscWeight + orderFlowWeight;
-            double maxWeight = CompositeRawWeight + CompositeMaWeight + CompositeOscWeight + CompositeOrderFlowWeight;
-            double coherence = (alignedWeight + opposedWeight) > 1e-8
-                ? alignedWeight / (alignedWeight + opposedWeight)
-                : 0.50;
-            double strength = activeWeight > 1e-8
-                ? ClampUnit(weightedMagnitude / activeWeight)
-                : 0;
-            double coverage = ClampUnit(activeWeight / maxWeight);
-            double agreementScore = directionSign == 0
-                ? 0
-                : ClampUnit(
-                    ((coherence * 0.70) + (strength * 0.30)) *
-                    ((coverage * 0.65) + 0.35));
-            double signedAgreement = directionSign == 0 ? 0 : (agreementScore * directionSign);
-
-            return NormalizeCompositeSignal(
-                (finalScore * 0.55) +
-                (technicalScore * 0.30) +
-                (signedAgreement * 0.15));
+            // ponytail: bridge Score is already the blended publish truth — do not re-mix components here
+            return NormalizeCompositeSignal(reading.Score);
         }
 
-        private static double ComputeWeightedAverage(
-            double valueA,
-            double weightA,
-            double valueB,
-            double weightB,
-            double valueC,
-            double weightC,
-            double valueD,
-            double weightD)
+        private static bool IsReadingFresh(GlitchIndicatorReading reading, DateTime nowUtc, TimeSpan maxAge)
         {
-            double sum = 0;
-            double totalWeight = 0;
+            if (reading == null || maxAge <= TimeSpan.Zero)
+                return false;
 
-            if (weightA > 0)
-            {
-                sum += valueA * weightA;
-                totalWeight += weightA;
-            }
-            if (weightB > 0)
-            {
-                sum += valueB * weightB;
-                totalWeight += weightB;
-            }
-            if (weightC > 0)
-            {
-                sum += valueC * weightC;
-                totalWeight += weightC;
-            }
-            if (weightD > 0)
-            {
-                sum += valueD * weightD;
-                totalWeight += weightD;
-            }
+            if (reading.UtcTime == default)
+                return false;
 
-            if (totalWeight <= 1e-8)
-                return 0;
-            return sum / totalWeight;
-        }
-
-        private static double ClampUnit(double value)
-        {
-            if (double.IsNaN(value) || double.IsInfinity(value))
-                return 0;
-            if (value <= 0)
-                return 0;
-            if (value >= 1)
-                return 1;
-            return value;
+            return (nowUtc - reading.UtcTime) <= maxAge;
         }
 
         private static double NormalizeCompositeSignal(double value)

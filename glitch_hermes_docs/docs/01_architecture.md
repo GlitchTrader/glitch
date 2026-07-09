@@ -20,7 +20,9 @@ Hermes Runtime
   └─ native cron first
       ├─ snapshot_sanity script job, no LLM
       ├─ suggest_trade LLM job every 5 minutes
-      ├─ daily_learning post-session job
+      ├─ portfolio_risk_review hourly job
+      ├─ learning_pass 6-hour job
+      ├─ daily_learning post-session trader journal
       └─ versioned policy / lesson store
 ```
 

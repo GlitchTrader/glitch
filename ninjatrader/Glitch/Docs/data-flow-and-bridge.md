@@ -63,6 +63,8 @@ This is important for day-to-day operator reliability, especially in a platform 
 
 Both sides normalize instrument identity before storing or requesting feed state. That normalization step is what allows the AddOn, chart surface, and any external snapshot consumers to stay aligned on the same instrument root.
 
+Composite scoring only includes timeframe readings whose own `UtcTime` is within the live window (~2 minutes). Retained per-timeframe readings may still display on dials, but stale timeframes do not pollute the header composite.
+
 ## Freshness and pruning
 
 Glitch treats analytics as live operational state with a retained last-known layer.

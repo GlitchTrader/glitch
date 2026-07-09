@@ -8,13 +8,13 @@ alwaysApply: true
 
 ## Source of truth
 
-- All edits happen in `D:\click-blue\trading\glitch-platform\ninjatrader\Glitch`.
+- All edits happen in `D:\ab\projects\glitch\Glitch-Platform\ninjatrader\Glitch`.
 - Never edit, rename, move, or delete files directly under `C:\Users\alan\Documents\NinjaTrader 8\bin\Custom`.
 
 ## Deploy scope
 
 - Live AddOn deploys are full-folder only.
-- Always copy the entire `D:\click-blue\trading\glitch-platform\ninjatrader\Glitch\AddOns\GlitchAddOn` tree to `C:\Users\alan\Documents\NinjaTrader 8\bin\Custom\AddOns\GlitchAddOn`.
+- Always copy the entire `D:\ab\projects\glitch\Glitch-Platform\ninjatrader\Glitch\AddOns\GlitchAddOn` tree to `C:\Users\alan\Documents\NinjaTrader 8\bin\Custom\AddOns\GlitchAddOn`.
 - Never cherry-pick individual AddOn files for live deploy.
 - Indicator and Strategy deploys still require explicit user request and separate intent confirmation.
 

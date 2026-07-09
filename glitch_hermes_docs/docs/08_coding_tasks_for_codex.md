@@ -151,9 +151,11 @@ Create the smallest Hermes runtime first: native cron jobs plus local files/conf
 Jobs:
 
 ```text
-snapshot_sanity   script-only/no-agent health check
-suggest_trade     5-minute LLM cron; one strict JSON intent or NOTHING
-daily_learning    post-session candidate lessons
+snapshot_sanity        script-only/no-agent health check
+suggest_trade          5-minute LLM cron; one strict JSON intent or NOTHING
+portfolio_risk_review  hourly review; risk posture recommendations only
+learning_pass          6-hour candidate lessons/archetypes
+daily_learning         post-session trader journal
 ```
 
 Do not create Docker services, a custom scheduler, or an always-on daemon unless cron fails a measured requirement.

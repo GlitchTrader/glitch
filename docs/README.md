@@ -40,7 +40,8 @@ ninjatrader/Glitch/Docs/*funnel*
 - The AddOn persists runtime state under `GlitchData/`; analytics cache now includes `AnalyticsBridgeCache.json`.
 - Copy/replication is being simplified around an event-driven `GlitchCopyEngine` rather than a polling sync loop.
 - Hermes/AI order authority is not live. The accepted invariant remains: Hermes proposes; Glitch validates, executes, journals, and protects.
-- Hermes runtime starts as native cron jobs: script-only snapshot sanity, 5-minute `suggest_trade`, and post-session learning. No always-on daemon until cron fails a measured need.
+- Hermes runtime starts as native cron jobs: script-only snapshot sanity, 5-minute `suggest_trade`, hourly portfolio/risk review, 6-hour learning pass, and daily trader journal. No always-on daemon until cron fails a measured need.
+- The AI data contract is snapshot-first: live snapshots and historical replay/export must use the same schema so pattern mining can transfer into operator archetypes.
 
 ## Ponytail rule for docs
 

@@ -88,6 +88,8 @@ Nominal loop:
 
 No Hermes output is actionable until Glitch accepts it.
 
+The broader snapshot, ingestion, historical replay, portfolio/risk, and learning cadence is defined in `11_snapshot_ingestion_learning_pipeline.md`.
+
 ## Required Glitch-to-Hermes input bundle
 
 The Hermes operator prompt/job must receive a bounded, deterministic input bundle, not ad-hoc chat context.
@@ -276,11 +278,13 @@ Runtime decision: use Hermes native cron first. Do not build an always-on Hermes
 Minimum runtime shape:
 
 ```text
-snapshot_sanity   script-only cron, every 1-5m, no LLM
-suggest_trade     LLM cron, every 5m, one strict intent or NOTHING
-daily_learning    post-session cron, candidate lessons only
-policy_store      versioned files/db records, no silent mutation
-lesson_store      Glitch-journaled outcomes and reviewed lessons
+snapshot_sanity        script-only cron, every 1-5m, no LLM
+suggest_trade          LLM cron, every 5m, one strict intent or NOTHING
+portfolio_risk_review  hourly cron, reviewable risk posture recommendations only
+learning_pass          6-hour cron, candidate lessons/archetypes only
+daily_learning         post-session cron, trader journal + candidate lessons only
+policy_store           versioned files/db records, no silent mutation
+lesson_store           Glitch-journaled outcomes and reviewed lessons
 ```
 
 `suggest_trade` cron job shape:
@@ -309,8 +313,9 @@ Read in order:
 3. glitch_hermes_docs/README.md
 4. glitch_hermes_docs/docs/09_intent_contract_v2_brackets.md
 5. glitch_hermes_docs/docs/10_hermes_operator_contract.md
-6. glitch_hermes_docs/schemas/intent.v2.schema.json
-7. relevant AddOn source files
+6. glitch_hermes_docs/docs/11_snapshot_ingestion_learning_pipeline.md
+7. glitch_hermes_docs/schemas/intent.v2.schema.json
+8. relevant AddOn source files
 ```
 
 Relevant AddOn anchors:

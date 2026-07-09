@@ -116,6 +116,8 @@ GlitchStrats/Glitch/247TelemetryExporter.cs
 
 The missing layer is not another strategy.
 
+The missing layer is documented in `10_hermes_operator_contract.md` and `11_snapshot_ingestion_learning_pipeline.md`.
+
 The missing layer is:
 
 ```text

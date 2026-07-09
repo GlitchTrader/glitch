@@ -61,10 +61,12 @@ NinjaTrader 8 (Windows)
       └─ existing: ComplianceEngine · ReplicationEngine · TradeLedger · RiskLockLedger · ShellBridge (UNTOUCHED by AI path)
 
 Hermes runtime — native cron first, no always-on daemon until proven necessary
-      ├─ snapshot_sanity  (H-0)   script-only/no-LLM freshness + schema + stuck-handoff check
-      ├─ suggest_trade    (H-2)   5-minute LLM cron → one intent per instrument per cycle or NOTHING
-      ├─ daily_learning   (H-2)   post-session candidate lessons from journal bridge data
-      └─ deferred         Docker/API/daemon/queue only if cron fails a measured requirement
+      ├─ snapshot_sanity        (H-0)   script-only/no-LLM freshness + schema + stuck-handoff check
+      ├─ suggest_trade          (H-2)   5-minute LLM cron → one intent per instrument per cycle or NOTHING
+      ├─ portfolio_risk_review  (H-2)   hourly exposure/drawdown/concentration review
+      ├─ learning_pass          (H-2)   6-hour candidate lesson/archetype review
+      ├─ daily_learning         (H-2)   post-session trader journal from Glitch outcomes
+      └─ deferred               Docker/API/daemon/queue only if cron fails a measured requirement
 ```
 
 **AI order path is fully separate from replication** (`06_implementation_plan.md` Step 0 stands): new services only, no edits inside `GlitchReplicationEngine` / `GlitchComplianceEngine` beyond calling their existing public checks.
@@ -75,7 +77,7 @@ Hermes runtime — native cron first, no always-on daemon until proven necessary
 
 Full normative text: `glitch_hermes_docs/docs/09_intent_contract_v2_brackets.md` · schema: `glitch_hermes_docs/schemas/intent.v2.schema.json`.
 
-Hermes-side operator doctrine: `glitch_hermes_docs/docs/10_hermes_operator_contract.md` defines the future 5-minute cron/operator input bundle, strict JSON output, learning boundary, and builder reading order. Hermes is not the operator today; this is the contract for the later `addon-ai-bridge` implementation.
+Hermes-side operator doctrine: `glitch_hermes_docs/docs/10_hermes_operator_contract.md` defines the future 5-minute cron/operator input bundle, strict JSON output, learning boundary, and builder reading order. `glitch_hermes_docs/docs/11_snapshot_ingestion_learning_pipeline.md` defines the minute snapshot, historical exporter/replay corpus, hourly portfolio/risk review, 6-hour learning pass, and daily trader journal. Hermes is not the operator today; these are contracts for the later `addon-ai-bridge` implementation.
 
 Summary of the operator's decisions (2026-07-08):
 

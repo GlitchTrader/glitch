@@ -61,7 +61,35 @@ NOTHING
 
 Every entry intent requires SL + TP1. Optional TP2/SL2 are contract-supported only where quantity and risk rules allow. Hermes never widens stops and never manages a loss mid-flight.
 
-## Routine 3 — daily_learning
+## Routine 3 — portfolio_risk_review
+
+Mode: Hermes cron, preferably script-assisted with bounded LLM reasoning only when needed.
+
+Cadence: every 1 hour.
+
+Responsibilities:
+
+```text
+review exposure, drawdown, locks, concentration, and correlation
+recommend risk posture changes
+produce reviewable policy candidates only
+```
+
+## Routine 4 — learning_pass
+
+Mode: LLM-driven or script-assisted Hermes cron.
+
+Cadence: every 6 hours during active experimentation.
+
+Responsibilities:
+
+```text
+compare accepted/rejected intents with outcomes
+rank mistakes and useful setups
+produce candidate lesson/archetype updates
+```
+
+## Routine 5 — daily_learning
 
 Mode: LLM-driven or script-assisted Hermes cron after the session.
 
@@ -75,6 +103,8 @@ produce reviewable policy/archetype updates
 ```
 
 Do not silently promote a lesson into active policy. Policy changes require a versioned candidate and review/promotion decision.
+
+Full cadence/snapshot/exporter doctrine: `11_snapshot_ingestion_learning_pipeline.md`.
 
 ## Deferred until proven necessary
 

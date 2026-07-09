@@ -526,6 +526,23 @@ namespace Glitch.UI
             if (snapshot == null || maxAge <= TimeSpan.Zero)
                 return false;
 
+            return HasReadingWithinAge(snapshot, nowUtc, maxAge);
+        }
+
+        internal static bool HasReadingWithinAge(GlitchIndicatorInstrumentSnapshot snapshot, DateTime nowUtc, TimeSpan maxAge)
+        {
+            if (snapshot == null || maxAge <= TimeSpan.Zero)
+                return false;
+
+            if (snapshot.TimeframeReadings != null)
+            {
+                foreach (GlitchIndicatorReading reading in snapshot.TimeframeReadings.Values)
+                {
+                    if (reading != null && IsWithinAge(reading.UtcTime, nowUtc, maxAge))
+                        return true;
+                }
+            }
+
             return IsWithinAge(snapshot.UpdatedUtc, nowUtc, maxAge);
         }
 
@@ -780,7 +797,11 @@ namespace Glitch.UI
 
             GlitchIndicatorReading clone = reading.Clone();
             clone.InstrumentRoot = normalizedRoot;
-            clone.UtcTime = DateTime.UtcNow;
+            DateTime incomingUtc = reading.UtcTime;
+            if (incomingUtc == default || incomingUtc > DateTime.UtcNow.AddMinutes(5))
+                clone.UtcTime = DateTime.UtcNow;
+            else
+                clone.UtcTime = incomingUtc;
             clone.SignalLabel = ClampText(clone.SignalLabel, 96);
             clone.VolatilityHint = ClampText(clone.VolatilityHint, 128);
             clone.TrendHint = ClampText(clone.TrendHint, 128);
