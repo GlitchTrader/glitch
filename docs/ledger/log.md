@@ -77,6 +77,13 @@ Append-only operator log. Newest first.
 - GL-022: SHA-256 checksum manifest + `npm run checksums`.
 - GL-014: per-account-type compliance settings granularity.
 
+## 2026-07-09 — v0.0.1.9 baseline closed; ledger pruned to rail
+
+- Operator: v19 = Trust + stable + non-AI operator — Wave 6 + Honest Copy + session work treated as complete.
+- Pruned `docs/ledger/backlog.md`: closed v19 items → done; umbrellas GL-008/009 superseded by R01–R23; active work = operating-system rail only.
+- Carryover (not v19 blockers): GL-039 → R04; GL-041 → R14 pre-AI; GL-005 F2 → R01; prop-firm GL-017–019 deferred.
+- Next: R01 (GL-025/026).
+
 ## 2026-07-09 — Operating system rail (first principles, no calendar gates)
 
 - Operator doctrine: fail-fast ($17) beats fail-slow ($600 renewal); pay compute to build/mine/test; stall = bad; target pass eval in 7–15 live days after build+train when evidence green — not self-limited by arbitrary calendars.

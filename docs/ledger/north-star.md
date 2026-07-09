@@ -12,6 +12,8 @@
 5. AI      — multi-asset bridge + Hermes decision layer (the killer feature)
 ```
 
+**v0.0.1.9 (2026-07-09)** closes steps 2–4 for the **non-AI operator**. Step 5 follows `docs/ai-program/operating-system-rail.md` (R01–R23).
+
 No AI work before the audit and bug fixes complete. Trust before intelligence.
 
 ## Product invariants

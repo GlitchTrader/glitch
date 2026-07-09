@@ -29,7 +29,7 @@ Glitch is the only component that can touch an order. Hermes has no order API, n
 
 | Version | Codename | Contents | Gate to enter |
 |---------|----------|----------|---------------|
-| **v0.0.1.9** | Trust | RP-1 dispatcher catch, RP-3 stale-display fixes, F1 commission truth, SHA-256 release integrity, repo hygiene (GL-020…024) | none — start now |
+| **v0.0.1.9** | Trust | RP-1/RP-3, F1 commission truth, SHA-256, Honest Copy, analytics scoring, scroll UX — **non-AI operator baseline** | **shipped 2026-07-09** |
 | **v0.0.2.0** | Eyes | Instrument metadata registry + multi-asset bridge normalization (GL-025), normalized Analytics panel (GL-026) | v0.0.1.9 shipped |
 | **v0.0.2.1** | Voice | `GlitchExternalTelemetryServer` — read-only localhost API + schemas (GL-027) | GL-034 security design review of the server spec |
 | *(Hermes H-0)* | — | Hermes runtime scaffold + `ingest_snapshot` (GL-028), separate repo, mktintel-style | v0.0.2.1 running |

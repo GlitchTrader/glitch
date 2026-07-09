@@ -8,7 +8,9 @@
 Hermes proposes. Glitch validates, executes, journals, and protects.
 ```
 
-**Version shorthand (labels only, not schedule):** v20 = v0.0.2.0 · v30 = v0.0.3.0.
+**Version shorthand (labels only, not schedule):** v19 = v0.0.1.9 (baseline) · v20 = v0.0.2.0 · v30 = v0.0.3.0.
+
+**Baseline:** v0.0.1.9 shipped — Trust + stable + non-AI operator. Ledger pruned; all new work is R01+.
 
 Duration is **open**. Advance the rail on **evidence**, not calendar. Parallelize compute wherever steps are read-only.
 
