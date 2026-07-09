@@ -26,7 +26,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
-using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -39,24 +38,6 @@ namespace Glitch.UI
 {
     public partial class GlitchMainWindow
     {
-        private static readonly Dictionary<string, double> FallbackInstrumentPointValues = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
-        {
-            { "MNQ", 2.0 },
-            { "NQ", 20.0 },
-            { "MES", 5.0 },
-            { "ES", 50.0 },
-            { "MYM", 0.5 },
-            { "YM", 5.0 },
-            { "M2K", 5.0 },
-            { "RTY", 50.0 },
-            { "MGC", 10.0 },
-            { "GC", 100.0 },
-            { "MCL", 100.0 },
-            { "CL", 1000.0 }
-        };
-        private static readonly Dictionary<string, double> CachedInstrumentPointValues = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
-        private static readonly object InstrumentPointValueSync = new object();
-
         private readonly GlitchTradeInsightsService _tradeInsightsService = new GlitchTradeInsightsService();
         private readonly GlitchTradeLedgerService _tradeLedgerService =
             new GlitchTradeLedgerService(GlitchStateStore.GetDefaultPath("TradeLedger.tsv"));
@@ -947,13 +928,28 @@ namespace Glitch.UI
                 if (trade == null)
                     continue;
 
-                double pointValue = ResolveInstrumentPointValue(trade.Instrument);
+                if (!GlitchInstrumentMetadataService.TryGetPointValue(trade.Instrument, out double pointValue))
+                {
+                    ReportUnknownInstrumentPointValue(trade.Instrument);
+                    continue;
+                }
+
                 double grossUsd = trade.PnlPoints * pointValue;
                 double netUsd = grossUsd - trade.CommissionTotal;
                 normalized.Add(CloneTradeForDisplay(trade, netUsd));
             }
 
             return normalized;
+        }
+
+        private void ReportUnknownInstrumentPointValue(string instrumentName)
+        {
+            string symbol = string.IsNullOrWhiteSpace(instrumentName) ? "unknown" : instrumentName.Trim();
+            RaiseCriticalWarning(
+                "System",
+                Lf("summary.point_value_unknown", "Point value unknown for {0}; PnL display may be wrong.", symbol),
+                $"PointValueUnknown|{symbol}",
+                unlocksTrading: false);
         }
 
         private static GlitchTradeInsightsService.TradeRoundTrip CloneTradeForDisplay(
@@ -984,101 +980,6 @@ namespace Glitch.UI
                 ExitSession = trade.ExitSession,
                 CommissionTotal = trade.CommissionTotal
             };
-        }
-
-        private double ResolveInstrumentPointValue(string instrumentName)
-        {
-            foreach (string candidate in BuildInstrumentLookupCandidates(instrumentName))
-            {
-                lock (InstrumentPointValueSync)
-                {
-                    if (CachedInstrumentPointValues.TryGetValue(candidate, out double cachedValue) && cachedValue > 0)
-                        return cachedValue;
-                }
-
-                double resolved = TryResolvePointValue(candidate, "GetInstrument");
-                if (resolved > 0)
-                {
-                    CacheInstrumentPointValue(candidate, resolved);
-                    return resolved;
-                }
-
-                resolved = TryResolvePointValue(candidate, "GetInstrumentFuzzy");
-                if (resolved > 0)
-                {
-                    CacheInstrumentPointValue(candidate, resolved);
-                    return resolved;
-                }
-
-                if (FallbackInstrumentPointValues.TryGetValue(candidate, out double fallbackValue) && fallbackValue > 0)
-                {
-                    CacheInstrumentPointValue(candidate, fallbackValue);
-                    return fallbackValue;
-                }
-            }
-
-            string symbol = string.IsNullOrWhiteSpace(instrumentName) ? "unknown" : instrumentName.Trim();
-            RaiseCriticalWarning(
-                "System",
-                Lf("summary.point_value_unknown", "Point value unknown for {0}; PnL display may be wrong.", symbol),
-                $"PointValueUnknown|{symbol}",
-                unlocksTrading: false);
-            return 1.0;
-        }
-
-        private static void CacheInstrumentPointValue(string candidate, double value)
-        {
-            if (string.IsNullOrWhiteSpace(candidate) || value <= 0)
-                return;
-
-            lock (InstrumentPointValueSync)
-                CachedInstrumentPointValues[candidate] = value;
-        }
-
-        private static IEnumerable<string> BuildInstrumentLookupCandidates(string instrumentName)
-        {
-            var candidates = new List<string>();
-            string token = string.IsNullOrWhiteSpace(instrumentName) ? string.Empty : instrumentName.Trim().ToUpperInvariant();
-            if (token.Length == 0)
-                return candidates;
-
-            candidates.Add(token);
-
-            string beforeSpace = token.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-            if (!string.IsNullOrWhiteSpace(beforeSpace))
-                candidates.Add(beforeSpace);
-
-            return candidates
-                .Where(candidate => !string.IsNullOrWhiteSpace(candidate))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-        }
-
-        private static double TryResolvePointValue(string candidate, string methodName)
-        {
-            if (string.IsNullOrWhiteSpace(candidate))
-                return 0;
-
-            try
-            {
-                MethodInfo resolver = typeof(Instrument)
-                    .GetMethods(BindingFlags.Public | BindingFlags.Static)
-                    .FirstOrDefault(method =>
-                        string.Equals(method.Name, methodName, StringComparison.Ordinal) &&
-                        method.ReturnType == typeof(Instrument) &&
-                        method.GetParameters().Length == 1 &&
-                        method.GetParameters()[0].ParameterType == typeof(string));
-                if (resolver == null)
-                    return 0;
-
-                var instrument = resolver.Invoke(null, new object[] { candidate }) as Instrument;
-                double pointValue = instrument?.MasterInstrument?.PointValue ?? 0;
-                return pointValue > 0 ? pointValue : 0;
-            }
-            catch
-            {
-                return 0;
-            }
         }
 
         private List<FleetTradeAggregate> BuildFleetTradeAggregates(IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> trades)

@@ -273,7 +273,7 @@ Cron first. Daemon only if cron fails a measured need.
 
 ## 8. Active pointer
 
-**Next step:** R01 — instrument metadata + multi-asset bridge (GL-025, GL-026).
+**Next step:** R03 — market snapshot writer (file).
 
 **Parallel:** R06 — mine `Glitch-Collab` / historical exports in separate Hermes sessions now.
 

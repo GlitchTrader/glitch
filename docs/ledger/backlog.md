@@ -64,8 +64,8 @@ Version map: `docs/ai-program/roadmap.md`
 
 | Rail | GL | Version | Title | Status |
 |------|-----|---------|-------|--------|
-| R01 | GL-025 | v20 | Instrument metadata registry | todo |
-| R02 | GL-026 | v20 | Multi-asset bridge normalization | todo |
+| R01 | GL-025 | v20 | Instrument metadata registry | done |
+| R02 | GL-026 | v20 | Multi-asset bridge normalization | done |
 | R03 | — | v21 | Market snapshot writer (file) | todo |
 | R04 | — | v21 | Portfolio snapshot writer (file) | todo |
 | R05 | — | v21 | Historical exporter (same schema) | todo |

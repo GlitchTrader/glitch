@@ -80,9 +80,11 @@ namespace NinjaTrader.NinjaScript.Indicators
         private Brush[] _buyPalette;
         private Brush[] _sellPalette;
 
-        private readonly Dictionary<int, DateTime> _lastPublishUtcByMinutes = new Dictionary<int, DateTime>();
-        private readonly Dictionary<int, SessionTracker> _sessionByMinutes = new Dictionary<int, SessionTracker>();
+        private readonly Dictionary<string, DateTime> _lastPublishUtcByFeedKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, SessionTracker> _sessionByFeedKey = new Dictionary<string, SessionTracker>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _trackedInstrumentRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private string _instrumentRoot;
+        private string[] _instrumentRootByBip;
         private int[] _minutesByBip;
         private bool[] _isTrackedByBip;
         private int _lastPaintedBarIndex = -1;
@@ -91,7 +93,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         private DateTime _lastBridgeUnavailableLogUtc = DateTime.MinValue;
         private DateTime _lastBridgeTouchUtc = DateTime.MinValue;
         private DateTime _lastBootstrapRegisterUtc = DateTime.MinValue;
-        private double _tickSize;
+        private double[] _tickSizeByBip;
         private SignalSnapshot[] _cachedSignalByBip;
         private bool[] _hasCachedSignalByBip;
         private OrderFlowCumulativeDelta[] _orderFlowDeltaByBip;
@@ -156,6 +158,10 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Order Flow Blend", Order = 10, GroupName = "Parameters")]
         public double OrderFlowBlend { get; set; }
 
+        [NinjaScriptProperty]
+        [Display(Name = "Additional Instrument Roots", Order = 11, GroupName = "Parameters", Description = "Comma-separated roots for multi-asset publish via AddData (e.g. NQ,ES).")]
+        public string AdditionalInstrumentRoots { get; set; }
+
         protected override void OnStateChange()
         {
             if (State == State.SetDefaults)
@@ -176,11 +182,15 @@ namespace NinjaTrader.NinjaScript.Indicators
                 PerformanceMode = true;
                 EnableOrderFlowLayer = true;
                 OrderFlowBlend = 0.8;
+                AdditionalInstrumentRoots = string.Empty;
             }
             else if (State == State.Configure)
             {
                 if (PublishToGlitchUi)
+                {
                     AddMissingTimeframeSeries();
+                    AddAdditionalInstrumentSeries();
+                }
 
                 if (EnableOrderFlowLayer)
                     AddOrderFlowTickSeries();
@@ -194,11 +204,9 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 InitializeIndicators();
                 InitializeColorPalettes();
-                _lastPublishUtcByMinutes.Clear();
-                _sessionByMinutes.Clear();
-                _tickSize = (Instrument != null && Instrument.MasterInstrument != null && Instrument.MasterInstrument.TickSize > 0)
-                    ? Instrument.MasterInstrument.TickSize
-                    : 0.25;
+                _lastPublishUtcByFeedKey.Clear();
+                _sessionByFeedKey.Clear();
+                _trackedInstrumentRoots.Clear();
                 _cachedSignalByBip = new SignalSnapshot[BarsArray.Length];
                 _hasCachedSignalByBip = new bool[BarsArray.Length];
                 _lastPaintedBarIndex = -1;
@@ -223,29 +231,24 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 InitializeOrderFlowIndicators();
 
-                BridgeBusCompat.RegisterBridge(_instrumentRoot, PublishToGlitchUi);
-                BridgeBusCompat.TouchBridge(
-                    _instrumentRoot,
-                    PublishToGlitchUi,
-                    IsTrackedMinutesForBip(0));
-                BridgeBusCompat.RegisterBridgeBootstrapPublisher(_instrumentRoot, RequestBootstrapFromExternal);
+                RegisterTrackedBridges();
+                RegisterBootstrapPublishersForTrackedRoots();
             }
             else if (State == State.Realtime)
             {
-                BridgeBusCompat.RegisterBridge(_instrumentRoot, PublishToGlitchUi);
-                BridgeBusCompat.TouchBridge(
-                    _instrumentRoot,
-                    PublishToGlitchUi,
-                    IsTrackedMinutesForBip(0));
-                BridgeBusCompat.RegisterBridgeBootstrapPublisher(_instrumentRoot, RequestBootstrapFromExternal);
+                RegisterTrackedBridges();
+                RegisterBootstrapPublishersForTrackedRoots();
                 PublishBootstrapReadings();
             }
             else if (State == State.Terminated)
             {
-                _lastPublishUtcByMinutes.Clear();
-                _sessionByMinutes.Clear();
+                _lastPublishUtcByFeedKey.Clear();
+                _sessionByFeedKey.Clear();
                 _minutesByBip = null;
                 _isTrackedByBip = null;
+                _instrumentRootByBip = null;
+                _tickSizeByBip = null;
+                _trackedInstrumentRoots.Clear();
                 _cachedSignalByBip = null;
                 _hasCachedSignalByBip = null;
                 _orderFlowDeltaByBip = null;
@@ -276,8 +279,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 _orderFlowTapeBuyVolume = 0;
                 _orderFlowTapeSellVolume = 0;
 
-                BridgeBusCompat.UnregisterBridgeBootstrapPublisher(_instrumentRoot, RequestBootstrapFromExternal);
-                BridgeBusCompat.UnregisterBridge(_instrumentRoot);
+                UnregisterTrackedBridges();
             }
         }
 
@@ -292,24 +294,19 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (BarsInProgress == 0)
             {
                 DateTime nowUtc = DateTime.UtcNow;
-                bool isTrackedPrimary = IsTrackedMinutesForBip(0);
 
                 if (_lastBridgeTouchUtc == DateTime.MinValue ||
                     (nowUtc - _lastBridgeTouchUtc) >= TimeSpan.FromSeconds(1))
                 {
                     _lastBridgeTouchUtc = nowUtc;
-                    BridgeBusCompat.TouchBridge(
-                        _instrumentRoot,
-                        PublishToGlitchUi,
-                        isTrackedPrimary);
+                    TouchTrackedBridges();
                 }
 
-                // Re-register periodically so callback wiring self-heals after script reloads.
                 if (_lastBootstrapRegisterUtc == DateTime.MinValue ||
                     (nowUtc - _lastBootstrapRegisterUtc) >= TimeSpan.FromSeconds(5))
                 {
                     _lastBootstrapRegisterUtc = nowUtc;
-                    BridgeBusCompat.RegisterBridgeBootstrapPublisher(_instrumentRoot, RequestBootstrapFromExternal);
+                    RegisterBootstrapPublishersForTrackedRoots();
                 }
             }
 
@@ -367,9 +364,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                 return;
 
             SessionTracker session = UpdateSessionTracker(minutes, BarsInProgress);
+            string instrumentRoot = ResolveInstrumentRootForBip(BarsInProgress);
             BridgeBusCompat.Publish(new BridgeBusCompat.BridgeReading
             {
-                InstrumentRoot = _instrumentRoot,
+                InstrumentRoot = instrumentRoot,
                 Minutes = minutes,
                 UtcTime = Times[BarsInProgress][0].ToUniversalTime(),
                 CurrentPrice = ResolvePublishedCurrentPrice(signal.Close),
@@ -569,7 +567,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 bool published = BridgeBusCompat.Publish(new BridgeBusCompat.BridgeReading
                 {
-                    InstrumentRoot = _instrumentRoot,
+                    InstrumentRoot = ResolveInstrumentRootForBip(bip),
                     Minutes = minutes,
                     UtcTime = readingUtc,
                     CurrentPrice = ResolvePublishedCurrentPrice(signal.Close),
@@ -610,7 +608,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                 });
                 if (published)
                 {
-                    _lastPublishUtcByMinutes[minutes] = nowUtc;
+                    string feedKey = BuildFeedKey(ResolveInstrumentRootForBip(bip), minutes);
+                    _lastPublishUtcByFeedKey[feedKey] = nowUtc;
                     publishedCount++;
                 }
             }
@@ -618,7 +617,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (publishedCount > 0)
             {
                 Log(
-                    "GlitchAnalyticsBridge bootstrap published " + publishedCount + " timeframe(s) for " + (_instrumentRoot ?? "(null)") + ".",
+                    "GlitchAnalyticsBridge bootstrap published " + publishedCount + " reading(s) across " + _trackedInstrumentRoots.Count + " instrument root(s).",
                     NinjaTrader.Cbi.LogLevel.Information);
             }
         }
@@ -644,7 +643,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (_smaByBip != null && bip < _smaByBip.Length && _smaByBip[bip] != null && CurrentBars[bip] > 0)
                 signal.AveragePrice = _smaByBip[bip][0];
 
-            double atr = signal.Atr > 0 ? signal.Atr : Math.Max(_tickSize, 0.25);
+            double atr = signal.Atr > 0 ? signal.Atr : Math.Max(ResolveTickSizeForBip(bip), 0.25);
             DateTime nowUtc = (_isOrderFlowRuntimeAvailable && EnableOrderFlowLayer) ? DateTime.UtcNow : DateTime.MinValue;
             TryBuildOrderFlowSnapshot(
                 bip,
@@ -752,6 +751,129 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
+        private void AddAdditionalInstrumentSeries()
+        {
+            if (!PublishToGlitchUi || string.IsNullOrWhiteSpace(AdditionalInstrumentRoots))
+                return;
+
+            string chartRoot = NormalizeInstrumentRoot(
+                Instrument == null
+                    ? null
+                    : (Instrument.MasterInstrument == null ? Instrument.FullName : Instrument.MasterInstrument.Name));
+
+            foreach (string token in AdditionalInstrumentRoots.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string root = NormalizeInstrumentRoot(token);
+                if (string.IsNullOrWhiteSpace(root))
+                    continue;
+
+                if (!string.IsNullOrWhiteSpace(chartRoot) &&
+                    string.Equals(root, chartRoot, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                Instrument additional = Instrument.GetInstrument(root);
+                if (additional == null)
+                    additional = Instrument.GetInstrumentFuzzy(root);
+                if (additional == null)
+                {
+                    Log(
+                        "GlitchAnalyticsBridge: unknown additional instrument root '" + root + "'.",
+                        NinjaTrader.Cbi.LogLevel.Warning);
+                    continue;
+                }
+
+                foreach (int minutes in TargetMinutes)
+                    AddDataSeries(additional, BarsPeriodType.Minute, minutes);
+            }
+        }
+
+        private void RegisterTrackedBridges()
+        {
+            _trackedInstrumentRoots.Clear();
+            if (_instrumentRootByBip == null)
+            {
+                if (!string.IsNullOrWhiteSpace(_instrumentRoot))
+                    _trackedInstrumentRoots.Add(_instrumentRoot);
+            }
+            else
+            {
+                for (int bip = 0; bip < _instrumentRootByBip.Length; bip++)
+                {
+                    string root = _instrumentRootByBip[bip];
+                    if (!string.IsNullOrWhiteSpace(root))
+                        _trackedInstrumentRoots.Add(root);
+                }
+            }
+
+            foreach (string root in _trackedInstrumentRoots)
+            {
+                BridgeBusCompat.RegisterBridge(root, PublishToGlitchUi);
+                BridgeBusCompat.TouchBridge(root, PublishToGlitchUi, string.Equals(root, _instrumentRoot, StringComparison.OrdinalIgnoreCase));
+            }
+        }
+
+        private void RegisterBootstrapPublishersForTrackedRoots()
+        {
+            foreach (string root in _trackedInstrumentRoots)
+                BridgeBusCompat.RegisterBridgeBootstrapPublisher(root, RequestBootstrapFromExternal);
+        }
+
+        private void TouchTrackedBridges()
+        {
+            foreach (string root in _trackedInstrumentRoots)
+                BridgeBusCompat.TouchBridge(root, PublishToGlitchUi, string.Equals(root, _instrumentRoot, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private void UnregisterTrackedBridges()
+        {
+            foreach (string root in _trackedInstrumentRoots)
+            {
+                BridgeBusCompat.UnregisterBridgeBootstrapPublisher(root, RequestBootstrapFromExternal);
+                BridgeBusCompat.UnregisterBridge(root);
+            }
+
+            _trackedInstrumentRoots.Clear();
+        }
+
+        private string ResolveInstrumentRootForBip(int bip)
+        {
+            if (_instrumentRootByBip != null && bip >= 0 && bip < _instrumentRootByBip.Length &&
+                !string.IsNullOrWhiteSpace(_instrumentRootByBip[bip]))
+                return _instrumentRootByBip[bip];
+
+            return _instrumentRoot;
+        }
+
+        private double ResolveTickSizeForBip(int bip)
+        {
+            if (_tickSizeByBip != null && bip >= 0 && bip < _tickSizeByBip.Length && _tickSizeByBip[bip] > 0)
+                return _tickSizeByBip[bip];
+
+            return 0.25;
+        }
+
+        private static string ResolveInstrumentRootFromBars(Bars bars)
+        {
+            if (bars == null || bars.Instrument == null)
+                return null;
+
+            return NormalizeInstrumentRoot(
+                bars.Instrument.MasterInstrument == null
+                    ? bars.Instrument.FullName
+                    : bars.Instrument.MasterInstrument.Name);
+        }
+
+        private static double ResolveTickSizeFromBars(Bars bars)
+        {
+            double tickSize = bars?.Instrument?.MasterInstrument?.TickSize ?? 0;
+            return tickSize > 0 ? tickSize : 0.25;
+        }
+
+        private static string BuildFeedKey(string instrumentRoot, int minutes)
+        {
+            return (instrumentRoot ?? string.Empty).Trim().ToUpperInvariant() + "|" + minutes.ToString(CultureInfo.InvariantCulture);
+        }
+
         private void AddOrderFlowTickSeries()
         {
             bool isPrimaryOneTick =
@@ -767,12 +889,16 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 _minutesByBip = null;
                 _isTrackedByBip = null;
+                _instrumentRootByBip = null;
+                _tickSizeByBip = null;
                 return;
             }
 
             int seriesCount = BarsArray.Length;
             _minutesByBip = new int[seriesCount];
             _isTrackedByBip = new bool[seriesCount];
+            _instrumentRootByBip = new string[seriesCount];
+            _tickSizeByBip = new double[seriesCount];
 
             for (int bip = 0; bip < seriesCount; bip++)
             {
@@ -783,6 +909,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 _minutesByBip[bip] = minutes;
                 _isTrackedByBip[bip] = IsTrackedMinutes(minutes);
+                _instrumentRootByBip[bip] = ResolveInstrumentRootFromBars(bars);
+                _tickSizeByBip[bip] = ResolveTickSizeFromBars(bars);
             }
         }
 
@@ -1093,7 +1221,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             double emaMed = _emaMedByBip[bip][0];
             double emaSlow = _emaSlowByBip[bip][0];
 
-            double denominator = Math.Max(Math.Max(atr, _tickSize), 1e-8);
+            double denominator = Math.Max(Math.Max(atr, ResolveTickSizeForBip(bip)), 1e-8);
             double fastSlopeN = (_emaFastByBip[bip][0] - _emaFastByBip[bip][1]) / denominator;
             double medSlopeN = (_emaMedByBip[bip][0] - _emaMedByBip[bip][1]) / denominator;
             double slowSlopeN = (_emaSlowByBip[bip][0] - _emaSlowByBip[bip][1]) / denominator;
@@ -1207,7 +1335,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             int maSellVotes = 0;
             int maNeutralVotes = 0;
             int totalMaVotes = 0;
-            double maTolerance = Math.Max(denominator * 0.03, _tickSize * 0.50);
+            double maTolerance = Math.Max(denominator * 0.03, ResolveTickSizeForBip(bip) * 0.50);
 
             if (CurrentBars[bip] >= 10)
             {
@@ -1415,7 +1543,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 return cachedSignal.Score;
 
             double atr = _atrByBip[bip][0];
-            double scale = Math.Max(Math.Max(atr, _tickSize), 1e-8);
+            double scale = Math.Max(Math.Max(atr, ResolveTickSizeForBip(bip)), 1e-8);
             double bodyVelocity = (Closes[bip][0] - Opens[bip][0]) / (scale * 0.55);
             double tickVelocity = (Closes[bip][0] - Closes[bip][1]) / (scale * 0.30);
             double acceleration = ((Closes[bip][0] - Closes[bip][1]) - (Closes[bip][1] - Closes[bip][2])) / (scale * 0.40);
@@ -1502,7 +1630,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                         if (currentVwap > 0)
                         {
                             vwap = currentVwap;
-                            double normalization = Math.Max(Math.Max(atr, _tickSize), 1e-8);
+                            double normalization = Math.Max(Math.Max(atr, ResolveTickSizeForBip(bip)), 1e-8);
                             vwapBias = Clamp((close - currentVwap) / normalization, -1, 1);
 
                             double stdUpper = vwapIndicator.StdDev1Upper[0];
@@ -1544,7 +1672,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (CurrentBars[bip] > 0)
             {
                 priceVelocity = Clamp(
-                    (Closes[bip][0] - Opens[bip][0]) / Math.Max(Math.Max(atr, _tickSize), 1e-8),
+                    (Closes[bip][0] - Opens[bip][0]) / Math.Max(Math.Max(atr, ResolveTickSizeForBip(bip)), 1e-8),
                     -1,
                     1);
                 hasPriceVelocity = true;
@@ -1611,12 +1739,13 @@ namespace NinjaTrader.NinjaScript.Indicators
                 return IsFirstTickOfBar;
 
             DateTime nowUtc = DateTime.UtcNow;
+            string feedKey = BuildFeedKey(ResolveInstrumentRootForBip(bip), minutes);
             DateTime lastPublishUtc;
-            if (_lastPublishUtcByMinutes.TryGetValue(minutes, out lastPublishUtc) &&
+            if (_lastPublishUtcByFeedKey.TryGetValue(feedKey, out lastPublishUtc) &&
                 (nowUtc - lastPublishUtc).TotalMilliseconds < intervalMs)
                 return false;
 
-            _lastPublishUtcByMinutes[minutes] = nowUtc;
+            _lastPublishUtcByFeedKey[feedKey] = nowUtc;
             return true;
         }
 
@@ -1733,11 +1862,12 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private SessionTracker UpdateSessionTracker(int minutes, int bip)
         {
+            string feedKey = BuildFeedKey(ResolveInstrumentRootForBip(bip), minutes);
             SessionTracker tracker;
-            if (!_sessionByMinutes.TryGetValue(minutes, out tracker) || tracker == null)
+            if (!_sessionByFeedKey.TryGetValue(feedKey, out tracker) || tracker == null)
             {
                 tracker = new SessionTracker();
-                _sessionByMinutes[minutes] = tracker;
+                _sessionByFeedKey[feedKey] = tracker;
             }
 
             DateTime barLocal = Times[bip][0].ToLocalTime();

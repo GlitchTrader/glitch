@@ -2406,7 +2406,7 @@ namespace Glitch.UI
                     visual.AveragePriceHintText.Text = string.Empty;
                     visual.AtrValueText.Text = BuildRegimeSummary(reading);
                     visual.AtrHintText.Text = string.Empty;
-                    visual.AdxValueText.Text = BuildAdxAtrSummary(reading.AdxProxy, reading.AtrProxy);
+                    visual.AdxValueText.Text = BuildAdxAtrSummary(reading.AdxProxy, reading.AtrProxy, _selectedAnalyticsInstrument);
                     visual.AdxHintText.Text = BuildOrderFlowSummary(reading);
                     visual.AdxHintText.Foreground = ResolveAnalyticsSignalBrush(reading.OrderFlowScore ?? 0);
 
@@ -3873,49 +3873,7 @@ namespace Glitch.UI
         
                 private static bool IsPointBasedInstrumentRoot(string instrumentRoot)
                 {
-                    if (string.IsNullOrWhiteSpace(instrumentRoot))
-                        return false;
-        
-                    string root = instrumentRoot.Trim().ToUpperInvariant();
-                    int spaceIndex = root.IndexOf(' ');
-                    if (spaceIndex > 0)
-                        root = root.Substring(0, spaceIndex);
-                    int dotIndex = root.IndexOf('.');
-                    if (dotIndex > 0)
-                        root = root.Substring(0, dotIndex);
-        
-                    switch (root)
-                    {
-                        case "MNQ":
-                        case "NQ":
-                        case "MES":
-                        case "ES":
-                        case "MYM":
-                        case "YM":
-                        case "M2K":
-                        case "RTY":
-                        case "MGC":
-                        case "GC":
-                        case "MCL":
-                        case "CL":
-                        case "SI":
-                        case "HG":
-                        case "NG":
-                        case "ZB":
-                        case "ZN":
-                        case "ZF":
-                        case "ZT":
-                        case "6E":
-                        case "6B":
-                        case "6J":
-                        case "6A":
-                        case "6C":
-                        case "6S":
-                        case "6N":
-                            return true;
-                        default:
-                            return false;
-                    }
+                    return Glitch.Services.GlitchInstrumentMetadataService.IsPointBasedInstrumentRoot(instrumentRoot);
                 }
         
                 private static string FormatAnalyticsPriceWhole(double? value)
@@ -3925,14 +3883,30 @@ namespace Glitch.UI
                     return "$ " + value.Value.ToString("N0", CultureInfo.CurrentCulture);
                 }
         
-                private static string BuildAdxAtrSummary(double? adx, double? atr)
+                private static string BuildAdxAtrSummary(double? adx, double? atr, string instrumentRoot)
                 {
                     string adxText = adx.HasValue
                         ? adx.Value.ToString("N1", CultureInfo.CurrentCulture)
                         : "-";
-                    string atrText = atr.HasValue
-                        ? atr.Value.ToString("N2", CultureInfo.CurrentCulture)
-                        : "-";
+                    string atrText = "-";
+                    if (atr.HasValue && !double.IsNaN(atr.Value) && !double.IsInfinity(atr.Value))
+                    {
+                        if (Glitch.Services.GlitchInstrumentMetadataService.TryResolve(
+                                instrumentRoot,
+                                out Glitch.Services.GlitchInstrumentMetadata metadata) &&
+                            metadata.TickSize > 0)
+                        {
+                            double atrTicks = Glitch.Services.GlitchInstrumentMetadataService.NormalizeAtrToTicks(
+                                atr.Value,
+                                metadata.TickSize);
+                            atrText = atrTicks.ToString("N1", CultureInfo.CurrentCulture) + " ticks";
+                        }
+                        else
+                        {
+                            atrText = atr.Value.ToString("N2", CultureInfo.CurrentCulture);
+                        }
+                    }
+
                     return adxText + " | " + atrText;
                 }
 

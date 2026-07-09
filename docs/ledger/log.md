@@ -2,6 +2,12 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-09 — R01/R02 Eyes (glitch/ai-rail)
+
+- **GL-025:** `GlitchInstrumentMetadataService` — point value, tick size, session from NT `MasterInstrument`; kills F2 silent `1.0` fallback (unknown instruments excluded from USD aggregates + visible warning).
+- **GL-026:** Multi-asset bridge — per-bip instrument root + tick normalization; `AdditionalInstrumentRoots` AddData parameter; Analytics ATR shown in ticks when metadata resolves.
+- **Next:** R03 market snapshot writer.
+
 ## 2026-07-09 — ABX memory system (ABKB)
 
 - Glitch agent memory routes through ABKB (`knowledge/llm/memory-routing.md`), not Cursor `AGENTS.md` Learned bullets.

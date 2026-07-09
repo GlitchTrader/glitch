@@ -29,6 +29,7 @@ The indicator exposes a focused public parameter surface for chart behavior and 
 | `PerformanceMode` | Favors lighter runtime behavior where appropriate |
 | `EnableOrderFlowLayer` | Enables the optional order-flow contribution |
 | `OrderFlowBlend` | Controls how much the order-flow layer influences the final reading |
+| `AdditionalInstrumentRoots` | Comma-separated instrument roots (e.g. `NQ,ES`) added via `AddData` for multi-asset publishing from one chart |
 
 ## Timeframes and bar series
 
@@ -62,7 +63,9 @@ The color logic is designed to stay readable rather than hyperactive. Hysteresis
 
 ## Publishing into Glitch
 
-When `PublishToGlitchUi` is enabled and the bridge is available, the indicator publishes a normalized reading for the active instrument and timeframe into the AddOn.
+When `PublishToGlitchUi` is enabled and the bridge is available, the indicator publishes a normalized reading per instrument root and timeframe into the AddOn. Use `AdditionalInstrumentRoots` to feed multiple roots from one chart instance (preferred over opening many charts).
+
+The AddOn resolves instrument metadata (point value, tick size, session template) through `GlitchInstrumentMetadataService` for PnL and normalized analytics display.
 
 That published reading is what powers:
 

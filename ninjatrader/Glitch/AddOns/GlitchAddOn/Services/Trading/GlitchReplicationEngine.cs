@@ -14,12 +14,7 @@ namespace Glitch.Services
     {
         public static string GetInstrumentRoot(Instrument instrument)
         {
-            if (instrument == null)
-                return string.Empty;
-
-            return instrument.MasterInstrument?.Name ??
-                   instrument.FullName ??
-                   string.Empty;
+            return GlitchInstrumentMetadataService.GetInstrumentRoot(instrument);
         }
 
         public static int GetNetQuantityForInstrumentRoot(Account account, string instrumentRoot)
