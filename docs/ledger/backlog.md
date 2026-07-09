@@ -1,6 +1,7 @@
 # Glitch Backlog
 
-**Active work:** `docs/ai-program/operating-system-rail.md` (R01–R23).  
+**Active work:** `docs/ai-program/operating-system-rail.md` (R01–R23) on branch **`glitch/ai-rail`**.  
+**User releases:** `main` only — v0.0.1.x (`docs/ledger/branching.md`).
 **Status values:** `todo | in_progress | partial | done | deferred`. Flip only with evidence.
 
 **v0.0.1.9 baseline (2026-07-09):** Trust + stable + **non-AI operator**. Shipped `Glitch_v0.0.1.9.zip`. Wave 6 + Honest Copy + session hardening closed below. New work = rail steps only.

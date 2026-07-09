@@ -41,7 +41,8 @@ Glitch is the only component that can touch an order. Hermes has no order API, n
 | **v0.0.3.0** | Learn | M3: self-heal + self-learn with promotion gates | R22–R23 acceptance |
 | v0.0.3.x | — | M1–M3 detail (`glitch_hermes_docs/docs/05_milestones_m0_m3.md`) | each per its milestone gate |
 
-**Canonical rail (first principles, R01–R23):** `operating-system-rail.md`
+**Canonical rail (first principles, R01–R23):** `operating-system-rail.md`  
+**Branching:** `docs/ledger/branching.md` — `main` = v0.0.1.x user line; `glitch/ai-rail` = v0.0.2.x+ implementation
 
 Doctrine check: north-star says no AI before audit + fixes. The ladder respects it — v0.0.2.0/2.1 and H-0/H-1 are read-only data work (operator phase-ladder step 2, explicitly pre-approved); nothing that can create an order ships before Waves 1–2 close.
 

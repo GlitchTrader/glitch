@@ -12,6 +12,8 @@ Hermes proposes. Glitch validates, executes, journals, and protects.
 
 **Baseline:** v0.0.1.9 shipped — Trust + stable + non-AI operator. Ledger pruned; all new work is R01+.
 
+**Branching:** R01+ **product code** on `glitch/ai-rail`; `main` = v0.0.1.x patches + user downloads only. See `docs/ledger/branching.md`.
+
 Duration is **open**. Advance the rail on **evidence**, not calendar. Parallelize compute wherever steps are read-only.
 
 ---

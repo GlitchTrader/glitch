@@ -36,6 +36,12 @@ This repo is shared between multiple agents. Work like a responsible teammate.
 
 When a bounded patch should be visible: skill `ab-patch-finish` → `abkb/projects/glitch/deploy-routine.md` (full AddOn folder deploy, then NT recompile). Commit in this repo before saying done.
 
+## Branching (NinjaTrader product)
+
+- **`main`:** v0.0.1.x — user downloads, non-AI patches only (`docs/ledger/branching.md`).
+- **`glitch/ai-rail`:** v0.0.2.x+ — operating-system rail R01–R23; no public zips until promotion merge.
+- Confirm `git branch --show-current` before editing AddOn/Indicator code.
+
 ## Coding discipline
 
 Ponytail (lazy senior dev): `d:/ab/projects/abkb/knowledge/llm/engineering-discipline.md` + `d:/ab/.cursor/rules/ponytail.mdc`. Repo-specific: workspace-only edits; never `bin\Custom`; smallest scoped diff per package map above.

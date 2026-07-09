@@ -77,6 +77,12 @@ Append-only operator log. Newest first.
 - GL-022: SHA-256 checksum manifest + `npm run checksums`.
 - GL-014: per-account-type compliance settings granularity.
 
+## 2026-07-09 — Branching doctrine: main vs glitch/ai-rail
+
+- `main` = v0.0.1.x user line (v19 + non-AI patches); public download zips only from here.
+- `glitch/ai-rail` = R01–R23 AI operating-system implementation (v0.0.2.x reserved until promotion).
+- Wrote `docs/ledger/branching.md`; pointers in north-star, backlog, rail, roadmap, AGENTS.md.
+
 ## 2026-07-09 — v0.0.1.9 baseline closed; ledger pruned to rail
 
 - Operator: v19 = Trust + stable + non-AI operator — Wave 6 + Honest Copy + session work treated as complete.
