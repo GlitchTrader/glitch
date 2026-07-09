@@ -159,7 +159,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         public double OrderFlowBlend { get; set; }
 
         [NinjaScriptProperty]
-        [Display(Name = "Additional Instrument Roots", Order = 11, GroupName = "Parameters", Description = "Comma-separated roots for multi-asset publish via AddData (e.g. NQ,ES).")]
+        [Display(Name = "Additional Instrument Roots", Order = 11, GroupName = "Parameters", Description = "Hint only: add these roots as chart Data Series in NT (Configure cannot call AddDataSeries with runtime symbols).")]
         public string AdditionalInstrumentRoots { get; set; }
 
         protected override void OnStateChange()
@@ -187,10 +187,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             else if (State == State.Configure)
             {
                 if (PublishToGlitchUi)
-                {
                     AddMissingTimeframeSeries();
-                    AddAdditionalInstrumentSeries();
-                }
 
                 if (EnableOrderFlowLayer)
                     AddOrderFlowTickSeries();
@@ -748,42 +745,6 @@ namespace NinjaTrader.NinjaScript.Indicators
                     continue;
 
                 AddDataSeries(BarsPeriodType.Minute, minutes);
-            }
-        }
-
-        private void AddAdditionalInstrumentSeries()
-        {
-            if (!PublishToGlitchUi || string.IsNullOrWhiteSpace(AdditionalInstrumentRoots))
-                return;
-
-            string chartRoot = NormalizeInstrumentRoot(
-                Instrument == null
-                    ? null
-                    : (Instrument.MasterInstrument == null ? Instrument.FullName : Instrument.MasterInstrument.Name));
-
-            foreach (string token in AdditionalInstrumentRoots.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
-            {
-                string root = NormalizeInstrumentRoot(token);
-                if (string.IsNullOrWhiteSpace(root))
-                    continue;
-
-                if (!string.IsNullOrWhiteSpace(chartRoot) &&
-                    string.Equals(root, chartRoot, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                Instrument additional = Instrument.GetInstrument(root);
-                if (additional == null)
-                    additional = Instrument.GetInstrumentFuzzy(root);
-                if (additional == null)
-                {
-                    Log(
-                        "GlitchAnalyticsBridge: unknown additional instrument root '" + root + "'.",
-                        NinjaTrader.Cbi.LogLevel.Warning);
-                    continue;
-                }
-
-                foreach (int minutes in TargetMinutes)
-                    AddDataSeries(additional.FullName, BarsPeriodType.Minute, minutes);
             }
         }
 
