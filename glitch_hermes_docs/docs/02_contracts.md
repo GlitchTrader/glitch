@@ -85,26 +85,17 @@ Endpoint:
 POST /intent
 ```
 
-Allowed actions by milestone:
+Allowed actions for the current operator contract:
 
 ```text
-M0:
-  HOLD
-  ENTER_LONG
-  ENTER_SHORT
-  EXIT
-
-M1+:
-  ADJUST_STOP
-  PARTIAL_EXIT
-
-M2+:
-  MULTI_TARGET_EXIT
-  SIZE_PROPOSAL
-
-M3:
-  PORTFOLIO_RISK_PROPOSAL
+ENTER_LONG
+ENTER_SHORT
+HOLD
+EXIT
+NOTHING
 ```
+
+Reserved future actions such as ADJUST_STOP or PARTIAL_EXIT are not v1 cron outputs. Add them only after the bracket/firewall path is stable and the contract is revised.
 
 M0/M1 request:
 

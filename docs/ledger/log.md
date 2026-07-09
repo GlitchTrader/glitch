@@ -2,6 +2,25 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-09 — ABX memory system (ABKB)
+
+- Glitch agent memory routes through ABKB (`knowledge/llm/memory-routing.md`), not Cursor `AGENTS.md` Learned bullets.
+- Coding doctrine: `AGENTS.md` § Coding discipline → ponytail + repo reuse rules.
+- Removed orphan `.cursor/hooks/state/continual-learning.json`.
+
+## 2026-07-08 — Money path strip + v0.0.1.19 release prep
+
+- **Copy:** Pure fill mirror (`Round(qty×ratio)`, same action); no position reads or exit caps.
+- **Flatten:** `account.Flatten()` only (user Flatten All + enabled risk rules).
+- **Removed:** GLT-FLAT/SYNC/PROT submit paths, protective OCO, sync machinery.
+
+- **Flatten:** Chart Trader `Flatten All` no longer no-ops when header button ref is null — `RunFlattenAllAsync` runs flatten directly. Each exposed instrument root gets its own `account.Flatten()` call (NT primitive, per-instrument).
+- **Drift:** Removed Honest Copy drift banner, Sync now button, and user-sync delta submit path.
+
+## 2026-07-08 — Cursor honest-copy P3 header revert (compile pending)
+
+- **P3-1 (reverted):** Removed Master/Group/Fleet scope selector; first header metric is static **Fleet uPnL** (sum of fleet total PnL: realized + unrealized per account, same basis as PA/Eval header metrics). Localization key `header.metric.fleet_upnl`.
+
 ## 2026-07-08 — Cursor honest-copy Phase 4 (compile pending)
 
 - **P4-1:** `GlitchMainWindow.Replication.partial.cs` shrunk to honest-copy shim (~550 LOC): copy engine wiring, drift monitor, user Sync now (`GLT-SYNC`), legacy flag warns once.

@@ -20,7 +20,9 @@ Monorepo for the Glitch trading platform: NinjaTrader 8 AddOn and Indicator, mar
 
 - **API:** [apps/api/README.md](apps/api/README.md) — endpoints, environment, auth.
 - **Website:** [apps/website/README.md](apps/website/README.md) — env, run, build.
-- **NinjaTrader (AddOn + Indicator):** [ninjatrader/Glitch/Docs/README.md](ninjatrader/Glitch/Docs/README.md) — architecture, addon, indicator, data flow, persistence, API reference; plus internal commercial and funnel plans.
+- **NinjaTrader (AddOn + Indicator):** [ninjatrader/Glitch/Docs/README.md](ninjatrader/Glitch/Docs/README.md) — public-safe architecture, AddOn, indicator, data flow, persistence, and API reference.
+- **Docs map:** [docs/README.md](docs/README.md) — public/private split and current docs routing.
+- **Internal planning:** `docs/ledger/`, `docs/ai-program/`, and `glitch_hermes_docs/` are private maintainer/agent surfaces unless explicitly released.
 - **Docs site readiness:** [ninjatrader/Glitch/Docs/DOCS-SITE-READINESS.md](ninjatrader/Glitch/Docs/DOCS-SITE-READINESS.md) — inventory and public-safety rules for a future docs site (e.g. docs.glitchtrader.com).
 
 ## Build and run

@@ -27,6 +27,16 @@ Do **not** publish these on the public docs site. They are internal planning and
 | [Commercial Implementation And Sales Funnel Plan](commercial-implementation-and-sales-funnel-plan.md) | Monetization, commission, attribution rules |
 | [Website Sales Funnel Outline](website-sales-funnel-outline.md) | Funnel tactics, offer stack, pricing strategy |
 
+### AI / roadmap / ledger docs — **internal only**
+
+Do **not** publish these until intentionally sanitized and released. They contain unreleased roadmap, operator gates, audit findings, internal architecture decisions, and agent handoff context.
+
+| Path | Reason |
+|------|--------|
+| `docs/ledger/` | Active backlog, audits, handoffs, internal program state |
+| `docs/ai-program/` | Unreleased Hermes/AI roadmap and security gates |
+| `glitch_hermes_docs/` | Private Glitch↔Hermes contracts, schemas, and agent memory |
+
 ### Developer / repo docs — **selective**
 
 - **Root README** (repo root) — Monorepo structure, workspaces, build/run. Safe to summarize for a “Contributing” or “Repo overview” page; do not copy verbatim if it references internal tooling.

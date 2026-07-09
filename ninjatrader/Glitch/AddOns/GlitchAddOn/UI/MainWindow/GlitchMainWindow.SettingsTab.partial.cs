@@ -62,11 +62,16 @@ namespace Glitch.UI
         private UIElement CreateSettingsTabImpl()
         {
             var root = new Grid { Margin = new Thickness(20) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.VerticalAlignment = VerticalAlignment.Stretch;
+            root.HorizontalAlignment = HorizontalAlignment.Stretch;
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             _settingsRootGrid = root;
+            _settingsRootGrid.SizeChanged += OnSettingsRootSizeChanged;
+
+            var settingsStack = new StackPanel
+            {
+                Orientation = Orientation.Vertical
+            };
 
             var compliancePanel = new StackPanel
             {
@@ -160,8 +165,7 @@ namespace Glitch.UI
             ApplySkinResource(_settingsCopyTradingPolicyNotice, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
             compliancePanel.Children.Add(_settingsCopyTradingPolicyNotice);
 
-            Grid.SetRow(compliancePanel, 0);
-            root.Children.Add(compliancePanel);
+            settingsStack.Children.Add(compliancePanel);
 
             var licensingPanel = new StackPanel
             {
@@ -195,8 +199,7 @@ namespace Glitch.UI
             licensingPanel.Children.Add(_settingsLicenseKeyTextBox);
             licensingPanel.Children.Add(_settingsPlanBadgeBorder);
 
-            Grid.SetRow(licensingPanel, 1);
-            root.Children.Add(licensingPanel);
+            settingsStack.Children.Add(licensingPanel);
 
             var actionHost = new StackPanel
             {
@@ -242,13 +245,28 @@ namespace Glitch.UI
             actionHost.Children.Add(actionRow);
             actionHost.Children.Add(_settingsUpdateBadgeText);
 
-            Grid.SetRow(actionHost, 2);
-            root.Children.Add(actionHost);
+            settingsStack.Children.Add(actionHost);
+
+            _settingsPageScroll = CreateAccordionPageScrollHost(settingsStack);
+            _settingsPageScroll.Loaded += (_, __) => SyncSettingsPageScrollViewport();
+            Grid.SetRow(_settingsPageScroll, 0);
+            root.Children.Add(_settingsPageScroll);
 
             UpdateSettingsControlsFromRuntimePolicy();
             UpdateSettingsTabLicenseStatusText();
             UpdateSettingsCopyTradingPolicyNotice();
-            return root;
+            SyncSettingsPageScrollViewport();
+            return WrapTabBodyForScroll(root);
+        }
+
+        private void OnSettingsRootSizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            SyncSettingsPageScrollViewport();
+        }
+
+        private void SyncSettingsPageScrollViewport()
+        {
+            SyncTabPageScrollViewport(_settingsRootGrid, _settingsPageScroll);
         }
 
         private void UpdateSettingsCopyTradingPolicyNotice()
@@ -519,7 +537,7 @@ namespace Glitch.UI
             style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
             style.Setters.Add(new Setter(Control.FocusVisualStyleProperty, null));
             style.Setters.Add(new Setter(Control.CursorProperty, System.Windows.Input.Cursors.Hand));
-            style.Setters.Add(new Setter(Control.ForegroundProperty, UiPrimaryTextBrush));
+            ApplySkinSetter(style, Control.ForegroundProperty, context, "FontControlBrush", "FontTableBrush", "GridRowForeground");
             style.Setters.Add(new Setter(Control.FontWeightProperty, UiActionFontWeight));
             style.Setters.Add(new Setter(Control.TemplateProperty, CreateActionButtonTemplate()));
             double? sharedFontSize = FindSkinDouble(context, "FontTableHeight", "FontControlHeight", "FontHeaderLevel4Height");
@@ -530,13 +548,13 @@ namespace Glitch.UI
             var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
             hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, TealAccentBrush));
             hoverTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, TealAccentBrush));
-            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             style.Triggers.Add(hoverTrigger);
 
             var pressedTrigger = new Trigger { Property = System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty, Value = true };
             pressedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, TealAccentBrush));
             pressedTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, TealAccentBrush));
-            pressedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            pressedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             style.Triggers.Add(pressedTrigger);
 
             var keyboardFocusTrigger = new Trigger { Property = UIElement.IsKeyboardFocusWithinProperty, Value = true };
@@ -577,7 +595,7 @@ namespace Glitch.UI
             markFactory.Name = "CheckMark";
             markFactory.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse("M 2,7 L 5,10 L 11,3"));
             markFactory.SetValue(System.Windows.Shapes.Path.StrokeThicknessProperty, 1.8);
-            markFactory.SetValue(System.Windows.Shapes.Path.StrokeProperty, Brushes.White);
+            markFactory.SetValue(System.Windows.Shapes.Path.StrokeProperty, AccentOnColorForegroundBrush);
             markFactory.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
             markFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
             markFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(0, -1, 0, 0));
@@ -780,7 +798,7 @@ namespace Glitch.UI
             button.Content = message;
             button.Background = TealAccentBrush;
             button.BorderBrush = TealAccentBrush;
-            button.Foreground = Brushes.White;
+            button.Foreground = AccentOnColorForegroundBrush;
 
             try
             {
@@ -945,7 +963,7 @@ namespace Glitch.UI
                 return;
 
             FrameworkElement skinContext = (FrameworkElement)_settingsRootGrid ?? _settingsLicenseKeyTextBox;
-            Brush normalBrush = FindSkinBrush(skinContext, "FontControlBrush", "FontTableBrush") ?? Brushes.White;
+            Brush normalBrush = FindSkinBrush(skinContext, "FontControlBrush", "FontTableBrush", "GridRowForeground") ?? Brushes.Black;
             _settingsLicenseKeyTextBox.Foreground = normalBrush;
         }
 
@@ -1023,7 +1041,7 @@ namespace Glitch.UI
                 : _latestDownloadUrl.Trim();
 
             FrameworkElement skinContext = (FrameworkElement)_settingsRootGrid ?? _settingsPlanBadgeText;
-            Brush baseTextBrush = UiPrimaryTextBrush;
+            Brush baseTextBrush = FindSkinBrush(skinContext, "FontControlBrush", "FontTableBrush", "GridRowForeground") ?? Brushes.Black;
             double sharedFontSize = _settingsPlanBadgeText.FontSize;
             if (sharedFontSize <= 0)
             {

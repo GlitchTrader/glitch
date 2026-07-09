@@ -100,6 +100,8 @@ namespace Glitch.UI
             _analyticsCardExpansionVisuals.Clear();
 
             var root = new Grid { Margin = new Thickness(20) };
+            root.VerticalAlignment = VerticalAlignment.Stretch;
+            root.HorizontalAlignment = HorizontalAlignment.Stretch;
             _analyticsRoot = root;
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -108,6 +110,7 @@ namespace Glitch.UI
             _analyticsTopBarGrid = new Grid();
 
             var topHeaderBand = CreateAnalyticsCard(root, new Thickness(0, 0, 0, 12), new Thickness(8, 6, 8, 6));
+            _analyticsTopHeaderBand = topHeaderBand;
             topHeaderBand.Child = _analyticsTopBarGrid;
             Grid.SetRow(topHeaderBand, 0);
             root.Children.Add(topHeaderBand);
@@ -212,20 +215,6 @@ namespace Glitch.UI
                 MinWidth = 300
             };
 
-            _analyticsOpenDetachedWindowButton = new Button
-            {
-                Content = L("analytics.button.open_window", "Open Nasdaq Macro"),
-                Margin = new Thickness(0, 0, 0, 8),
-                Padding = new Thickness(10, 4, 10, 4),
-                MinWidth = 148,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Visibility = Visibility.Collapsed,
-                Style = CreateGroupActionButtonStyle(root)
-            };
-            BindLocalizedContent(_analyticsOpenDetachedWindowButton, "analytics.button.open_window", "Open Nasdaq Macro");
-            _analyticsOpenDetachedWindowButton.Click += OnAnalyticsOpenDetachedWindowClick;
-            fundamentalStack.Children.Add(_analyticsOpenDetachedWindowButton);
-
             fundamentalStack.Children.Add(CreateAnalyticsMag7ScoringBlock(root, out _analyticsScoreSectionTitleText, out _analyticsMag7ItemsHost));
             fundamentalStack.Children.Add(CreateAnalyticsHeadlineListBlock(root, "analytics.block.latest_headlines", "Latest Headlines", out _analyticsLatestHeadlinesList));
             fundamentalStack.Children.Add(CreateAnalyticsInfoBlock(root, "analytics.block.upcoming_news_calendar", "Upcoming News Calendar", out _analyticsOfficialNewsText));
@@ -251,11 +240,29 @@ namespace Glitch.UI
             ApplySkinResource(_analyticsTechnicalFeedFootnoteText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
             fundamentalStack.Children.Add(_analyticsTechnicalFeedFootnoteText);
 
+            _analyticsOpenDetachedWindowButton = new Button
+            {
+                Content = L("analytics.button.open_window", "Open Nasdaq Macro"),
+                Margin = new Thickness(0, 10, 0, 0),
+                Padding = new Thickness(10, 4, 10, 4),
+                MinWidth = 148,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Visibility = Visibility.Visible,
+                Style = CreateGroupActionButtonStyle(root)
+            };
+            BindLocalizedContent(_analyticsOpenDetachedWindowButton, "analytics.button.open_window", "Open Nasdaq Macro");
+            _analyticsOpenDetachedWindowButton.Click += OnAnalyticsOpenDetachedWindowClick;
+            fundamentalStack.Children.Add(_analyticsOpenDetachedWindowButton);
+
             body.Children.Add(fundamentalStack);
             _analyticsFundamentalCard = fundamentalStack;
 
-            Grid.SetRow(body, 1);
-            root.Children.Add(body);
+            var bodyScrollStack = new StackPanel();
+            bodyScrollStack.Children.Add(body);
+            _analyticsPageScroll = CreateAccordionPageScrollHost(bodyScrollStack);
+            _analyticsPageScroll.Loaded += (_, __) => SyncAnalyticsPageScrollViewport();
+            Grid.SetRow(_analyticsPageScroll, 1);
+            root.Children.Add(_analyticsPageScroll);
 
             _analyticsLicenseGateOverlay = CreatePremiumSurfaceOverlay(root, "analytics");
             Thickness analyticsContentMargin = root.Margin;
@@ -270,9 +277,10 @@ namespace Glitch.UI
             root.Children.Add(_analyticsLicenseGateOverlay);
 
             ApplyAnalyticsResponsiveLayout(root.ActualWidth > 0 ? root.ActualWidth : Width);
+            SyncAnalyticsPageScrollViewport();
 
             RefreshAnalyticsDashboard(GetActiveAccountsSnapshot());
-            return root;
+            return WrapTabBodyForScroll(root);
         }
 
         private static void ApplyAnalyticsLabelTypography(TextBlock textBlock)
@@ -306,6 +314,15 @@ namespace Glitch.UI
         private void OnAnalyticsRootSizeChanged(object sender, SizeChangedEventArgs e)
         {
             ApplyAnalyticsResponsiveLayout(e.NewSize.Width);
+            SyncAnalyticsPageScrollViewport();
+        }
+
+        private void SyncAnalyticsPageScrollViewport()
+        {
+            SyncTabPageScrollViewport(
+                _analyticsRoot as FrameworkElement,
+                _analyticsPageScroll,
+                _analyticsTopHeaderBand);
         }
         
         private void ApplyAnalyticsResponsiveLayout(double width)
@@ -1796,7 +1813,7 @@ namespace Glitch.UI
                     {
                         Width = 3,
                         Height = 18,
-                        Background = Brushes.White
+                        Background = ResolveSkinBrush("FontControlBrush", "FontTableBrush", "GridRowForeground") ?? Brushes.Black
                     };
                     _analyticsSessionRangeCanvas.Children.Add(_analyticsSessionRangeCurrentMarker);
         
@@ -2160,7 +2177,7 @@ namespace Glitch.UI
         
                     Brush defaultBrush = ResolveSkinBrush(
                         "FontControlBrush",
-                        "FontTableBrush") ?? Brushes.White;
+                        "FontTableBrush") ?? Brushes.Black;
                     const double headingFontSize = AnalyticsLabelFontSize;
                     const double detailFontSize = AnalyticsBodyFontSize;
                     bool firstItem = true;
@@ -2322,7 +2339,7 @@ namespace Glitch.UI
                         return luminance >= 0.57 ? Brushes.Black : Brushes.White;
                     }
 
-                    return Brushes.White;
+                    return ResolveSkinBrush("FontControlBrush", "FontTableBrush", "GridRowForeground") ?? Brushes.Black;
                 }
 
                 private static bool TryResolveBrushColor(Brush brush, out Color color)
@@ -3186,7 +3203,7 @@ namespace Glitch.UI
                         return TealAccentBrush;
                     if (quality <= 35)
                         return ResolveAnalyticsSignalBrush(-0.20);
-                    return _analyticsCurrentPriceText?.Foreground ?? Brushes.White;
+                    return _analyticsCurrentPriceText?.Foreground ?? Brushes.Black;
                 }
 
                 private Brush ResolveGateBrush(string gateLabel)
@@ -3210,9 +3227,9 @@ namespace Glitch.UI
                         normalized.Equals(L("analytics.unified.gate.watch", "Watch"), StringComparison.OrdinalIgnoreCase) ||
                         normalized.Equals("Wait", StringComparison.OrdinalIgnoreCase) ||
                         normalized.Equals("Watch", StringComparison.OrdinalIgnoreCase))
-                        return _analyticsCurrentPriceText?.Foreground ?? Brushes.White;
+                        return _analyticsCurrentPriceText?.Foreground ?? Brushes.Black;
 
-                    return _analyticsCurrentPriceText?.Foreground ?? Brushes.White;
+                    return _analyticsCurrentPriceText?.Foreground ?? Brushes.Black;
                 }
 
                 private string ResolveDecisionActionText(AnalyticsUnifiedSignalState state)
@@ -3805,7 +3822,7 @@ namespace Glitch.UI
                         return TealAccentBrush;
                     if (score <= -0.10)
                         return OrangeAccentBrush;
-                    return _analyticsCurrentPriceText?.Foreground ?? Brushes.White;
+                    return _analyticsCurrentPriceText?.Foreground ?? Brushes.Black;
                 }
         
                 private static string FormatAnalyticsPrice(double? value)
@@ -3891,7 +3908,7 @@ namespace Glitch.UI
                         _analyticsSessionRangeCurrentMarker.Visibility = Visibility.Collapsed;
                         _analyticsSessionRangeCurrentText.Text = L("analytics.session_range.current", "Current") + " -";
                         _analyticsSessionRangeAvgText.Text = L("analytics.session_range.avg", "Avg") + " -";
-                        _analyticsSessionRangeCurrentText.Foreground = ResolveSkinBrush("FontControlBrush", "FontTableBrush") ?? Brushes.White;
+                        _analyticsSessionRangeCurrentText.Foreground = ResolveSkinBrush("FontControlBrush", "FontTableBrush") ?? Brushes.Black;
                         double centerX = leftPad + (trackWidth / 2.0);
                         double currentTextWidth = MeasureTextWidth(_analyticsSessionRangeCurrentText);
                         double avgTextWidth = MeasureTextWidth(_analyticsSessionRangeAvgText);
@@ -3965,7 +3982,7 @@ namespace Glitch.UI
                     if (host == null)
                             return;
         
-                    Brush defaultBrush = ResolveSkinBrush("FontControlBrush", "FontTableBrush") ?? Brushes.White;
+                    Brush defaultBrush = ResolveSkinBrush("FontControlBrush", "FontTableBrush") ?? Brushes.Black;
                     host.Inlines.Clear();
                     host.Inlines.Add(new Run((caption ?? "-") + Environment.NewLine)
                     {
@@ -4222,6 +4239,10 @@ namespace Glitch.UI
                     if (snapshot?.TimeframeReadings == null)
                         return false;
 
+                    if (!string.IsNullOrWhiteSpace(snapshot.CompositeSignal) &&
+                        snapshot.CompositeSignal.StartsWith("Retained", StringComparison.OrdinalIgnoreCase))
+                        return true;
+
                     foreach (GlitchTimeframeReading reading in snapshot.TimeframeReadings)
                     {
                         if (reading == null)
@@ -4275,64 +4296,7 @@ namespace Glitch.UI
             if (_analyticsOpenDetachedWindowButton == null)
                 return;
 
-            string instrument = ResolveAnalyticsInstrumentForMacroButton();
-
-            _analyticsOpenDetachedWindowButton.Visibility = IsNasdaqMacroInstrument(instrument)
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-        }
-
-        private string ResolveAnalyticsInstrumentForMacroButton()
-        {
-            string instrument = _selectedAnalyticsInstrument;
-            if (string.IsNullOrWhiteSpace(instrument))
-                instrument = _analyticsInstrumentCombo?.SelectedItem as string;
-            if (string.IsNullOrWhiteSpace(instrument))
-                instrument = _analyticsInstrumentCombo?.Text;
-            if (string.IsNullOrWhiteSpace(instrument))
-                instrument = _analyticsSessionRangeInstrumentRoot;
-
-            return instrument;
-        }
-
-        private static bool IsNasdaqMacroInstrument(string instrument)
-        {
-            if (string.IsNullOrWhiteSpace(instrument))
-                return false;
-
-            string root = instrument.Trim().ToUpperInvariant();
-            int spaceIndex = root.IndexOf(' ');
-            if (spaceIndex > 0)
-                root = root.Substring(0, spaceIndex);
-            int dotIndex = root.IndexOf('.');
-            if (dotIndex > 0)
-                root = root.Substring(0, dotIndex);
-            int colonIndex = root.LastIndexOf(':');
-            if (colonIndex >= 0 && colonIndex + 1 < root.Length)
-                root = root.Substring(colonIndex + 1);
-
-            if (root.StartsWith("@", StringComparison.Ordinal))
-                root = root.Substring(1);
-
-            switch (root)
-            {
-                case "NQ":
-                case "MNQ":
-                case "NDX":
-                case "NAS100":
-                case "US100":
-                case "QQQ":
-                case "AAPL":
-                case "MSFT":
-                case "NVDA":
-                case "AMZN":
-                case "META":
-                case "GOOGL":
-                case "TSLA":
-                    return true;
-                default:
-                    return root.IndexOf("NASDAQ", StringComparison.Ordinal) >= 0;
-            }
+            _analyticsOpenDetachedWindowButton.Visibility = Visibility.Visible;
         }
 
                 private bool CanAccessAnalyticsPremium(out string lockedMessage)
@@ -4467,7 +4431,7 @@ namespace Glitch.UI
                         Style = CreateGroupActionButtonStyle(context),
                         Background = OrangeAccentBrush,
                         BorderBrush = OrangeAccentBrush,
-                        Foreground = Brushes.White
+                        Foreground = AccentOnColorForegroundBrush
                     };
                     RegisterLocalizationBinding(() => checkoutButton.Content = L("overlay.button.go_pro", "Go Pro"));
                     checkoutButton.Click += (_, __) => OpenAnalyticsExternalUrl(GetWhopUpgradeCheckoutUrl());
@@ -4539,7 +4503,7 @@ namespace Glitch.UI
 
                 private TextBlock CreateLiteLicensePromptLine(FrameworkElement context)
                 {
-                    Brush baseTextBrush = FindSkinBrush(context, "FontControlBrush", "FontTableBrush") ?? Brushes.White;
+                    Brush baseTextBrush = FindSkinBrush(context, "FontControlBrush", "FontTableBrush") ?? Brushes.Black;
                     double? skinFontSize = FindSkinDouble(context, "FontControlHeight", "FontTableHeight", "FontHeaderLevel4Height");
                     double sharedFontSize = skinFontSize.HasValue && skinFontSize.Value > 0 ? skinFontSize.Value : 12d;
 
@@ -4581,7 +4545,7 @@ namespace Glitch.UI
 
                 private TextBlock CreateSettingsTabShortcutLine(FrameworkElement context)
                 {
-                    Brush baseTextBrush = FindSkinBrush(context, "FontControlBrush", "FontTableBrush") ?? Brushes.White;
+                    Brush baseTextBrush = FindSkinBrush(context, "FontControlBrush", "FontTableBrush") ?? Brushes.Black;
 
                     var line = new TextBlock
                     {

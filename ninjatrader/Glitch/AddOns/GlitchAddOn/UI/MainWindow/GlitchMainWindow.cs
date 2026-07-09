@@ -63,10 +63,12 @@ namespace Glitch.UI
     {
         private static readonly SolidColorBrush TealAccentBrush = new SolidColorBrush(Color.FromRgb(26, 188, 156));   // #1ABC9C
         private static readonly SolidColorBrush OrangeAccentBrush = new SolidColorBrush(Color.FromRgb(255, 66, 0));  // #FF4200
+        private static readonly Brush AccentOnColorForegroundBrush = Brushes.White;
+        private static readonly Brush SkinForegroundFallbackBrush = Brushes.Black;
+        private static readonly Color AccentOnColorForeground = Colors.White;
         private static readonly FontWeight UiHeadingFontWeight = FontWeights.Medium;
         private static readonly FontWeight UiActionFontWeight = FontWeights.Medium;
         private static readonly FontWeight UiTabFontWeight = FontWeights.Medium;
-        private static readonly Brush UiPrimaryTextBrush = Brushes.White;
         private const string ReplicationSignalName = "GLT-SYNC";
         private const string ProtectiveStopSignalName = "GLT-PROT-STP";
         private const string ProtectiveTargetSignalName = "GLT-PROT-TGT";
@@ -112,8 +114,8 @@ namespace Glitch.UI
         private readonly HashSet<string> _riskLockAcknowledgedAccounts;
         private readonly HashSet<string> _riskOneContractAccounts;
         private readonly HashSet<string> _unrealizedLossFlattenTriggeredAccounts;
+        private readonly HashSet<AccountGroupMemberRow> _wiredReplicationMembers;
         private readonly GlitchCopyEngine _copyEngine;
-        private ReplicationDriftNotice _replicationDriftNotice;
         private readonly Dictionary<string, DateTime> _noProtectionDetectedSinceByKey;
         private readonly Dictionary<string, DateTime> _riskMitigationCooldownByKey;
         private readonly Dictionary<string, string> _lastOrderJournalSnapshotByKey;
@@ -134,9 +136,6 @@ namespace Glitch.UI
         private Grid _headerActionsGrid;
         private Border _headerNewsLockoutBanner;
         private StackPanel _headerAlertsStack;
-        private Border _headerReplicationDriftBanner;
-        private TextBlock _headerReplicationDriftText;
-        private Button _headerReplicationDriftSyncButton;
         private TextBlock _headerNewsLockoutText;
         private ComboBox _analyticsInstrumentCombo;
         private StackPanel _accountGroupsHostPanel;
@@ -167,7 +166,9 @@ namespace Glitch.UI
         private bool _isCommittingAccountsGridEdit;
         private bool _isFlattenFeedbackActive;
         private bool _isFlattenAllInProgress;
+        private Task<bool> _flattenAllInFlight;
         private bool _isReplicatingUi;
+        private bool _replicationUserIntentLive;
         private bool _restoreMaximizedOnLoad;
         private volatile bool _hasPendingPeakStateWrite;
         private bool _hasPendingAuditWrite;
@@ -186,9 +187,6 @@ namespace Glitch.UI
         private bool _hasLoggedStartupRuntimeSettings;
         private bool _isWindowClosed;
         private TextBlock _totalPnlValueText;
-        private TextBlock _headerPnlTitleText;
-        private ComboBox _headerPnlScopeComboBox;
-        private HeaderPnlScope _headerPnlScope = HeaderPnlScope.Master;
         private TextBlock _evalPnlValueText;
         private TextBlock _paPnlValueText;
         private TextBlock _evalHeadroomValueText;
@@ -222,6 +220,7 @@ namespace Glitch.UI
         private TabControl _mainTabControl;
         private FrameworkElement _analyticsInstrumentHost;
         private FrameworkElement _analyticsRoot;
+        private FrameworkElement _analyticsTopHeaderBand;
         private Border _analyticsSessionRangeCard;
         private Border _analyticsCurrentPriceCard;
         private Border _analyticsSignalCard;
@@ -277,6 +276,7 @@ namespace Glitch.UI
             _riskLockAcknowledgedAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _riskOneContractAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _unrealizedLossFlattenTriggeredAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _wiredReplicationMembers = new HashSet<AccountGroupMemberRow>();
             _copyEngine = new GlitchCopyEngine
             {
                 Journal = (accountName, message) => AppendJournal(accountName, "Replication", message),
@@ -561,7 +561,7 @@ namespace Glitch.UI
 
             style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
             style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(14, 6, 14, 6)));
-            style.Setters.Add(new Setter(Control.ForegroundProperty, UiPrimaryTextBrush));
+            ApplySkinSetter(style, Control.ForegroundProperty, context, "FontControlBrush", "FontTableBrush", "GridRowForeground");
             style.Setters.Add(new Setter(Control.FontWeightProperty, UiActionFontWeight));
             style.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Center));
             style.Setters.Add(new Setter(Control.VerticalContentAlignmentProperty, VerticalAlignment.Center));
@@ -576,7 +576,7 @@ namespace Glitch.UI
             runningTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, L("header.button.replicating", "Replicating")));
             runningTrigger.Setters.Add(new Setter(Control.BackgroundProperty, TealAccentBrush));
             runningTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, TealAccentBrush));
-            runningTrigger.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            runningTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             style.Triggers.Add(runningTrigger);
 
             var hoverStopped = new MultiTrigger();
@@ -584,7 +584,7 @@ namespace Glitch.UI
             hoverStopped.Conditions.Add(new Condition(FrameworkElement.TagProperty, "Stopped"));
             hoverStopped.Setters.Add(new Setter(Control.BackgroundProperty, TealAccentBrush));
             hoverStopped.Setters.Add(new Setter(Control.BorderBrushProperty, TealAccentBrush));
-            hoverStopped.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            hoverStopped.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             hoverStopped.Setters.Add(new Setter(ContentControl.ContentProperty, L("header.button.start", "Start")));
             style.Triggers.Add(hoverStopped);
 
@@ -593,7 +593,7 @@ namespace Glitch.UI
             hoverRunning.Conditions.Add(new Condition(FrameworkElement.TagProperty, "Running"));
             hoverRunning.Setters.Add(new Setter(Control.BackgroundProperty, OrangeAccentBrush));
             hoverRunning.Setters.Add(new Setter(Control.BorderBrushProperty, OrangeAccentBrush));
-            hoverRunning.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            hoverRunning.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             hoverRunning.Setters.Add(new Setter(ContentControl.ContentProperty, L("header.button.stop", "Stop")));
             style.Triggers.Add(hoverRunning);
 
@@ -614,7 +614,7 @@ namespace Glitch.UI
 
             style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
             style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(14, 6, 14, 6)));
-            style.Setters.Add(new Setter(Control.ForegroundProperty, UiPrimaryTextBrush));
+            ApplySkinSetter(style, Control.ForegroundProperty, context, "FontControlBrush", "FontTableBrush", "GridRowForeground");
             style.Setters.Add(new Setter(Control.FontWeightProperty, UiActionFontWeight));
             style.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Center));
             style.Setters.Add(new Setter(Control.VerticalContentAlignmentProperty, VerticalAlignment.Center));
@@ -624,7 +624,7 @@ namespace Glitch.UI
             var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
             hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, OrangeAccentBrush));
             hoverTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, OrangeAccentBrush));
-            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             style.Triggers.Add(hoverTrigger);
 
             return style;
@@ -645,7 +645,7 @@ namespace Glitch.UI
             style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
             style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(10, 4, 10, 4)));
             style.Setters.Add(new Setter(Control.MinHeightProperty, 28d));
-            style.Setters.Add(new Setter(Control.ForegroundProperty, UiPrimaryTextBrush));
+            ApplySkinSetter(style, Control.ForegroundProperty, context, "FontControlBrush", "FontTableBrush", "GridRowForeground");
             style.Setters.Add(new Setter(Control.FontWeightProperty, UiActionFontWeight));
             style.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Center));
             style.Setters.Add(new Setter(Control.VerticalContentAlignmentProperty, VerticalAlignment.Center));
@@ -657,13 +657,13 @@ namespace Glitch.UI
             var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
             hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, TealAccentBrush));
             hoverTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, TealAccentBrush));
-            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             style.Triggers.Add(hoverTrigger);
 
             var pressedTrigger = new Trigger { Property = System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty, Value = true };
             pressedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, TealAccentBrush));
             pressedTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, TealAccentBrush));
-            pressedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            pressedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             style.Triggers.Add(pressedTrigger);
 
             var keyboardFocusTrigger = new Trigger { Property = UIElement.IsKeyboardFocusWithinProperty, Value = true };
@@ -708,7 +708,7 @@ namespace Glitch.UI
             var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
             hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, TealAccentBrush));
             hoverTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, TealAccentBrush));
-            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             style.Triggers.Add(hoverTrigger);
             return style;
         }
@@ -722,7 +722,7 @@ namespace Glitch.UI
             enabledTrigger.Setters.Add(new Setter(UIElement.OpacityProperty, 1.0));
             enabledTrigger.Setters.Add(new Setter(Control.BackgroundProperty, OrangeAccentBrush));
             enabledTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, OrangeAccentBrush));
-            enabledTrigger.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            enabledTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             style.Triggers.Add(enabledTrigger);
 
             var disabledTrigger = new Trigger { Property = UIElement.IsEnabledProperty, Value = false };
@@ -760,13 +760,13 @@ namespace Glitch.UI
             }
             else
             {
-                ClearComplianceEnforcementRuntimeState();
                 CancelGlitchWorkingOrdersOnFollowers(activeAccounts);
-                _replicationDriftNotice = null;
-                UpdateReplicationDriftBanner();
             }
 
             RefreshCopyEngineConfiguration(activeAccounts);
+
+            if (_isReplicatingUi)
+                AlignAllEnabledFollowersToMaster("replicate_on");
 
             AppendJournal(
                 "System",
@@ -776,6 +776,7 @@ namespace Glitch.UI
                     : "Replication gate closed.");
             UpdateReplicateButtonState();
             UpdateRefreshTimerCadence();
+            PersistReplicationUiState();
             PublishGlitchShellState();
         }
 
@@ -786,7 +787,71 @@ namespace Glitch.UI
 
         internal void FlattenAllFromExternalSurface()
         {
-            OnFlattenAllButtonClick(this, new RoutedEventArgs());
+            _ = RunFlattenAllAsync(showHeaderButtonFeedback: false);
+        }
+
+        private async void OnFlattenAllButtonClick(object sender, RoutedEventArgs e)
+        {
+            await RunFlattenAllAsync(showHeaderButtonFeedback: true);
+        }
+
+        private async Task RunFlattenAllAsync(bool showHeaderButtonFeedback)
+        {
+            if (showHeaderButtonFeedback && _flattenAllButton == null)
+                return;
+
+            Color normalBackground = Colors.Transparent;
+            Color normalBorder = Colors.Transparent;
+            Color normalForeground = Colors.Black;
+            if (showHeaderButtonFeedback && _flattenAllButton != null)
+            {
+                normalBackground = ResolveBrushColor(_flattenAllButton.Background, Color.FromRgb(45, 45, 48));
+                normalBorder = ResolveBrushColor(_flattenAllButton.BorderBrush, normalBackground);
+                normalForeground = ResolveBrushColor(_flattenAllButton.Foreground, Colors.Black);
+            }
+
+            bool flattenSucceeded = await TryExecuteFlattenAllAsync();
+            if (!flattenSucceeded || !showHeaderButtonFeedback || _flattenAllButton == null)
+                return;
+
+            _isFlattenFeedbackActive = true;
+            _flattenAllButton.IsEnabled = false;
+            _flattenAllButton.Content = L("header.button.flattened", "Flattened!");
+            AnimateButtonColors(
+                _flattenAllButton,
+                normalBackground,
+                TealAccentBrush.Color,
+                normalBorder,
+                TealAccentBrush.Color,
+                normalForeground,
+                AccentOnColorForeground);
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(3));
+            }
+            finally
+            {
+                if (_flattenAllButton != null)
+                {
+                    _flattenAllButton.Content = L("header.button.flatten_all", "Flatten All");
+                    AnimateButtonColors(
+                        _flattenAllButton,
+                        TealAccentBrush.Color,
+                        normalBackground,
+                        TealAccentBrush.Color,
+                        normalBorder,
+                        AccentOnColorForeground,
+                        normalForeground);
+                    await Task.Delay(TimeSpan.FromMilliseconds(260));
+                    _flattenAllButton.ClearValue(Control.BackgroundProperty);
+                    _flattenAllButton.ClearValue(Control.BorderBrushProperty);
+                    _flattenAllButton.ClearValue(Control.ForegroundProperty);
+                    _flattenAllButton.IsEnabled = true;
+                }
+
+                _isFlattenFeedbackActive = false;
+            }
         }
 
         private void UpdateReplicateButtonState()
@@ -799,12 +864,7 @@ namespace Glitch.UI
 
         private void UpdateRefreshTimerCadence()
         {
-            if (_refreshTimer == null)
-                return;
-
-            _refreshTimer.Interval = _isReplicatingUi
-                ? TimeSpan.FromMilliseconds(500)
-                : (IsGlitchShellUiActive() ? TimeSpan.FromSeconds(1.5) : IdleBackgroundUiRefreshInterval);
+            UpdateRefreshTimerCadenceIfNeeded();
         }
 
         private string BuildRuntimePolicySummaryLogLine()
@@ -950,12 +1010,8 @@ namespace Glitch.UI
 
         private void ApplyRiskMitigations(IReadOnlyList<AccountGridRow> rows, IReadOnlyList<Account> activeAccounts)
         {
-            if (!_isReplicatingUi ||
-                _runtimePolicySettings == null)
-            {
-                ClearComplianceEnforcementRuntimeState();
+            if (_runtimePolicySettings == null)
                 return;
-            }
 
             if (!_runtimePolicySettings.AnyRiskComplianceFeatureEnabled())
             {
@@ -963,15 +1019,7 @@ namespace Glitch.UI
                 return;
             }
 
-            ComputeRiskState(rows, activeAccounts);
             ApplyEnabledRiskActions(rows, activeAccounts);
-        }
-
-        private void ComputeRiskState(IReadOnlyList<AccountGridRow> rows, IReadOnlyList<Account> activeAccounts)
-        {
-            // ponytail: pure trigger evaluation only; side effects stay in ApplyEnabledRiskActions.
-            _ = rows;
-            _ = activeAccounts;
         }
 
         private bool IsFreeLitePlan()
@@ -1114,6 +1162,26 @@ namespace Glitch.UI
             }
 
             return true;
+        }
+
+        private void RestoreReplicationUiFromPersistence()
+        {
+            bool wantOn = _runtimePolicySettings?.ReplicationUiEnabled ?? false;
+            if (wantOn && !CanEnableReplication(out _))
+                wantOn = false;
+
+            _isReplicatingUi = wantOn;
+            UpdateReplicateButtonState();
+            UpdateRefreshTimerCadence();
+        }
+
+        private void PersistReplicationUiState()
+        {
+            if (_runtimePolicySettings == null || string.IsNullOrWhiteSpace(_runtimePolicyFilePath))
+                return;
+
+            _runtimePolicySettings.ReplicationUiEnabled = _isReplicatingUi;
+            GlitchRuntimePolicyStore.SaveSettings(_runtimePolicyFilePath, _runtimePolicySettings);
         }
 
         private int CountConfiguredGroups()
@@ -1378,114 +1446,68 @@ namespace Glitch.UI
             }
         }
 
-        private async void OnFlattenAllButtonClick(object sender, RoutedEventArgs e)
+        private async Task<bool> TryExecuteFlattenAllAsync()
         {
-            if (_flattenAllButton == null || _isFlattenFeedbackActive)
-                return;
+            if (_flattenAllInFlight != null)
+                return await _flattenAllInFlight.ConfigureAwait(true);
 
-            Color normalBackground = ResolveBrushColor(_flattenAllButton.Background, Color.FromRgb(45, 45, 48));
-            Color normalBorder = ResolveBrushColor(_flattenAllButton.BorderBrush, normalBackground);
-            Color normalForeground = ResolveBrushColor(_flattenAllButton.Foreground, Colors.White);
-            bool flattenSucceeded = await TryExecuteFlattenAllAsync();
-            if (!flattenSucceeded)
-                return;
-
-            _isFlattenFeedbackActive = true;
-            _flattenAllButton.IsEnabled = false;
-            _flattenAllButton.Content = L("header.button.flattened", "Flattened!");
-            AnimateButtonColors(
-                _flattenAllButton,
-                normalBackground,
-                TealAccentBrush.Color,
-                normalBorder,
-                TealAccentBrush.Color,
-                normalForeground,
-                Colors.White);
-
+            _flattenAllInFlight = ExecuteFlattenAllCoreAsync();
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(3));
+                return await _flattenAllInFlight.ConfigureAwait(true);
             }
             finally
             {
-                if (_flattenAllButton != null)
-                {
-                    _flattenAllButton.Content = L("header.button.flatten_all", "Flatten All");
-                    AnimateButtonColors(
-                        _flattenAllButton,
-                        TealAccentBrush.Color,
-                        normalBackground,
-                        TealAccentBrush.Color,
-                        normalBorder,
-                        Colors.White,
-                        normalForeground);
-                    await Task.Delay(TimeSpan.FromMilliseconds(260));
-                    _flattenAllButton.ClearValue(Control.BackgroundProperty);
-                    _flattenAllButton.ClearValue(Control.BorderBrushProperty);
-                    _flattenAllButton.ClearValue(Control.ForegroundProperty);
-                    _flattenAllButton.IsEnabled = true;
-                }
-
-                _isFlattenFeedbackActive = false;
+                _flattenAllInFlight = null;
             }
         }
 
-        private async Task<bool> TryExecuteFlattenAllAsync()
+        private async Task<bool> ExecuteFlattenAllCoreAsync()
         {
-            if (_isFlattenAllInProgress)
-                return false;
-
             _isFlattenAllInProgress = true;
             var flattenStopwatch = Stopwatch.StartNew();
             int flattenSubmitCount = 0;
+            bool restoreCopyEngine = _isReplicatingUi && !UseLegacyReplicationEngine();
             try
             {
-                var accounts = GetActiveAccountsSnapshot();
+                if (restoreCopyEngine)
+                    _copyEngine?.Configure(false, null);
+
+                var accounts = ResolveFlattenAllAccounts();
                 if (accounts.Count == 0)
                     return true;
 
-                foreach (Account account in accounts)
-                {
-                    if (account == null || string.IsNullOrWhiteSpace(account.Name))
-                        continue;
-
-                    string accountName = account.Name.Trim();
-                    List<Instrument> instruments = GetOpenPositionInstruments(account);
-                    string resultToken;
-                    if (instruments.Count == 0)
-                    {
-                        resultToken = "skipped_no_exposure";
-                    }
-                    else
-                    {
-                        try
-                        {
-                            account.Flatten(instruments.ToArray());
-                            flattenSubmitCount++;
-                            resultToken = "issued";
-                        }
-                        catch (Exception ex)
-                        {
-                            resultToken = "failed_" + CleanJournalToken(ex.GetType().Name);
-                        }
-                    }
-
-                    AppendJournal(
-                        accountName,
-                        "Risk",
-                        $"flatten_all|origin=user_button|result={resultToken}|instruments={instruments.Count}");
-                }
+                flattenSubmitCount = await Dispatcher.InvokeAsync(() => IssueFlattenOrdersForAccounts(accounts));
 
                 flattenStopwatch.Stop();
                 AppendJournal(
                     "System",
                     "Perf",
-                    $"METRIC|flatten_submit_ms={flattenStopwatch.ElapsedMilliseconds}|orders={flattenSubmitCount}");
+                    $"METRIC|flatten_submit_ms={flattenStopwatch.ElapsedMilliseconds}|orders={flattenSubmitCount}|accounts={accounts.Count}");
 
-                bool flattened = await WaitForAllAccountsFlatAsync(accounts, TimeSpan.FromSeconds(5));
+                bool flattened = await WaitForAllAccountsFlatAsync(accounts, TimeSpan.FromSeconds(8));
+
+                if (!flattened)
+                {
+                    List<Account> stillExposed = accounts
+                        .Where(account =>
+                            account != null &&
+                            (!GlitchReplicationEngine.IsAccountFlat(account) ||
+                             GlitchReplicationEngine.HasAnyWorkingOrders(account)))
+                        .ToList();
+                    if (stillExposed.Count > 0)
+                    {
+                        await Dispatcher.InvokeAsync(() => IssueFlattenOrdersForAccounts(stillExposed));
+                        flattened = await WaitForAllAccountsFlatAsync(accounts, TimeSpan.FromSeconds(4));
+                    }
+                }
+
                 if (flattened)
                 {
-                    AppendJournal("System", "Risk", "Flatten All executed successfully.");
+                    string flattenSummary = flattenSubmitCount > 0
+                        ? "Flatten All executed successfully."
+                        : "Flatten All: fleet already flat.";
+                    AppendJournal("System", "Risk", flattenSummary);
                     RefreshAccountData(preferSynchronous: true);
                 }
                 else
@@ -1505,6 +1527,9 @@ namespace Glitch.UI
             }
             finally
             {
+                if (restoreCopyEngine)
+                    RefreshCopyEngineConfiguration(GetActiveAccountsSnapshot());
+
                 _isFlattenAllInProgress = false;
             }
         }
@@ -1750,7 +1775,7 @@ namespace Glitch.UI
                 CanUserDeleteRows = false,
                 HeadersVisibility = DataGridHeadersVisibility.Column,
                 Margin = new Thickness(0, 8, 0, 0),
-                ItemsSource = group.Members,
+                ItemsSource = SyncGroupGridRows(group),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Top
             };
@@ -1891,17 +1916,24 @@ namespace Glitch.UI
             grid.CellEditEnding += (s, e) =>
             {
                 var editedMember = e?.Row?.Item as AccountGroupMemberRow;
+                if (editedMember == null || editedMember.IsMasterRow)
+                    return;
+
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
-                    if (editedMember != null)
-                    {
-                        if (double.IsNaN(editedMember.Ratio) || double.IsInfinity(editedMember.Ratio) || editedMember.Ratio <= 0)
-                            editedMember.Ratio = ComputeDefaultRatio(editedMember.FollowerSize, editedMember.MasterSize);
-                        else
-                            editedMember.Ratio = Math.Round(editedMember.Ratio, 4);
-                    }
+                    if (double.IsNaN(editedMember.Ratio) || double.IsInfinity(editedMember.Ratio) || editedMember.Ratio <= 0)
+                        editedMember.Ratio = ComputeDefaultRatio(editedMember.FollowerSize, editedMember.MasterSize);
+                    else
+                        editedMember.Ratio = Math.Round(editedMember.Ratio, 4);
                     SaveAccountGroupsToDisk();
+                    HandleFollowerRatioUserChange(group, editedMember);
                 }), DispatcherPriority.Background);
+            };
+
+            grid.BeginningEdit += (s, e) =>
+            {
+                if (e?.Row?.Item is AccountGroupMemberRow row && row.IsMasterRow)
+                    e.Cancel = true;
             };
 
             Action queueHeaderSelectionRefresh = () =>
@@ -1917,7 +1949,9 @@ namespace Glitch.UI
             grid.LoadingRow += (s, e) =>
             {
                 if (e?.Row?.Item is AccountGroupMemberRow member)
-                    e.Row.ToolTip = BuildFollowerRatioMathTooltip(member);
+                    e.Row.ToolTip = member.IsMasterRow
+                        ? L("dashboard.group.master_row_tooltip", "Master account")
+                        : BuildFollowerRatioMathTooltip(member);
             };
             grid.PreparingCellForEdit += (s, e) =>
             {
@@ -1936,6 +1970,8 @@ namespace Glitch.UI
                     queueHeaderSelectionRefresh();
             };
             grid.Loaded += (s, e) => queueHeaderSelectionRefresh();
+
+            WireReplicationMemberHandlers(group);
 
             return grid;
         }
@@ -2023,7 +2059,7 @@ namespace Glitch.UI
             return column;
         }
 
-        private static Style CreateGroupEnableCheckBoxStyle(FrameworkElement context)
+        private Style CreateGroupEnableCheckBoxStyle(FrameworkElement context)
         {
             var style = new Style(typeof(CheckBox));
 
@@ -2063,7 +2099,7 @@ namespace Glitch.UI
             checkedTrigger.Setters.Add(new Setter(UIElement.VisibilityProperty, Visibility.Visible, "CheckMark"));
             checkedTrigger.Setters.Add(new Setter(Border.BackgroundProperty, TealAccentBrush, "CheckBoxBorder"));
             checkedTrigger.Setters.Add(new Setter(Border.BorderBrushProperty, TealAccentBrush, "CheckBoxBorder"));
-            checkedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            checkedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             template.Triggers.Add(checkedTrigger);
 
             string hoverBorderKey = FindSkinResourceKey(context, "GridHeaderHighlight", "BorderThinBrush", "TabControlBorderBrush");
@@ -2075,6 +2111,9 @@ namespace Glitch.UI
             }
 
             style.Setters.Add(new Setter(Control.TemplateProperty, template));
+            AddLockMasterEnableCheckBoxTrigger(
+                style,
+                L("dashboard.group.master_enable_locked", "Master account is always enabled"));
             return style;
         }
 
@@ -2127,7 +2166,42 @@ namespace Glitch.UI
             }
 
             style.Setters.Add(new Setter(Control.TemplateProperty, template));
+            AddHideWhenMasterRowTrigger(style);
             return style;
+        }
+
+        private static void AddHideWhenMasterRowTrigger(Style style)
+        {
+            if (style == null)
+                return;
+
+            var trigger = new DataTrigger
+            {
+                Binding = new Binding(nameof(AccountGroupMemberRow.IsMasterRow)),
+                Value = true
+            };
+            trigger.Setters.Add(new Setter(UIElement.VisibilityProperty, Visibility.Collapsed));
+            trigger.Setters.Add(new Setter(UIElement.IsHitTestVisibleProperty, false));
+            style.Triggers.Add(trigger);
+        }
+
+        private static void AddLockMasterEnableCheckBoxTrigger(Style style, string lockedTooltip)
+        {
+            if (style == null)
+                return;
+
+            var trigger = new DataTrigger
+            {
+                Binding = new Binding(nameof(AccountGroupMemberRow.IsMasterRow)),
+                Value = true
+            };
+            trigger.Setters.Add(new Setter(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, true));
+            trigger.Setters.Add(new Setter(UIElement.IsHitTestVisibleProperty, false));
+            trigger.Setters.Add(new Setter(UIElement.FocusableProperty, false));
+            if (!string.IsNullOrWhiteSpace(lockedTooltip))
+                trigger.Setters.Add(new Setter(FrameworkElement.ToolTipProperty, lockedTooltip));
+
+            style.Triggers.Add(trigger);
         }
 
         private DataGridTextColumn CreateEditableFollowerRatioColumn(FrameworkElement context, Style centerHeaderStyle)
@@ -2225,6 +2299,92 @@ namespace Glitch.UI
                 .ToList();
         }
 
+        private ObservableCollection<AccountGroupMemberRow> SyncGroupGridRows(AccountGroupDefinition group)
+        {
+            if (group == null)
+                return new ObservableCollection<AccountGroupMemberRow>();
+
+            if (group.GridRows == null)
+                group.GridRows = new ObservableCollection<AccountGroupMemberRow>();
+
+            group.GridRows.Clear();
+
+            if (!string.IsNullOrWhiteSpace(group.MasterAccount))
+                group.GridRows.Add(EnsureMasterDisplayRow(group));
+
+            if (group.Members != null)
+            {
+                foreach (AccountGroupMemberRow member in group.Members)
+                {
+                    if (member != null)
+                        group.GridRows.Add(member);
+                }
+            }
+
+            return group.GridRows;
+        }
+
+        private AccountGroupMemberRow EnsureMasterDisplayRow(AccountGroupDefinition group)
+        {
+            if (group.MasterDisplayRow == null)
+            {
+                group.MasterDisplayRow = new AccountGroupMemberRow
+                {
+                    IsMasterRow = true,
+                    IsEnabled = true,
+                    IsSelected = false,
+                    Ratio = 1
+                };
+            }
+
+            group.MasterDisplayRow.IsMasterRow = true;
+            string master = group.MasterAccount?.Trim() ?? string.Empty;
+            group.MasterDisplayRow.FollowerAccount = master;
+            group.MasterDisplayRow.MasterAccount = master;
+            double masterSize = group.MasterSize > 0 ? group.MasterSize : ResolveAccountSizeForName(master, 25000);
+            group.MasterDisplayRow.FollowerSize = masterSize;
+            group.MasterDisplayRow.FollowerSizeDisplay = FormatAccountSize(masterSize);
+            group.MasterDisplayRow.MasterSize = masterSize;
+            group.MasterDisplayRow.MasterSizeDisplay = FormatAccountSize(masterSize);
+            ApplyAccountSnapshotToGroupMemberRow(group.MasterDisplayRow, FindAccountRowByName(master));
+            return group.MasterDisplayRow;
+        }
+
+        private static void ApplyAccountSnapshotToGroupMemberRow(AccountGroupMemberRow member, AccountGridRow row)
+        {
+            if (member == null)
+                return;
+
+            string pnlDisplay = "-";
+            string pnlSign = "Neutral";
+            string maxDd = "-";
+            string maxL = "-";
+            string maxContracts = "-";
+            string position = "0";
+            if (row != null)
+            {
+                pnlDisplay = string.IsNullOrWhiteSpace(row.TotalPnl) ? "-" : row.TotalPnl;
+                pnlSign = string.IsNullOrWhiteSpace(row.TotalPnlSign) ? "Neutral" : row.TotalPnlSign;
+                maxDd = string.IsNullOrWhiteSpace(row.MaxDrawdown) ? "-" : row.MaxDrawdown;
+                maxL = string.IsNullOrWhiteSpace(row.IntratradeDrawdown) ? "-" : row.IntratradeDrawdown;
+                maxContracts = string.IsNullOrWhiteSpace(row.MaxContracts) ? "-" : row.MaxContracts;
+                position = string.IsNullOrWhiteSpace(row.Position) ? "0" : row.Position;
+            }
+
+            if (!string.Equals(member.Pnl, pnlDisplay, StringComparison.Ordinal))
+                member.Pnl = pnlDisplay;
+            if (!string.Equals(member.PnlSign, pnlSign, StringComparison.Ordinal))
+                member.PnlSign = pnlSign;
+            if (!string.Equals(member.MaxDd, maxDd, StringComparison.Ordinal))
+                member.MaxDd = maxDd;
+            if (!string.Equals(member.MaxL, maxL, StringComparison.Ordinal))
+                member.MaxL = maxL;
+            if (!string.Equals(member.MaxContracts, maxContracts, StringComparison.Ordinal))
+                member.MaxContracts = maxContracts;
+            if (!string.Equals(member.Position, position, StringComparison.Ordinal))
+                member.Position = position;
+        }
+
         private void UpdateGroupMasterSelection(AccountGroupDefinition group, string selectedMaster)
         {
             if (group == null || string.IsNullOrWhiteSpace(selectedMaster))
@@ -2249,6 +2409,9 @@ namespace Glitch.UI
             }
 
             SaveAccountGroupsToDisk();
+
+            if (_replicationUserIntentLive && _isReplicatingUi)
+                AlignGroupEnabledFollowersToMaster(group, "master_change");
         }
 
         private void AddFollowerToGroup(AccountGroupDefinition group)
@@ -2678,7 +2841,7 @@ namespace Glitch.UI
             double? tableFontSize = FindSkinDouble(context, "FontTableHeight", "FontControlHeight", "FontHeaderLevel4Height");
 
             style.Setters.Add(new Setter(Control.BackgroundProperty, OrangeAccentBrush));
-            style.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            style.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             style.Setters.Add(new Setter(Control.BorderBrushProperty, OrangeAccentBrush));
             style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
             style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(8, 1, 8, 1)));
@@ -2690,7 +2853,7 @@ namespace Glitch.UI
             var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
             hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, OrangeAccentBrush));
             hoverTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, OrangeAccentBrush));
-            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             style.Triggers.Add(hoverTrigger);
 
             var dismissedTrigger = new DataTrigger
@@ -2767,7 +2930,7 @@ namespace Glitch.UI
 
             string selectedBackgroundKey = FindSkinResourceKey(context, "BackgroundTextInput", "GridEntireBackground", "BackgroundMainWindow");
             style.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
-            style.Setters.Add(new Setter(Control.ForegroundProperty, UiPrimaryTextBrush));
+            ApplySkinSetter(style, Control.ForegroundProperty, context, "FontControlBrush", "FontTableBrush", "GridRowForeground");
             style.Setters.Add(new Setter(Control.BorderBrushProperty, Brushes.Transparent));
 
             style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0, 0, 0, 2)));
@@ -2819,7 +2982,9 @@ namespace Glitch.UI
             var selectedTrigger = new Trigger { Property = TabItem.IsSelectedProperty, Value = true };
             if (!string.IsNullOrWhiteSpace(selectedBackgroundKey))
                 selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, new DynamicResourceExtension(selectedBackgroundKey)));
-            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, UiPrimaryTextBrush));
+            string tabForegroundKey = FindSkinResourceKey(context, "FontControlBrush", "FontTableBrush", "GridRowForeground");
+            if (!string.IsNullOrWhiteSpace(tabForegroundKey))
+                selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, new DynamicResourceExtension(tabForegroundKey)));
             selectedTrigger.Setters.Add(new Setter(Border.BackgroundProperty, OrangeAccentBrush, "TabBottomIndicator"));
             selectedTrigger.Setters.Add(new Setter(Control.FontWeightProperty, UiTabFontWeight));
             selectedTrigger.Setters.Add(new Setter(UIElement.OpacityProperty, 1.0));
@@ -2857,7 +3022,7 @@ namespace Glitch.UI
             ApplyTealAccentResourceOverrides(style);
             Brush neutralBorder = FindSkinBrush(context, "BorderThinBrush", "TabControlBorderBrush") ?? Brushes.Gray;
             Brush neutralBackground = FindSkinBrush(context, "BackgroundTextInput", "BackgroundMainWindow", "GridEntireBackground") ?? Brushes.Transparent;
-            Brush neutralForeground = FindSkinBrush(context, "FontControlBrush", "FontTableBrush") ?? Brushes.White;
+            Brush neutralForeground = FindSkinBrush(context, "FontControlBrush", "FontTableBrush", "GridRowForeground") ?? SkinForegroundFallbackBrush;
 
             style.Resources["ComboBox.Static.Background"] = neutralBackground;
             style.Resources["ComboBox.Static.Border"] = neutralBorder;
@@ -2918,19 +3083,19 @@ namespace Glitch.UI
             style.Resources["TextControlBorderFocused"] = TealAccentBrush;
             style.Resources["ComboBoxItem.ItemsviewHover.Background"] = TealAccentBrush;
             style.Resources["ComboBoxItem.ItemsviewHover.Border"] = TealAccentBrush;
-            style.Resources["ComboBoxItem.ItemsviewHover.Foreground"] = Brushes.White;
+            style.Resources["ComboBoxItem.ItemsviewHover.Foreground"] = AccentOnColorForegroundBrush;
             style.Resources["ComboBoxItem.ItemsviewHoverFocus.Background"] = TealAccentBrush;
             style.Resources["ComboBoxItem.ItemsviewHoverFocus.Border"] = TealAccentBrush;
-            style.Resources["ComboBoxItem.ItemsviewHoverFocus.Foreground"] = Brushes.White;
+            style.Resources["ComboBoxItem.ItemsviewHoverFocus.Foreground"] = AccentOnColorForegroundBrush;
             style.Resources["ComboBoxItem.ItemsviewSelected.Background"] = TealAccentBrush;
             style.Resources["ComboBoxItem.ItemsviewSelected.Border"] = TealAccentBrush;
-            style.Resources["ComboBoxItem.ItemsviewSelected.Foreground"] = Brushes.White;
-            style.Resources["ComboBoxItem.ItemsviewSelectedHover.Foreground"] = Brushes.White;
+            style.Resources["ComboBoxItem.ItemsviewSelected.Foreground"] = AccentOnColorForegroundBrush;
+            style.Resources["ComboBoxItem.ItemsviewSelectedHover.Foreground"] = AccentOnColorForegroundBrush;
             style.Resources["ComboBoxItem.ItemsviewSelectedHover.Background"] = TealAccentBrush;
             style.Resources["ComboBoxItem.ItemsviewSelectedHover.Border"] = TealAccentBrush;
             style.Resources["ComboBoxItem.ItemsviewSelectedNoFocus.Background"] = TealAccentBrush;
             style.Resources["ComboBoxItem.ItemsviewSelectedNoFocus.Border"] = TealAccentBrush;
-            style.Resources["ComboBoxItem.ItemsviewSelectedNoFocus.Foreground"] = Brushes.White;
+            style.Resources["ComboBoxItem.ItemsviewSelectedNoFocus.Foreground"] = AccentOnColorForegroundBrush;
 
             var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
             hoverTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, TealAccentBrush));
@@ -3087,13 +3252,13 @@ namespace Glitch.UI
             var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
             hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, TealAccentBrush));
             hoverTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, TealAccentBrush));
-            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             style.Triggers.Add(hoverTrigger);
 
             var selectedTrigger = new Trigger { Property = ListBoxItem.IsSelectedProperty, Value = true };
             selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, TealAccentBrush));
             selectedTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, TealAccentBrush));
-            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             style.Triggers.Add(selectedTrigger);
 
             return style;
@@ -3124,13 +3289,13 @@ namespace Glitch.UI
             var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
             hoverTrigger.Setters.Add(new Setter(Border.BackgroundProperty, TealAccentBrush, "ItemBorder"));
             hoverTrigger.Setters.Add(new Setter(Border.BorderBrushProperty, TealAccentBrush, "ItemBorder"));
-            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             template.Triggers.Add(hoverTrigger);
 
             var selectedTrigger = new Trigger { Property = ListBoxItem.IsSelectedProperty, Value = true };
             selectedTrigger.Setters.Add(new Setter(Border.BackgroundProperty, TealAccentBrush, "ItemBorder"));
             selectedTrigger.Setters.Add(new Setter(Border.BorderBrushProperty, TealAccentBrush, "ItemBorder"));
-            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             template.Triggers.Add(selectedTrigger);
 
             var disabledTrigger = new Trigger { Property = UIElement.IsEnabledProperty, Value = false };
@@ -3146,8 +3311,8 @@ namespace Glitch.UI
 
             style.Resources[SystemColors.HighlightBrushKey] = TealAccentBrush;
             style.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = TealAccentBrush;
-            style.Resources[SystemColors.HighlightTextBrushKey] = Brushes.White;
-            style.Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = Brushes.White;
+            style.Resources[SystemColors.HighlightTextBrushKey] = AccentOnColorForegroundBrush;
+            style.Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = AccentOnColorForegroundBrush;
             style.Resources[SystemColors.HotTrackBrushKey] = TealAccentBrush;
         }
 
@@ -3234,6 +3399,9 @@ namespace Glitch.UI
             style.Setters.Add(new Setter(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center));
             style.Setters.Add(new Setter(FrameworkElement.MarginProperty, margin));
             ApplySkinSetter(style, TextBlock.ForegroundProperty, context, "FontControlBrush", "FontTableBrush", "GridRowForeground");
+            Brush resolvedForeground = FindSkinBrush(context, "FontControlBrush", "FontTableBrush", "GridRowForeground");
+            if (resolvedForeground != null)
+                style.Setters.Add(new Setter(TextBlock.ForegroundProperty, resolvedForeground));
 
             double? sharedFontSize = FindSkinDouble(context, "FontTableHeight", "FontHeaderLevel4Height", "FontControlHeight");
             if (sharedFontSize.HasValue)
@@ -3426,13 +3594,36 @@ namespace Glitch.UI
             if (_restoreMaximizedOnLoad)
                 WindowState = WindowState.Maximized;
 
-            _isReplicatingUi = false;
-            UpdateReplicateButtonState();
+            _replicationUserIntentLive = false;
+            RestoreReplicationUiFromPersistence();
             ApplyPlanLimitsToAccountGroups("startup");
             LogStartupRuntimeSettingsOnce();
             RefreshAccountData(preferSynchronous: true);
+            _replicationUserIntentLive = true;
+            if (_isReplicatingUi)
+            {
+                AppendJournal(
+                    "System",
+                    "Replication",
+                    "replication_restored|origin=startup|catchup=skipped");
+            }
+
             _refreshTimer.Start();
+            BootstrapAnalyticsBridgeOnStartup();
             _ = RefreshLicenseStateAsync(useValidateEndpoint: true, force: true);
+        }
+
+        private void BootstrapAnalyticsBridgeOnStartup()
+        {
+            try
+            {
+                GlitchAnalyticsFeedBus.BootstrapAllRegisteredBridges();
+                RequestAnalyticsRefresh();
+                RefreshAnalyticsDashboard(GetActiveAccountsSnapshot());
+            }
+            catch
+            {
+            }
         }
 
         private void LogStartupRuntimeSettingsOnce()
@@ -3459,10 +3650,12 @@ namespace Glitch.UI
             SavePeakStatesToDisk(force: true);
             SaveAuditFeedsToDisk(force: true);
             SaveWindowPlacementToDisk();
+            GlitchAnalyticsFeedBus.FlushPersistence();
             _isFlattenAllInProgress = false;
+            PersistReplicationUiState();
+            _replicationUserIntentLive = false;
             _isReplicatingUi = false;
             _copyEngine?.Configure(false, null);
-            _replicationDriftNotice = null;
             PublishGlitchShellState();
             GlitchShellBridge.UnregisterMainWindow(this);
 
@@ -3482,6 +3675,8 @@ namespace Glitch.UI
                 _summaryRootGrid.SizeChanged -= OnSummaryRootSizeChanged;
             if (_analyticsRoot != null)
                 _analyticsRoot.SizeChanged -= OnAnalyticsRootSizeChanged;
+            if (_settingsRootGrid != null)
+                _settingsRootGrid.SizeChanged -= OnSettingsRootSizeChanged;
             if (_analyticsSessionRangeCanvas != null)
                 _analyticsSessionRangeCanvas.SizeChanged -= OnAnalyticsSessionRangeCanvasSizeChanged;
             if (_replicateButton != null)
@@ -3493,11 +3688,6 @@ namespace Glitch.UI
             {
                 _flattenAllButton.Click -= OnFlattenAllButtonClick;
                 _flattenAllButton = null;
-            }
-            if (_headerReplicationDriftSyncButton != null)
-            {
-                _headerReplicationDriftSyncButton.Click -= OnReplicationDriftSyncButtonClick;
-                _headerReplicationDriftSyncButton = null;
             }
             if (_analyticsInstrumentCombo != null)
             {
@@ -3533,6 +3723,8 @@ namespace Glitch.UI
             ClearAccordionLayoutRefs();
             _summaryRootGrid = null;
             _analyticsRoot = null;
+            _analyticsTopHeaderBand = null;
+            _settingsRootGrid = null;
             _headerResponsiveMode = -1;
             _dashboardNarrowLayout = null;
             _journalNarrowLayout = null;
@@ -3580,10 +3772,13 @@ namespace Glitch.UI
 
         private void OnRefreshTimerTickCore()
         {
+            UpdateRefreshTimerCadenceIfNeeded();
+
             DateTime nowUtc = DateTime.UtcNow;
             PruneRuntimeJournalCaches(nowUtc);
             PruneInformationalWarningJournalCooldowns(nowUtc);
             PruneAccountItemUpdateThrottle(nowUtc);
+            PruneActiveAccountCache(nowUtc);
             MaybeRunLicenseHeartbeat(nowUtc);
 
             if (_isEditingAccountsGrid || _isCommittingAccountsGridEdit)
@@ -3596,9 +3791,7 @@ namespace Glitch.UI
             bool uiActive = IsGlitchShellUiActive();
             if (!uiActive)
             {
-                if (_isReplicatingUi)
-                    RefreshAccountData(heavyTabWork: false);
-
+                // ponytail: replication is event-driven; skip Account.All scans while minimized
                 SavePeakStatesToDisk(force: false);
                 SaveAuditFeedsToDisk(force: false);
                 FlushPendingJournalEntries();
@@ -3678,19 +3871,33 @@ namespace Glitch.UI
                 .Where(row => row != null && !string.IsNullOrWhiteSpace(row.DisplayName))
                 .ToList();
 
+            var rowIndexByName = BuildAccountRowIndexByName();
             int targetIndex = 0;
             foreach (AccountGridRow nextRow in incoming)
             {
-                int existingIndex = FindAccountRowIndexByName(nextRow.DisplayName);
+                string name = nextRow.DisplayName.Trim();
+                int existingIndex = -1;
+                if (rowIndexByName.TryGetValue(name, out int mappedIndex) &&
+                    mappedIndex >= 0 &&
+                    mappedIndex < _accountRows.Count &&
+                    string.Equals(_accountRows[mappedIndex]?.DisplayName, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    existingIndex = mappedIndex;
+                }
+
                 if (existingIndex < 0)
                 {
                     _accountRows.Insert(targetIndex, nextRow);
+                    rowIndexByName = BuildAccountRowIndexByName();
                     targetIndex++;
                     continue;
                 }
 
                 if (existingIndex != targetIndex)
+                {
                     _accountRows.Move(existingIndex, targetIndex);
+                    rowIndexByName = BuildAccountRowIndexByName();
+                }
 
                 AccountGridRow currentRow = _accountRows[targetIndex];
                 currentRow.ApplyFrom(nextRow);
@@ -3700,6 +3907,20 @@ namespace Glitch.UI
 
             while (_accountRows.Count > targetIndex)
                 _accountRows.RemoveAt(_accountRows.Count - 1);
+        }
+
+        private Dictionary<string, int> BuildAccountRowIndexByName()
+        {
+            var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < _accountRows.Count; i++)
+            {
+                AccountGridRow row = _accountRows[i];
+                if (row == null || string.IsNullOrWhiteSpace(row.DisplayName))
+                    continue;
+                map[row.DisplayName.Trim()] = i;
+            }
+
+            return map;
         }
 
         private int FindAccountRowIndexByName(string accountName)
@@ -4295,12 +4516,14 @@ namespace Glitch.UI
             string reasonToken = CleanJournalToken(reason);
             try
             {
-                account.Flatten(instruments.ToArray());
+                if (!GlitchReplicationEngine.TryFlattenAccount(account, out int flattenedInstruments))
+                    return false;
+
                 MarkRiskMitigation(mitigationKey, nowUtc);
                 AppendJournal(
                     account.Name,
                     "Risk",
-                    $"risk_flatten|action=flatten|reason={reasonToken}|instruments={instruments.Count}|origin=enabled_rule");
+                    $"risk_flatten|action=flatten|reason={reasonToken}|instruments={flattenedInstruments}|origin=enabled_rule");
                 AppendJournal(account.Name, "Risk", reason + ". Flatten issued.");
                 return true;
             }
@@ -4598,7 +4821,7 @@ namespace Glitch.UI
                 !entry.IsDismissed &&
                 NormalizeWarningSeverity(entry.Severity) == WarningSeverity.Critical);
             _warningCountValueText.Text = criticalCount.ToString("N0", CultureInfo.CurrentCulture);
-            _warningCountValueText.Foreground = Brushes.White;
+            ApplySkinResource(_warningCountValueText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush", "GridRowForeground");
         }
 
         private static double ToRiskRatio(double headroomRatio)
@@ -4679,7 +4902,16 @@ namespace Glitch.UI
 
             foreach (AccountGroupDefinition group in _accountGroups)
             {
-                if (group?.Members == null)
+                if (group == null)
+                    continue;
+
+                if (!string.IsNullOrWhiteSpace(group.MasterAccount))
+                {
+                    rowsByAccount.TryGetValue(group.MasterAccount.Trim(), out AccountGridRow masterGridRow);
+                    ApplyAccountSnapshotToGroupMemberRow(EnsureMasterDisplayRow(group), masterGridRow);
+                }
+
+                if (group.Members == null)
                     continue;
 
                 foreach (AccountGroupMemberRow member in group.Members)
@@ -4687,34 +4919,8 @@ namespace Glitch.UI
                     if (member == null || string.IsNullOrWhiteSpace(member.FollowerAccount))
                         continue;
 
-                    string pnlDisplay = "-";
-                    string pnlSign = "Neutral";
-                    string maxDd = "-";
-                    string maxL = "-";
-                    string maxContracts = "-";
-                    string position = "0";
-                    if (rowsByAccount.TryGetValue(member.FollowerAccount.Trim(), out AccountGridRow row))
-                    {
-                        pnlDisplay = string.IsNullOrWhiteSpace(row.TotalPnl) ? "-" : row.TotalPnl;
-                        pnlSign = string.IsNullOrWhiteSpace(row.TotalPnlSign) ? "Neutral" : row.TotalPnlSign;
-                        maxDd = string.IsNullOrWhiteSpace(row.MaxDrawdown) ? "-" : row.MaxDrawdown;
-                        maxL = string.IsNullOrWhiteSpace(row.IntratradeDrawdown) ? "-" : row.IntratradeDrawdown;
-                        maxContracts = string.IsNullOrWhiteSpace(row.MaxContracts) ? "-" : row.MaxContracts;
-                        position = string.IsNullOrWhiteSpace(row.Position) ? "0" : row.Position;
-                    }
-
-                    if (!string.Equals(member.Pnl, pnlDisplay, StringComparison.Ordinal))
-                        member.Pnl = pnlDisplay;
-                    if (!string.Equals(member.PnlSign, pnlSign, StringComparison.Ordinal))
-                        member.PnlSign = pnlSign;
-                    if (!string.Equals(member.MaxDd, maxDd, StringComparison.Ordinal))
-                        member.MaxDd = maxDd;
-                    if (!string.Equals(member.MaxL, maxL, StringComparison.Ordinal))
-                        member.MaxL = maxL;
-                    if (!string.Equals(member.MaxContracts, maxContracts, StringComparison.Ordinal))
-                        member.MaxContracts = maxContracts;
-                    if (!string.Equals(member.Position, position, StringComparison.Ordinal))
-                        member.Position = position;
+                    rowsByAccount.TryGetValue(member.FollowerAccount.Trim(), out AccountGridRow row);
+                    ApplyAccountSnapshotToGroupMemberRow(member, row);
                 }
             }
         }
@@ -5250,9 +5456,11 @@ namespace Glitch.UI
 
             if (_accountEventSubscriptions.TryGetValue(accountName, out List<EventBridgeSubscription> existing) && existing.Count > 0)
             {
-                // Keep a single subscription set per account name for this window lifetime.
-                // Re-subscribing on object-reference churn can stack duplicate handlers.
-                return;
+                if (ReferenceEquals(existing[0].Account, account))
+                    return;
+
+                UnsubscribeFromAccountRuntimeEvents(accountName);
+                _activeAccountCache.Remove(accountName);
             }
 
             var subscriptions = new List<EventBridgeSubscription>();
@@ -5292,6 +5500,22 @@ namespace Glitch.UI
 
         private void OnAccountRuntimeEventBridge(string eventName, object sender, object eventArgs)
         {
+            if (_isWindowClosed)
+                return;
+
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(
+                    new Action(() => OnAccountRuntimeEventBridgeCore(eventName, sender, eventArgs)),
+                    System.Windows.Threading.DispatcherPriority.Normal);
+                return;
+            }
+
+            OnAccountRuntimeEventBridgeCore(eventName, sender, eventArgs);
+        }
+
+        private void OnAccountRuntimeEventBridgeCore(string eventName, object sender, object eventArgs)
+        {
             try
             {
                 Account account = sender as Account ?? TryExtractAccountFromEventArgs(eventArgs);
@@ -5324,6 +5548,7 @@ namespace Glitch.UI
 
                 TryAppendRuntimeEventJournalEntry(eventName, account, eventArgs);
                 TryProcessCopyExecutionFromRuntimeEvent(eventName, account, eventArgs);
+                TryProcessCopyOrderRetryFromRuntimeEvent(eventName, account, eventArgs);
             }
             catch (Exception ex)
             {
@@ -5336,11 +5561,7 @@ namespace Glitch.UI
             if (string.IsNullOrWhiteSpace(signalName))
                 return false;
 
-            string token = signalName.Trim();
-            return token.StartsWith(ReplicationSignalName, StringComparison.OrdinalIgnoreCase) ||
-                   token.StartsWith(GlitchCopyEngine.CopySignalName, StringComparison.OrdinalIgnoreCase) ||
-                   token.StartsWith(ProtectiveStopSignalName, StringComparison.OrdinalIgnoreCase) ||
-                   token.StartsWith(ProtectiveTargetSignalName, StringComparison.OrdinalIgnoreCase);
+            return signalName.Trim().StartsWith("GLT-", StringComparison.OrdinalIgnoreCase);
         }
 
         private void TryAppendRuntimeEventJournalEntry(string eventName, Account account, object eventArgs)
@@ -5556,12 +5777,23 @@ namespace Glitch.UI
             }
 
             const int maxSnapshots = 6000;
-            if (_lastOrderJournalSnapshotByKey.Count > maxSnapshots)
-                _lastOrderJournalSnapshotByKey.Clear();
-            if (_lastPositionJournalSnapshotByKey.Count > maxSnapshots)
-                _lastPositionJournalSnapshotByKey.Clear();
-            if (_lastExecutionJournalSnapshotByKey.Count > maxSnapshots)
-                _lastExecutionJournalSnapshotByKey.Clear();
+            const int trimTo = 5000;
+            TrimJournalSnapshotCache(_lastOrderJournalSnapshotByKey, maxSnapshots, trimTo);
+            TrimJournalSnapshotCache(_lastPositionJournalSnapshotByKey, maxSnapshots, trimTo);
+            TrimJournalSnapshotCache(_lastExecutionJournalSnapshotByKey, maxSnapshots, trimTo);
+        }
+
+        private static void TrimJournalSnapshotCache(Dictionary<string, string> cache, int maxSnapshots, int trimTo)
+        {
+            if (cache == null || cache.Count <= maxSnapshots)
+                return;
+
+            int removeCount = cache.Count - trimTo;
+            if (removeCount <= 0)
+                return;
+
+            foreach (string key in cache.Keys.Take(removeCount).ToList())
+                cache.Remove(key);
         }
 
         private static bool TryBuildExecutionJournalMessage(object eventArgs, out string message)
@@ -6075,7 +6307,7 @@ namespace Glitch.UI
             return false;
         }
 
-        private static List<Account> GetActiveAccountsSnapshot()
+        private List<Account> GetActiveAccountsSnapshot()
         {
             var accounts = new List<Account>();
 
@@ -6090,7 +6322,7 @@ namespace Glitch.UI
                     {
                         if (account == null || string.IsNullOrWhiteSpace(account.Name))
                             continue;
-                        if (!IsActiveAccount(account))
+                        if (!IsActiveAccountCached(account))
                             continue;
 
                         accounts.Add(account);
@@ -6104,6 +6336,40 @@ namespace Glitch.UI
             return accounts
                 .OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
+        }
+
+        private bool IsActiveAccountCached(Account account)
+        {
+            if (account == null || string.IsNullOrWhiteSpace(account.Name))
+                return false;
+
+            string accountName = account.Name.Trim();
+            DateTime nowUtc = DateTime.UtcNow;
+            if (_activeAccountCache.TryGetValue(accountName, out (bool active, DateTime checkedUtc) cached) &&
+                (nowUtc - cached.checkedUtc) < ActiveAccountCacheTtl)
+            {
+                return cached.active;
+            }
+
+            bool active = IsActiveAccount(account);
+            _activeAccountCache[accountName] = (active, nowUtc);
+            return active;
+        }
+
+        private void PruneActiveAccountCache(DateTime nowUtc)
+        {
+            if (_activeAccountCache.Count == 0)
+                return;
+
+            var stale = new List<string>();
+            foreach (KeyValuePair<string, (bool active, DateTime checkedUtc)> entry in _activeAccountCache)
+            {
+                if ((nowUtc - entry.Value.checkedUtc) > TimeSpan.FromMinutes(5))
+                    stale.Add(entry.Key);
+            }
+
+            for (int i = 0; i < stale.Count; i++)
+                _activeAccountCache.Remove(stale[i]);
         }
 
         private static bool IsActiveAccount(Account account)
@@ -6149,6 +6415,47 @@ namespace Glitch.UI
 
             // Mirror old-simplified eligibility behavior: only accounts with retrievable size are treated as active.
             return GetAccountSizeFromNt(account) > 0;
+        }
+
+        private static bool IsFlattenEligibleAccount(Account account)
+        {
+            if (account == null || string.IsNullOrWhiteSpace(account.Name))
+                return false;
+
+            string accountName = account.Name.Trim();
+            if (accountName.Equals("Backtest", StringComparison.OrdinalIgnoreCase) ||
+                accountName.StartsWith("Playback", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            try
+            {
+                Type accountType = account.GetType();
+                bool? isArchived = TryGetBoolProperty(account, accountType, "IsArchived", "Archived", "IsArchive");
+                if (isArchived == true)
+                    return false;
+
+                bool? isConnected = TryGetBoolProperty(account, accountType, "IsConnected", "Connected");
+                if (isConnected.HasValue && !isConnected.Value)
+                    return false;
+
+                object connection = accountType.GetProperty("Connection")?.GetValue(account, null);
+                if (connection != null)
+                {
+                    object status = connection.GetType().GetProperty("Status")?.GetValue(connection, null);
+                    if (status != null &&
+                        !string.Equals(status.ToString(), "Connected", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return false;
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return true;
         }
 
         private static bool? TryGetBoolProperty(object instance, Type type, params string[] names)
@@ -6204,8 +6511,9 @@ namespace Glitch.UI
             double cashValue = TryGetAccountItem(account, "CashValue");
             double realizedPnl = TryGetAccountItem(account, "RealizedProfitLoss", "RealizedPnL", "RealizedProfit", "RealizedLoss");
             double unrealizedPnl = TryGetAccountItem(account, "UnrealizedProfitLoss", "UnrealizedPnL");
-            // ponytail: stable mid-flight PnL — always sum NT components; drop TotalProfitLoss ≈0 flip (fable D-5)
-            double totalPnl = realizedPnl + unrealizedPnl;
+            // ponytail: flat or flatten-in-flight → realized-only avoids NT lag double-count in group PnL
+            bool useRealizedOnlyPnl = _isFlattenAllInProgress || GlitchReplicationEngine.IsAccountFlat(account);
+            double totalPnl = useRealizedOnlyPnl ? realizedPnl : realizedPnl + unrealizedPnl;
             bool hasSelectionOverride = selectionOverride != null;
             bool hasManualOverride = hasSelectionOverride && selectionOverride.IsManual;
 

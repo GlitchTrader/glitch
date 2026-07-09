@@ -26,13 +26,18 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Glitch.Services;
 
 namespace Glitch.UI
 {
     public static class GlitchAnalyticsFeedBus
     {
         private static readonly object SyncRoot = new object();
+        private static readonly TimeSpan MaintenanceRetentionAge = TimeSpan.FromDays(7);
         private static int _publishCounter;
+        private static bool _persistenceLoaded;
+        private static DateTime _lastPersistUtc = DateTime.MinValue;
+        private static readonly TimeSpan PersistThrottle = TimeSpan.FromSeconds(5);
         private static readonly Dictionary<string, InstrumentFeedState> StateByInstrument =
             new Dictionary<string, InstrumentFeedState>(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string, BridgePresenceState> BridgeStateByInstrument =
@@ -68,7 +73,7 @@ namespace Glitch.UI
 
                 _publishCounter++;
                 if ((_publishCounter % 128) == 0 || StateByInstrument.Count > 32)
-                    PruneStale(heartbeatUtc, TimeSpan.FromDays(2));
+                    RunMaintenancePrune(heartbeatUtc);
 
                 InstrumentFeedState state;
                 if (!StateByInstrument.TryGetValue(normalizedRoot, out state) || state == null)
@@ -97,6 +102,187 @@ namespace Glitch.UI
                 snapshotReading.UtcTime = heartbeatUtc;
                 state.TimeframeReadings[normalizedReading.Minutes] = snapshotReading;
             }
+
+            MaybePersistToDisk();
+        }
+
+        public static void EnsurePersistenceLoaded()
+        {
+            lock (SyncRoot)
+            {
+                if (_persistenceLoaded)
+                    return;
+
+                _persistenceLoaded = true;
+            }
+
+            ImportPersistedInstrumentState();
+        }
+
+        public static void BootstrapAllRegisteredBridges()
+        {
+            EnsurePersistenceLoaded();
+            DateTime nowUtc = DateTime.UtcNow;
+            ImportLegacyBusStateIfNeeded(nowUtc);
+
+            List<string> roots;
+            lock (SyncRoot)
+            {
+                roots = GetKnownInstrumentRootsUnsafe();
+            }
+
+            for (int i = 0; i < roots.Count; i++)
+                RequestBridgeBootstrapPublish(roots[i]);
+        }
+
+        public static IReadOnlyList<string> GetKnownInstrumentRoots()
+        {
+            EnsurePersistenceLoaded();
+            lock (SyncRoot)
+                return GetKnownInstrumentRootsUnsafe();
+        }
+
+        private static List<string> GetKnownInstrumentRootsUnsafe()
+        {
+            var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string key in StateByInstrument.Keys)
+                roots.Add(key);
+            foreach (string key in BridgeStateByInstrument.Keys)
+                roots.Add(key);
+            return roots.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        private static void ImportPersistedInstrumentState()
+        {
+            List<GlitchAnalyticsBridgeCacheStore.PersistedInstrumentFeed> persisted = GlitchAnalyticsBridgeCacheStore.Load();
+            if (persisted == null || persisted.Count == 0)
+                return;
+
+            lock (SyncRoot)
+            {
+                for (int i = 0; i < persisted.Count; i++)
+                {
+                    GlitchAnalyticsBridgeCacheStore.PersistedInstrumentFeed feed = persisted[i];
+                    if (feed == null || string.IsNullOrWhiteSpace(feed.InstrumentRoot))
+                        continue;
+
+                    string normalizedRoot = NormalizeInstrumentRoot(feed.InstrumentRoot);
+                    if (string.IsNullOrWhiteSpace(normalizedRoot))
+                        continue;
+
+                    InstrumentFeedState state;
+                    if (!StateByInstrument.TryGetValue(normalizedRoot, out state) || state == null)
+                    {
+                        state = new InstrumentFeedState(normalizedRoot);
+                        StateByInstrument[normalizedRoot] = state;
+                    }
+
+                    if (feed.LastUpdatedUtc != DateTime.MinValue && feed.LastUpdatedUtc >= state.LastUpdatedUtc)
+                        state.LastUpdatedUtc = feed.LastUpdatedUtc;
+
+                    if (HasPositiveValue(feed.CurrentPrice))
+                        state.CurrentPrice = feed.CurrentPrice;
+                    if (!string.IsNullOrWhiteSpace(feed.SessionName))
+                        state.SessionName = feed.SessionName;
+                    if (feed.SessionHigh.HasValue)
+                        state.SessionHigh = feed.SessionHigh;
+                    if (feed.SessionLow.HasValue)
+                        state.SessionLow = feed.SessionLow;
+                    if (feed.PreviousSessionHigh.HasValue)
+                        state.PreviousSessionHigh = feed.PreviousSessionHigh;
+                    if (feed.PreviousSessionLow.HasValue)
+                        state.PreviousSessionLow = feed.PreviousSessionLow;
+
+                    if (feed.Readings == null)
+                        continue;
+
+                    for (int r = 0; r < feed.Readings.Count; r++)
+                    {
+                        GlitchIndicatorReading reading = feed.Readings[r];
+                        if (reading == null || reading.Minutes <= 0)
+                            continue;
+                        if (!TryNormalizeIncomingReading(reading, out GlitchIndicatorReading normalized))
+                            continue;
+
+                        GlitchIndicatorReading existing;
+                        if (!state.TimeframeReadings.TryGetValue(normalized.Minutes, out existing) ||
+                            existing == null ||
+                            normalized.UtcTime >= existing.UtcTime)
+                        {
+                            state.TimeframeReadings[normalized.Minutes] = normalized;
+                        }
+                    }
+                }
+            }
+        }
+
+        private static void MaybePersistToDisk()
+        {
+            DateTime nowUtc = DateTime.UtcNow;
+            lock (SyncRoot)
+            {
+                if (_lastPersistUtc != DateTime.MinValue && (nowUtc - _lastPersistUtc) < PersistThrottle)
+                    return;
+
+                _lastPersistUtc = nowUtc;
+            }
+
+            try
+            {
+                List<GlitchAnalyticsBridgeCacheStore.PersistedInstrumentFeed> feeds;
+                lock (SyncRoot)
+                    feeds = ExportPersistedFeedsUnsafe();
+
+                GlitchAnalyticsBridgeCacheStore.Save(feeds);
+            }
+            catch
+            {
+            }
+        }
+
+        private static List<GlitchAnalyticsBridgeCacheStore.PersistedInstrumentFeed> ExportPersistedFeedsUnsafe()
+        {
+            var feeds = new List<GlitchAnalyticsBridgeCacheStore.PersistedInstrumentFeed>();
+            foreach (KeyValuePair<string, InstrumentFeedState> entry in StateByInstrument)
+            {
+                InstrumentFeedState state = entry.Value;
+                if (state == null || state.TimeframeReadings == null || state.TimeframeReadings.Count == 0)
+                    continue;
+
+                var readings = new List<GlitchIndicatorReading>();
+                foreach (GlitchIndicatorReading reading in state.TimeframeReadings.Values)
+                {
+                    if (reading != null)
+                        readings.Add(reading.Clone());
+                }
+
+                if (readings.Count == 0)
+                    continue;
+
+                feeds.Add(new GlitchAnalyticsBridgeCacheStore.PersistedInstrumentFeed
+                {
+                    InstrumentRoot = state.InstrumentRoot,
+                    LastUpdatedUtc = state.LastUpdatedUtc,
+                    CurrentPrice = state.CurrentPrice,
+                    SessionName = state.SessionName,
+                    SessionHigh = state.SessionHigh,
+                    SessionLow = state.SessionLow,
+                    PreviousSessionHigh = state.PreviousSessionHigh,
+                    PreviousSessionLow = state.PreviousSessionLow,
+                    Readings = readings
+                });
+            }
+
+            return feeds;
+        }
+
+        public static void FlushPersistence()
+        {
+            EnsurePersistenceLoaded();
+            lock (SyncRoot)
+                _lastPersistUtc = DateTime.MinValue;
+
+            MaybePersistToDisk();
         }
 
         public static void RegisterBridge(string instrumentRoot, bool publishToGlitchUi)
@@ -257,19 +443,16 @@ namespace Glitch.UI
 
         public static IReadOnlyList<string> GetBridgeInstrumentRoots(DateTime nowUtc, TimeSpan maxAge)
         {
-            lock (SyncRoot)
-            {
-                PruneBridgeState(nowUtc, maxAge);
-            }
-
+            EnsurePersistenceLoaded();
             ImportLegacyBusStateIfNeeded(nowUtc);
 
             lock (SyncRoot)
             {
-                PruneBridgeState(nowUtc, maxAge);
-
                 return BridgeStateByInstrument
-                    .Where(kvp => kvp.Value != null && kvp.Value.ActiveInstanceCount > 0)
+                    .Where(kvp =>
+                        kvp.Value != null &&
+                        kvp.Value.ActiveInstanceCount > 0 &&
+                        (maxAge <= TimeSpan.Zero || IsWithinAge(kvp.Value.LastHeartbeatUtc, nowUtc, maxAge)))
                     .Select(kvp => kvp.Key)
                     .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
                     .ToList();
@@ -288,28 +471,34 @@ namespace Glitch.UI
             if (string.IsNullOrWhiteSpace(normalizedRoot))
                 return false;
 
+            EnsurePersistenceLoaded();
             ImportLegacyBusStateIfNeeded(nowUtc);
 
             lock (SyncRoot)
             {
-                PruneBridgeState(nowUtc, maxAge);
-                return TryCreateBridgeStatusUnsafe(normalizedRoot, out status);
+                if (!TryCreateBridgeStatusUnsafe(normalizedRoot, out status) || status == null)
+                    return false;
+
+                if (maxAge > TimeSpan.Zero && !IsWithinAge(status.LastHeartbeatUtc, nowUtc, maxAge))
+                {
+                    status = null;
+                    return false;
+                }
+
+                return true;
             }
         }
 
         public static IReadOnlyList<string> GetActiveInstrumentRoots(DateTime nowUtc, TimeSpan maxAge)
         {
-            lock (SyncRoot)
-            {
-                PruneStale(nowUtc, maxAge);
-            }
-
+            EnsurePersistenceLoaded();
             ImportLegacyBusStateIfNeeded(nowUtc);
 
             lock (SyncRoot)
             {
-                PruneStale(nowUtc, maxAge);
-                return StateByInstrument.Keys
+                return StateByInstrument
+                    .Where(kvp => kvp.Value != null && (maxAge <= TimeSpan.Zero || IsWithinAge(kvp.Value.LastUpdatedUtc, nowUtc, maxAge)))
+                    .Select(kvp => kvp.Key)
                     .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
                     .ToList();
             }
@@ -317,8 +506,6 @@ namespace Glitch.UI
 
         internal static bool TryGetSnapshot(
             string instrumentRoot,
-            DateTime nowUtc,
-            TimeSpan maxAge,
             out GlitchIndicatorInstrumentSnapshot snapshot)
         {
             snapshot = null;
@@ -327,13 +514,37 @@ namespace Glitch.UI
             if (string.IsNullOrWhiteSpace(normalizedRoot))
                 return false;
 
-            ImportLegacyBusStateIfNeeded(nowUtc);
+            EnsurePersistenceLoaded();
+            ImportLegacyBusStateIfNeeded(DateTime.UtcNow);
 
             lock (SyncRoot)
-            {
-                PruneStale(nowUtc, maxAge);
                 return TryCreateSnapshotUnsafe(normalizedRoot, out snapshot);
+        }
+
+        internal static bool IsSnapshotFresh(GlitchIndicatorInstrumentSnapshot snapshot, DateTime nowUtc, TimeSpan maxAge)
+        {
+            if (snapshot == null || maxAge <= TimeSpan.Zero)
+                return false;
+
+            return IsWithinAge(snapshot.UpdatedUtc, nowUtc, maxAge);
+        }
+
+        internal static bool TryGetSnapshot(
+            string instrumentRoot,
+            DateTime nowUtc,
+            TimeSpan maxAge,
+            out GlitchIndicatorInstrumentSnapshot snapshot)
+        {
+            if (!TryGetSnapshot(instrumentRoot, out snapshot) || snapshot == null)
+                return false;
+
+            if (maxAge > TimeSpan.Zero && !IsSnapshotFresh(snapshot, nowUtc, maxAge))
+            {
+                snapshot = null;
+                return false;
             }
+
+            return true;
         }
 
         private static bool TryCreateBridgeStatusUnsafe(string normalizedRoot, out GlitchBridgeStatus status)
@@ -416,6 +627,22 @@ namespace Glitch.UI
                 TimeframeReadings = readings
             };
             return true;
+        }
+
+        private static void RunMaintenancePrune(DateTime nowUtc)
+        {
+            PruneStale(nowUtc, MaintenanceRetentionAge);
+            PruneBridgeState(nowUtc, MaintenanceRetentionAge);
+        }
+
+        private static bool IsWithinAge(DateTime timestampUtc, DateTime nowUtc, TimeSpan maxAge)
+        {
+            if (timestampUtc == DateTime.MinValue)
+                return false;
+            if (maxAge <= TimeSpan.Zero)
+                return true;
+
+            return (nowUtc - timestampUtc) <= maxAge;
         }
 
         private static void PruneStale(DateTime nowUtc, TimeSpan maxAge)

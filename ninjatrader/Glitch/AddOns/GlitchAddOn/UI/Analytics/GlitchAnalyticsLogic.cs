@@ -50,6 +50,9 @@ namespace Glitch.UI
             foreach (string instrument in GlitchAnalyticsFeedBus.GetBridgeInstrumentRoots(nowUtc, MaxBridgePresenceAge))
                 options.Add(instrument);
 
+            foreach (string instrument in GlitchAnalyticsFeedBus.GetKnownInstrumentRoots())
+                options.Add(instrument);
+
             string normalizedSelected = NormalizeInstrumentRoot(selectedInstrument);
             if (!string.IsNullOrWhiteSpace(normalizedSelected))
                 options.Add(normalizedSelected);
@@ -67,16 +70,8 @@ namespace Glitch.UI
                 return BuildEmptySnapshot(null, sessionWindow, nowUtc);
 
             GlitchIndicatorInstrumentSnapshot sourceSnapshot;
-            if (!GlitchAnalyticsFeedBus.TryGetSnapshot(normalizedInstrument, nowUtc, MaxFeedAge, out sourceSnapshot) ||
-                sourceSnapshot == null)
+            if (!GlitchAnalyticsFeedBus.TryGetSnapshot(normalizedInstrument, out sourceSnapshot) || sourceSnapshot == null)
             {
-                GlitchIndicatorInstrumentSnapshot staleSnapshot;
-                if (GlitchAnalyticsFeedBus.TryGetSnapshot(normalizedInstrument, nowUtc, SnapshotRetentionAge, out staleSnapshot) &&
-                    staleSnapshot != null)
-                {
-                    return BuildStaleSnapshot(normalizedInstrument, sessionWindow, nowUtc, staleSnapshot.UpdatedUtc);
-                }
-
                 GlitchBridgeStatus bridgeStatus;
                 if (GlitchAnalyticsFeedBus.TryGetBridgeStatus(
                     normalizedInstrument,
@@ -89,7 +84,7 @@ namespace Glitch.UI
                     if (requestedBootstrap &&
                         GlitchAnalyticsFeedBus.TryGetSnapshot(normalizedInstrument, nowUtc, MaxFeedAge, out sourceSnapshot) &&
                         sourceSnapshot != null)
-                        return BuildSnapshot(normalizedInstrument, accounts, nowUtc);
+                        return BuildSnapshotFromSource(normalizedInstrument, sessionWindow, nowUtc, sourceSnapshot);
 
                     string bridgeStatusText = BuildBridgeStatusText(bridgeStatus);
                     if (!requestedBootstrap)
@@ -100,6 +95,39 @@ namespace Glitch.UI
                 return BuildEmptySnapshot(normalizedInstrument, sessionWindow, nowUtc);
             }
 
+            bool isLiveFeed = GlitchAnalyticsFeedBus.IsSnapshotFresh(sourceSnapshot, nowUtc, MaxFeedAge);
+            if (!isLiveFeed && !GlitchAnalyticsFeedBus.IsSnapshotFresh(sourceSnapshot, nowUtc, SnapshotRetentionAge))
+                return BuildEmptySnapshot(normalizedInstrument, sessionWindow, nowUtc);
+
+            GlitchAnalyticsSnapshot built = BuildSnapshotFromSource(
+                normalizedInstrument,
+                sessionWindow,
+                nowUtc,
+                sourceSnapshot);
+            if (!isLiveFeed)
+            {
+                string ageText = FormatAge(nowUtc, sourceSnapshot.UpdatedUtc);
+                built.CompositeSignal = "Retained · " + built.CompositeSignal;
+                foreach (GlitchTimeframeReading reading in built.TimeframeReadings ?? new List<GlitchTimeframeReading>())
+                {
+                    if (reading == null || string.Equals(reading.SignalLabel, "Awaiting feed", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    reading.TrendHint = string.IsNullOrWhiteSpace(reading.TrendHint)
+                        ? "Last chart feed " + ageText
+                        : reading.TrendHint + " | Last chart feed " + ageText;
+                }
+            }
+
+            return built;
+        }
+
+        private GlitchAnalyticsSnapshot BuildSnapshotFromSource(
+            string normalizedInstrument,
+            SessionWindow sessionWindow,
+            DateTime nowUtc,
+            GlitchIndicatorInstrumentSnapshot sourceSnapshot)
+        {
             var timeframeReadings = new List<GlitchTimeframeReading>(DefaultTimeframes.Length);
             var activeReadings = new List<GlitchTimeframeReading>(DefaultTimeframes.Length);
             foreach (int timeframe in DefaultTimeframes)

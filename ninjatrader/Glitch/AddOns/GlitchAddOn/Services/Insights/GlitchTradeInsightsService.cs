@@ -504,6 +504,8 @@ namespace Glitch.Services
                 return "Manual Entry";
             if (signal.StartsWith("GLT-SYNC", StringComparison.OrdinalIgnoreCase))
                 return "Replication Sync";
+            if (signal.StartsWith("GLT-CATCHUP", StringComparison.OrdinalIgnoreCase))
+                return "Replication Catch-up";
             if (signal.StartsWith("GLT-PROT-", StringComparison.OrdinalIgnoreCase))
                 return "Protective Follow-up";
             return signal;
@@ -593,6 +595,8 @@ namespace Glitch.Services
                 return "SL";
             if (signal.StartsWith("GLT-SYNC", StringComparison.OrdinalIgnoreCase))
                 return "SYNC";
+            if (signal.StartsWith("GLT-CATCHUP", StringComparison.OrdinalIgnoreCase))
+                return "CATCHUP";
             if (signal.StartsWith("ENTRY", StringComparison.OrdinalIgnoreCase))
                 return "ENTRY";
             if (signal.StartsWith("EXIT", StringComparison.OrdinalIgnoreCase) ||
@@ -703,6 +707,8 @@ namespace Glitch.Services
 
                 return "Replication Sync";
             }
+            if (signal.StartsWith("GLT-CATCHUP", StringComparison.OrdinalIgnoreCase))
+                return "Replication Catch-up";
             if (signal.StartsWith("EXIT", StringComparison.OrdinalIgnoreCase) ||
                 signal.StartsWith("CLOSE", StringComparison.OrdinalIgnoreCase))
             {

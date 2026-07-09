@@ -65,15 +65,13 @@ Both sides normalize instrument identity before storing or requesting feed state
 
 ## Freshness and pruning
 
-Glitch treats analytics as live operational state, not as permanent history.
+Glitch treats analytics as live operational state with a retained last-known layer.
 
-Stale feed entries are pruned so the UI can distinguish:
+- **Live feed** — readings newer than ~2 minutes from an active chart bridge.
+- **Retained feed** — last-known readings kept in memory and `GlitchData/AnalyticsBridgeCache.json` for up to 7 days.
+- Stale entries are pruned on a maintenance cadence, not on every UI read (reads no longer delete retained data).
 
-- fresh live context
-- last-known context
-- no active feed
-
-That freshness model helps the operator trust what is on screen instead of unknowingly acting on expired chart state.
+On AddOn startup, persisted bridge cache is loaded and registered chart bridges are asked to publish immediately so analytics can populate even when Glitch opens after the indicator is already on a chart.
 
 ## Shell bridge versus analytics bridge
 

@@ -16,15 +16,12 @@ Windows VPS / Local Windows Host
           ├─ GlitchAiJournalBridge               NEW
           └─ existing compliance / replication / ledger services
 
-Docker / Linux VPS / WSL2
-  └─ Hermes Runtime
-      ├─ ingestion routine
-      ├─ trade suggestion routine
-      ├─ signal ranking routine
-      ├─ trade archetype routine
-      ├─ portfolio/risk routine
-      ├─ daily learning routine
-      └─ Postgres / journal store
+Hermes Runtime
+  └─ native cron first
+      ├─ snapshot_sanity script job, no LLM
+      ├─ suggest_trade LLM job every 5 minutes
+      ├─ daily_learning post-session job
+      └─ versioned policy / lesson store
 ```
 
 ## NT-Side Services to Add
@@ -124,42 +121,33 @@ snapshot hash
 
 This is what Hermes learns from.
 
-## Hermes-Side Services
+## Hermes-Side Runtime
 
-### Ingestion Routine
+### snapshot_sanity
 
-Pulls `/snapshot` and stores structured state.
+Script-only Hermes cron. Checks freshness, schema validity, and stuck handoffs without calling the LLM.
 
-### Trade Suggestion Routine
+### suggest_trade
 
-Outputs one of:
+LLM-driven Hermes cron every 5 minutes. Outputs one of:
 
 ```text
-HOLD
 ENTER_LONG
 ENTER_SHORT
+HOLD
 EXIT
-ADJUST_STOP
-PARTIAL_EXIT
+NOTHING
 ```
 
-Only M0/M1 subset is enabled initially.
+Every entry requires SL + TP1. Glitch rejects anything stale, malformed, over-risk, or outside policy.
 
-### Signal Ranking Routine
+### daily_learning
 
-Learns which indicator combinations correlate with edge.
+Post-session routine. Produces candidate lessons from Glitch-journaled outcomes; it does not silently mutate active policy.
 
-### Trade Archetype Routine
+## Deferred Runtime
 
-Ranks types of trades based on outcomes.
-
-### Risk/Portfolio Routine
-
-Evaluates drawdown, exposure, buffer, churn, and recent degradation.
-
-### Daily Learning Routine
-
-Runs deeper analysis after the trading day.
+Do not start with Docker services, a custom scheduler, or an always-on Hermes daemon. Add a small deterministic bridge daemon only after cron proves insufficient for a measured need.
 
 ## Deployment Layouts
 
@@ -168,19 +156,22 @@ Runs deeper analysis after the trading day.
 ```text
 Single Windows machine:
   NT8 + Glitch
-  Docker Desktop / WSL2 + Hermes + Postgres
+  Hermes native cron jobs
 ```
 
-### Preferred Production
+### Later, only if needed
 
 ```text
 Windows VPS:
   NT8 + Glitch
 
-Linux VPS:
-  Hermes + Postgres
+Optional deterministic bridge worker:
+  file/event watcher, retries, schema checks
 
-Network:
+Optional Hermes data store:
+  only if file-backed cron state is no longer enough
+
+Network, if split-host:
   Tailscale / WireGuard
 ```
 

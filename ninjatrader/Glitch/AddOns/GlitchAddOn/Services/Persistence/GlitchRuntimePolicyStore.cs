@@ -27,6 +27,7 @@ namespace Glitch.Services
         public bool EnforceEvalProfitTargetLock { get; set; } = false;
         public bool EnforceStrategyComplianceActions { get; set; } = false;
         public bool UseLegacyReplicationEngine { get; set; } = false;
+        public bool ReplicationUiEnabled { get; set; } = false;
         public ComplianceAccountTypeScope BufferFreezeScopes { get; set; } = new ComplianceAccountTypeScope();
         public double BufferFreezeThresholdRatio { get; set; } = 0.15;
         public ComplianceAccountTypeScope BufferOneContractScopes { get; set; } = new ComplianceAccountTypeScope();
@@ -198,6 +199,7 @@ namespace Glitch.Services
             settings.EnforceEvalProfitTargetLock = ReadBool(rows, "ENFORCE_EVAL_PROFIT_TARGET_LOCK", settings.EnforceEvalProfitTargetLock);
             settings.EnforceStrategyComplianceActions = ReadBool(rows, "ENFORCE_STRATEGY_COMPLIANCE_ACTIONS", settings.EnforceStrategyComplianceActions);
             settings.UseLegacyReplicationEngine = ReadBool(rows, "USE_LEGACY_REPLICATION_ENGINE", settings.UseLegacyReplicationEngine);
+            settings.ReplicationUiEnabled = ReadBool(rows, "REPLICATION_UI_ENABLED", settings.ReplicationUiEnabled);
             settings.FlattenOnCriticalBufferLock = ReadBool(rows, "FLATTEN_ON_CRITICAL_BUFFER_LOCK", settings.FlattenOnCriticalBufferLock);
             LoadComplianceFeatureScopes(settings, rows);
             settings.SyncLegacyComplianceFlags();
@@ -259,6 +261,7 @@ namespace Glitch.Services
                 $"ENFORCE_EVAL_PROFIT_TARGET_LOCK\t{ToBoolToken(settings.EnforceEvalProfitTargetLock)}",
                 $"ENFORCE_STRATEGY_COMPLIANCE_ACTIONS\t{ToBoolToken(settings.EnforceStrategyComplianceActions)}",
                 $"USE_LEGACY_REPLICATION_ENGINE\t{ToBoolToken(settings.UseLegacyReplicationEngine)}",
+                $"REPLICATION_UI_ENABLED\t{ToBoolToken(settings.ReplicationUiEnabled)}",
                 $"FLATTEN_ON_CRITICAL_BUFFER_LOCK\t{ToBoolToken(settings.FlattenOnCriticalBufferLock)}",
                 $"ENFORCE_BUFFER_FREEZE_15_SIM\t{ToBoolToken(settings.BufferFreezeScopes.Sim)}",
                 $"ENFORCE_BUFFER_FREEZE_15_EVAL\t{ToBoolToken(settings.BufferFreezeScopes.Eval)}",
@@ -437,16 +440,15 @@ namespace Glitch.Services
             if (rows == null)
                 rows = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-            bool legacyFreeze = settings.EnforceBufferFreeze15Percent;
-            settings.BufferFreezeScopes.Sim = ReadBool(rows, "ENFORCE_BUFFER_FREEZE_15_SIM", legacyFreeze);
-            settings.BufferFreezeScopes.Eval = ReadBool(rows, "ENFORCE_BUFFER_FREEZE_15_EVAL", legacyFreeze);
-            settings.BufferFreezeScopes.Ap = ReadBool(rows, "ENFORCE_BUFFER_FREEZE_15_AP", legacyFreeze);
+            // ponytail: scoped enforcement defaults OFF; legacy monolithic flags do not auto-enable scopes.
+            settings.BufferFreezeScopes.Sim = ReadBool(rows, "ENFORCE_BUFFER_FREEZE_15_SIM", false);
+            settings.BufferFreezeScopes.Eval = ReadBool(rows, "ENFORCE_BUFFER_FREEZE_15_EVAL", false);
+            settings.BufferFreezeScopes.Ap = ReadBool(rows, "ENFORCE_BUFFER_FREEZE_15_AP", false);
             settings.BufferFreezeThresholdRatio = ReadDouble(rows, "BUFFER_FREEZE_THRESHOLD", 0.15, 0.01, 0.99);
 
-            bool legacyOneContract = settings.EnforceBufferOneContract30Percent;
-            settings.BufferOneContractScopes.Sim = ReadBool(rows, "ENFORCE_BUFFER_ONE_CONTRACT_SIM", legacyOneContract);
-            settings.BufferOneContractScopes.Eval = ReadBool(rows, "ENFORCE_BUFFER_ONE_CONTRACT_EVAL", legacyOneContract);
-            settings.BufferOneContractScopes.Ap = ReadBool(rows, "ENFORCE_BUFFER_ONE_CONTRACT_AP", legacyOneContract);
+            settings.BufferOneContractScopes.Sim = ReadBool(rows, "ENFORCE_BUFFER_ONE_CONTRACT_SIM", false);
+            settings.BufferOneContractScopes.Eval = ReadBool(rows, "ENFORCE_BUFFER_ONE_CONTRACT_EVAL", false);
+            settings.BufferOneContractScopes.Ap = ReadBool(rows, "ENFORCE_BUFFER_ONE_CONTRACT_AP", false);
             settings.BufferOneContractOnThresholdRatio = ReadDouble(rows, "BUFFER_ONE_CONTRACT_ON_THRESHOLD", 0.20, 0.01, 0.99);
             settings.BufferOneContractOffThresholdRatio = ReadDouble(
                 rows,
@@ -455,10 +457,9 @@ namespace Glitch.Services
                 settings.BufferOneContractOnThresholdRatio,
                 0.99);
 
-            bool legacyUnrealized = settings.EnforceUnrealizedFlatten70Percent;
-            settings.UnrealizedFlattenScopes.Sim = ReadBool(rows, "ENFORCE_UNREALIZED_FLATTEN_SIM", legacyUnrealized);
-            settings.UnrealizedFlattenScopes.Eval = ReadBool(rows, "ENFORCE_UNREALIZED_FLATTEN_EVAL", legacyUnrealized);
-            settings.UnrealizedFlattenScopes.Ap = ReadBool(rows, "ENFORCE_UNREALIZED_FLATTEN_AP", legacyUnrealized);
+            settings.UnrealizedFlattenScopes.Sim = ReadBool(rows, "ENFORCE_UNREALIZED_FLATTEN_SIM", false);
+            settings.UnrealizedFlattenScopes.Eval = ReadBool(rows, "ENFORCE_UNREALIZED_FLATTEN_EVAL", false);
+            settings.UnrealizedFlattenScopes.Ap = ReadBool(rows, "ENFORCE_UNREALIZED_FLATTEN_AP", false);
             settings.UnrealizedFlattenThresholdRatio = ReadDouble(rows, "UNREALIZED_FLATTEN_THRESHOLD", 0.80, 0.01, 0.99);
 
             if (rows.ContainsKey("ENFORCE_EVAL_PROFIT_TARGET_LOCK_EVAL"))

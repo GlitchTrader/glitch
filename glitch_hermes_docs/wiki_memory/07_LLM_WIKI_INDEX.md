@@ -16,3 +16,10 @@ Primary invariant:
 Hermes may become smarter.
 Glitch must remain harder to break.
 ```
+
+Contract docs to read after memory load:
+
+```text
+docs/09_intent_contract_v2_brackets.md
+docs/10_hermes_operator_contract.md
+```

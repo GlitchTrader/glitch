@@ -16,7 +16,7 @@ The goal is to give Hermes a narrow decision contract over Glitch’s existing a
 
 ## Current Glitch Assets
 
-The uploaded codebase already contains the major NT-side pieces.
+The current repo already contains the major NinjaTrader-side substrate.
 
 ### Analytics
 
@@ -70,6 +70,7 @@ The AddOn stores and normalizes these through:
 ```text
 GlitchAddOn/UI/Analytics/GlitchAnalyticsFeedBus.cs
 GlitchAddOn/UI/Analytics/GlitchAnalyticsLogic.cs
+GlitchAddOn/Services/Persistence/GlitchAnalyticsBridgeCacheStore.cs
 ```
 
 ### Compliance and Risk
@@ -90,13 +91,14 @@ The codebase already has concepts for prop-firm inference, account status, liqui
 Relevant files:
 
 ```text
+GlitchAddOn/Services/Trading/GlitchCopyEngine.cs
 GlitchAddOn/Services/Trading/GlitchReplicationEngine.cs
 GlitchAddOn/UI/MainWindow/GlitchMainWindow.Replication.partial.cs
 GlitchAddOn/UI/MainWindow/GlitchMainWindow.cs
 GlitchAddOn/Services/GlitchShellBridge.cs
 ```
 
-The codebase already uses NT account/order primitives and has replication, flattening, and shell bridge surfaces.
+The codebase already uses NT account/order primitives and now has event-driven copy-engine wiring, flattening, and shell bridge surfaces.
 
 ### Journal and Learning Data
 
@@ -117,12 +119,11 @@ The missing layer is not another strategy.
 The missing layer is:
 
 ```text
-External telemetry server
-+ TradeIntent API
-+ AI-specific risk firewall wrapper
-+ AI-specific execution service
-+ journal feedback API
-+ Hermes multi-routine scheduler
+read-only snapshot export
++ strict TradeIntent intake
++ deterministic AI risk firewall
++ journal/result feedback export
++ Hermes 5-minute suggest_trade cron
 ```
 
 ## Correct Mental Model

@@ -194,7 +194,7 @@ analytics.unified.quality	Quality
 analytics.unified.setup	Setup
 analytics.window.secondary_title	Nasdaq Macro
 header.banner.news_event_in_progress_prefix	News Event in Progress:
-header.metric.daily_pnl	Daily PnL
+header.metric.fleet_upnl	Daily PnL
 header.metric.eval_pnl	Eval PnL
 header.metric.eval_risk	Eval Risk
 header.metric.global_risk	Global Risk

@@ -63,8 +63,7 @@ namespace Glitch.UI
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Top
             };
-            _headerMetricBoxesPanel.Children.Add(CreateHeaderMetricDataBox(_headerRootGrid, "header.metric.daily_pnl", "Daily PnL", out _totalPnlValueText, new Thickness(0)));
-            WireHeaderPnlScopeSelector();
+            _headerMetricBoxesPanel.Children.Add(CreateHeaderMetricDataBox(_headerRootGrid, "header.metric.fleet_upnl", "Daily PnL", out _totalPnlValueText, new Thickness(0)));
             _headerMetricBoxesPanel.Children.Add(CreateHeaderMetricDataBox(_headerRootGrid, "header.metric.global_risk", "Global Risk", out _globalHeadroomValueText, new Thickness(0)));
             _headerMetricBoxesPanel.Children.Add(CreateHeaderMetricDataBox(_headerRootGrid, "header.metric.pa_pnl", "PA PnL", out _paPnlValueText, new Thickness(0)));
             _headerMetricBoxesPanel.Children.Add(CreateHeaderMetricDataBox(_headerRootGrid, "header.metric.pa_risk", "PA Risk", out _paHeadroomValueText, new Thickness(0)));
@@ -136,47 +135,12 @@ namespace Glitch.UI
             };
             _headerNewsLockoutBanner.Child = _headerNewsLockoutText;
 
-            _headerReplicationDriftBanner = new Border
-            {
-                BorderBrush = OrangeAccentBrush,
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(10, 6, 10, 6),
-                Margin = new Thickness(0, 8, 0, 0),
-                Visibility = Visibility.Collapsed,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Top
-            };
-            ApplySkinResource(_headerReplicationDriftBanner, Border.BackgroundProperty, "BackgroundMainWindow", "GridEntireBackground", "BackgroundTextInput");
-
-            _headerReplicationDriftText = new TextBlock
-            {
-                TextWrapping = TextWrapping.Wrap,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            ApplySkinResource(_headerReplicationDriftText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
-
-            _headerReplicationDriftSyncButton = new Button
-            {
-                Content = L("header.button.sync_now", "Sync now"),
-                MinWidth = 88,
-                Margin = new Thickness(12, 0, 0, 0),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            _headerReplicationDriftSyncButton.Click += OnReplicationDriftSyncButtonClick;
-
-            var driftPanel = new StackPanel { Orientation = Orientation.Horizontal };
-            driftPanel.Children.Add(_headerReplicationDriftText);
-            driftPanel.Children.Add(_headerReplicationDriftSyncButton);
-            _headerReplicationDriftBanner.Child = driftPanel;
-
             _headerAlertsStack = new StackPanel
             {
                 Orientation = Orientation.Vertical,
                 Margin = new Thickness(0, 8, 0, 0)
             };
             _headerAlertsStack.Children.Add(_headerNewsLockoutBanner);
-            _headerAlertsStack.Children.Add(_headerReplicationDriftBanner);
             _headerRootGrid.Children.Add(_headerAlertsStack);
 
             _headerRootGrid.Loaded += (sender, args) =>
@@ -398,55 +362,6 @@ namespace Glitch.UI
         
                     return dataBox;
                 }
-
-        private void WireHeaderPnlScopeSelector()
-        {
-            if (!(_totalPnlValueText?.Parent is StackPanel stack) || stack.Children.Count == 0)
-                return;
-
-            _headerPnlTitleText = stack.Children[0] as TextBlock;
-            _headerPnlScopeComboBox = new ComboBox
-            {
-                Margin = new Thickness(0, 0, 0, 3),
-                FontSize = 10,
-                MinWidth = 84
-            };
-            _headerPnlScopeComboBox.Items.Add(L("header.pnl_scope.master", "Master"));
-            _headerPnlScopeComboBox.Items.Add(L("header.pnl_scope.group", "Group"));
-            _headerPnlScopeComboBox.Items.Add(L("header.pnl_scope.fleet", "Fleet"));
-            _headerPnlScopeComboBox.SelectedIndex = (int)_headerPnlScope;
-            _headerPnlScopeComboBox.SelectionChanged += OnHeaderPnlScopeSelectionChanged;
-            stack.Children.Insert(1, _headerPnlScopeComboBox);
-            UpdateHeaderPnlScopeTitle();
-        }
-
-        private void OnHeaderPnlScopeSelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (_headerPnlScopeComboBox == null || _headerPnlScopeComboBox.SelectedIndex < 0)
-                return;
-
-            _headerPnlScope = (HeaderPnlScope)_headerPnlScopeComboBox.SelectedIndex;
-            UpdateHeaderPnlScopeTitle();
-        }
-
-        private void UpdateHeaderPnlScopeTitle()
-        {
-            if (_headerPnlTitleText == null)
-                return;
-
-            switch (_headerPnlScope)
-            {
-                case HeaderPnlScope.Group:
-                    _headerPnlTitleText.Text = L("header.metric.group_pnl", "Group PnL (realized+unrealized)");
-                    break;
-                case HeaderPnlScope.Fleet:
-                    _headerPnlTitleText.Text = L("header.metric.fleet_pnl", "Fleet PnL (realized+unrealized)");
-                    break;
-                default:
-                    _headerPnlTitleText.Text = L("header.metric.master_pnl", "Master PnL (realized+unrealized)");
-                    break;
-            }
-        }
 
     }
 }

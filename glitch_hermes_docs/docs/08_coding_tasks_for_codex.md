@@ -146,26 +146,17 @@ max trades/day
 
 ## Task H — Hermes Skeleton
 
-Create Dockerized Hermes service:
-
-```text
-docker-compose.yml
-services:
-  hermes-db
-  hermes-worker
-  hermes-api
-```
+Create the smallest Hermes runtime first: native cron jobs plus local files/config.
 
 Jobs:
 
 ```text
-ingest_snapshot
-suggest_trade
-rank_signals
-rank_archetypes
-evaluate_risk
-daily_learning
+snapshot_sanity   script-only/no-agent health check
+suggest_trade     5-minute LLM cron; one strict JSON intent or NOTHING
+daily_learning    post-session candidate lessons
 ```
+
+Do not create Docker services, a custom scheduler, or an always-on daemon unless cron fails a measured requirement.
 
 ## Task I — Tests / Smoke
 

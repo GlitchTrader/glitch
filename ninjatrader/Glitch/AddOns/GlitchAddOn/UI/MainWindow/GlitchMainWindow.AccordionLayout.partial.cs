@@ -18,12 +18,15 @@ namespace Glitch.UI
         private const double AccordionHeaderPaddingX = 8;
         private const double AccordionContentPaddingTop = 8;
         private const double AccordionContentPaddingBottom = 12;
+        private const double AccordionPageScrollGutterWidth = 8;
 
         private ScrollViewer _dashboardPageScroll;
         private Expander _dashboardReplicationExpander;
         private Expander _dashboardConnectedAccountsExpander;
 
         private ScrollViewer _journalAccordionScroll;
+        private ScrollViewer _analyticsPageScroll;
+        private ScrollViewer _settingsPageScroll;
         private Expander _journalPerformanceExpander;
         private Expander _journalCriticalWarningsExpander;
         private Expander _journalLiveFeedExpander;
@@ -32,7 +35,11 @@ namespace Glitch.UI
 
         private static Grid WrapTabBodyForScroll(UIElement body)
         {
-            var host = new Grid();
+            var host = new Grid
+            {
+                VerticalAlignment = VerticalAlignment.Stretch,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
             host.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             if (body is FrameworkElement element)
             {
@@ -43,6 +50,65 @@ namespace Glitch.UI
             Grid.SetRow(body, 0);
             host.Children.Add(body);
             return host;
+        }
+
+        /// <summary>
+        /// NT/WPF tab hosts often give tab bodies unbounded height; cap the page scroll viewport
+        /// from the tab root's effective height minus any pinned chrome (Journal star-row pattern).
+        /// </summary>
+        private static void SyncTabPageScrollViewport(FrameworkElement root, ScrollViewer pageScroll, params UIElement[] pinnedRows)
+        {
+            if (root == null || pageScroll == null)
+                return;
+
+            double available = root.ActualHeight;
+            if (available <= 0 || double.IsNaN(available))
+                return;
+
+            Thickness rootMargin = root.Margin;
+            available -= rootMargin.Top + rootMargin.Bottom;
+
+            if (pinnedRows != null)
+            {
+                foreach (UIElement pinned in pinnedRows)
+                {
+                    if (!(pinned is FrameworkElement pinnedElement))
+                        continue;
+
+                    double pinnedHeight = pinnedElement.ActualHeight;
+                    if (pinnedHeight <= 0 || double.IsNaN(pinnedHeight))
+                        continue;
+
+                    Thickness pinnedMargin = pinnedElement.Margin;
+                    available -= pinnedHeight + pinnedMargin.Top + pinnedMargin.Bottom;
+                }
+            }
+
+            available -= 4;
+            if (available < 120)
+                available = 120;
+
+            pageScroll.MaxHeight = available;
+            pageScroll.VerticalAlignment = VerticalAlignment.Top;
+            ApplyAccordionPageScrollGutter(pageScroll);
+        }
+
+        private static void ApplyAccordionPageScrollGutter(ScrollViewer scroll)
+        {
+            if (scroll == null)
+                return;
+
+            bool scrollbarVisible = scroll.ComputedVerticalScrollBarVisibility == Visibility.Visible;
+            double rightPadding = scrollbarVisible ? AccordionPageScrollGutterWidth : 0;
+            Thickness nextPadding = new Thickness(0, 0, rightPadding, 0);
+            if (scroll.Padding != nextPadding)
+                scroll.Padding = nextPadding;
+        }
+
+        private static void OnAccordionPageScrollLayoutChanged(object sender, RoutedEventArgs e)
+        {
+            if (sender is ScrollViewer scroll)
+                ApplyAccordionPageScrollGutter(scroll);
         }
 
         private Expander CreateAccordionExpander(FrameworkElement context, string localizationKey, string fallback)
@@ -195,6 +261,9 @@ namespace Glitch.UI
             };
             pageScroll.Content = accordionStack;
             pageScroll.PreviewMouseWheel += OnAccordionPageScrollPreviewMouseWheel;
+            pageScroll.Loaded += OnAccordionPageScrollLayoutChanged;
+            pageScroll.SizeChanged += OnAccordionPageScrollLayoutChanged;
+            pageScroll.ScrollChanged += OnAccordionPageScrollLayoutChanged;
             return pageScroll;
         }
 
@@ -262,14 +331,40 @@ namespace Glitch.UI
         private void ClearAccordionLayoutRefs()
         {
             if (_dashboardPageScroll != null)
+            {
                 _dashboardPageScroll.PreviewMouseWheel -= OnAccordionPageScrollPreviewMouseWheel;
+                _dashboardPageScroll.Loaded -= OnAccordionPageScrollLayoutChanged;
+                _dashboardPageScroll.SizeChanged -= OnAccordionPageScrollLayoutChanged;
+                _dashboardPageScroll.ScrollChanged -= OnAccordionPageScrollLayoutChanged;
+            }
             if (_journalAccordionScroll != null)
+            {
                 _journalAccordionScroll.PreviewMouseWheel -= OnAccordionPageScrollPreviewMouseWheel;
+                _journalAccordionScroll.Loaded -= OnAccordionPageScrollLayoutChanged;
+                _journalAccordionScroll.SizeChanged -= OnAccordionPageScrollLayoutChanged;
+                _journalAccordionScroll.ScrollChanged -= OnAccordionPageScrollLayoutChanged;
+            }
+            if (_analyticsPageScroll != null)
+            {
+                _analyticsPageScroll.PreviewMouseWheel -= OnAccordionPageScrollPreviewMouseWheel;
+                _analyticsPageScroll.Loaded -= OnAccordionPageScrollLayoutChanged;
+                _analyticsPageScroll.SizeChanged -= OnAccordionPageScrollLayoutChanged;
+                _analyticsPageScroll.ScrollChanged -= OnAccordionPageScrollLayoutChanged;
+            }
+            if (_settingsPageScroll != null)
+            {
+                _settingsPageScroll.PreviewMouseWheel -= OnAccordionPageScrollPreviewMouseWheel;
+                _settingsPageScroll.Loaded -= OnAccordionPageScrollLayoutChanged;
+                _settingsPageScroll.SizeChanged -= OnAccordionPageScrollLayoutChanged;
+                _settingsPageScroll.ScrollChanged -= OnAccordionPageScrollLayoutChanged;
+            }
 
             _dashboardPageScroll = null;
             _dashboardReplicationExpander = null;
             _dashboardConnectedAccountsExpander = null;
             _journalAccordionScroll = null;
+            _analyticsPageScroll = null;
+            _settingsPageScroll = null;
             _journalPerformanceExpander = null;
             _journalCriticalWarningsExpander = null;
             _journalLiveFeedExpander = null;

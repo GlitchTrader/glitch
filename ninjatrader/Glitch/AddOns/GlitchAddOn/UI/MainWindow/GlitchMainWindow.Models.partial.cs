@@ -55,36 +55,21 @@ namespace Glitch.UI
             public DateTime UpdatedUtc { get; set; }
         }
 
-        private sealed class ReplicationDriftNotice
-        {
-            public string FollowerAccount { get; set; }
-            public Account MasterAccount { get; set; }
-            public Account FollowerAccountRef { get; set; }
-            public string InstrumentRoot { get; set; }
-            public int ActualQty { get; set; }
-            public int ExpectedQty { get; set; }
-            public double Ratio { get; set; }
-        }
-
-        private enum HeaderPnlScope
-        {
-            Master = 0,
-            Group = 1,
-            Fleet = 2
-        }
-
         private sealed class AccountGroupDefinition
         {
             public string GroupId { get; set; }
             public string MasterAccount { get; set; }
             public double MasterSize { get; set; }
             public ObservableCollection<AccountGroupMemberRow> Members { get; set; }
+            public AccountGroupMemberRow MasterDisplayRow { get; set; }
+            public ObservableCollection<AccountGroupMemberRow> GridRows { get; set; }
         }
 
         private sealed class AccountGroupMemberRow : INotifyPropertyChanged
         {
             private bool _isSelected;
             private bool _isEnabled;
+            private bool _isMasterRow;
             private string _masterAccount;
             private double _masterSize;
             private string _masterSizeDisplay;
@@ -110,7 +95,31 @@ namespace Glitch.UI
             public bool IsEnabled
             {
                 get => _isEnabled;
-                set => SetField(ref _isEnabled, value, nameof(IsEnabled));
+                set
+                {
+                    if (_isMasterRow && !value)
+                        return;
+
+                    SetField(ref _isEnabled, value, nameof(IsEnabled));
+                }
+            }
+
+            public bool IsMasterRow
+            {
+                get => _isMasterRow;
+                set
+                {
+                    if (EqualityComparer<bool>.Default.Equals(_isMasterRow, value))
+                        return;
+
+                    _isMasterRow = value;
+                    if (value && !_isEnabled)
+                        _isEnabled = true;
+
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsMasterRow)));
+                    if (value)
+                        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsEnabled)));
+                }
             }
 
             public string MasterAccount

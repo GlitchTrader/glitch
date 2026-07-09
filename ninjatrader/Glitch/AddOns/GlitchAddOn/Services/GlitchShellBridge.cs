@@ -124,14 +124,7 @@ namespace Glitch.Services
 
         internal static bool FlattenAll()
         {
-            if (!TryGetMainWindow(out Glitch.UI.GlitchMainWindow window))
-                return false;
-
-            if (window.Dispatcher.CheckAccess())
-                window.FlattenAllFromExternalSurface();
-            else
-                window.Dispatcher.BeginInvoke(new Action(window.FlattenAllFromExternalSurface));
-
+            NinjaTrader.NinjaScript.AddOns.GlitchAddOn.RequestFlattenAll();
             return true;
         }
 

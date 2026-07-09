@@ -40,6 +40,8 @@ namespace NinjaTrader.NinjaScript.AddOns
         private const string ChartTraderWidgetTag = "GLITCH_CHART_TRADER_WIDGET";
         private static readonly SolidColorBrush ChartTraderTealBrush = new SolidColorBrush(Color.FromRgb(26, 188, 156));
         private static readonly SolidColorBrush ChartTraderOrangeBrush = new SolidColorBrush(Color.FromRgb(255, 66, 0));
+        private static readonly Brush ChartTraderAccentForegroundBrush = Brushes.White;
+        private static readonly Brush ChartTraderSkinForegroundFallbackBrush = Brushes.Black;
         private static readonly CultureInfo UsdCulture = CultureInfo.GetCultureInfo("en-US");
         private static readonly IEqualityComparer<Window> ChartWindowReferenceComparer = new ChartWindowComparer();
         private Dictionary<Window, ChartTraderWidgetHost> _chartTraderHosts;
@@ -280,14 +282,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 Style = CreateChartTraderFlattenButtonStyle(context)
             };
-            flattenAllButton.Click += (sender, args) =>
-            {
-                if (!GlitchShellBridge.FlattenAll())
-                {
-                    ShowMainWindowFromExternalSurface();
-                    GlitchShellBridge.FlattenAll();
-                }
-            };
+            flattenAllButton.Click += (sender, args) => GlitchAddOn.RequestFlattenAll();
             Grid.SetColumn(flattenAllButton, 1);
             buttonGrid.Children.Add(flattenAllButton);
 
@@ -618,7 +613,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                     return tableBrush;
             }
 
-            return Brushes.White;
+            return ChartTraderSkinForegroundFallbackBrush;
         }
 
         private static void ApplySkinResource(FrameworkElement element, DependencyProperty property, params string[] keys)
@@ -691,7 +686,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             runningTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, Translate("header.button.replicating", "Replicating")));
             runningTrigger.Setters.Add(new Setter(Control.BackgroundProperty, ChartTraderTealBrush));
             runningTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, ChartTraderTealBrush));
-            runningTrigger.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            runningTrigger.Setters.Add(new Setter(Control.ForegroundProperty, ChartTraderAccentForegroundBrush));
             style.Triggers.Add(runningTrigger);
 
             var hoverStopped = new MultiTrigger();
@@ -699,7 +694,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             hoverStopped.Conditions.Add(new System.Windows.Condition(FrameworkElement.TagProperty, "Stopped"));
             hoverStopped.Setters.Add(new Setter(Control.BackgroundProperty, ChartTraderTealBrush));
             hoverStopped.Setters.Add(new Setter(Control.BorderBrushProperty, ChartTraderTealBrush));
-            hoverStopped.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            hoverStopped.Setters.Add(new Setter(Control.ForegroundProperty, ChartTraderAccentForegroundBrush));
             hoverStopped.Setters.Add(new Setter(ContentControl.ContentProperty, Translate("header.button.start", "Start")));
             style.Triggers.Add(hoverStopped);
 
@@ -708,7 +703,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             hoverRunning.Conditions.Add(new System.Windows.Condition(FrameworkElement.TagProperty, "Running"));
             hoverRunning.Setters.Add(new Setter(Control.BackgroundProperty, ChartTraderOrangeBrush));
             hoverRunning.Setters.Add(new Setter(Control.BorderBrushProperty, ChartTraderOrangeBrush));
-            hoverRunning.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            hoverRunning.Setters.Add(new Setter(Control.ForegroundProperty, ChartTraderAccentForegroundBrush));
             hoverRunning.Setters.Add(new Setter(ContentControl.ContentProperty, Translate("header.button.stop", "Stop")));
             style.Triggers.Add(hoverRunning);
 
@@ -738,7 +733,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
             hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, ChartTraderOrangeBrush));
             hoverTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, ChartTraderOrangeBrush));
-            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, ChartTraderAccentForegroundBrush));
             style.Triggers.Add(hoverTrigger);
 
             return style;

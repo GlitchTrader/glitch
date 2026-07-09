@@ -441,7 +441,7 @@ namespace Glitch.UI
                         Style = CreateGroupActionButtonStyle(context),
                         Background = OrangeAccentBrush,
                         BorderBrush = OrangeAccentBrush,
-                        Foreground = Brushes.White
+                        Foreground = AccentOnColorForegroundBrush
                     };
                     RegisterLocalizationBinding(() => checkoutButton.Content = L("overlay.button.go_pro", "Go Pro"));
                     checkoutButton.Click += (_, __) => OpenAnalyticsExternalUrl(GetWhopUpgradeCheckoutUrl());

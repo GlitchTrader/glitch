@@ -1,5 +1,5 @@
 //
-// Honest Copy replication shim — event-driven copy engine, drift monitor, user sync only.
+// Replication — event-driven copy engine wiring and flatten helpers.
 //
 
 using System;
@@ -8,7 +8,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Windows;
 using Glitch.Services;
 using NinjaTrader.Cbi;
 
@@ -16,211 +15,6 @@ namespace Glitch.UI
 {
     public partial class GlitchMainWindow
     {
-        private enum DeltaSubmitResult
-        {
-            Failed = 0,
-            Rejected = 1,
-            Accepted = 2
-        }
-
-        private bool _legacyReplicationRemovalNotified;
-
-        private void ExecuteReplicationCycle(IReadOnlyList<Account> activeAccounts)
-        {
-            _ = activeAccounts;
-            if (!UseLegacyReplicationEngine() || _legacyReplicationRemovalNotified)
-                return;
-
-            _legacyReplicationRemovalNotified = true;
-            AppendJournal(
-                "System",
-                "Replication",
-                "legacy_engine_removed|setting=USE_LEGACY_REPLICATION_ENGINE|detail=Polling replication was deleted in Honest Copy Phase 4. Use event copy or git rollback.");
-            RaiseCriticalWarning(
-                "System",
-                "USE_LEGACY_REPLICATION_ENGINE is enabled but the polling replication engine was removed. Turn the flag off or roll back via git.",
-                "LegacyReplicationRemoved",
-                unlocksTrading: false);
-        }
-
-        private DeltaSubmitResult SubmitDeltaOrder(Account followerAccount, Instrument instrument, int deltaNetQty, out string failureReason)
-        {
-            failureReason = null;
-            if (followerAccount == null || instrument == null || deltaNetQty == 0)
-            {
-                failureReason = "Invalid delta submission input.";
-                return DeltaSubmitResult.Failed;
-            }
-
-            int quantity = Math.Abs(deltaNetQty);
-            if (quantity <= 0)
-            {
-                failureReason = "Invalid order quantity.";
-                return DeltaSubmitResult.Failed;
-            }
-
-            try
-            {
-                string instrumentRoot = GetInstrumentRoot(instrument);
-                if (string.IsNullOrWhiteSpace(instrumentRoot))
-                {
-                    failureReason = "Unable to resolve instrument root.";
-                    return DeltaSubmitResult.Failed;
-                }
-
-                int followerNetQty = GetNetQuantityForInstrumentRoot(followerAccount, instrumentRoot);
-                if (deltaNetQty > 0)
-                {
-                    if (followerNetQty < 0)
-                    {
-                        int coverQty = Math.Min(Math.Abs(followerNetQty), quantity);
-                        if (coverQty > 0)
-                        {
-                            DeltaSubmitResult coverResult = SubmitMarketOrder(
-                                followerAccount,
-                                instrument,
-                                OrderAction.BuyToCover,
-                                coverQty,
-                                out failureReason);
-                            if (coverResult != DeltaSubmitResult.Accepted)
-                                return coverResult;
-                        }
-
-                        int remainingQty = quantity - coverQty;
-                        if (remainingQty > 0)
-                        {
-                            DeltaSubmitResult buyResult = SubmitMarketOrder(
-                                followerAccount,
-                                instrument,
-                                OrderAction.Buy,
-                                remainingQty,
-                                out failureReason);
-                            if (buyResult != DeltaSubmitResult.Accepted)
-                                return buyResult;
-                        }
-
-                        return DeltaSubmitResult.Accepted;
-                    }
-
-                    return SubmitMarketOrder(followerAccount, instrument, OrderAction.Buy, quantity, out failureReason);
-                }
-
-                if (followerNetQty > 0)
-                {
-                    int sellQty = Math.Min(followerNetQty, quantity);
-                    if (sellQty > 0)
-                    {
-                        DeltaSubmitResult sellResult = SubmitMarketOrder(
-                            followerAccount,
-                            instrument,
-                            OrderAction.Sell,
-                            sellQty,
-                            out failureReason);
-                        if (sellResult != DeltaSubmitResult.Accepted)
-                            return sellResult;
-                    }
-
-                    int remainingQty = quantity - sellQty;
-                    if (remainingQty > 0)
-                    {
-                        DeltaSubmitResult shortResult = SubmitMarketOrder(
-                            followerAccount,
-                            instrument,
-                            OrderAction.SellShort,
-                            remainingQty,
-                            out failureReason);
-                        if (shortResult != DeltaSubmitResult.Accepted)
-                            return shortResult;
-                    }
-
-                    return DeltaSubmitResult.Accepted;
-                }
-
-                return SubmitMarketOrder(followerAccount, instrument, OrderAction.SellShort, quantity, out failureReason);
-            }
-            catch (Exception ex)
-            {
-                failureReason = ex.Message;
-                RecordSubsystemFault("replication_delta_submit", ex);
-                return DeltaSubmitResult.Failed;
-            }
-        }
-
-        private DeltaSubmitResult SubmitMarketOrder(Account account, Instrument instrument, OrderAction action, int quantity, out string failureReason)
-        {
-            failureReason = null;
-            if (account == null || instrument == null || quantity <= 0)
-            {
-                failureReason = "Invalid market order input.";
-                return DeltaSubmitResult.Failed;
-            }
-
-            try
-            {
-                Order order = account.CreateOrder(
-                    instrument,
-                    action,
-                    OrderType.Market,
-                    GetPreferredFollowerOrderEntry(),
-                    TimeInForce.Day,
-                    quantity,
-                    0.0,
-                    0.0,
-                    string.Empty,
-                    ReplicationSignalName,
-                    DateTime.MaxValue,
-                    null);
-                if (order == null)
-                {
-                    failureReason = "CreateOrder returned null.";
-                    return DeltaSubmitResult.Failed;
-                }
-
-                account.Submit(new[] { order });
-                if (order.OrderState == OrderState.Rejected || order.OrderState == OrderState.Cancelled)
-                {
-                    failureReason = $"Order {order.OrderState} by broker.";
-                    return DeltaSubmitResult.Rejected;
-                }
-
-                return DeltaSubmitResult.Accepted;
-            }
-            catch (Exception ex)
-            {
-                failureReason = ex.Message;
-                RecordSubsystemFault("replication_market_submit", ex);
-                return DeltaSubmitResult.Failed;
-            }
-        }
-
-        private static OrderEntry GetPreferredFollowerOrderEntry()
-        {
-            try
-            {
-                if (Enum.TryParse("Automated", true, out OrderEntry automatedEntry))
-                    return automatedEntry;
-            }
-            catch
-            {
-            }
-
-            try
-            {
-                if (Enum.TryParse("Manual", true, out OrderEntry manualEntry))
-                    return manualEntry;
-            }
-            catch
-            {
-            }
-
-            return default(OrderEntry);
-        }
-
-        private static List<string> GetSyncInstrumentRoots(Account masterAccount, Account followerAccount)
-        {
-            return GlitchReplicationEngine.GetSyncInstrumentRoots(masterAccount, followerAccount);
-        }
-
         private static string GetInstrumentRoot(Instrument instrument)
         {
             return GlitchReplicationEngine.GetInstrumentRoot(instrument);
@@ -231,24 +25,9 @@ namespace Glitch.UI
             return GlitchReplicationEngine.GetNetQuantityForInstrumentRoot(account, instrumentRoot);
         }
 
-        private static Instrument FindInstrumentForInstrumentRoot(Account account, string instrumentRoot)
-        {
-            return GlitchReplicationEngine.FindInstrumentForInstrumentRoot(account, instrumentRoot);
-        }
-
         private static List<Instrument> GetOpenPositionInstruments(Account account)
         {
             return GlitchReplicationEngine.GetOpenPositionInstruments(account);
-        }
-
-        private static bool IsAccountFlat(Account account)
-        {
-            return GlitchReplicationEngine.IsAccountFlat(account);
-        }
-
-        private static bool HasAnyWorkingOrders(Account account)
-        {
-            return GlitchReplicationEngine.HasAnyWorkingOrders(account);
         }
 
         private static async Task<bool> WaitForAllAccountsFlatAsync(IReadOnlyList<Account> accounts, TimeSpan timeout)
@@ -258,7 +37,8 @@ namespace Glitch.UI
 
         private bool UseLegacyReplicationEngine()
         {
-            return _runtimePolicySettings != null && _runtimePolicySettings.UseLegacyReplicationEngine;
+            // ponytail: legacy poll engine removed; persisted flag ignored.
+            return false;
         }
 
         private void RefreshCopyEngineConfiguration(IReadOnlyList<Account> activeAccounts)
@@ -305,9 +85,128 @@ namespace Glitch.UI
             _copyEngine.Configure(true, routes);
         }
 
+        private void AlignAllEnabledFollowersToMaster(string origin)
+        {
+            if (_copyEngine == null || !_isReplicatingUi || _isFlattenAllInProgress || UseLegacyReplicationEngine())
+                return;
+
+            foreach (AccountGroupDefinition group in _accountGroups ?? new ObservableCollection<AccountGroupDefinition>())
+                AlignGroupEnabledFollowersToMaster(group, origin);
+        }
+
+        private void AlignGroupEnabledFollowersToMaster(AccountGroupDefinition group, string origin)
+        {
+            if (group == null || string.IsNullOrWhiteSpace(group.MasterAccount) || _copyEngine == null)
+                return;
+
+            Account masterAccount = TryFindConnectedAccountByName(group.MasterAccount);
+            if (masterAccount == null || group.Members == null)
+                return;
+
+            foreach (AccountGroupMemberRow member in group.Members)
+            {
+                if (member == null || !member.IsEnabled || string.IsNullOrWhiteSpace(member.FollowerAccount))
+                    continue;
+                if (double.IsNaN(member.Ratio) || double.IsInfinity(member.Ratio) || member.Ratio <= 0)
+                    continue;
+
+                Account followerAccount = TryFindConnectedAccountByName(member.FollowerAccount);
+                if (followerAccount == null)
+                    continue;
+
+                _copyEngine.AlignFollowerToMaster(masterAccount, followerAccount, member.Ratio, origin);
+            }
+        }
+
+        private void AlignOneEnabledFollowerToMaster(AccountGroupDefinition group, AccountGroupMemberRow member, string origin)
+        {
+            if (group == null || member == null || _copyEngine == null || !member.IsEnabled)
+                return;
+            if (string.IsNullOrWhiteSpace(group.MasterAccount) || string.IsNullOrWhiteSpace(member.FollowerAccount))
+                return;
+            if (double.IsNaN(member.Ratio) || double.IsInfinity(member.Ratio) || member.Ratio <= 0)
+                return;
+
+            Account masterAccount = TryFindConnectedAccountByName(group.MasterAccount);
+            Account followerAccount = TryFindConnectedAccountByName(member.FollowerAccount);
+            if (masterAccount == null || followerAccount == null)
+                return;
+
+            _copyEngine.AlignFollowerToMaster(masterAccount, followerAccount, member.Ratio, origin);
+        }
+
+        private void HandleFollowerEnableUserToggle(AccountGroupDefinition group, AccountGroupMemberRow member, bool enabled)
+        {
+            if (!_replicationUserIntentLive)
+                return;
+            if (group == null || member == null || member.IsMasterRow)
+                return;
+
+            if (!enabled)
+            {
+                Account followerAccount = TryFindConnectedAccountByName(member.FollowerAccount);
+                if (followerAccount != null)
+                    CancelGlitchWorkingOrdersOnFollowers(new[] { followerAccount });
+            }
+
+            RefreshCopyEngineConfiguration(GetActiveAccountsSnapshot());
+            if (enabled && _isReplicatingUi)
+                AlignOneEnabledFollowerToMaster(group, member, "follower_enable");
+
+            SaveAccountGroupsToDisk();
+            AppendJournal(
+                member.FollowerAccount ?? "System",
+                "Replication",
+                enabled
+                    ? "follower_enabled|origin=user_toggle"
+                    : "follower_disabled|origin=user_toggle");
+            PublishGlitchShellState();
+        }
+
+        private void HandleFollowerRatioUserChange(AccountGroupDefinition group, AccountGroupMemberRow member)
+        {
+            if (!_replicationUserIntentLive)
+                return;
+            if (group == null || member == null || member.IsMasterRow)
+                return;
+
+            RefreshCopyEngineConfiguration(GetActiveAccountsSnapshot());
+            if (_isReplicatingUi && member.IsEnabled)
+                AlignOneEnabledFollowerToMaster(group, member, "ratio_change");
+        }
+
+        private void WireReplicationMemberHandlers(AccountGroupDefinition group)
+        {
+            if (group?.Members == null)
+                return;
+
+            foreach (AccountGroupMemberRow member in group.Members)
+            {
+                if (member == null || member.IsMasterRow || _wiredReplicationMembers.Contains(member))
+                    continue;
+
+                _wiredReplicationMembers.Add(member);
+                bool lastEnabled = member.IsEnabled;
+                member.PropertyChanged += (sender, args) =>
+                {
+                    if (!string.Equals(args.PropertyName, nameof(AccountGroupMemberRow.IsEnabled), StringComparison.Ordinal))
+                        return;
+
+                    bool nowEnabled = member.IsEnabled;
+                    if (nowEnabled == lastEnabled)
+                        return;
+
+                    lastEnabled = nowEnabled;
+                    HandleFollowerEnableUserToggle(group, member, nowEnabled);
+                };
+            }
+        }
+
         private void TryProcessCopyExecutionFromRuntimeEvent(string eventName, Account account, object eventArgs)
         {
             if (account == null || eventArgs == null || _copyEngine == null)
+                return;
+            if (_isFlattenAllInProgress)
                 return;
             if (!_isReplicatingUi || UseLegacyReplicationEngine())
                 return;
@@ -317,6 +216,148 @@ namespace Glitch.UI
                 return;
 
             _copyEngine.ProcessMasterExecution(account, context);
+        }
+
+        private void TryProcessCopyOrderRetryFromRuntimeEvent(string eventName, Account account, object eventArgs)
+        {
+            if (account == null || eventArgs == null || _copyEngine == null)
+                return;
+            if (_isFlattenAllInProgress || !_isReplicatingUi)
+                return;
+            if (!string.Equals(eventName, "OrderUpdate", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            Order order = TryGetNestedPropertyValue(eventArgs, "Order") as Order;
+            if (order == null)
+                return;
+
+            _copyEngine.ProcessFollowerOrderUpdate(account, order);
+        }
+
+        private List<Account> ResolveFlattenAllAccounts()
+        {
+            var accountsByName = new Dictionary<string, Account>(StringComparer.OrdinalIgnoreCase);
+
+            void TryAdd(Account account)
+            {
+                if (account == null || string.IsNullOrWhiteSpace(account.Name))
+                    return;
+                if (!IsFlattenEligibleAccount(account))
+                    return;
+
+                accountsByName[account.Name.Trim()] = account;
+            }
+
+            try
+            {
+                if (Account.All != null)
+                {
+                    lock (Account.All)
+                    {
+                        foreach (Account account in Account.All)
+                            TryAdd(account);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                RecordSubsystemFault("flatten_all_accounts", ex);
+            }
+
+            foreach (AccountGroupDefinition group in _accountGroups ?? new ObservableCollection<AccountGroupDefinition>())
+            {
+                if (group == null)
+                    continue;
+
+                if (!string.IsNullOrWhiteSpace(group.MasterAccount))
+                    TryAdd(TryFindConnectedAccountByName(group.MasterAccount));
+
+                if (group.Members == null)
+                    continue;
+
+                foreach (AccountGroupMemberRow member in group.Members)
+                {
+                    if (member == null || string.IsNullOrWhiteSpace(member.FollowerAccount))
+                        continue;
+
+                    TryAdd(TryFindConnectedAccountByName(member.FollowerAccount));
+                }
+            }
+
+            return accountsByName.Values
+                .OrderBy(account => account.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private int IssueFlattenOrdersForAccounts(IReadOnlyList<Account> accounts)
+        {
+            int totalIssued = 0;
+            foreach (Account account in accounts ?? Array.Empty<Account>())
+            {
+                if (account == null || string.IsNullOrWhiteSpace(account.Name))
+                    continue;
+
+                string accountName = account.Name.Trim();
+                string resultToken;
+                int instrumentFlattenCount = 0;
+                try
+                {
+                    if (GlitchReplicationEngine.TryFlattenAccount(account, out instrumentFlattenCount))
+                    {
+                        totalIssued += instrumentFlattenCount;
+                        resultToken = "issued";
+                    }
+                    else
+                    {
+                        resultToken = "skipped_no_exposure";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    resultToken = "failed_" + CleanJournalToken(ex.GetType().Name);
+                    RecordSubsystemFault("flatten_all", ex);
+                }
+
+                AppendJournal(
+                    accountName,
+                    "Risk",
+                    $"flatten_all|origin=user_button|result={resultToken}|instruments={instrumentFlattenCount}");
+            }
+
+            return totalIssued;
+        }
+
+        private static Account TryFindConnectedAccountByName(string accountName)
+        {
+            if (string.IsNullOrWhiteSpace(accountName))
+                return null;
+
+            string trimmed = accountName.Trim();
+            try
+            {
+                if (Account.All == null)
+                    return null;
+
+                lock (Account.All)
+                {
+                    foreach (Account account in Account.All)
+                    {
+                        if (account == null || string.IsNullOrWhiteSpace(account.Name))
+                            continue;
+                        if (!string.Equals(account.Name.Trim(), trimmed, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        if (!IsFlattenEligibleAccount(account))
+                            return null;
+
+                        return account;
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return null;
         }
 
         private bool TryBuildCopyExecutionContext(object eventArgs, out GlitchCopyExecutionContext context)
@@ -337,12 +378,8 @@ namespace Glitch.UI
 
             Order order = TryGetNestedPropertyValue(executionObject, "Order") as Order;
             string signalName = order?.Name;
-            if (IsReplicationInternalSignal(signalName) ||
-                (!string.IsNullOrWhiteSpace(signalName) &&
-                 signalName.StartsWith(GlitchCopyEngine.CopySignalName, StringComparison.OrdinalIgnoreCase)))
-            {
+            if (IsReplicationInternalSignal(signalName))
                 return false;
-            }
 
             OrderAction action;
             if (order != null)
@@ -436,117 +473,58 @@ namespace Glitch.UI
             if (order == null || string.IsNullOrWhiteSpace(order.Name))
                 return false;
 
-            string name = order.Name.Trim();
-            return name.StartsWith(GlitchCopyEngine.CopySignalName, StringComparison.OrdinalIgnoreCase) ||
-                   name.StartsWith("GLT-SYNC", StringComparison.OrdinalIgnoreCase);
+            return order.Name.Trim().StartsWith("GLT-", StringComparison.OrdinalIgnoreCase);
         }
 
-        private void EvaluateReplicationDrift(IReadOnlyList<Account> activeAccounts)
+        private static bool IsWorkingOrderState(OrderState state)
         {
-            _replicationDriftNotice = null;
-            if (!_isReplicatingUi || UseLegacyReplicationEngine() || _accountGroups == null || _accountGroups.Count == 0)
+            return GlitchReplicationEngine.IsWorkingOrderState(state);
+        }
+
+        private static bool IsStopLikeOrder(Order order)
+        {
+            return GlitchReplicationEngine.IsStopLikeOrder(order);
+        }
+
+        private static int GetTotalInFlightReplicationEntryDelta(Account account)
+        {
+            if (account == null)
+                return 0;
+
+            int netDelta = 0;
+            try
             {
-                UpdateReplicationDriftBanner();
-                return;
-            }
-
-            var accountsByName = (activeAccounts ?? Array.Empty<Account>())
-                .Where(account => account != null && !string.IsNullOrWhiteSpace(account.Name))
-                .GroupBy(account => account.Name.Trim(), StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
-
-            foreach (AccountGroupDefinition group in _accountGroups)
-            {
-                if (group == null || string.IsNullOrWhiteSpace(group.MasterAccount) || group.Members == null)
-                    continue;
-                if (!accountsByName.TryGetValue(group.MasterAccount.Trim(), out Account masterAccount) || masterAccount == null)
-                    continue;
-
-                foreach (AccountGroupMemberRow member in group.Members)
+                foreach (Order order in account.Orders)
                 {
-                    if (member == null || !member.IsEnabled || string.IsNullOrWhiteSpace(member.FollowerAccount))
+                    if (order == null || !GlitchReplicationEngine.IsWorkingOrderState(order.OrderState))
                         continue;
-                    if (double.IsNaN(member.Ratio) || double.IsInfinity(member.Ratio) || member.Ratio <= 0)
-                        continue;
-                    if (!accountsByName.TryGetValue(member.FollowerAccount.Trim(), out Account followerAccount) || followerAccount == null)
+                    if (!IsGlitchOwnedWorkingOrder(order))
                         continue;
 
-                    foreach (string instrumentRoot in GetSyncInstrumentRoots(masterAccount, followerAccount))
-                    {
-                        if (string.IsNullOrWhiteSpace(instrumentRoot))
-                            continue;
+                    int actionSign = GlitchReplicationEngine.GetOrderActionSign(order.OrderAction);
+                    if (actionSign == 0)
+                        continue;
 
-                        int masterNetQty = GetNetQuantityForInstrumentRoot(masterAccount, instrumentRoot);
-                        int expectedQty = (int)Math.Round(
-                            masterNetQty * member.Ratio,
-                            MidpointRounding.AwayFromZero);
-                        int actualQty = GetNetQuantityForInstrumentRoot(followerAccount, instrumentRoot);
-                        if (actualQty == expectedQty)
-                            continue;
+                    int totalQty = Math.Abs(order.Quantity);
+                    if (totalQty <= 0)
+                        continue;
 
-                        _replicationDriftNotice = new ReplicationDriftNotice
-                        {
-                            FollowerAccount = followerAccount.Name?.Trim(),
-                            MasterAccount = masterAccount,
-                            FollowerAccountRef = followerAccount,
-                            InstrumentRoot = instrumentRoot,
-                            ActualQty = actualQty,
-                            ExpectedQty = expectedQty,
-                            Ratio = member.Ratio
-                        };
-                        UpdateReplicationDriftBanner();
-                        return;
-                    }
+                    double filledRaw = TryGetNestedPropertyValueAsDouble(order, "Filled", "FilledQuantity", "QuantityFilled");
+                    int filledQty = filledRaw > 0
+                        ? Math.Max(0, (int)Math.Round(filledRaw, MidpointRounding.AwayFromZero))
+                        : 0;
+                    int remainingQty = filledQty >= totalQty ? 0 : totalQty - filledQty;
+                    if (remainingQty <= 0)
+                        continue;
+
+                    netDelta += actionSign * remainingQty;
                 }
             }
-
-            UpdateReplicationDriftBanner();
-        }
-
-        private void OnReplicationDriftSyncButtonClick(object sender, RoutedEventArgs e)
-        {
-            if (_replicationDriftNotice == null)
-                return;
-
-            ReplicationDriftNotice notice = _replicationDriftNotice;
-            Instrument instrument = FindInstrumentForInstrumentRoot(notice.FollowerAccountRef, notice.InstrumentRoot);
-            if (instrument == null)
-                return;
-
-            int deltaQty = notice.ExpectedQty - notice.ActualQty;
-            if (deltaQty == 0)
-                return;
-
-            DeltaSubmitResult result = SubmitDeltaOrder(notice.FollowerAccountRef, instrument, deltaQty, out string failureReason);
-            AppendJournal(
-                notice.FollowerAccount,
-                "Replication",
-                $"user_sync|origin=user_sync_button|instrument={CleanJournalToken(notice.InstrumentRoot)}|actual={notice.ActualQty}|expected={notice.ExpectedQty}|delta={deltaQty}|result={result}");
-            if (result != DeltaSubmitResult.Accepted)
+            catch
             {
-                RaiseCriticalWarning(
-                    notice.FollowerAccount,
-                    $"Manual sync failed on {notice.InstrumentRoot}: {failureReason ?? result.ToString()}",
-                    $"UserSyncFailed|{CleanJournalToken(notice.InstrumentRoot)}",
-                    unlocksTrading: false);
-            }
-        }
-
-        private void UpdateReplicationDriftBanner()
-        {
-            if (_headerReplicationDriftBanner == null || _headerReplicationDriftText == null)
-                return;
-
-            if (_replicationDriftNotice == null)
-            {
-                _headerReplicationDriftBanner.Visibility = Visibility.Collapsed;
-                _headerReplicationDriftText.Text = string.Empty;
-                return;
             }
 
-            _headerReplicationDriftText.Text =
-                $"Follower {_replicationDriftNotice.FollowerAccount} differs from ratio target (has {_replicationDriftNotice.ActualQty}, ratio implies {_replicationDriftNotice.ExpectedQty}) on {CleanJournalToken(_replicationDriftNotice.InstrumentRoot)}.";
-            _headerReplicationDriftBanner.Visibility = Visibility.Visible;
+            return netDelta;
         }
     }
 }

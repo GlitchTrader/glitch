@@ -149,6 +149,24 @@ namespace NinjaTrader.NinjaScript.AddOns
             RunOnUiThread(_activeInstance.ShowWindow);
         }
 
+        internal static void RequestFlattenAll()
+        {
+            if (_activeInstance == null)
+                return;
+
+            _activeInstance.RequestFlattenAllCore();
+        }
+
+        private void RequestFlattenAllCore()
+        {
+            RunOnUiThreadSync(() =>
+            {
+                if (_mainWindow == null)
+                    EnsureSingleWindow(restart: false);
+                _mainWindow?.FlattenAllFromExternalSurface();
+            });
+        }
+
         private void RestartSingleWindow()
         {
             EnsureSingleWindow(restart: true);
@@ -349,6 +367,21 @@ namespace NinjaTrader.NinjaScript.AddOns
                 action();
             else
                 dispatcher.InvokeAsync(action);
+        }
+
+        private static void RunOnUiThreadSync(Action action)
+        {
+            if (action == null)
+                return;
+
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher == null || dispatcher.HasShutdownStarted)
+                return;
+
+            if (dispatcher.CheckAccess())
+                action();
+            else
+                dispatcher.Invoke(action);
         }
 
         private static List<Window> FindOpenGlitchWindows()

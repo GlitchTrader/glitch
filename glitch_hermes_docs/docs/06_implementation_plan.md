@@ -117,23 +117,24 @@ manual kill switch
 
 ## Step 5 — Hermes Runtime
 
-Docker services:
+Start with Hermes native cron jobs, not a daemon and not a Docker service stack.
+
+Minimum jobs:
 
 ```text
-hermes-api
-hermes-worker
-hermes-db
+snapshot_sanity   script-only/no-LLM; validates freshness and handoff health
+suggest_trade     5-minute LLM cron; emits one strict JSON intent or NOTHING
+daily_learning    post-session review; emits candidate lessons only
 ```
 
-Jobs:
+Deferred until measured need:
 
 ```text
-ingest_snapshot
-suggest_trade
-rank_signals
-rank_archetypes
-evaluate_risk
-daily_learning
+always-on daemon
+custom scheduler
+queue service
+Hermes API server
+Dockerized worker stack
 ```
 
 ## Step 6 — Observability

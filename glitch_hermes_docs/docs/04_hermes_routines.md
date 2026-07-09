@@ -1,252 +1,93 @@
-# 04 — Hermes Multi-Routine Model
+# 04 — Hermes Runtime Routines
 
-Hermes should not be modeled as one trading loop.
+Audience: private maintainers and agents. This is design doctrine, not live trading authority.
 
-It should be a set of specialized routines running at different intervals.
+## Runtime decision
 
-## Routine 1 — Data Ingestion
+Start with Hermes native cron jobs. Do not build an always-on daemon/runtime until cron is proven insufficient.
 
-Cadence:
+The LLM is never "always on". Deterministic code watches state; Hermes is called only when a scheduled decision or review needs reasoning.
 
 ```text
-Every 1m, optionally faster
+Glitch writes snapshot/result artifacts
+Hermes cron reads them
+Hermes emits strict JSON intent or NOTHING
+Glitch validates, executes, journals, protects
 ```
+
+## Routine 1 — snapshot sanity check
+
+Mode: script-only / no LLM.
+
+Cadence: every 1-5 minutes.
 
 Responsibilities:
 
 ```text
-GET /snapshot
-normalize state
-store in Postgres
-build rolling feature windows
-detect stale data
+check latest snapshot exists
+check timestamp freshness
+validate schema
+check intent/result handoff is not stuck
+stay silent unless something is wrong
 ```
 
-Output:
+This is deterministic plumbing. It should not ask the model for judgment.
 
-```text
-structured market-state history
-```
+## Routine 2 — suggest_trade
 
-## Routine 2 — Trade Suggestion
+Mode: LLM-driven Hermes cron.
 
-Cadence:
-
-```text
-Every 5m in M0
-Every 1m in M1+
-```
+Cadence: every 5 minutes, aligned to the closed decision window.
 
 Responsibilities:
 
 ```text
-evaluate current snapshot
-read recent journal
-read open position
-emit HOLD / ENTER_LONG / ENTER_SHORT / EXIT
+load latest Glitch snapshot
+load current risk/prop policy
+load recent Glitch-journaled outcomes
+load active operator rules/archetypes
+emit one strict intent or NOTHING
 ```
 
-M1+:
+Allowed output actions for the current contract:
 
 ```text
-ADJUST_STOP
-PARTIAL_EXIT
+ENTER_LONG
+ENTER_SHORT
+HOLD
+EXIT
+NOTHING
 ```
 
-Output:
+Every entry intent requires SL + TP1. Optional TP2/SL2 are contract-supported only where quantity and risk rules allow. Hermes never widens stops and never manages a loss mid-flight.
 
-```text
-TradeIntent
-```
+## Routine 3 — daily_learning
 
-## Routine 3 — Signal Ranking
-
-Cadence:
-
-```text
-Every 5–15m
-```
-
-Purpose:
-
-Learn which combinations of Glitch indicators are actually useful.
-
-Example pattern:
-
-```text
-RSI oversold
-+ VWAP deviation z2+
-+ price exhaustion
-+ order-flow reliability improving
-→ reversal candidate
-```
-
-Inputs:
-
-```text
-Glitch readings
-timeframe alignment
-order-flow metrics
-session context
-historical outcomes
-```
-
-Outputs:
-
-```text
-ranked signals
-feature weights
-pattern confidence
-suppression rules
-```
-
-## Routine 4 — Trade Archetype Ranking
-
-Cadence:
-
-```text
-Every 15m / hourly / daily
-```
-
-Purpose:
-
-Rank the types of trades that work.
-
-Archetypes:
-
-```text
-breakout
-reversal
-trend continuation
-range fade
-chop failure
-news volatility
-late-session continuation
-```
-
-Evaluate:
-
-```text
-win rate
-PnL
-MAE
-MFE
-duration
-time of day
-regime
-signal family
-```
-
-Also simulate:
-
-```text
-trades not taken
-alternative stops
-alternative exits
-alternative targets
-```
-
-Output:
-
-```text
-archetype scores
-allowed / suppressed conditions
-```
-
-## Routine 5 — Wallet / Portfolio / Risk Manager
-
-Cadence:
-
-```text
-Every 15m
-```
-
-Purpose:
-
-Protect account and adapt exposure.
-
-Inputs:
-
-```text
-drawdown
-buffer remaining
-daily PnL
-recent trade quality
-volatility regime
-trade churn
-account lock state
-```
-
-Possible recommendations:
-
-```text
-reduce trade frequency
-pause trading
-tighten risk
-lower size
-resume normal mode
-```
-
-Important:
-
-```text
-M0–M2: Hermes recommends, Glitch enforces.
-M3: Hermes may propose more portfolio-level actions, but Glitch still validates.
-```
-
-## Routine 6 — Daily Learning
-
-Cadence:
-
-```text
-Once per trading day
-```
+Mode: LLM-driven or script-assisted Hermes cron after the session.
 
 Responsibilities:
 
 ```text
-analyze full journal
-compare live vs shadow
-rank patterns
-rank archetypes
-update prompt / heuristic candidates
-generate next-day operating notes
+read accepted/rejected intents
+read journaled outcomes
+classify lessons as candidates
+produce reviewable policy/archetype updates
 ```
 
-Output:
+Do not silently promote a lesson into active policy. Policy changes require a versioned candidate and review/promotion decision.
+
+## Deferred until proven necessary
+
+Do not add these for v1:
 
 ```text
-daily learning memo
-candidate model/prompt/heuristic updates
+always-on Hermes daemon
+streaming LLM loop
+custom scheduler
+queue service
+websocket watcher
+separate API server for Hermes
+Hermes-owned execution service
 ```
 
-## Why This Is Not If-This-Then-That
-
-Traditional strategy:
-
-```text
-if X then Y
-```
-
-Hermes + Glitch:
-
-```text
-observe
-evaluate
-adapt
-manage
-learn
-promote only if validated
-```
-
-This allows the system to:
-
-```text
-change its mind during a trade
-cut losses early
-avoid bad conditions
-learn from missed trades
-evolve pattern ranking
-```
-
-Still, all execution must remain bounded by Glitch.
+Add a small deterministic bridge daemon only if cron cannot meet a measured requirement such as sub-minute events, file-watch debouncing, queue retries, or persistent local API connectivity. Even then, the daemon stays dumb: it wakes Hermes; it does not become the trading brain.

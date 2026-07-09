@@ -164,7 +164,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Name = "GlitchAnalyticsBridge";
                 Calculate = Calculate.OnPriceChange;
                 IsOverlay = true;
-                IsSuspendedWhileInactive = true;
+                // ponytail: SetDefaults-only; keep bridge publishing when chart tab is inactive (PublishToGlitchUi defaults true)
+                IsSuspendedWhileInactive = false;
                 NeutralBand = 0.01;
                 EnableBarColoring = true;
                 PublishToGlitchUi = true;
@@ -231,6 +232,12 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
             else if (State == State.Realtime)
             {
+                BridgeBusCompat.RegisterBridge(_instrumentRoot, PublishToGlitchUi);
+                BridgeBusCompat.TouchBridge(
+                    _instrumentRoot,
+                    PublishToGlitchUi,
+                    IsTrackedMinutesForBip(0));
+                BridgeBusCompat.RegisterBridgeBootstrapPublisher(_instrumentRoot, RequestBootstrapFromExternal);
                 PublishBootstrapReadings();
             }
             else if (State == State.Terminated)

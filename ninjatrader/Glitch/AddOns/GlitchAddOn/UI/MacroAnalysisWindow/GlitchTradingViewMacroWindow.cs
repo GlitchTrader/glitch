@@ -42,7 +42,6 @@ namespace Glitch.UI
     {
         private static readonly System.Windows.Media.SolidColorBrush ActiveTabOrangeBrush = CreateFrozenSolidBrush(0xFF, 0x42, 0x00);
         private static readonly FontWeight UiTabFontWeight = FontWeights.Medium;
-        private static readonly System.Windows.Media.Brush UiPrimaryTextBrush = System.Windows.Media.Brushes.White;
         private bool _isDarkTheme;
         private readonly List<DeferredBrowserTab> _deferredTabs = new List<DeferredBrowserTab>();
         private BrowserHost _tickerBrowser;
@@ -811,7 +810,7 @@ namespace Glitch.UI
 
             string selectedBackgroundKey = FindSkinResourceKey(context, "BackgroundTextInput", "GridEntireBackground", "BackgroundMainWindow");
             style.Setters.Add(new Setter(Control.BackgroundProperty, System.Windows.Media.Brushes.Transparent));
-            style.Setters.Add(new Setter(Control.ForegroundProperty, UiPrimaryTextBrush));
+            ApplySkinResourceSetter(style, Control.ForegroundProperty, context, "FontControlBrush", "FontTableBrush", "GridRowForeground");
             style.Setters.Add(new Setter(Control.BorderBrushProperty, System.Windows.Media.Brushes.Transparent));
 
             style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0, 0, 0, 2)));
@@ -863,7 +862,9 @@ namespace Glitch.UI
             var selectedTrigger = new Trigger { Property = TabItem.IsSelectedProperty, Value = true };
             if (!string.IsNullOrWhiteSpace(selectedBackgroundKey))
                 selectedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, new DynamicResourceExtension(selectedBackgroundKey)));
-            selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, UiPrimaryTextBrush));
+            string tabForegroundKey = FindSkinResourceKey(context, "FontControlBrush", "FontTableBrush", "GridRowForeground");
+            if (!string.IsNullOrWhiteSpace(tabForegroundKey))
+                selectedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, new DynamicResourceExtension(tabForegroundKey)));
             selectedTrigger.Setters.Add(new Setter(Border.BackgroundProperty, ActiveTabOrangeBrush, "TabBottomIndicator"));
             selectedTrigger.Setters.Add(new Setter(Control.FontWeightProperty, UiTabFontWeight));
             selectedTrigger.Setters.Add(new Setter(UIElement.OpacityProperty, 1.0));

@@ -26,6 +26,9 @@ namespace Glitch.UI
         private const int SubsystemFaultLogEveryNth = 25;
 
         private static readonly TimeSpan IdleBackgroundUiRefreshInterval = TimeSpan.FromSeconds(3);
+        private static readonly TimeSpan ReplicationActiveUiRefreshInterval = TimeSpan.FromMilliseconds(500);
+        private static readonly TimeSpan ActiveUiRefreshInterval = TimeSpan.FromSeconds(1.5);
+        private static readonly TimeSpan ActiveAccountCacheTtl = TimeSpan.FromSeconds(10);
         private static readonly TimeSpan AccountItemUpdateMinInterval = TimeSpan.FromMilliseconds(500);
         private static readonly TimeSpan ShellPublishMinInterval = TimeSpan.FromMilliseconds(400);
         private static readonly TimeSpan AccountSubscriptionResyncInterval = TimeSpan.FromSeconds(20);
@@ -57,6 +60,9 @@ namespace Glitch.UI
 
         private readonly Dictionary<TextBlock, string> _headerMetricSignatures =
             new Dictionary<TextBlock, string>();
+
+        private readonly Dictionary<string, (bool active, DateTime checkedUtc)> _activeAccountCache =
+            new Dictionary<string, (bool, DateTime)>(StringComparer.OrdinalIgnoreCase);
 
         private sealed class SubsystemFaultState
         {
@@ -127,6 +133,25 @@ namespace Glitch.UI
                 return false;
 
             return WindowState != WindowState.Minimized;
+        }
+
+        private TimeSpan ComputeRefreshTimerInterval()
+        {
+            if (_isReplicatingUi && IsGlitchShellUiActive())
+                return ReplicationActiveUiRefreshInterval;
+            if (IsGlitchShellUiActive())
+                return ActiveUiRefreshInterval;
+            return IdleBackgroundUiRefreshInterval;
+        }
+
+        private void UpdateRefreshTimerCadenceIfNeeded()
+        {
+            if (_refreshTimer == null)
+                return;
+
+            TimeSpan desired = ComputeRefreshTimerInterval();
+            if (_refreshTimer.Interval != desired)
+                _refreshTimer.Interval = desired;
         }
 
         private int GetSelectedMainTabIndex()

@@ -1,5 +1,7 @@
 # Glitch AI Program — Architecture & Version Roadmap
 
+**Audience:** private maintainers and agents only. Do not publish this file or copy its gates/versions into public docs until a release owner promotes a sanitized summary.
+
 **Author:** Fable (architect) · 2026-07-08 · **Implementer:** Cursor (coder)
 **Sources of truth:** this doc (roadmap) · `glitch_hermes_docs/` (AI contract) · `docs/ledger/backlog.md` (work items) · `docs/ledger/north-star.md` (invariants)
 
@@ -39,6 +41,8 @@ Glitch is the only component that can touch an order. Hermes has no order API, n
 
 Doctrine check: north-star says no AI before audit + fixes. The ladder respects it — v0.0.2.0/2.1 and H-0/H-1 are read-only data work (operator phase-ladder step 2, explicitly pre-approved); nothing that can create an order ships before Waves 1–2 close.
 
+**Instrument universe (Tradovate/Apex via NT):** `tradovate-apex-instrument-universe.md` — 148 symbols captured 2026-07-08 for GL-025 registry seed + bridge export/mining scope.
+
 ---
 
 ## Component map
@@ -56,12 +60,11 @@ NinjaTrader 8 (Windows)
       ├─ GlitchAiOrderExecutor             NEW  v0.0.2.3  (entry + NT-held OCO bracket, atomic; signal names GlitchAI*)
       └─ existing: ComplianceEngine · ReplicationEngine · TradeLedger · RiskLockLedger · ShellBridge (UNTOUCHED by AI path)
 
-Hermes runtime (Docker: hermes-api, hermes-worker, Postgres) — separate repo `projects/glitch/Hermes`
-      ├─ ingest_snapshot   (H-0)   pulls /snapshot every 5m, stores normalized state
-      ├─ mine_patterns     (H-1)   pattern/archetype mining over corpus
-      ├─ backtest          (H-1)   replay harness over corpus + Glitch-Collab historical data
-      ├─ suggest_trade     (H-2)   5-minute loop → one intent per instrument per cycle
-      └─ daily_learning    (H-2)   post-session analysis from journal bridge data
+Hermes runtime — native cron first, no always-on daemon until proven necessary
+      ├─ snapshot_sanity  (H-0)   script-only/no-LLM freshness + schema + stuck-handoff check
+      ├─ suggest_trade    (H-2)   5-minute LLM cron → one intent per instrument per cycle or NOTHING
+      ├─ daily_learning   (H-2)   post-session candidate lessons from journal bridge data
+      └─ deferred         Docker/API/daemon/queue only if cron fails a measured requirement
 ```
 
 **AI order path is fully separate from replication** (`06_implementation_plan.md` Step 0 stands): new services only, no edits inside `GlitchReplicationEngine` / `GlitchComplianceEngine` beyond calling their existing public checks.
@@ -71,6 +74,8 @@ Hermes runtime (Docker: hermes-api, hermes-worker, Postgres) — separate repo `
 ## Intent contract v2 — the bracket mandate
 
 Full normative text: `glitch_hermes_docs/docs/09_intent_contract_v2_brackets.md` · schema: `glitch_hermes_docs/schemas/intent.v2.schema.json`.
+
+Hermes-side operator doctrine: `glitch_hermes_docs/docs/10_hermes_operator_contract.md` defines the future 5-minute cron/operator input bundle, strict JSON output, learning boundary, and builder reading order. Hermes is not the operator today; this is the contract for the later `addon-ai-bridge` implementation.
 
 Summary of the operator's decisions (2026-07-08):
 

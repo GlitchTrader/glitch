@@ -1,61 +1,40 @@
-# HERMES ROUTINES
+# HERMES RUNTIME ROUTINES
 
-Hermes should run multiple routines, not one monolithic loop.
+## Runtime rule
 
-## ingest_snapshot
+Use Hermes native cron first. No always-on Hermes daemon until a measured need appears.
 
-Cadence: every 1m.
+The LLM is called on demand. Deterministic scripts/Glitch own monitoring, freshness checks, validation, execution, and journals.
 
-Stores Glitch state.
+## snapshot_sanity
+
+Cadence: every 1-5m.
+Mode: script-only / no-agent.
+
+Checks latest snapshot, schema freshness, and stuck handoffs. Silent unless unhealthy.
 
 ## suggest_trade
 
-Cadence: every 5m in M0, every 1m in M1+.
+Cadence: every 5m.
+Mode: LLM-driven Hermes cron.
 
-Produces:
-- HOLD
+Reads latest Glitch snapshot + policy + recent journal + active archetypes. Emits exactly one strict JSON intent or NOTHING.
+
+Allowed actions:
 - ENTER_LONG
 - ENTER_SHORT
+- HOLD
 - EXIT
-- ADJUST_STOP
-- PARTIAL_EXIT
+- NOTHING
 
-## rank_signals
-
-Cadence: every 5–15m.
-
-Learns which indicator combinations matter.
-
-Example:
-RSI oversold + VWAP deviation z2+ + exhaustion + order-flow shift.
-
-## rank_trade_archetypes
-
-Cadence: 15m/hourly/daily.
-
-Ranks:
-- breakout
-- reversal
-- continuation
-- chop failure
-- news volatility
-
-## evaluate_wallet_risk
-
-Cadence: every 15m.
-
-Recommends:
-- pause
-- reduce size
-- tighten risk
-- resume
+Every entry requires SL + TP1. Hermes never widens stops or manages losses mid-flight.
 
 ## daily_learning
 
-Cadence: once daily.
+Cadence: once daily after session.
 
-Compares:
-- live trades
-- rejected intents
-- shadow trades
-- missed trades
+Reads Glitch-journaled outcomes and produces candidate lessons. Human/review gate promotes candidates into active policy.
+
+## Deferred
+
+No custom scheduler, queue, websocket watcher, Hermes API server, or always-on daemon for v1. Add a dumb deterministic bridge daemon only if cron fails a real measured need.

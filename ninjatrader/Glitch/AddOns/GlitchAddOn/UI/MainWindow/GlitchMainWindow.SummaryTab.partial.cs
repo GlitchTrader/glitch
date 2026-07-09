@@ -446,16 +446,17 @@ namespace Glitch.UI
             if (_summaryFleetTradesValueText != null)
                 _summaryFleetTradesValueText.Text = FormatSignedCurrency(snapshot.All.AvgWinningTradePoints);
             _summaryWinRateValueText.Text = snapshot.All.WinRate.ToString("P1", CultureInfo.CurrentCulture);
+            FrameworkElement summarySkinContext = (FrameworkElement)_summaryRootGrid ?? _summaryNetPointsValueText;
             _summaryNetPointsValueText.Text = FormatSignedCurrency(snapshot.All.NetPoints);
-            _summaryNetPointsValueText.Foreground = ResolveSignedBrush(snapshot.All.NetPoints);
+            _summaryNetPointsValueText.Foreground = ResolveSignedBrush(snapshot.All.NetPoints, summarySkinContext);
             _summaryProfitFactorValueText.Text = snapshot.All.ProfitFactor > 0 ? snapshot.All.ProfitFactor.ToString("N2", CultureInfo.CurrentCulture) : "-";
             _summaryAccountsValueText.Text = FormatSignedCurrency(snapshot.All.AvgLosingTradePoints);
             _summaryAsOfText.Text = L("summary.updated", "Updated") + ": " + nowUtc.ToLocalTime().ToString("MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
 
             if (_summaryFleetTradesValueText != null)
-                _summaryFleetTradesValueText.Foreground = ResolveSignedBrush(snapshot.All.AvgWinningTradePoints);
+                _summaryFleetTradesValueText.Foreground = ResolveSignedBrush(snapshot.All.AvgWinningTradePoints, summarySkinContext);
             if (_summaryAccountsValueText != null)
-                _summaryAccountsValueText.Foreground = ResolveSignedBrush(snapshot.All.AvgLosingTradePoints);
+                _summaryAccountsValueText.Foreground = ResolveSignedBrush(snapshot.All.AvgLosingTradePoints, summarySkinContext);
 
             _summaryMetricRows.Clear();
             _summaryMetricRows.Add(new SummaryMetricRow { Metric = L("summary.total_trades", "Total Trades"), All = snapshot.All.Trades.ToString("N0"), Long = snapshot.Long.Trades.ToString("N0"), Short = snapshot.Short.Trades.ToString("N0") });
@@ -833,13 +834,13 @@ namespace Glitch.UI
             return compact.Length <= 10 ? compact : compact.Substring(0, 10);
         }
 
-        private static Brush ResolveSignedBrush(double value)
+        private Brush ResolveSignedBrush(double value, FrameworkElement context)
         {
             if (value > 0)
                 return TealAccentBrush;
             if (value < 0)
                 return OrangeAccentBrush;
-            return Brushes.White;
+            return FindSkinBrush(context, "FontControlBrush", "FontTableBrush", "GridRowForeground") ?? Brushes.Black;
         }
 
         private static string FormatRatio(double value)
