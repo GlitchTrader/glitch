@@ -783,7 +783,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
 
                 foreach (int minutes in TargetMinutes)
-                    AddDataSeries(additional, BarsPeriodType.Minute, minutes);
+                    AddDataSeries(additional.FullName, BarsPeriodType.Minute, minutes);
             }
         }
 
