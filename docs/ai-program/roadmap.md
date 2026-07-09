@@ -33,11 +33,15 @@ Glitch is the only component that can touch an order. Hermes has no order API, n
 | **v0.0.2.0** | Eyes | Instrument metadata registry + multi-asset bridge normalization (GL-025), normalized Analytics panel (GL-026) | v0.0.1.9 shipped |
 | **v0.0.2.1** | Voice | `GlitchExternalTelemetryServer` — read-only localhost API + schemas (GL-027) | GL-034 security design review of the server spec |
 | *(Hermes H-0)* | — | Hermes runtime scaffold + `ingest_snapshot` (GL-028), separate repo, mktintel-style | v0.0.2.1 running |
-| *(Hermes H-1)* | — | Pattern mining + backtest harness over accumulated corpus + Glitch-Collab research data (GL-029) | corpus ≥ 4 weeks of sessions |
+| *(Hermes H-1)* | — | Pattern mining + backtest harness over accumulated corpus + Glitch-Collab research data (GL-029) | exporter + corpus sufficient for ranked archetypes (no calendar gate) |
 | **v0.0.2.2** | Ears | `POST /intent` paper mode: intent models v2, AI risk firewall, AI journal bridge (GL-030, GL-031) | Waves 1–2 complete (GL-002 LANE-1, GL-001, GL-004) + F1 landed |
-| **v0.0.2.3** | Hands-sim | `GlitchAiOrderExecutor` on Sim101, bracket-mandatory (GL-032) | ≥ 2 weeks clean paper intents (zero firewall bypasses, zero schema rejects from drift) |
-| **v0.0.2.4** | Hands-eval | One allowlisted eval account, M0 caps, kill switch (GL-033) | paper-profitable per M0 success criteria + operator approval + GL-034 full security audit |
-| v0.0.3.x | — | M1–M3 ladder (`glitch_hermes_docs/docs/05_milestones_m0_m3.md`) | each per its milestone gate |
+| **v0.0.2.3** | Hands-sim | `GlitchAiOrderExecutor` on Sim101, bracket-mandatory (GL-032) | paper path clean: zero firewall bypasses, zero schema drift rejects |
+| **v0.0.2.4** | Hands-eval | Eval allowlist, Eval Sprint profile, kill switch (GL-033) | GL-041 + sim/replay evidence + operator enable |
+| v0.0.2.5–v0.0.2.9 | Filter → Shadow | M1–M2: confidence gating, lifecycle, fleet, shadow VPS | live eval rail advancing on evidence |
+| **v0.0.3.0** | Learn | M3: self-heal + self-learn with promotion gates | R22–R23 acceptance |
+| v0.0.3.x | — | M1–M3 detail (`glitch_hermes_docs/docs/05_milestones_m0_m3.md`) | each per its milestone gate |
+
+**Canonical rail (first principles, R01–R23):** `operating-system-rail.md`
 
 Doctrine check: north-star says no AI before audit + fixes. The ladder respects it — v0.0.2.0/2.1 and H-0/H-1 are read-only data work (operator phase-ladder step 2, explicitly pre-approved); nothing that can create an order ships before Waves 1–2 close.
 

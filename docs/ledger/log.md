@@ -77,6 +77,19 @@ Append-only operator log. Newest first.
 - GL-022: SHA-256 checksum manifest + `npm run checksums`.
 - GL-014: per-account-type compliance settings granularity.
 
+## 2026-07-09 — Operating system rail (first principles, no calendar gates)
+
+- Operator doctrine: fail-fast ($17) beats fail-slow ($600 renewal); pay compute to build/mine/test; stall = bad; target pass eval in 7–15 live days after build+train when evidence green — not self-limited by arbitrary calendars.
+- Wrote `docs/ai-program/operating-system-rail.md` — market + portfolio snapshots, Hermes operator bundle, three learning loops, rail R01–R23, parallel R06 mining, Eval Sprint profile for live pass pacing.
+- `milestones-v20-v30.md` → pointer to rail doc. Roadmap gates de-calendarized.
+
+## 2026-07-09 — Milestone contracts v20→v30 (operator sprint + 3 eval accounts)
+
+- Operator context: 3× ~$250k funded evals, $15k pass / $6.5k max loss, ~30 days at ~$17 before ~$177 renewal; Hermes + Glitch + NT already running; fail-fast acceptable.
+- Wrote `docs/ai-program/milestones-v20-v30.md` — M0-prep (v20–v22) → M0-sim/live (v23–v24) → M1 (v25–v26) → M2 (v27–v28) → M3 self-heal/learn (v29–v30); Eval Sprint Profile vs Survival Profile; account A/B/C roles; ponytail non-goals; week-by-week calendar.
+- Roadmap table extended with v0.0.2.5–v0.0.3.0 rows + pointer to contracts doc.
+- Next WO: confirm GL-041 → v20 (GL-025/026).
+
 ## 2026-07-08 — AI-program architecture pass (architect: Fable → implementer: Cursor)
 
 - Operator decree: Fable architects/documents, Cursor implements exactly what is planned. Goal: improve v0.0.1.9, then v0.0.2.0+ with AI progressively integrated — more assets, better bridge/normalized analytics, then ingest → mine → backtest → learn → 5-min BUY/SELL/HOLD/NOTHING intents with **mandatory SL+TP1 (optional TP2/SL2), NT-held OCO brackets**, Glitch deterministic firewall before any order.
