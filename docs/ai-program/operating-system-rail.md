@@ -74,7 +74,14 @@ no_trade_reasons
 schema_version · snapshot_id · snapshot_hash · provenance
 ```
 
-Prefer **one chart / one bridge instance** feeding multiple instruments via `BarsInProgress` / `AddData` before asking the operator to open many charts. Multiple charts is acceptable when NT requires it.
+Prefer a **dedicated ingest chart** with `GlitchAiMarketIngest` for multi-instrument Hermes feed. Keep `GlitchAnalyticsBridge` on the trade chart for the visual assistant (single instrument, full MTF + bar coloring).
+
+```text
+Trade chart     → GlitchAnalyticsBridge  → AddOn analytics UI (one instrument)
+Ingest chart    → GlitchAiMarketIngest   → feed bus → R03 market snapshot JSON
+```
+
+Multiple charts is the intended split when NT cannot cheaply multiplex instruments through the UI bridge.
 
 ### 1.2 Portfolio snapshot (what Hermes sees about the book)
 
@@ -162,7 +169,7 @@ Advance when the step’s **acceptance** is met. Skip nothing in §4.5 safety. L
 | **R02** | v20 | Multi-asset bridge normalization; prefer single-chart `AddData` | ≥2 roots publish normalized readings; Analytics selector works |
 | **R03** | v21 | **Market snapshot** writer → `GlitchData/snapshots/market/` | Valid JSON; schema versioned; all required TFs for active set |
 | **R04** | v21 | **Portfolio snapshot** writer → `GlitchData/snapshots/portfolio/` | Accounts, positions, PnL net of commission, rules version |
-| **R05** | v21 | Historical exporter — **same schema** as R03/R04 | Replay file validates; Hermes ingests without transform |
+| **R05** | v21 | Historical exporter — **same schema** as R03/R04 | Replay file validates; Hermes ingests without transform (**done**) |
 | **R06** | H-1 | **Parallel:** pattern mining, backtest harness, archetype docs | Ranked setups with evidence; seed Hermes memory |
 | **R07** | v21 | `GlitchExternalTelemetryServer` (localhost GET) — optional if files suffice | Schema-valid GET `/snapshot`; bearer auth; off UI thread |
 
@@ -273,9 +280,9 @@ Cron first. Daemon only if cron fails a measured need.
 
 ## 8. Active pointer
 
-**Next step:** R03 — market snapshot writer (file).
+**Next step:** R06 — pattern mining on historical replay exports (parallel OK).
 
-**Parallel:** R06 — mine `Glitch-Collab` / historical exports in separate Hermes sessions now.
+**Also available:** R07 telemetry server (optional if file exports suffice).
 
 **Blocker check:** GL-041 status before R16.
 

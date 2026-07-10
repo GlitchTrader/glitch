@@ -1,6 +1,6 @@
 {
   "schemaVersion": "2.2.0",
-  "updatedAtUtc": "2026-07-07T00:00:00Z",
+  "updatedAtUtc": "2026-07-09T22:00:00Z",
   "globalInstrumentSizingDefaults": {
     "microContractRootRegex": "^M[A-Z0-9]+$",
     "microContractMultiplier": 10
@@ -12,9 +12,10 @@
       "legalName": "Apex Trader Funding Legacy",
       "officialSourceUrls": [
         "https://support.apextraderfunding.com/hc/en-us/articles/32630056568595-What-are-the-Max-Position-Sizes-for-Apex-Legacy-accounts",
-        "https://support.apextraderfunding.com/hc/en-us/articles/32631092410771-How-does-the-Trailing-Static-Drawdown-Threshold-Work"
+        "https://support.apextraderfunding.com/hc/en-us/articles/32631092410771-How-does-the-Trailing-Static-Drawdown-Threshold-Work",
+        "https://apextraderfunding.com/help-center/legacy-helpful-items/legacy-30-consistency-rule-windfall/"
       ],
-      "lastVerifiedDate": "2026-03-04",
+      "lastVerifiedDate": "2026-07-09",
       "status": "Supported",
       "copyTradingPolicy": {
         "allowed": "conditional",
@@ -72,7 +73,7 @@
         "hasDailyLossLimit": false,
         "allowSundayTrading": true,
         "minimumTradingDays": 7,
-        "consistencyRulePercent": 50.0,
+        "consistencyRulePercent": 30.0,
         "evalRithmicThresholdStopsAtProfitTarget": true,
         "evalTradovateThresholdStopsAtProfitTarget": false,
         "evalRithmicThresholdStopOffset": 0,

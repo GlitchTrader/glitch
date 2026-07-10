@@ -3650,6 +3650,12 @@ namespace Glitch.UI
             SavePeakStatesToDisk(force: true);
             SaveAuditFeedsToDisk(force: true);
             SaveWindowPlacementToDisk();
+            DateTime closeUtc = DateTime.UtcNow;
+            string closeSnapshotId = closeUtc.ToString("yyyyMMdd'T'HHmmss'Z'", System.Globalization.CultureInfo.InvariantCulture);
+            GlitchMarketSnapshotWriter.TryWriteLatest(closeUtc, closeSnapshotId);
+            GlitchPortfolioSnapshotCapture portfolioCapture = BuildPortfolioSnapshotCapture();
+            if (portfolioCapture != null)
+                GlitchPortfolioSnapshotWriter.TryWriteLatest(closeUtc, portfolioCapture, closeSnapshotId);
             GlitchAnalyticsFeedBus.FlushPersistence();
             _isFlattenAllInProgress = false;
             PersistReplicationUiState();
@@ -3775,6 +3781,13 @@ namespace Glitch.UI
             UpdateRefreshTimerCadenceIfNeeded();
 
             DateTime nowUtc = DateTime.UtcNow;
+            string snapshotId = nowUtc.ToString("yyyyMMdd'T'HHmmss'Z'", System.Globalization.CultureInfo.InvariantCulture);
+            GlitchMarketSnapshotWriter.TryWriteLatestIfDue(nowUtc, snapshotId);
+            MaybeWritePortfolioSnapshot(nowUtc, snapshotId);
+            GlitchHistoricalSnapshotExporter.TryWriteReplayBundleIfDue(
+                nowUtc,
+                TimeSpan.FromMinutes(15),
+                TimeSpan.FromHours(24));
             PruneRuntimeJournalCaches(nowUtc);
             PruneInformationalWarningJournalCooldowns(nowUtc);
             PruneAccountItemUpdateThrottle(nowUtc);

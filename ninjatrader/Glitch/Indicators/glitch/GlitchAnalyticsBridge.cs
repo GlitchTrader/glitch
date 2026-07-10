@@ -27,8 +27,8 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
-using System.Reflection;
 using System.Windows.Media;
+using NinjaTrader.Cbi;
 using NinjaTrader.Cbi;
 using NinjaTrader.Data;
 using NinjaTrader.NinjaScript;
@@ -80,11 +80,9 @@ namespace NinjaTrader.NinjaScript.Indicators
         private Brush[] _buyPalette;
         private Brush[] _sellPalette;
 
-        private readonly Dictionary<string, DateTime> _lastPublishUtcByFeedKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, SessionTracker> _sessionByFeedKey = new Dictionary<string, SessionTracker>(StringComparer.OrdinalIgnoreCase);
-        private readonly HashSet<string> _trackedInstrumentRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<int, DateTime> _lastPublishUtcByMinutes = new Dictionary<int, DateTime>();
+        private readonly Dictionary<int, SessionTracker> _sessionByMinutes = new Dictionary<int, SessionTracker>();
         private string _instrumentRoot;
-        private string[] _instrumentRootByBip;
         private int[] _minutesByBip;
         private bool[] _isTrackedByBip;
         private int _lastPaintedBarIndex = -1;
@@ -93,7 +91,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         private DateTime _lastBridgeUnavailableLogUtc = DateTime.MinValue;
         private DateTime _lastBridgeTouchUtc = DateTime.MinValue;
         private DateTime _lastBootstrapRegisterUtc = DateTime.MinValue;
-        private double[] _tickSizeByBip;
+        private double _tickSize;
         private SignalSnapshot[] _cachedSignalByBip;
         private bool[] _hasCachedSignalByBip;
         private OrderFlowCumulativeDelta[] _orderFlowDeltaByBip;
@@ -158,10 +156,6 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Order Flow Blend", Order = 10, GroupName = "Parameters")]
         public double OrderFlowBlend { get; set; }
 
-        [NinjaScriptProperty]
-        [Display(Name = "Additional Instrument Roots", Order = 11, GroupName = "Parameters", Description = "Hint only: add these roots as chart Data Series in NT (Configure cannot call AddDataSeries with runtime symbols).")]
-        public string AdditionalInstrumentRoots { get; set; }
-
         protected override void OnStateChange()
         {
             if (State == State.SetDefaults)
@@ -180,9 +174,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                 PredictiveBoost = 0.35;
                 FlipHysteresis = 0.03;
                 PerformanceMode = true;
-                EnableOrderFlowLayer = true;
+                EnableOrderFlowLayer = false;
                 OrderFlowBlend = 0.8;
-                AdditionalInstrumentRoots = string.Empty;
             }
             else if (State == State.Configure)
             {
@@ -199,11 +192,14 @@ namespace NinjaTrader.NinjaScript.Indicators
                         ? null
                         : (Instrument.MasterInstrument == null ? Instrument.FullName : Instrument.MasterInstrument.Name));
 
+                InitializeSeriesMetadata();
                 InitializeIndicators();
                 InitializeColorPalettes();
-                _lastPublishUtcByFeedKey.Clear();
-                _sessionByFeedKey.Clear();
-                _trackedInstrumentRoots.Clear();
+                _lastPublishUtcByMinutes.Clear();
+                _sessionByMinutes.Clear();
+                _tickSize = (Instrument != null && Instrument.MasterInstrument != null && Instrument.MasterInstrument.TickSize > 0)
+                    ? Instrument.MasterInstrument.TickSize
+                    : 0.25;
                 _cachedSignalByBip = new SignalSnapshot[BarsArray.Length];
                 _hasCachedSignalByBip = new bool[BarsArray.Length];
                 _lastPaintedBarIndex = -1;
@@ -224,28 +220,32 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Array.Clear(_depthBidByLevel, 0, _depthBidByLevel.Length);
                 Array.Clear(_depthAskByLevel, 0, _depthAskByLevel.Length);
                 _orderFlowTickBip = ResolveOrderFlowTickBip();
-                InitializeSeriesMetadata();
 
                 InitializeOrderFlowIndicators();
 
-                RegisterTrackedBridges();
-                RegisterBootstrapPublishersForTrackedRoots();
+                GlitchBridgeBusCompat.RegisterBridge(_instrumentRoot, PublishToGlitchUi);
+                GlitchBridgeBusCompat.TouchBridge(
+                    _instrumentRoot,
+                    PublishToGlitchUi,
+                    IsTrackedMinutesForBip(0));
+                GlitchBridgeBusCompat.RegisterBridgeBootstrapPublisher(_instrumentRoot, RequestBootstrapFromExternal);
             }
             else if (State == State.Realtime)
             {
-                RegisterTrackedBridges();
-                RegisterBootstrapPublishersForTrackedRoots();
+                GlitchBridgeBusCompat.RegisterBridge(_instrumentRoot, PublishToGlitchUi);
+                GlitchBridgeBusCompat.TouchBridge(
+                    _instrumentRoot,
+                    PublishToGlitchUi,
+                    IsTrackedMinutesForBip(0));
+                GlitchBridgeBusCompat.RegisterBridgeBootstrapPublisher(_instrumentRoot, RequestBootstrapFromExternal);
                 PublishBootstrapReadings();
             }
             else if (State == State.Terminated)
             {
-                _lastPublishUtcByFeedKey.Clear();
-                _sessionByFeedKey.Clear();
+                _lastPublishUtcByMinutes.Clear();
+                _sessionByMinutes.Clear();
                 _minutesByBip = null;
                 _isTrackedByBip = null;
-                _instrumentRootByBip = null;
-                _tickSizeByBip = null;
-                _trackedInstrumentRoots.Clear();
                 _cachedSignalByBip = null;
                 _hasCachedSignalByBip = null;
                 _orderFlowDeltaByBip = null;
@@ -276,7 +276,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                 _orderFlowTapeBuyVolume = 0;
                 _orderFlowTapeSellVolume = 0;
 
-                UnregisterTrackedBridges();
+                GlitchBridgeBusCompat.UnregisterBridgeBootstrapPublisher(_instrumentRoot, RequestBootstrapFromExternal);
+                GlitchBridgeBusCompat.UnregisterBridge(_instrumentRoot);
             }
         }
 
@@ -291,19 +292,24 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (BarsInProgress == 0)
             {
                 DateTime nowUtc = DateTime.UtcNow;
+                bool isTrackedPrimary = IsTrackedMinutesForBip(0);
 
                 if (_lastBridgeTouchUtc == DateTime.MinValue ||
                     (nowUtc - _lastBridgeTouchUtc) >= TimeSpan.FromSeconds(1))
                 {
                     _lastBridgeTouchUtc = nowUtc;
-                    TouchTrackedBridges();
+                    GlitchBridgeBusCompat.TouchBridge(
+                        _instrumentRoot,
+                        PublishToGlitchUi,
+                        isTrackedPrimary);
                 }
 
+                // Re-register periodically so callback wiring self-heals after script reloads.
                 if (_lastBootstrapRegisterUtc == DateTime.MinValue ||
                     (nowUtc - _lastBootstrapRegisterUtc) >= TimeSpan.FromSeconds(5))
                 {
                     _lastBootstrapRegisterUtc = nowUtc;
-                    RegisterBootstrapPublishersForTrackedRoots();
+                    GlitchBridgeBusCompat.RegisterBridgeBootstrapPublisher(_instrumentRoot, RequestBootstrapFromExternal);
                 }
             }
 
@@ -322,7 +328,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 isPrimarySeries &&
                 (isHistorical || IntraBarColoring || IsFirstTickOfBar);
 
-            bool bridgeAvailable = !PublishToGlitchUi || BridgeBusCompat.IsAvailable();
+            bool bridgeAvailable = !PublishToGlitchUi || GlitchBridgeBusCompat.IsAvailable();
             if (PublishToGlitchUi && !bridgeAvailable)
             {
                 DateTime nowUtc = DateTime.UtcNow;
@@ -361,10 +367,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                 return;
 
             SessionTracker session = UpdateSessionTracker(minutes, BarsInProgress);
-            string instrumentRoot = ResolveInstrumentRootForBip(BarsInProgress);
-            BridgeBusCompat.Publish(new BridgeBusCompat.BridgeReading
+            GlitchBridgeBusCompat.Publish(new GlitchBridgeBusCompat.BridgeReading
             {
-                InstrumentRoot = instrumentRoot,
+                InstrumentRoot = _instrumentRoot,
                 Minutes = minutes,
                 UtcTime = Times[BarsInProgress][0].ToUniversalTime(),
                 CurrentPrice = ResolvePublishedCurrentPrice(signal.Close),
@@ -527,7 +532,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (!PublishToGlitchUi || BarsArray == null || CurrentBars == null)
                 return;
 
-            if (!BridgeBusCompat.IsAvailable())
+            if (!GlitchBridgeBusCompat.IsAvailable())
                 return;
 
             DateTime nowUtc = DateTime.UtcNow;
@@ -562,9 +567,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                         readingUtc = barTime.ToUniversalTime();
                 }
 
-                bool published = BridgeBusCompat.Publish(new BridgeBusCompat.BridgeReading
+                bool published = GlitchBridgeBusCompat.Publish(new GlitchBridgeBusCompat.BridgeReading
                 {
-                    InstrumentRoot = ResolveInstrumentRootForBip(bip),
+                    InstrumentRoot = _instrumentRoot,
                     Minutes = minutes,
                     UtcTime = readingUtc,
                     CurrentPrice = ResolvePublishedCurrentPrice(signal.Close),
@@ -605,8 +610,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 });
                 if (published)
                 {
-                    string feedKey = BuildFeedKey(ResolveInstrumentRootForBip(bip), minutes);
-                    _lastPublishUtcByFeedKey[feedKey] = nowUtc;
+                    _lastPublishUtcByMinutes[minutes] = nowUtc;
                     publishedCount++;
                 }
             }
@@ -614,7 +618,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (publishedCount > 0)
             {
                 Log(
-                    "GlitchAnalyticsBridge bootstrap published " + publishedCount + " reading(s) across " + _trackedInstrumentRoots.Count + " instrument root(s).",
+                    "GlitchAnalyticsBridge bootstrap published " + publishedCount + " timeframe(s) for " + (_instrumentRoot ?? "(null)") + ".",
                     NinjaTrader.Cbi.LogLevel.Information);
             }
         }
@@ -640,7 +644,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (_smaByBip != null && bip < _smaByBip.Length && _smaByBip[bip] != null && CurrentBars[bip] > 0)
                 signal.AveragePrice = _smaByBip[bip][0];
 
-            double atr = signal.Atr > 0 ? signal.Atr : Math.Max(ResolveTickSizeForBip(bip), 0.25);
+            double atr = signal.Atr > 0 ? signal.Atr : Math.Max(_tickSize, 0.25);
             DateTime nowUtc = (_isOrderFlowRuntimeAvailable && EnableOrderFlowLayer) ? DateTime.UtcNow : DateTime.MinValue;
             TryBuildOrderFlowSnapshot(
                 bip,
@@ -748,93 +752,6 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
-        private void RegisterTrackedBridges()
-        {
-            _trackedInstrumentRoots.Clear();
-            if (_instrumentRootByBip == null)
-            {
-                if (!string.IsNullOrWhiteSpace(_instrumentRoot))
-                    _trackedInstrumentRoots.Add(_instrumentRoot);
-            }
-            else
-            {
-                for (int bip = 0; bip < _instrumentRootByBip.Length; bip++)
-                {
-                    string root = _instrumentRootByBip[bip];
-                    if (!string.IsNullOrWhiteSpace(root))
-                        _trackedInstrumentRoots.Add(root);
-                }
-            }
-
-            foreach (string root in _trackedInstrumentRoots)
-            {
-                BridgeBusCompat.RegisterBridge(root, PublishToGlitchUi);
-                BridgeBusCompat.TouchBridge(root, PublishToGlitchUi, string.Equals(root, _instrumentRoot, StringComparison.OrdinalIgnoreCase));
-            }
-        }
-
-        private void RegisterBootstrapPublishersForTrackedRoots()
-        {
-            foreach (string root in _trackedInstrumentRoots)
-                BridgeBusCompat.RegisterBridgeBootstrapPublisher(root, RequestBootstrapFromExternal);
-        }
-
-        private void TouchTrackedBridges()
-        {
-            foreach (string root in _trackedInstrumentRoots)
-                BridgeBusCompat.TouchBridge(root, PublishToGlitchUi, string.Equals(root, _instrumentRoot, StringComparison.OrdinalIgnoreCase));
-        }
-
-        private void UnregisterTrackedBridges()
-        {
-            foreach (string root in _trackedInstrumentRoots)
-            {
-                BridgeBusCompat.UnregisterBridgeBootstrapPublisher(root, RequestBootstrapFromExternal);
-                BridgeBusCompat.UnregisterBridge(root);
-            }
-
-            _trackedInstrumentRoots.Clear();
-        }
-
-        private string ResolveInstrumentRootForBip(int bip)
-        {
-            if (_instrumentRootByBip != null && bip >= 0 && bip < _instrumentRootByBip.Length &&
-                !string.IsNullOrWhiteSpace(_instrumentRootByBip[bip]))
-                return _instrumentRootByBip[bip];
-
-            return _instrumentRoot;
-        }
-
-        private double ResolveTickSizeForBip(int bip)
-        {
-            if (_tickSizeByBip != null && bip >= 0 && bip < _tickSizeByBip.Length && _tickSizeByBip[bip] > 0)
-                return _tickSizeByBip[bip];
-
-            return 0.25;
-        }
-
-        private static string ResolveInstrumentRootFromBars(Bars bars)
-        {
-            if (bars == null || bars.Instrument == null)
-                return null;
-
-            return NormalizeInstrumentRoot(
-                bars.Instrument.MasterInstrument == null
-                    ? bars.Instrument.FullName
-                    : bars.Instrument.MasterInstrument.Name);
-        }
-
-        private static double ResolveTickSizeFromBars(Bars bars)
-        {
-            double tickSize = bars?.Instrument?.MasterInstrument?.TickSize ?? 0;
-            return tickSize > 0 ? tickSize : 0.25;
-        }
-
-        private static string BuildFeedKey(string instrumentRoot, int minutes)
-        {
-            return (instrumentRoot ?? string.Empty).Trim().ToUpperInvariant() + "|" + minutes.ToString(CultureInfo.InvariantCulture);
-        }
-
         private void AddOrderFlowTickSeries()
         {
             bool isPrimaryOneTick =
@@ -850,16 +767,12 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 _minutesByBip = null;
                 _isTrackedByBip = null;
-                _instrumentRootByBip = null;
-                _tickSizeByBip = null;
                 return;
             }
 
             int seriesCount = BarsArray.Length;
             _minutesByBip = new int[seriesCount];
             _isTrackedByBip = new bool[seriesCount];
-            _instrumentRootByBip = new string[seriesCount];
-            _tickSizeByBip = new double[seriesCount];
 
             for (int bip = 0; bip < seriesCount; bip++)
             {
@@ -870,8 +783,6 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 _minutesByBip[bip] = minutes;
                 _isTrackedByBip[bip] = IsTrackedMinutes(minutes);
-                _instrumentRootByBip[bip] = ResolveInstrumentRootFromBars(bars);
-                _tickSizeByBip[bip] = ResolveTickSizeFromBars(bars);
             }
         }
 
@@ -1113,6 +1024,9 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             for (int bip = 0; bip < seriesCount; bip++)
             {
+                if (!IsTrackedMinutesForBip(bip))
+                    continue;
+
                 _emaFastByBip[bip] = EMA(BarsArray[bip], 12);
                 _emaMedByBip[bip] = EMA(BarsArray[bip], 26);
                 _emaSlowByBip[bip] = EMA(BarsArray[bip], 55);
@@ -1182,7 +1096,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             double emaMed = _emaMedByBip[bip][0];
             double emaSlow = _emaSlowByBip[bip][0];
 
-            double denominator = Math.Max(Math.Max(atr, ResolveTickSizeForBip(bip)), 1e-8);
+            double denominator = Math.Max(Math.Max(atr, _tickSize), 1e-8);
             double fastSlopeN = (_emaFastByBip[bip][0] - _emaFastByBip[bip][1]) / denominator;
             double medSlopeN = (_emaMedByBip[bip][0] - _emaMedByBip[bip][1]) / denominator;
             double slowSlopeN = (_emaSlowByBip[bip][0] - _emaSlowByBip[bip][1]) / denominator;
@@ -1296,7 +1210,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             int maSellVotes = 0;
             int maNeutralVotes = 0;
             int totalMaVotes = 0;
-            double maTolerance = Math.Max(denominator * 0.03, ResolveTickSizeForBip(bip) * 0.50);
+            double maTolerance = Math.Max(denominator * 0.03, _tickSize * 0.50);
 
             if (CurrentBars[bip] >= 10)
             {
@@ -1504,7 +1418,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 return cachedSignal.Score;
 
             double atr = _atrByBip[bip][0];
-            double scale = Math.Max(Math.Max(atr, ResolveTickSizeForBip(bip)), 1e-8);
+            double scale = Math.Max(Math.Max(atr, _tickSize), 1e-8);
             double bodyVelocity = (Closes[bip][0] - Opens[bip][0]) / (scale * 0.55);
             double tickVelocity = (Closes[bip][0] - Closes[bip][1]) / (scale * 0.30);
             double acceleration = ((Closes[bip][0] - Closes[bip][1]) - (Closes[bip][1] - Closes[bip][2])) / (scale * 0.40);
@@ -1591,7 +1505,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                         if (currentVwap > 0)
                         {
                             vwap = currentVwap;
-                            double normalization = Math.Max(Math.Max(atr, ResolveTickSizeForBip(bip)), 1e-8);
+                            double normalization = Math.Max(Math.Max(atr, _tickSize), 1e-8);
                             vwapBias = Clamp((close - currentVwap) / normalization, -1, 1);
 
                             double stdUpper = vwapIndicator.StdDev1Upper[0];
@@ -1633,7 +1547,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (CurrentBars[bip] > 0)
             {
                 priceVelocity = Clamp(
-                    (Closes[bip][0] - Opens[bip][0]) / Math.Max(Math.Max(atr, ResolveTickSizeForBip(bip)), 1e-8),
+                    (Closes[bip][0] - Opens[bip][0]) / Math.Max(Math.Max(atr, _tickSize), 1e-8),
                     -1,
                     1);
                 hasPriceVelocity = true;
@@ -1700,13 +1614,12 @@ namespace NinjaTrader.NinjaScript.Indicators
                 return IsFirstTickOfBar;
 
             DateTime nowUtc = DateTime.UtcNow;
-            string feedKey = BuildFeedKey(ResolveInstrumentRootForBip(bip), minutes);
             DateTime lastPublishUtc;
-            if (_lastPublishUtcByFeedKey.TryGetValue(feedKey, out lastPublishUtc) &&
+            if (_lastPublishUtcByMinutes.TryGetValue(minutes, out lastPublishUtc) &&
                 (nowUtc - lastPublishUtc).TotalMilliseconds < intervalMs)
                 return false;
 
-            _lastPublishUtcByFeedKey[feedKey] = nowUtc;
+            _lastPublishUtcByMinutes[minutes] = nowUtc;
             return true;
         }
 
@@ -1823,12 +1736,11 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private SessionTracker UpdateSessionTracker(int minutes, int bip)
         {
-            string feedKey = BuildFeedKey(ResolveInstrumentRootForBip(bip), minutes);
             SessionTracker tracker;
-            if (!_sessionByFeedKey.TryGetValue(feedKey, out tracker) || tracker == null)
+            if (!_sessionByMinutes.TryGetValue(minutes, out tracker) || tracker == null)
             {
                 tracker = new SessionTracker();
-                _sessionByFeedKey[feedKey] = tracker;
+                _sessionByMinutes[minutes] = tracker;
             }
 
             DateTime barLocal = Times[bip][0].ToLocalTime();
@@ -2361,405 +2273,6 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (value > max)
                 return max;
             return value;
-        }
-
-        private static class BridgeBusCompat
-        {
-            private static readonly object SyncRoot = new object();
-            private static readonly TimeSpan ResolveRetryInterval = TimeSpan.FromSeconds(1);
-            private const string BusTypeFullName = "Glitch.UI.GlitchAnalyticsFeedBus";
-            private const string ReadingTypeFullName = "Glitch.UI.GlitchIndicatorReading";
-
-            private static DateTime _lastResolveUtc = DateTime.MinValue;
-            private static Type _busType;
-            private static Type _readingType;
-            private static MethodInfo _publishMethod;
-            private static MethodInfo _registerBridgeMethod;
-            private static MethodInfo _touchBridgeMethod;
-            private static MethodInfo _unregisterBridgeMethod;
-            private static MethodInfo _registerBootstrapPublisherMethod;
-            private static MethodInfo _unregisterBootstrapPublisherMethod;
-
-            public sealed class BridgeReading
-            {
-                public string InstrumentRoot { get; set; }
-                public int Minutes { get; set; }
-                public DateTime UtcTime { get; set; }
-                public double? CurrentPrice { get; set; }
-                public double? AveragePrice { get; set; }
-                public double? Atr { get; set; }
-                public double? Adx { get; set; }
-                public double Score { get; set; }
-                public double? RawScore { get; set; }
-                public double? DirectionalScore { get; set; }
-                public double? TradeabilityScore { get; set; }
-                public string SignalLabel { get; set; }
-                public string VolatilityHint { get; set; }
-                public string TrendHint { get; set; }
-                public string RegimeLabel { get; set; }
-                public string NoTradeReasons { get; set; }
-                public double? Rsi { get; set; }
-                public double? StochK { get; set; }
-                public double? ZScore { get; set; }
-                public double? EmaAlignment { get; set; }
-                public double? RegimeWeight { get; set; }
-                public double? OscillatorCompositeScore { get; set; }
-                public double? MaCompositeScore { get; set; }
-                public double? OrderFlowScore { get; set; }
-                public double? OrderFlowConfidence { get; set; }
-                public double? OrderFlowReliability { get; set; }
-                public double? OrderFlowCumulativeDelta { get; set; }
-                public double? OrderFlowDeltaChange { get; set; }
-                public double? OrderFlowVwap { get; set; }
-                public double? OrderFlowVwapDeviation { get; set; }
-                public double? OrderFlowAggressionBalance { get; set; }
-                public double? OrderFlowDepthImbalance { get; set; }
-                public string OrderFlowHint { get; set; }
-                public string SessionName { get; set; }
-                public double? SessionHigh { get; set; }
-                public double? SessionLow { get; set; }
-                public double? PreviousSessionHigh { get; set; }
-                public double? PreviousSessionLow { get; set; }
-            }
-
-            public static bool IsAvailable()
-            {
-                return EnsureResolved();
-            }
-
-            public static void RegisterBridge(string instrumentRoot, bool publishToGlitchUi)
-            {
-                MethodInfo method = GetMethod("RegisterBridge");
-                if (method == null)
-                    return;
-
-                TryInvoke(method, new object[] { instrumentRoot, publishToGlitchUi });
-            }
-
-            public static void TouchBridge(string instrumentRoot, bool publishToGlitchUi, bool isTrackedPrimaryTimeframe)
-            {
-                MethodInfo method = GetMethod("TouchBridge");
-                if (method == null)
-                    return;
-
-                TryInvoke(method, new object[] { instrumentRoot, publishToGlitchUi, isTrackedPrimaryTimeframe });
-            }
-
-            public static void UnregisterBridge(string instrumentRoot)
-            {
-                MethodInfo method = GetMethod("UnregisterBridge");
-                if (method == null)
-                    return;
-
-                TryInvoke(method, new object[] { instrumentRoot });
-            }
-
-            public static void RegisterBridgeBootstrapPublisher(string instrumentRoot, Action publisher)
-            {
-                MethodInfo method = GetMethod("RegisterBridgeBootstrapPublisher");
-                if (method == null)
-                    return;
-
-                TryInvoke(method, new object[] { instrumentRoot, publisher });
-            }
-
-            public static void UnregisterBridgeBootstrapPublisher(string instrumentRoot, Action publisher)
-            {
-                MethodInfo method = GetMethod("UnregisterBridgeBootstrapPublisher");
-                if (method == null)
-                    return;
-
-                TryInvoke(method, new object[] { instrumentRoot, publisher });
-            }
-
-            public static bool Publish(BridgeReading reading)
-            {
-                if (reading == null)
-                    return false;
-
-                if (!EnsureResolved())
-                    return false;
-
-                object message = CreateReadingMessage(reading);
-                if (message == null)
-                    return false;
-
-                MethodInfo method = _publishMethod;
-                if (method == null)
-                    return false;
-
-                return TryInvoke(method, new object[] { message });
-            }
-
-            private static MethodInfo GetMethod(string name)
-            {
-                if (!EnsureResolved())
-                    return null;
-
-                switch (name)
-                {
-                    case "Publish":
-                        return _publishMethod;
-                    case "RegisterBridge":
-                        return _registerBridgeMethod;
-                    case "TouchBridge":
-                        return _touchBridgeMethod;
-                    case "UnregisterBridge":
-                        return _unregisterBridgeMethod;
-                    case "RegisterBridgeBootstrapPublisher":
-                        return _registerBootstrapPublisherMethod;
-                    case "UnregisterBridgeBootstrapPublisher":
-                        return _unregisterBootstrapPublisherMethod;
-                    default:
-                        return null;
-                }
-            }
-
-            private static bool EnsureResolved()
-            {
-                lock (SyncRoot)
-                {
-                    if (_busType != null && _readingType != null && _publishMethod != null)
-                        return true;
-
-                    DateTime nowUtc = DateTime.UtcNow;
-                    if (_lastResolveUtc != DateTime.MinValue && (nowUtc - _lastResolveUtc) < ResolveRetryInterval)
-                        return false;
-
-                    _lastResolveUtc = nowUtc;
-
-                    Type busType = ResolvePreferredBusType();
-                    Type readingType = ResolveReadingTypeForBus(busType);
-                    if (busType == null || readingType == null)
-                    {
-                        ClearResolvedTypes();
-                        return false;
-                    }
-
-                    MethodInfo publish = busType.GetMethod("Publish", BindingFlags.Public | BindingFlags.Static);
-                    MethodInfo registerBridge = busType.GetMethod("RegisterBridge", BindingFlags.Public | BindingFlags.Static);
-                    MethodInfo touchBridge = busType.GetMethod("TouchBridge", BindingFlags.Public | BindingFlags.Static);
-                    MethodInfo unregisterBridge = busType.GetMethod("UnregisterBridge", BindingFlags.Public | BindingFlags.Static);
-                    MethodInfo registerPublisher = busType.GetMethod("RegisterBridgeBootstrapPublisher", BindingFlags.Public | BindingFlags.Static);
-                    MethodInfo unregisterPublisher = busType.GetMethod("UnregisterBridgeBootstrapPublisher", BindingFlags.Public | BindingFlags.Static);
-
-                    if (publish == null)
-                    {
-                        ClearResolvedTypes();
-                        return false;
-                    }
-
-                    _busType = busType;
-                    _readingType = readingType;
-                    _publishMethod = publish;
-                    _registerBridgeMethod = registerBridge;
-                    _touchBridgeMethod = touchBridge;
-                    _unregisterBridgeMethod = unregisterBridge;
-                    _registerBootstrapPublisherMethod = registerPublisher;
-                    _unregisterBootstrapPublisherMethod = unregisterPublisher;
-                    return true;
-                }
-            }
-
-            private static void ClearResolvedTypes()
-            {
-                _busType = null;
-                _readingType = null;
-                _publishMethod = null;
-                _registerBridgeMethod = null;
-                _touchBridgeMethod = null;
-                _unregisterBridgeMethod = null;
-                _registerBootstrapPublisherMethod = null;
-                _unregisterBootstrapPublisherMethod = null;
-            }
-
-            private static Type ResolvePreferredBusType()
-            {
-                try
-                {
-                    Assembly currentAssembly = typeof(GlitchAnalyticsBridge).Assembly;
-                    Type inCurrentAssembly = currentAssembly == null
-                        ? null
-                        : currentAssembly.GetType(BusTypeFullName, false);
-                    if (inCurrentAssembly != null)
-                        return inCurrentAssembly;
-                }
-                catch
-                {
-                }
-
-                return ResolveType(BusTypeFullName);
-            }
-
-            private static Type ResolveReadingTypeForBus(Type busType)
-            {
-                if (busType == null)
-                    return null;
-
-                try
-                {
-                    Type inBusAssembly = busType.Assembly == null
-                        ? null
-                        : busType.Assembly.GetType(ReadingTypeFullName, false);
-                    if (inBusAssembly != null)
-                        return inBusAssembly;
-                }
-                catch
-                {
-                }
-
-                return ResolveType(ReadingTypeFullName);
-            }
-
-            private static Type ResolveType(string fullName)
-            {
-                Type resolved = Type.GetType(fullName, false);
-                if (resolved != null)
-                    return resolved;
-
-                Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
-                for (int i = 0; i < assemblies.Length; i++)
-                {
-                    Assembly assembly = assemblies[i];
-                    if (assembly == null)
-                        continue;
-
-                    resolved = assembly.GetType(fullName, false);
-                    if (resolved != null)
-                        return resolved;
-                }
-
-                return null;
-            }
-
-            private static bool TryInvoke(MethodInfo method, object[] args)
-            {
-                if (method == null)
-                    return false;
-
-                try
-                {
-                    method.Invoke(null, args);
-                    return true;
-                }
-                catch
-                {
-                    return false;
-                }
-            }
-
-            private static object CreateReadingMessage(BridgeReading reading)
-            {
-                Type readingType = _readingType;
-                if (readingType == null)
-                    return null;
-
-                object message;
-                try
-                {
-                    message = Activator.CreateInstance(readingType, true);
-                }
-                catch
-                {
-                    return null;
-                }
-
-                SetProperty(message, "InstrumentRoot", reading.InstrumentRoot);
-                SetProperty(message, "Minutes", reading.Minutes);
-                SetProperty(message, "UtcTime", reading.UtcTime);
-                SetProperty(message, "CurrentPrice", reading.CurrentPrice);
-                SetProperty(message, "AveragePrice", reading.AveragePrice);
-                SetProperty(message, "Atr", reading.Atr);
-                SetProperty(message, "Adx", reading.Adx);
-                SetProperty(message, "Score", reading.Score);
-                SetProperty(message, "RawScore", reading.RawScore);
-                SetProperty(message, "DirectionalScore", reading.DirectionalScore);
-                SetProperty(message, "TradeabilityScore", reading.TradeabilityScore);
-                SetProperty(message, "SignalLabel", reading.SignalLabel);
-                SetProperty(message, "VolatilityHint", reading.VolatilityHint);
-                SetProperty(message, "TrendHint", reading.TrendHint);
-                SetProperty(message, "RegimeLabel", reading.RegimeLabel);
-                SetProperty(message, "NoTradeReasons", reading.NoTradeReasons);
-                SetProperty(message, "Rsi", reading.Rsi);
-                SetProperty(message, "StochK", reading.StochK);
-                SetProperty(message, "ZScore", reading.ZScore);
-                SetProperty(message, "EmaAlignment", reading.EmaAlignment);
-                SetProperty(message, "RegimeWeight", reading.RegimeWeight);
-                SetProperty(message, "OscillatorCompositeScore", reading.OscillatorCompositeScore);
-                SetProperty(message, "MaCompositeScore", reading.MaCompositeScore);
-                SetProperty(message, "OrderFlowScore", reading.OrderFlowScore);
-                SetProperty(message, "OrderFlowConfidence", reading.OrderFlowConfidence);
-                SetProperty(message, "OrderFlowReliability", reading.OrderFlowReliability);
-                SetProperty(message, "OrderFlowCumulativeDelta", reading.OrderFlowCumulativeDelta);
-                SetProperty(message, "OrderFlowDeltaChange", reading.OrderFlowDeltaChange);
-                SetProperty(message, "OrderFlowVwap", reading.OrderFlowVwap);
-                SetProperty(message, "OrderFlowVwapDeviation", reading.OrderFlowVwapDeviation);
-                SetProperty(message, "OrderFlowAggressionBalance", reading.OrderFlowAggressionBalance);
-                SetProperty(message, "OrderFlowDepthImbalance", reading.OrderFlowDepthImbalance);
-                SetProperty(message, "OrderFlowHint", reading.OrderFlowHint);
-                SetProperty(message, "SessionName", reading.SessionName);
-                SetProperty(message, "SessionHigh", reading.SessionHigh);
-                SetProperty(message, "SessionLow", reading.SessionLow);
-                SetProperty(message, "PreviousSessionHigh", reading.PreviousSessionHigh);
-                SetProperty(message, "PreviousSessionLow", reading.PreviousSessionLow);
-
-                return message;
-            }
-
-            private static void SetProperty(object target, string propertyName, object value)
-            {
-                if (target == null || string.IsNullOrWhiteSpace(propertyName))
-                    return;
-
-                PropertyInfo property = target.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
-                if (property == null || !property.CanWrite)
-                    return;
-
-                try
-                {
-                    object converted = ConvertValue(value, property.PropertyType);
-                    property.SetValue(target, converted, null);
-                }
-                catch
-                {
-                }
-            }
-
-            private static object ConvertValue(object value, Type destinationType)
-            {
-                Type nonNullableType = Nullable.GetUnderlyingType(destinationType) ?? destinationType;
-
-                if (value == null)
-                {
-                    if (Nullable.GetUnderlyingType(destinationType) != null || !destinationType.IsValueType)
-                        return null;
-
-                    return Activator.CreateInstance(destinationType);
-                }
-
-                if (nonNullableType.IsInstanceOfType(value))
-                    return value;
-
-                if (nonNullableType == typeof(string))
-                    return value.ToString();
-
-                if (nonNullableType == typeof(DateTime))
-                {
-                    if (value is DateTime)
-                        return (DateTime)value;
-
-                    DateTime parsedDateTime;
-                    if (DateTime.TryParse(value.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out parsedDateTime))
-                        return parsedDateTime;
-
-                    return DateTime.MinValue;
-                }
-
-                if (nonNullableType.IsEnum)
-                    return Enum.Parse(nonNullableType, value.ToString(), true);
-
-                return Convert.ChangeType(value, nonNullableType, CultureInfo.InvariantCulture);
-            }
         }
 
         private struct SignalSnapshot

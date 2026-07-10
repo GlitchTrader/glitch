@@ -65,10 +65,10 @@ Version map: `docs/ai-program/roadmap.md`
 | Rail | GL | Version | Title | Status |
 |------|-----|---------|-------|--------|
 | R01 | GL-025 | v20 | Instrument metadata registry | done |
-| R02 | GL-026 | v20 | Multi-asset bridge normalization | done |
-| R03 | — | v21 | Market snapshot writer (file) | todo |
-| R04 | — | v21 | Portfolio snapshot writer (file) | todo |
-| R05 | — | v21 | Historical exporter (same schema) | todo |
+| R02 | GL-026 | v20 | Multi-asset ingest (`GlitchAiMarketIngest`) | done (bridge rolled back to single-instrument UI) |
+| R03 | — | v21 | Market snapshot writer (file) | done |
+| R04 | — | v21 | Portfolio snapshot writer (file) | done |
+| R05 | — | v21 | Historical exporter (same schema) | done |
 | R06 | GL-029 | H-1 | Pattern mining / backtest (parallel) | todo |
 | R07 | GL-027 | v21 | Telemetry server (localhost GET) | todo |
 | R08 | GL-030 | v22 | Intent endpoint (paper only) | todo |

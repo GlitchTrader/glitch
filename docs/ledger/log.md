@@ -2,6 +2,37 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-09 — R05 historical snapshot exporter (glitch/ai-rail)
+
+- **R05:** `GlitchHistoricalSnapshotExporter` archives paired market+portfolio snapshots under `GlitchData/snapshots/historical/{market,portfolio}/`.
+- Index: `snapshots/historical/index.jsonl` (paired by shared `snapshot_id`).
+- Replay bundle: `snapshots/historical/replay/latest.json` (`glitch.historical.replay.v1`, `source_mode: historical_replay`).
+- **Next:** R06 pattern mining (parallel) or R07 telemetry server.
+
+## 2026-07-09 — UI bridge vs AI ingest split (glitch/ai-rail)
+
+- **Rollback:** `GlitchAnalyticsBridge` restored to **single-instrument** UI scope (pre-R02 multi-asset on one bridge).
+- **Perf:** skip indicator init on non-tracked bips; `EnableOrderFlowLayer` default **off**.
+- **New:** `GlitchAiMarketIngest` — lightweight `OnBarClose` ingest on a separate chart; multi-root via Data Series → feed bus → R03 snapshot.
+- **Shared:** `GlitchBridgeBusCompat.cs` extracted for both indicators.
+- **Operator:** trade chart = bridge (MNQ); ingest chart = `GlitchAiMarketIngest` + Data Series (MES, M2K, …).
+
+## 2026-07-09 — R04 portfolio snapshot writer (glitch/ai-rail)
+
+- **R04:** `GlitchPortfolioSnapshotWriter` → `GlitchData/snapshots/portfolio/latest.json` (`glitch.portfolio.snapshot.v1`, accounts/positions/PnL/locks, prop rules version).
+- Shared `GlitchSnapshotJson` helpers for market + portfolio writers.
+- **Next:** R05 historical exporter (same schema).
+
+## 2026-07-09 — R03 market snapshot writer (glitch/ai-rail)
+
+- **R03:** `GlitchMarketSnapshotWriter` → `GlitchData/snapshots/market/latest.json` (`glitch.market.snapshot.v1`, 1-min throttle, coverage for TFs 1/5/15/60).
+- Bridge logs bar-series + instrument-root count on `DataLoaded` for multi-asset diagnostics.
+- **Feed check (NT log):** only **MNQ** publishing (4 readings / 1 root); add secondary roots via chart **Data Series** (1-min each).
+
+## 2026-07-09 — Apex Legacy prop rules patch (glitch/ai-rail)
+
+- `ApexTraderFunding` PA consistency **50% → 30%**; bundled fallback regenerated + deployed.
+
 ## 2026-07-09 — R01/R02 Eyes (glitch/ai-rail)
 
 - **GL-025:** `GlitchInstrumentMetadataService` — point value, tick size, session from NT `MasterInstrument`; kills F2 silent `1.0` fallback (unknown instruments excluded from USD aggregates + visible warning).

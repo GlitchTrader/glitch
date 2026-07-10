@@ -1,21 +1,22 @@
-# GlitchAnalyticsBridge Indicator
+# Glitch NinjaTrader Indicators
 
-## Role
+## GlitchAnalyticsBridge (UI / trade chart)
 
-`GlitchAnalyticsBridge` is the chart-side analytics publisher for Glitch.
+### Role
 
-It runs as a NinjaTrader indicator, watches supported timeframes for the active instrument, builds a structured market reading, and publishes that reading into the Glitch AddOn when the bridge is available.
+`GlitchAnalyticsBridge` is the chart-side analytics publisher for the Glitch AddOn visual assistant.
 
-## Identity
+It runs on the **trade chart**, watches supported timeframes for **one instrument**, builds a structured market reading, colors bars by regime, and publishes into the AddOn analytics tab.
+
+### Identity
 
 - Type: `NinjaTrader.NinjaScript.Indicators.GlitchAnalyticsBridge`
 - Name: `GlitchAnalyticsBridge`
 - Overlay: `true`
-- Default calculation mode: price-change driven
+- Default calculation mode: price-change driven (bar coloring)
+- Scope: **single instrument only** — do not add secondary Data Series here
 
-## Public parameters
-
-The indicator exposes a focused public parameter surface for chart behavior and bridge publishing.
+### Public parameters
 
 | Parameter | Purpose |
 |-----------|---------|
@@ -27,84 +28,68 @@ The indicator exposes a focused public parameter surface for chart behavior and 
 | `PredictiveBoost` | Adjusts how aggressively the signal reacts to developing context |
 | `FlipHysteresis` | Reduces noisy direction flips around the neutral zone |
 | `PerformanceMode` | Favors lighter runtime behavior where appropriate |
-| `EnableOrderFlowLayer` | Enables the optional order-flow contribution |
+| `EnableOrderFlowLayer` | Optional order-flow contribution (default **off** for performance) |
 | `OrderFlowBlend` | Controls how much the order-flow layer influences the final reading |
-| `AdditionalInstrumentRoots` | Comma-separated instrument roots (e.g. `NQ,ES`) added via `AddData` for multi-asset publishing from one chart |
 
-## Timeframes and bar series
+### Timeframes
 
-The indicator tracks a small set of operationally useful timeframes:
+Tracks 1m · 5m · 15m · 60m for the chart instrument. When publishing is enabled, missing series are added automatically.
 
-- 1 minute
-- 5 minute
-- 15 minute
-- 60 minute
+### Performance notes
 
-When publishing is enabled, the indicator ensures the required series are available so the AddOn can receive a stable multi-timeframe view for the current instrument.
+- Indicators initialize only on tracked minute series (not tick/order-flow slots).
+- Order flow is off by default; enable only with Order Flow+ and when you need it on the trade chart.
 
-## Signal pipeline
+---
 
-For each tracked timeframe, the indicator builds a structured reading that includes:
+## GlitchAiMarketIngest (AI / Hermes feed)
 
-- directional context
-- tradeability context
-- regime labeling
-- supporting oscillator and moving-average context
-- optional order-flow contribution
-- session context such as current and previous session range
+### Role
 
-The public docs intentionally describe the output categories instead of publishing proprietary scoring formulas, weights, or thresholds.
+`GlitchAiMarketIngest` is a **separate, lightweight** indicator for the operating-system rail.
 
-## Bar coloring
+Use it on a dedicated ingest chart (can be minimized) to publish multi-instrument readings into `GlitchAnalyticsFeedBus` for R03 market snapshots. It does **not** color bars and does not replace the UI bridge on the trade chart.
 
-When enabled, the indicator uses the current reading to color bars so the trader can see regime and directional bias directly on the chart.
+### Identity
 
-The color logic is designed to stay readable rather than hyperactive. Hysteresis and neutral-band behavior help reduce visual noise around borderline conditions.
+- Type: `NinjaTrader.NinjaScript.Indicators.GlitchAiMarketIngest`
+- Name: `GlitchAiMarketIngest`
+- Overlay: `false`
+- Default calculation mode: **OnBarClose**
+- `IsSuspendedWhileInactive = true`
 
-## Publishing into Glitch
+### Operator setup
 
-When `PublishToGlitchUi` is enabled and the bridge is available, the indicator publishes a normalized reading per instrument root and timeframe into the AddOn. Use `AdditionalInstrumentRoots` to feed multiple roots from one chart instance (preferred over opening many charts).
+1. Open a separate chart (not the trade chart).
+2. Set primary instrument to the first symbol in your ingest basket (e.g. MNQ 1m).
+3. Add **Data Series** for additional roots at **1 minute** each (MES, M2K, ES, …).
+4. Apply `GlitchAiMarketIngest`.
+5. Confirm NT output log: `GlitchAiMarketIngest data loaded: N bar series, M instrument root(s): …`
+6. After ~1 minute with Glitch open, check `GlitchData/snapshots/market/latest.json` for `instrument_count` > 1.
 
-The AddOn resolves instrument metadata (point value, tick size, session template) through `GlitchInstrumentMetadataService` for PnL and normalized analytics display.
+### Parameters
 
-That published reading is what powers:
+| Parameter | Purpose |
+|-----------|---------|
+| `AddPrimaryTimeframes` | When true, auto-adds 5m/15m/60m for the **primary** instrument only |
 
-- the AddOn analytics tab
-- consolidated multi-timeframe views
-- higher-level market context inside the Glitch window
+Secondary Data Series publish **1m** readings only (NT cannot auto-add MTF per secondary instrument at runtime).
 
-The indicator can also participate in bootstrap publishing so the AddOn can obtain a fresh reading without waiting for a full new chart cycle.
+### Output
 
-## Order-flow layer
+Publishes the same `GlitchIndicatorReading` shape the AddOn feed bus expects: price, ATR, ADX, RSI, simplified score/regime, session context. No order flow, no bar paint.
 
-The optional order-flow layer enriches the signal with short-horizon tape and microstructure context.
+---
 
-Public docs keep this at the capability level:
+## Shared feed bus
 
-- it tracks near-term order-flow state
-- it contributes to the published reading when enabled
-- it is blended into the overall context model without exposing private implementation details
-
-## Session tracking
-
-The indicator also tracks session context so the AddOn can present:
-
-- current session name
-- current session high and low
-- previous session high and low
-
-This gives the operator immediate structural context without forcing them to derive it manually from the chart.
-
-## Generated NinjaScript wrappers
-
-Like other NinjaTrader indicators, the file ends with generated NinjaScript wrappers so the indicator can be requested consistently from indicator, market-analyzer, and strategy contexts.
+Both indicators publish through `GlitchBridgeBusCompat` → `Glitch.UI.GlitchAnalyticsFeedBus`. The AddOn snapshot writers (R03 market, R04 portfolio) read from the feed bus and export JSON under `GlitchData/snapshots/`.
 
 ## Summary
 
-The indicator is not the entire product. Its job is narrower and cleaner:
+| Layer | Indicator | Chart | Instruments |
+|-------|-----------|-------|-------------|
+| UI / visual assistant | `GlitchAnalyticsBridge` | Trade chart | One (MNQ) |
+| AI / Hermes ingest | `GlitchAiMarketIngest` | Separate ingest chart | Many via Data Series |
 
-- build chart-side context
-- publish stable readings
-- stay decoupled from host-side AddOn concerns
-
-That separation is one of the reasons Glitch can behave like a real operating layer rather than a single crowded indicator file.
+That separation keeps the trade chart responsive while the AI rail gets exactly the tape fields it needs.

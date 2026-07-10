@@ -1,6 +1,6 @@
 param(
-    [string]$JsonPath = "d:\click-blue\trading\glitch-platform\ninjatrader\Glitch\AddOns\GlitchAddOn\Resources\PropFirmRules.json",
-    [string]$OutputPath = "d:\click-blue\trading\glitch-platform\ninjatrader\Glitch\AddOns\GlitchAddOn\UI\MainWindow\GlitchMainWindow.PropFirmRulesBundle.generated.cs"
+    [string]$JsonPath = "D:\ab\projects\glitch\Glitch-Platform\ninjatrader\Glitch\AddOns\GlitchAddOn\Resources\PropFirmRules.json",
+    [string]$OutputPath = "D:\ab\projects\glitch\Glitch-Platform\ninjatrader\Glitch\AddOns\GlitchAddOn\UI\MainWindow\GlitchMainWindow.PropFirmRulesBundle.generated.cs"
 )
 
 $ErrorActionPreference = "Stop"
