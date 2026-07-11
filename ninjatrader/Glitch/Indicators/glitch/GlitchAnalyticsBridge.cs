@@ -156,6 +156,18 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Order Flow Blend", Order = 10, GroupName = "Parameters")]
         public double OrderFlowBlend { get; set; }
 
+        [NinjaScriptProperty]
+        [Browsable(false)]
+        [Display(Name = "Enable Historical Snapshot Export", Order = 1, GroupName = "Historical Export")]
+        public bool EnableHistoricalSnapshotExport { get; set; }
+
+        [NinjaScriptProperty]
+        [Browsable(false)]
+        [Display(Name = "Historical Export Directory", Order = 2, GroupName = "Historical Export")]
+        public string HistoricalExportDirectory { get; set; }
+
+        private int _historicalExportCount;
+
         protected override void OnStateChange()
         {
             if (State == State.SetDefaults)
@@ -164,8 +176,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Name = "GlitchAnalyticsBridge";
                 Calculate = Calculate.OnPriceChange;
                 IsOverlay = true;
-                // ponytail: SetDefaults-only; keep bridge publishing when chart tab is inactive (PublishToGlitchUi defaults true)
-                IsSuspendedWhileInactive = false;
+                // ponytail: do not assign IsSuspendedWhileInactive here — NT throws if reapplied on reload; default keeps bridge active enough for feed bus touch/bootstrap.
                 NeutralBand = 0.01;
                 EnableBarColoring = true;
                 PublishToGlitchUi = true;
@@ -176,10 +187,12 @@ namespace NinjaTrader.NinjaScript.Indicators
                 PerformanceMode = true;
                 EnableOrderFlowLayer = false;
                 OrderFlowBlend = 0.8;
+                EnableHistoricalSnapshotExport = false;
+                HistoricalExportDirectory = string.Empty;
             }
             else if (State == State.Configure)
             {
-                if (PublishToGlitchUi)
+                if (PublishToGlitchUi || EnableHistoricalSnapshotExport)
                     AddMissingTimeframeSeries();
 
                 if (EnableOrderFlowLayer)
@@ -343,18 +356,24 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
 
             bool shouldPublish = PublishToGlitchUi && bridgeAvailable && ShouldPublish(minutes, BarsInProgress);
-            if (!shouldColor && !shouldPublish)
+            bool isStrategyAnalyzerHost = ChartControl == null;
+            bool shouldComputeForExport =
+                EnableHistoricalSnapshotExport &&
+                (isHistorical || (State == State.Realtime && isStrategyAnalyzerHost)) &&
+                isBoundaryTick;
+            if (!shouldColor && !shouldPublish && !shouldComputeForExport)
                 return;
 
             SignalSnapshot signal;
+            bool includeOrderFlowHint = shouldPublish || shouldComputeForExport;
             if (hasEnoughBars)
             {
-                if (!TryResolveSignal(BarsInProgress, isBoundaryTick, shouldPublish, out signal))
+                if (!TryResolveSignal(BarsInProgress, isBoundaryTick, includeOrderFlowHint, out signal))
                     return;
             }
             else
             {
-                signal = BuildWarmupSignal(BarsInProgress, shouldPublish);
+                signal = BuildWarmupSignal(BarsInProgress, includeOrderFlowHint);
             }
 
             if (shouldColor)
@@ -363,51 +382,14 @@ namespace NinjaTrader.NinjaScript.Indicators
                 ApplyBarColor(colorScore);
             }
 
-            if (!shouldPublish)
-                return;
-
-            SessionTracker session = UpdateSessionTracker(minutes, BarsInProgress);
-            GlitchBridgeBusCompat.Publish(new GlitchBridgeBusCompat.BridgeReading
+            if (shouldPublish)
             {
-                InstrumentRoot = _instrumentRoot,
-                Minutes = minutes,
-                UtcTime = Times[BarsInProgress][0].ToUniversalTime(),
-                CurrentPrice = ResolvePublishedCurrentPrice(signal.Close),
-                AveragePrice = signal.AveragePrice,
-                Atr = signal.Atr,
-                Adx = signal.Adx,
-                Score = signal.Score,
-                RawScore = signal.RawScore,
-                DirectionalScore = signal.DirectionalScore,
-                TradeabilityScore = signal.TradeabilityScore,
-                SignalLabel = ToSignalLabel(signal.Score),
-                VolatilityHint = BuildVolatilityHint(signal.Atr, signal.Close),
-                TrendHint = BuildTrendHint(signal.Adx, signal.Rsi, signal.StochK, signal.ZScore),
-                RegimeLabel = signal.RegimeLabel,
-                NoTradeReasons = signal.NoTradeReasons,
-                Rsi = signal.Rsi,
-                StochK = signal.StochK,
-                ZScore = signal.ZScore,
-                EmaAlignment = signal.EmaAlignment,
-                RegimeWeight = signal.RegimeWeight,
-                OscillatorCompositeScore = signal.OscillatorCompositeScore,
-                MaCompositeScore = signal.MaCompositeScore,
-                OrderFlowScore = signal.OrderFlowScore,
-                OrderFlowConfidence = signal.OrderFlowConfidence,
-                OrderFlowReliability = signal.OrderFlowReliability,
-                OrderFlowCumulativeDelta = signal.OrderFlowCumulativeDelta,
-                OrderFlowDeltaChange = signal.OrderFlowDeltaChange,
-                OrderFlowVwap = signal.OrderFlowVwap,
-                OrderFlowVwapDeviation = signal.OrderFlowVwapDeviation,
-                OrderFlowAggressionBalance = signal.OrderFlowAggressionBalance,
-                OrderFlowDepthImbalance = signal.OrderFlowDepthImbalance,
-                OrderFlowHint = signal.OrderFlowHint,
-                SessionName = session.Name,
-                SessionHigh = session.CurrentHigh,
-                SessionLow = session.CurrentLow,
-                PreviousSessionHigh = session.PreviousHigh,
-                PreviousSessionLow = session.PreviousLow
-            });
+                SessionTracker session = UpdateSessionTracker(minutes, BarsInProgress);
+                GlitchBridgeBusCompat.Publish(BuildBridgeReading(BarsInProgress, minutes, signal, session));
+            }
+
+            if (shouldComputeForExport && BarsInProgress == 0)
+                TryExportHistoricalMinuteSnapshot();
         }
 
         protected override void OnMarketData(MarketDataEventArgs marketDataUpdate)
@@ -1747,6 +1729,242 @@ namespace NinjaTrader.NinjaScript.Indicators
             SessionBlock block = SessionBlock.Resolve(barLocal);
             tracker.Update(block.Key, block.Name, Highs[bip][0], Lows[bip][0]);
             return tracker;
+        }
+
+        private GlitchBridgeBusCompat.BridgeReading BuildBridgeReading(
+            int bip,
+            int minutes,
+            SignalSnapshot signal,
+            SessionTracker session)
+        {
+            DateTime readingUtc = Times[bip][0].ToUniversalTime();
+            return new GlitchBridgeBusCompat.BridgeReading
+            {
+                InstrumentRoot = _instrumentRoot,
+                Minutes = minutes,
+                UtcTime = readingUtc,
+                Open = Opens[bip][0],
+                High = Highs[bip][0],
+                Low = Lows[bip][0],
+                Volume = Volumes[bip][0],
+                CurrentPrice = ResolvePublishedCurrentPrice(signal.Close),
+                AveragePrice = signal.AveragePrice,
+                Atr = signal.Atr,
+                Adx = signal.Adx,
+                Score = signal.Score,
+                RawScore = signal.RawScore,
+                DirectionalScore = signal.DirectionalScore,
+                TradeabilityScore = signal.TradeabilityScore,
+                SignalLabel = ToSignalLabel(signal.Score),
+                VolatilityHint = BuildVolatilityHint(signal.Atr, signal.Close),
+                TrendHint = BuildTrendHint(signal.Adx, signal.Rsi, signal.StochK, signal.ZScore),
+                RegimeLabel = signal.RegimeLabel,
+                NoTradeReasons = signal.NoTradeReasons,
+                Rsi = signal.Rsi,
+                StochK = signal.StochK,
+                ZScore = signal.ZScore,
+                EmaAlignment = signal.EmaAlignment,
+                RegimeWeight = signal.RegimeWeight,
+                OscillatorCompositeScore = signal.OscillatorCompositeScore,
+                MaCompositeScore = signal.MaCompositeScore,
+                OrderFlowScore = signal.OrderFlowScore,
+                OrderFlowConfidence = signal.OrderFlowConfidence,
+                OrderFlowReliability = signal.OrderFlowReliability,
+                OrderFlowCumulativeDelta = signal.OrderFlowCumulativeDelta,
+                OrderFlowDeltaChange = signal.OrderFlowDeltaChange,
+                OrderFlowVwap = signal.OrderFlowVwap,
+                OrderFlowVwapDeviation = signal.OrderFlowVwapDeviation,
+                OrderFlowAggressionBalance = signal.OrderFlowAggressionBalance,
+                OrderFlowDepthImbalance = signal.OrderFlowDepthImbalance,
+                OrderFlowHint = signal.OrderFlowHint,
+                SessionName = session == null ? null : session.Name,
+                SessionHigh = session == null ? null : session.CurrentHigh,
+                SessionLow = session == null ? null : session.CurrentLow,
+                PreviousSessionHigh = session == null ? null : session.PreviousHigh,
+                PreviousSessionLow = session == null ? null : session.PreviousLow
+            };
+        }
+
+        private int ResolveBipForMinutes(int minutes)
+        {
+            if (_minutesByBip == null)
+                return -1;
+
+            for (int bip = 0; bip < _minutesByBip.Length; bip++)
+            {
+                if (_minutesByBip[bip] == minutes)
+                    return bip;
+            }
+
+            return -1;
+        }
+
+        private bool TryBuildRawTimeframeBar(int bip, int minutes, out GlitchMarketSnapshotRawJson.RawTimeframeBarPayload bar)
+        {
+            bar = null;
+            if (bip < 0 || bip >= BarsArray.Length || CurrentBars[bip] < MinBarsForSignal)
+                return false;
+
+            double close = Closes[bip][0];
+            if (close <= 0)
+                return false;
+
+            double? diPlus = null;
+            double? diMinus = null;
+            if (_dmByBip != null && bip < _dmByBip.Length && _dmByBip[bip] != null && CurrentBars[bip] >= 14)
+            {
+                diPlus = _dmByBip[bip].DiPlus[0];
+                diMinus = _dmByBip[bip].DiMinus[0];
+            }
+
+            double? cci = null;
+            if (_cciByBip != null && bip < _cciByBip.Length && _cciByBip[bip] != null && CurrentBars[bip] >= 20)
+                cci = _cciByBip[bip][0];
+
+            double? macdHistogram = null;
+            if (_macdByBip != null && bip < _macdByBip.Length && _macdByBip[bip] != null && CurrentBars[bip] >= 35)
+            {
+                double macdMain = _macdByBip[bip].Default[0];
+                double macdSignalLine = _macdByBip[bip].Avg[0];
+                macdHistogram = macdMain - macdSignalLine;
+            }
+
+            double? orderFlowDelta = null;
+            double? orderFlowDeltaChange = null;
+            double? orderFlowVwap = null;
+            double? orderFlowVwapDeviation = null;
+            if (EnableOrderFlowLayer && _isOrderFlowRuntimeAvailable)
+            {
+                double atr = _atrByBip[bip][0];
+                DateTime nowUtc = DateTime.UtcNow;
+                double? orderFlowScore;
+                double? orderFlowConfidence;
+                double? orderFlowReliability;
+                double? orderFlowAggressionBalance;
+                double? orderFlowDepthImbalance;
+                string orderFlowHint;
+                TryBuildOrderFlowSnapshot(
+                    bip,
+                    close,
+                    atr,
+                    nowUtc,
+                    false,
+                    out orderFlowScore,
+                    out orderFlowConfidence,
+                    out orderFlowReliability,
+                    out orderFlowDelta,
+                    out orderFlowDeltaChange,
+                    out orderFlowVwap,
+                    out orderFlowVwapDeviation,
+                    out orderFlowAggressionBalance,
+                    out orderFlowDepthImbalance,
+                    out orderFlowHint);
+            }
+
+            bar = new GlitchMarketSnapshotRawJson.RawTimeframeBarPayload
+            {
+                Minutes = minutes,
+                UtcTime = Times[bip][0].ToUniversalTime(),
+                Open = Opens[bip][0],
+                High = Highs[bip][0],
+                Low = Lows[bip][0],
+                Close = close,
+                Volume = Volumes[bip][0],
+                Indicators = new GlitchMarketSnapshotRawJson.RawIndicatorsPayload
+                {
+                    Atr = _atrByBip[bip][0],
+                    Adx = _adxByBip[bip][0],
+                    Rsi = _rsiByBip[bip][0],
+                    StochK = _stochByBip[bip].K[0],
+                    ZScore = ComputeZScore(Closes[bip], Math.Min(ZLookback, CurrentBars[bip] + 1)),
+                    AveragePrice = _smaByBip[bip][0],
+                    DiPlus = diPlus,
+                    DiMinus = diMinus,
+                    Cci = cci,
+                    MacdHistogram = macdHistogram,
+                    OrderFlowCumulativeDelta = orderFlowDelta,
+                    OrderFlowDeltaChange = orderFlowDeltaChange,
+                    OrderFlowVwap = orderFlowVwap,
+                    OrderFlowVwapDeviation = orderFlowVwapDeviation
+                }
+            };
+            return true;
+        }
+
+        private void TryExportHistoricalMinuteSnapshot()
+        {
+            if (!EnableHistoricalSnapshotExport)
+                return;
+
+            // Strategy Analyzer: hosted indicators often stay State.Realtime with no chart surface.
+            bool isStrategyAnalyzerHost = ChartControl == null;
+            if (State != State.Historical && !(State == State.Realtime && isStrategyAnalyzerHost))
+                return;
+
+            if (ResolveMinutesForBip(0) != 1)
+                return;
+
+            if (CurrentBars == null || CurrentBars.Length == 0 || CurrentBars[0] < MinBarsForSignal)
+                return;
+
+            DateTime barCloseUtc = Times[0][0].ToUniversalTime();
+            var bars = new List<GlitchMarketSnapshotRawJson.RawTimeframeBarPayload>(TargetMinutes.Length);
+            SessionTracker primarySession = null;
+
+            for (int i = 0; i < TargetMinutes.Length; i++)
+            {
+                int minutes = TargetMinutes[i];
+                int bip = ResolveBipForMinutes(minutes);
+                if (bip < 0 || bip >= CurrentBars.Length || CurrentBars[bip] < MinBarsForSignal)
+                    return;
+
+                GlitchMarketSnapshotRawJson.RawTimeframeBarPayload bar;
+                if (!TryBuildRawTimeframeBar(bip, minutes, out bar))
+                    return;
+
+                SessionTracker session = UpdateSessionTracker(minutes, bip);
+                bars.Add(bar);
+
+                if (minutes == 1)
+                    primarySession = session;
+            }
+
+            if (bars.Count != TargetMinutes.Length)
+                return;
+
+            var payload = new GlitchMarketSnapshotRawJson.RawInstrumentPayload
+            {
+                InstrumentRoot = _instrumentRoot,
+                UpdatedUtc = barCloseUtc,
+                SessionName = primarySession == null ? null : primarySession.Name,
+                SessionHigh = primarySession == null ? null : primarySession.CurrentHigh,
+                SessionLow = primarySession == null ? null : primarySession.CurrentLow,
+                PreviousSessionHigh = primarySession == null ? null : primarySession.PreviousHigh,
+                PreviousSessionLow = primarySession == null ? null : primarySession.PreviousLow,
+                TimeframeBars = bars
+            };
+
+            bool wrote = GlitchHistoricalCorpusWriter.TryWriteMinuteSnapshot(
+                HistoricalExportDirectory,
+                _instrumentRoot,
+                barCloseUtc,
+                new[] { payload });
+
+            if (wrote)
+            {
+                _historicalExportCount++;
+                if (_historicalExportCount == 1 || (_historicalExportCount % 500) == 0)
+                {
+                    string directory = GlitchHistoricalCorpusWriter.ResolveExportDirectory(
+                        HistoricalExportDirectory,
+                        _instrumentRoot);
+                    Log(
+                        "Glitch historical corpus export count=" + _historicalExportCount.ToString(CultureInfo.InvariantCulture)
+                        + " latest=" + barCloseUtc.ToString("o", CultureInfo.InvariantCulture)
+                        + " dir=" + directory,
+                        NinjaTrader.Cbi.LogLevel.Information);
+                }
+            }
         }
 
         private double ResolvePublishedCurrentPrice(double fallbackPrice)

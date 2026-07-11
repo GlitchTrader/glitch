@@ -3610,6 +3610,7 @@ namespace Glitch.UI
 
             _refreshTimer.Start();
             BootstrapAnalyticsBridgeOnStartup();
+            StartRailInfrastructure();
             _ = RefreshLicenseStateAsync(useValidateEndpoint: true, force: true);
         }
 
@@ -3657,6 +3658,7 @@ namespace Glitch.UI
             if (portfolioCapture != null)
                 GlitchPortfolioSnapshotWriter.TryWriteLatest(closeUtc, portfolioCapture, closeSnapshotId);
             GlitchAnalyticsFeedBus.FlushPersistence();
+            StopRailInfrastructure();
             _isFlattenAllInProgress = false;
             PersistReplicationUiState();
             _replicationUserIntentLive = false;
@@ -3788,6 +3790,9 @@ namespace Glitch.UI
                 nowUtc,
                 TimeSpan.FromMinutes(15),
                 TimeSpan.FromHours(24));
+            GlitchRailSelfCheckWriter.TryWriteIfDue(nowUtc);
+            GlitchSnapshotSanityWriter.TryWriteIfDue(nowUtc);
+            GlitchAiReplayHarnessWriter.TryWriteIfDue(nowUtc);
             PruneRuntimeJournalCaches(nowUtc);
             PruneInformationalWarningJournalCooldowns(nowUtc);
             PruneAccountItemUpdateThrottle(nowUtc);

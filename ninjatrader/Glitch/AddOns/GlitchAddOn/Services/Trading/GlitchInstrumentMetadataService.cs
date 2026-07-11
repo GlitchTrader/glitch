@@ -110,6 +110,24 @@ namespace Glitch.Services
             return metadata.IsResolved;
         }
 
+        public static bool TryResolveTradeInstrument(string instrumentRoot, out Instrument instrument)
+        {
+            instrument = null;
+            if (string.IsNullOrWhiteSpace(instrumentRoot))
+                return false;
+
+            foreach (string candidate in BuildLookupCandidates(instrumentRoot))
+            {
+                instrument = TryGetInstrument(candidate, "GetInstrument");
+                if (instrument == null)
+                    instrument = TryGetInstrument(candidate, "GetInstrumentFuzzy");
+                if (instrument != null)
+                    return true;
+            }
+
+            return false;
+        }
+
         public static bool TryGetPointValue(string instrumentName, out double pointValue)
         {
             pointValue = 0;

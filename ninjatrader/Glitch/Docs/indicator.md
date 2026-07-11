@@ -60,20 +60,22 @@ Use it on a dedicated ingest chart (can be minimized) to publish multi-instrumen
 
 ### Operator setup
 
-1. Open a separate chart (not the trade chart).
-2. Set primary instrument to the first symbol in your ingest basket (e.g. MNQ 1m).
-3. Add **Data Series** for additional roots at **1 minute** each (MES, M2K, ES, …).
-4. Apply `GlitchAiMarketIngest`.
-5. Confirm NT output log: `GlitchAiMarketIngest data loaded: N bar series, M instrument root(s): …`
-6. After ~1 minute with Glitch open, check `GlitchData/snapshots/market/latest.json` for `instrument_count` > 1.
+1. Open a **separate ingest chart** (not the trade chart) on MNQ 1m.
+2. Apply `GlitchAiMarketIngest`.
+3. Set **Additional Instrument Roots** to your basket (default `MES,M2K`) — the indicator calls `AddDataSeries` in `Configure` using the primary contract month (e.g. `09-26`).
+4. Leave **Add Primary Timeframes** off if the trade chart already runs `GlitchAnalyticsBridge` for MNQ MTF.
+5. Confirm NT Output:
+   ```
+   GlitchAiMarketIngest data loaded: 3 bar series, 3 instrument root(s): MNQ, MES, M2K.
+   ```
+6. Chart **Data Series** panels are optional for display; ingest series come from the parameter above.
 
 ### Parameters
 
 | Parameter | Purpose |
 |-----------|---------|
 | `AddPrimaryTimeframes` | When true, auto-adds 5m/15m/60m for the **primary** instrument only |
-
-Secondary Data Series publish **1m** readings only (NT cannot auto-add MTF per secondary instrument at runtime).
+| `AdditionalInstrumentRoots` | Comma-separated roots to ingest via `AddDataSeries` (default `MES,M2K`) |
 
 ### Output
 

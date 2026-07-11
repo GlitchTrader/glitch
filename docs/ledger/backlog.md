@@ -68,15 +68,15 @@ Version map: `docs/ai-program/roadmap.md`
 | R02 | GL-026 | v20 | Multi-asset ingest (`GlitchAiMarketIngest`) | done (bridge rolled back to single-instrument UI) |
 | R03 | — | v21 | Market snapshot writer (file) | done |
 | R04 | — | v21 | Portfolio snapshot writer (file) | done |
-| R05 | — | v21 | Historical exporter (same schema) | done |
+| R05 | — | v21 | Historical exporter (same schema) | done (live archiver + bulk corpus strategy) |
 | R06 | GL-029 | H-1 | Pattern mining / backtest (parallel) | todo |
-| R07 | GL-027 | v21 | Telemetry server (localhost GET) | todo |
-| R08 | GL-030 | v22 | Intent endpoint (paper only) | todo |
-| R09 | GL-030 | v22 | AI risk firewall | todo |
-| R10 | GL-031 | v22 | AI journal bridge | todo |
-| R11 | GL-035 | v22 | Hermes suggest_trade → paper | todo |
-| R12 | GL-032 | v23 | Sim101 bracket executor | todo |
-| R13 | GL-029 | v23 | Replay harness / archetype proof | todo |
+| R07 | GL-027 | v21 | External telemetry server (localhost GET) | done |
+| R08 | GL-030 | v22 | Intent endpoint (paper only) | done |
+| R09 | GL-030 | v22 | AI risk firewall | done |
+| R10 | GL-031 | v22 | AI journal bridge | done |
+| R11 | GL-035 | v22 | Hermes suggest_trade → paper | ready (stub script) |
+| R12 | GL-032 | v23 | Sim101 bracket executor | ready (arm via policy mode=sim) |
+| R13 | GL-029 | v23 | Replay harness / archetype proof | ready |
 | R14 | GL-041 | — | Honest Copy live verify (pre-AI) | todo |
 | R15 | GL-033 | v24 | Eval allowlist + Eval Sprint profile | todo |
 | R16 | GL-033, GL-035 | v24 | Live Hermes loop | todo |

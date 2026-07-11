@@ -21,7 +21,9 @@ namespace NinjaTrader.NinjaScript.Indicators
     {
         private static readonly int[] PrimaryTargetMinutes = { 1, 5, 15, 60 };
         private const int MinBarsForReading = 30;
+        private const int MinBarsForSecondaryReading = 14;
 
+        private string _primaryInstrumentRoot;
         private string[] _rootByBip;
         private int[] _minutesByBip;
         private bool[] _isTrackedByBip;
@@ -41,6 +43,10 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Add Primary Timeframes", Order = 1, GroupName = "Parameters")]
         public bool AddPrimaryTimeframes { get; set; }
 
+        [NinjaScriptProperty]
+        [Display(Name = "Additional Instrument Roots", Order = 2, GroupName = "Parameters")]
+        public string AdditionalInstrumentRoots { get; set; }
+
         protected override void OnStateChange()
         {
             if (State == State.SetDefaults)
@@ -49,11 +55,12 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Name = "GlitchAiMarketIngest";
                 Calculate = Calculate.OnBarClose;
                 IsOverlay = false;
-                IsSuspendedWhileInactive = true;
-                AddPrimaryTimeframes = true;
+                AddPrimaryTimeframes = false;
+                AdditionalInstrumentRoots = "MES,M2K";
             }
             else if (State == State.Configure)
             {
+                AddConfiguredInstrumentSeries();
                 if (AddPrimaryTimeframes)
                     AddMissingPrimaryTimeframeSeries();
             }
@@ -87,7 +94,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (_isTrackedByBip == null || BarsInProgress >= _isTrackedByBip.Length || !_isTrackedByBip[BarsInProgress])
                 return;
 
-            if (CurrentBars[BarsInProgress] < MinBarsForReading)
+            if (CurrentBars[BarsInProgress] < MinBarsRequired(BarsInProgress))
                 return;
 
             TouchRegisteredRoots();
@@ -107,6 +114,50 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
+        private void AddConfiguredInstrumentSeries()
+        {
+            if (string.IsNullOrWhiteSpace(AdditionalInstrumentRoots))
+                return;
+
+            string primaryRoot = NormalizeInstrumentRoot(
+                Instrument == null
+                    ? null
+                    : (Instrument.MasterInstrument == null ? Instrument.FullName : Instrument.MasterInstrument.Name));
+            string contractSuffix = ExtractContractSuffix(Instrument == null ? null : Instrument.FullName);
+            string[] tokens = AdditionalInstrumentRoots.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+
+            for (int i = 0; i < tokens.Length; i++)
+            {
+                string root = NormalizeInstrumentRoot(tokens[i]);
+                if (string.IsNullOrWhiteSpace(root))
+                    continue;
+
+                if (!string.IsNullOrWhiteSpace(primaryRoot) &&
+                    string.Equals(root, primaryRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                string instrumentName = string.IsNullOrWhiteSpace(contractSuffix)
+                    ? root
+                    : root + " " + contractSuffix;
+
+                AddDataSeries(instrumentName, BarsPeriodType.Minute, 1);
+            }
+        }
+
+        private static string ExtractContractSuffix(string fullName)
+        {
+            if (string.IsNullOrWhiteSpace(fullName))
+                return null;
+
+            int spaceIndex = fullName.IndexOf(' ');
+            if (spaceIndex < 0 || spaceIndex >= fullName.Length - 1)
+                return null;
+
+            return fullName.Substring(spaceIndex + 1).Trim();
+        }
+
         private void InitializeSeriesMetadata()
         {
             if (BarsArray == null)
@@ -121,6 +172,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             _rootByBip = new string[seriesCount];
             _minutesByBip = new int[seriesCount];
             _isTrackedByBip = new bool[seriesCount];
+            _primaryInstrumentRoot = ResolveInstrumentRootForBip(0);
 
             for (int bip = 0; bip < seriesCount; bip++)
             {
@@ -130,8 +182,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                     minutes = ResolveMinutes(bars.BarsPeriod.BarsPeriodType, bars.BarsPeriod.Value);
 
                 _minutesByBip[bip] = minutes;
-                _isTrackedByBip[bip] = IsTrackedMinutesForBip(bip, minutes);
                 _rootByBip[bip] = ResolveInstrumentRootForBip(bip);
+                _isTrackedByBip[bip] = IsTrackedMinutesForBip(_rootByBip[bip], minutes);
             }
         }
 
@@ -162,12 +214,15 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
-        private bool IsTrackedMinutesForBip(int bip, int minutes)
+        private bool IsTrackedMinutesForBip(string instrumentRoot, int minutes)
         {
             if (minutes <= 0)
                 return false;
 
-            if (bip == 0)
+            bool isPrimaryRoot = !string.IsNullOrWhiteSpace(instrumentRoot) &&
+                string.Equals(instrumentRoot, _primaryInstrumentRoot, StringComparison.OrdinalIgnoreCase);
+
+            if (isPrimaryRoot && AddPrimaryTimeframes)
                 return IsPrimaryTargetMinutes(minutes);
 
             return minutes == 1;
@@ -184,15 +239,40 @@ namespace NinjaTrader.NinjaScript.Indicators
             return false;
         }
 
+        private int MinBarsRequired(int bip)
+        {
+            if (_rootByBip == null || bip < 0 || bip >= _rootByBip.Length)
+                return MinBarsForReading;
+
+            string root = _rootByBip[bip];
+            if (!string.IsNullOrWhiteSpace(root) &&
+                !string.Equals(root, _primaryInstrumentRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                return MinBarsForSecondaryReading;
+            }
+
+            return MinBarsForReading;
+        }
+
         private void RegisterKnownRoots()
         {
-            if (_rootByBip == null)
+            if (_rootByBip == null || _isTrackedByBip == null)
                 return;
 
+            var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (int bip = 0; bip < _rootByBip.Length; bip++)
             {
+                if (!_isTrackedByBip[bip])
+                    continue;
+
                 string root = _rootByBip[bip];
-                if (string.IsNullOrWhiteSpace(root) || !_registeredRoots.Add(root))
+                if (!string.IsNullOrWhiteSpace(root))
+                    roots.Add(root);
+            }
+
+            foreach (string root in roots)
+            {
+                if (!_registeredRoots.Add(root))
                     continue;
 
                 GlitchBridgeBusCompat.RegisterBridge(root, true);
@@ -259,7 +339,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             DateTime nowUtc = DateTime.UtcNow;
             for (int bip = 0; bip < BarsArray.Length; bip++)
             {
-                if (!_isTrackedByBip[bip] || CurrentBars[bip] < MinBarsForReading)
+                if (!_isTrackedByBip[bip] || CurrentBars[bip] < MinBarsRequired(bip))
                     continue;
 
                 GlitchBridgeBusCompat.BridgeReading reading = BuildReading(bip, _minutesByBip[bip], nowUtc);
@@ -351,23 +431,36 @@ namespace NinjaTrader.NinjaScript.Indicators
                 return;
 
             var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var seriesMap = new List<string>(_rootByBip.Length);
             for (int bip = 0; bip < _rootByBip.Length; bip++)
             {
-                if (!_isTrackedByBip[bip])
-                    continue;
-
-                string root = _rootByBip[bip];
-                if (!string.IsNullOrWhiteSpace(root))
-                    roots.Add(root);
+                string root = _rootByBip[bip] ?? "?";
+                int minutes = _minutesByBip != null && bip < _minutesByBip.Length ? _minutesByBip[bip] : -1;
+                bool tracked = _isTrackedByBip != null && bip < _isTrackedByBip.Length && _isTrackedByBip[bip];
+                seriesMap.Add(string.Format(CultureInfo.InvariantCulture, "{0}@{1}m:{2}", root, minutes, tracked ? "on" : "off"));
+                if (tracked && !string.IsNullOrWhiteSpace(_rootByBip[bip]))
+                    roots.Add(_rootByBip[bip]);
             }
 
             string rootList = roots.Count == 0 ? "(none)" : string.Join(", ", roots);
-            Print(string.Format(
+            string summary = string.Format(
                 CultureInfo.InvariantCulture,
                 "GlitchAiMarketIngest data loaded: {0} bar series, {1} instrument root(s): {2}.",
                 BarsArray == null ? 0 : BarsArray.Length,
                 roots.Count,
-                rootList));
+                rootList);
+            Print(summary);
+            Log(summary, LogLevel.Information);
+            string mapLine = "GlitchAiMarketIngest series map: " + string.Join("; ", seriesMap);
+            Print(mapLine);
+            Log(mapLine, LogLevel.Information);
+
+            if (roots.Count < 2)
+            {
+                const string hint = "GlitchAiMarketIngest: set Additional Instrument Roots (e.g. MES,M2K) in indicator parameters.";
+                Print(hint);
+                Log(hint, LogLevel.Warning);
+            }
         }
 
         private string ResolveInstrumentRootForBip(int bip)

@@ -169,17 +169,17 @@ Advance when the step’s **acceptance** is met. Skip nothing in §4.5 safety. L
 | **R02** | v20 | Multi-asset bridge normalization; prefer single-chart `AddData` | ≥2 roots publish normalized readings; Analytics selector works |
 | **R03** | v21 | **Market snapshot** writer → `GlitchData/snapshots/market/` | Valid JSON; schema versioned; all required TFs for active set |
 | **R04** | v21 | **Portfolio snapshot** writer → `GlitchData/snapshots/portfolio/` | Accounts, positions, PnL net of commission, rules version |
-| **R05** | v21 | Historical exporter — **same schema** as R03/R04 | Replay file validates; Hermes ingests without transform (**done**) |
+| **R05** | v21 | Historical exporter — **same schema** as R03/R04 | Live archiver + **bulk corpus** via `GlitchMarketSnapshotHistoricalExporter` (Strategy Analyzer, 1m only) (**done**) |
 | **R06** | H-1 | **Parallel:** pattern mining, backtest harness, archetype docs | Ranked setups with evidence; seed Hermes memory |
-| **R07** | v21 | `GlitchExternalTelemetryServer` (localhost GET) — optional if files suffice | Schema-valid GET `/snapshot`; bearer auth; off UI thread |
+| **R07** | v21 | `GlitchExternalTelemetryServer` (localhost GET) — optional if files suffice | Schema-valid GET `/snapshot`; bearer auth; off UI thread (**done**) |
 
 ### Phase B — Propose (paper only)
 
 | Step | Label | Work | Acceptance |
 |------|-------|------|------------|
-| **R08** | v22 | `GlitchAiIntentServer` POST `/intent` — **no executor registered** | 100% intents journaled; zero `CreateOrder` in path |
-| **R09** | v22 | `GlitchAiRiskFirewall` — 15-step chain | Adversarial intents rejected with per-check journal |
-| **R10** | v22 | `GlitchAiJournalBridge` — intent ↔ snapshot_hash ↔ verdict | Round-trip reconstructable from journal alone |
+| **R08** | v22 | `GlitchAiIntentServer` POST `/intent` — **no executor registered** | 100% intents journaled; zero `CreateOrder` in path (**done**) |
+| **R09** | v22 | `GlitchAiRiskFirewall` — 15-step chain | Adversarial intents rejected with per-check journal (**done**) |
+| **R10** | v22 | `GlitchAiJournalBridge` — intent ↔ snapshot_hash ↔ verdict | Round-trip reconstructable from journal alone (**done**) |
 | **R11** | v22 | Hermes `suggest_trade` → paper endpoint | End-to-end propose without execution |
 
 **Gate:** GL-024 commission-true journal before Hermes learns from outcomes.
@@ -188,7 +188,7 @@ Advance when the step’s **acceptance** is met. Skip nothing in §4.5 safety. L
 
 | Step | Label | Work | Acceptance |
 |------|-------|------|------------|
-| **R12** | v23 | `GlitchAiOrderExecutor` Sim101 — bracket-mandatory, `GlitchAI*` signals | Zero naked entries; attach failure ⇒ entry cancelled |
+| **R12** | v23 | `GlitchAiOrderExecutor` Sim101 — bracket-mandatory, `GlitchAI*` signals | Zero naked entries; attach failure ⇒ entry cancelled (**ready** — `executor_enabled` + `mode=sim`) |
 | **R13** | v23 | Replay harness — archetypes vs baseline on Eval risk profile | ≥1 archetype beats baseline on replay evidence |
 
 **Gate:** R08–R11 clean (zero firewall bypasses, zero schema drift rejects) — **session count, not weeks**.
@@ -280,9 +280,9 @@ Cron first. Daemon only if cron fails a measured need.
 
 ## 8. Active pointer
 
-**Next step:** R06 — pattern mining on historical replay exports (parallel OK).
+**Next step:** R11 — Hermes `suggest_trade` paper loop, or arm R12 on Sim101 (`ai/policy.json`: `mode=sim`, `executor_enabled=true`).
 
-**Also available:** R07 telemetry server (optional if file exports suffice).
+**Parallel:** R06 — pattern mining on historical replay exports (Hermes sessions).
 
 **Blocker check:** GL-041 status before R16.
 

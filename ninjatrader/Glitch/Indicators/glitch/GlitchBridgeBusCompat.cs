@@ -28,6 +28,10 @@ namespace NinjaTrader.NinjaScript.Indicators
             public string InstrumentRoot { get; set; }
             public int Minutes { get; set; }
             public DateTime UtcTime { get; set; }
+            public double? Open { get; set; }
+            public double? High { get; set; }
+            public double? Low { get; set; }
+            public double? Volume { get; set; }
             public double? CurrentPrice { get; set; }
             public double? AveragePrice { get; set; }
             public double? Atr { get; set; }
@@ -310,6 +314,10 @@ namespace NinjaTrader.NinjaScript.Indicators
             SetProperty(message, "InstrumentRoot", reading.InstrumentRoot);
             SetProperty(message, "Minutes", reading.Minutes);
             SetProperty(message, "UtcTime", reading.UtcTime);
+            SetProperty(message, "Open", reading.Open);
+            SetProperty(message, "High", reading.High);
+            SetProperty(message, "Low", reading.Low);
+            SetProperty(message, "Volume", reading.Volume);
             SetProperty(message, "CurrentPrice", reading.CurrentPrice);
             SetProperty(message, "AveragePrice", reading.AveragePrice);
             SetProperty(message, "Atr", reading.Atr);

@@ -1349,6 +1349,10 @@ namespace Glitch.UI
         public string InstrumentRoot { get; set; }
         public int Minutes { get; set; }
         public DateTime UtcTime { get; set; }
+        public double? Open { get; set; }
+        public double? High { get; set; }
+        public double? Low { get; set; }
+        public double? Volume { get; set; }
         public double? CurrentPrice { get; set; }
         public double? AveragePrice { get; set; }
         public double? Atr { get; set; }
@@ -1392,6 +1396,10 @@ namespace Glitch.UI
                 InstrumentRoot = InstrumentRoot,
                 Minutes = Minutes,
                 UtcTime = UtcTime,
+                Open = Open,
+                High = High,
+                Low = Low,
+                Volume = Volume,
                 CurrentPrice = CurrentPrice,
                 AveragePrice = AveragePrice,
                 Atr = Atr,

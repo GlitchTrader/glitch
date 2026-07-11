@@ -92,3 +92,21 @@ Moves operator actions and shell state such as:
 - flatten and toggle actions
 
 Keeping these paths separate avoids mixing read-heavy market context with action-heavy operational controls.
+
+## Historical corpus export (bulk backfill)
+
+Bulk historical export is **not** the live archiver under `snapshots/historical/` and **not** legacy CSV telemetry (`247TelemetryExporter`).
+
+**Schema:** `glitch.market.snapshot.v2` — OHLCV + indicator numbers per TF. No scores, labels, or trade opinions.
+
+| Path | Role |
+|------|------|
+| `Strategies/glitch/GlitchMarketSnapshotHistoricalExporter.cs` | Strategy Analyzer driver (1-minute primary chart) |
+| `Indicators/glitch/GlitchAnalyticsBridge.cs` | `EnableHistoricalSnapshotExport` writes on each 1m bar close in `State.Historical` |
+| `Indicators/glitch/GlitchMarketSnapshotRawJson.cs` | Canonical `glitch.market.snapshot.v2` JSON (raw OHLCV + indicators, no opinions) |
+| `Indicators/glitch/GlitchMarketSnapshotJson.cs` | Legacy v1 opinionated builder (retained for reference only) |
+| `Indicators/glitch/GlitchHistoricalCorpusWriter.cs` | Atomic file write + `index.jsonl` |
+
+**Output:** `GlitchData/export/corpus/{INSTRUMENT}/{snapshot_id}.json` — one file per 1-minute decision, `source_mode: historical_replay`, same fields as `snapshots/market/latest.json`.
+
+**Operator:** Strategy Analyzer → 1-minute instrument chart → enable export (default on) → set backtest date range → run. Recompile NinjaTrader after deploy.

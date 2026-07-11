@@ -2,6 +2,60 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-10 — R11 Hermes stub + telemetry reads (glitch/ai-rail)
+
+- `tools/hermes/suggest-trade.ps1` — GET market → POST paper NOTHING (cycles.jsonl).
+- Telemetry: `GET /snapshot/sanity`, `GET /intent/decisions`, `GET /selfcheck`.
+- Policy auto-upgrade adds missing `executor_*` keys on Glitch load.
+
+## 2026-07-10 — snapshot sanity + replay harness scaffold (glitch/ai-rail)
+
+- `GlitchSnapshotSanityWriter` → `selfcheck/snapshot_sanity.json` (5 min).
+- `GlitchAiReplayHarnessWriter` → `replay/harness/latest.json` (15 min, MNQ 5m signal tally).
+- Telemetry `GET /selfcheck`; script `tools/hermes/snapshot-sanity.ps1`.
+
+## 2026-07-10 — R12 Sim executor scaffold (glitch/ai-rail)
+
+- **R12:** `GlitchAiOrderExecutor` — bracket entry (`GlitchAIEntry`/`GlitchAIStop`/`GlitchAITarget`), EXIT flatten; UI-thread dispatch; journals to `intents/executions.jsonl`.
+- **Safety:** default `mode=paper`, `executor_enabled=false`; arm only via `GlitchData/ai/policy.json`.
+- **Next:** Hermes R11 paper loop or Sim101 live fire test with armed policy.
+
+## 2026-07-10 — R09 firewall + R10 journal bridge (glitch/ai-rail)
+
+- **R09:** `GlitchAiRiskFirewall` — 15-step chain on POST `/intent`; rejects return 422 with `failed_check_code`; all decisions journaled.
+- **R10:** `GlitchAiJournalBridge` → `GlitchData/intents/decisions.jsonl` (intent + snapshot_hash + verdict + check trail).
+- **Policy:** `GlitchData/ai/policy.json` (allowlists, M0 caps, kill switch); market snapshots now include `snapshot_hash`.
+- **Next:** R11 Hermes paper loop or R12 Sim101 executor.
+
+## 2026-07-10 — R08 paper intent server (glitch/ai-rail)
+
+- **R08:** `GlitchAiIntentServer` on `127.0.0.1:8788` — POST `/intent` (v2 schema validation, paper mode, no executor). Journals to `GlitchData/intents/received.jsonl` + idempotency file `intent_ids.txt`. Shared bearer auth via `GlitchRailBearerAuth`.
+- **Logging:** ingest `Log()` lines; intent accept lines in Glitch journal + selfcheck `intent.received_count`.
+- **Next:** R09 AI risk firewall.
+
+## 2026-07-10 — R07 telemetry + rail self-check (glitch/ai-rail)
+
+- **R07:** `GlitchExternalTelemetryServer` on `127.0.0.1:8787` (GET `/health`, `/snapshot/*`, `/accounts`, `/positions`, `/risk`, `/journal/recent`; bearer token in `GlitchData/telemetry.token`).
+- **Self-check:** `GlitchData/selfcheck/rail.json` every 30s — feed bus roots, snapshot counts, telemetry status (agent-readable).
+- **Ingest:** `Log()` added alongside `Print()` so lines land in NT log files.
+- **Next:** R08 paper intent endpoint.
+
+## 2026-07-10 — Market snapshot v2 raw-only (glitch/ai-rail)
+
+- **v2:** `glitch.market.snapshot.v2` — `timeframe_bars[]` with OHLCV + indicator numbers only; no scores, labels, or `no_trade_reasons`.
+- **Live + export:** `GlitchMarketSnapshotWriter` and corpus exporter both emit v2.
+- **v1:** opinionated builder retained as legacy reference; do not use for Hermes ingest or mining.
+- **Operator:** clear old v1 corpus files before a fresh bulk export run.
+
+## 2026-07-10 — R05 bulk historical corpus exporter (glitch/ai-rail)
+
+- **Bulk export:** `GlitchMarketSnapshotHistoricalExporter` strategy + bridge `EnableHistoricalSnapshotExport` write `glitch.market.snapshot.v1` at **1-minute cadence only** (`source_mode: historical_replay`).
+- **Shared JSON:** `GlitchMarketSnapshotJson` (Indicators) is canonical; `GlitchMarketSnapshotWriter` (AddOn) delegates to it so live and historical cannot drift.
+- **Output:** `GlitchData/export/corpus/{INSTRUMENT}/{snapshot_id}.json` + `index.jsonl`.
+- **Operator:** Strategy Analyzer on a **1-minute** chart; set date range; `PublishToGlitchUi=false`; export on by default.
+- **Not:** `247TelemetryExporter` CSV — reference only.
+- **Next:** R06 pattern mining on exported corpus.
+
 ## 2026-07-09 — R05 historical snapshot exporter (glitch/ai-rail)
 
 - **R05:** `GlitchHistoricalSnapshotExporter` archives paired market+portfolio snapshots under `GlitchData/snapshots/historical/{market,portfolio}/`.
