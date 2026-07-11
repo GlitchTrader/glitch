@@ -69,7 +69,13 @@ Version map: `docs/ai-program/roadmap.md`
 | R03 | — | v21 | Market snapshot writer (file) | done |
 | R04 | — | v21 | Portfolio snapshot writer (file) | done |
 | R05 | — | v21 | Historical exporter (same schema) | done (live archiver + bulk corpus strategy) |
-| R06 | GL-029 | H-1 | Pattern mining / backtest (parallel) | todo |
+| R06 | GL-029 | H-1 | Pattern mining / backtest (parallel) | **done (v1)** — 4 validated + 1 candidate + 2 retired archetypes; see `docs/ai-program/r06-pattern-mining.md` §10 |
+| R06a | GL-029 | H-1 | · ETL corpus → parquet + quality audit | done (705,697 snapshots 2024-01→2025-12, 0 bad; `Glitch-Collab/Research/r06-mining/`) |
+| R06b | GL-029 | H-1 | · Triple-barrier labels + regime frame + expectancy scan | done (6,596 tests → 23 OOS survivors, 5 families) |
+| R06c | GL-029 | H-1 | · Candidate archetypes + validation slice (2025-Q3) | done (7 frozen) |
+| R06d | GL-029 | H-1 | · Archetype JSON + MNQ playbook + Hermes memory seed | done (`glitch_hermes_docs/memory/` + doc 12 skills) |
+| R06e | GL-029 | H-1 | · Holdout pass (2025-Q4, locked) + R13 replay proof | partial — holdout done (2 longs retired); R13 replay proof pending |
+| R06f | GL-029 | H-1 | · Ongoing loop: monthly re-mine + live-stat reconciliation | todo (targets: bull gate for longs, vol_hi, DSR/PBO, order-flow re-export) |
 | R07 | GL-027 | v21 | External telemetry server (localhost GET) | done |
 | R08 | GL-030 | v22 | Intent endpoint (paper only) | done |
 | R09 | GL-030 | v22 | AI risk firewall | done |

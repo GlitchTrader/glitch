@@ -1,0 +1,648 @@
+{
+  "schema_version": "glitch.archetypes.v1",
+  "generated_utc": "2026-07-11",
+  "instrument": "MNQ",
+  "vol_tertile_thresholds_atrnorm60": [
+    0.0022017349443367237,
+    0.003100968207843547
+  ],
+  "archetypes": [
+    {
+      "archetype_id": "MNQ-DTC-BREAK-SHORT-v1",
+      "name": "Downtrend continuation short (US midday, established trend)",
+      "tier": "core",
+      "instrument": "MNQ",
+      "side": "short",
+      "regime_preconditions": {
+        "vol": [
+          "vol_md"
+        ],
+        "trend": [
+          "trend_down"
+        ],
+        "session": [
+          "US_mid"
+        ]
+      },
+      "trigger": [
+        {
+          "feature": "adx_15m",
+          "op": ">=",
+          "value": 35.22
+        },
+        {
+          "feature": "di_spread_60m",
+          "op": "<=",
+          "value": -14.09
+        }
+      ],
+      "geometry": {
+        "sl_atr1m_mult": 2.5,
+        "rr": 2.0,
+        "time_cap_min": 60,
+        "entry": "next 1m open after trigger bar close"
+      },
+      "sizing": {
+        "contracts_base": 1,
+        "risk_usd_per_trade": "sl_points * 2.00 * contracts",
+        "cap_rule": "risk_usd <= per_trade_cap (M0: $100)"
+      },
+      "friction_model": {
+        "points_round_trip": 1.15,
+        "note": "$1.30 commission + 1 tick/side slippage"
+      },
+      "stats": {
+        "train": {
+          "n": 113,
+          "trades_per_week": 1.45,
+          "net_exp_pts": 10.552,
+          "net_exp_usd": 21.1,
+          "pf": 1.823,
+          "win_rate": 0.54,
+          "time_exit_share": 0.257,
+          "max_consec_losses": 7,
+          "median_sl_pts": 27.6,
+          "median_risk_usd_1ct": 55.21,
+          "total_pts": 1192.3
+        },
+        "valid": {
+          "n": 31,
+          "trades_per_week": 2.38,
+          "net_exp_pts": 8.322,
+          "net_exp_usd": 16.64,
+          "pf": 1.531,
+          "win_rate": 0.516,
+          "time_exit_share": 0.161,
+          "max_consec_losses": 3,
+          "median_sl_pts": 30.95,
+          "median_risk_usd_1ct": 61.9,
+          "total_pts": 258.0
+        },
+        "holdout": {
+          "n": 9,
+          "trades_per_week": 0.69,
+          "net_exp_pts": 2.424,
+          "net_exp_usd": 4.85,
+          "pf": 1.102,
+          "win_rate": 0.333,
+          "time_exit_share": 0.111,
+          "max_consec_losses": 4,
+          "median_sl_pts": 37.77,
+          "median_risk_usd_1ct": 75.54,
+          "total_pts": 21.8
+        }
+      },
+      "status": "validated",
+      "provenance": {
+        "corpus": "MNQ glitch.market.snapshot.v2 2024-01..2025-12",
+        "mined_utc": "2026-07-11",
+        "miner": "fable/r06-mining",
+        "splits": "train 2024-01..2025-06 | valid 2025-Q3 | holdout 2025-Q4 (touched once)"
+      },
+      "post_holdout_verdict": "positive all splits; holdout thin (n=9) because regime rare in Q4"
+    },
+    {
+      "archetype_id": "MNQ-DTC-DI-SHORT-v1",
+      "name": "Downtrend DI-pressure short (US midday, broader trigger)",
+      "tier": "core",
+      "instrument": "MNQ",
+      "side": "short",
+      "regime_preconditions": {
+        "vol": [
+          "vol_md"
+        ],
+        "trend": [
+          "trend_down"
+        ],
+        "session": [
+          "US_mid"
+        ]
+      },
+      "trigger": [
+        {
+          "feature": "di_spread_60m",
+          "op": "<=",
+          "value": -14.09
+        }
+      ],
+      "geometry": {
+        "sl_atr1m_mult": 2.5,
+        "rr": 2.0,
+        "time_cap_min": 60,
+        "entry": "next 1m open after trigger bar close"
+      },
+      "sizing": {
+        "contracts_base": 1,
+        "risk_usd_per_trade": "sl_points * 2.00 * contracts",
+        "cap_rule": "risk_usd <= per_trade_cap (M0: $100)"
+      },
+      "friction_model": {
+        "points_round_trip": 1.15,
+        "note": "$1.30 commission + 1 tick/side slippage"
+      },
+      "stats": {
+        "train": {
+          "n": 205,
+          "trades_per_week": 2.63,
+          "net_exp_pts": 6.314,
+          "net_exp_usd": 12.63,
+          "pf": 1.437,
+          "win_rate": 0.483,
+          "time_exit_share": 0.22,
+          "max_consec_losses": 8,
+          "median_sl_pts": 25.99,
+          "median_risk_usd_1ct": 51.98,
+          "total_pts": 1294.3
+        },
+        "valid": {
+          "n": 37,
+          "trades_per_week": 2.85,
+          "net_exp_pts": 6.26,
+          "net_exp_usd": 12.52,
+          "pf": 1.398,
+          "win_rate": 0.486,
+          "time_exit_share": 0.189,
+          "max_consec_losses": 4,
+          "median_sl_pts": 32.57,
+          "median_risk_usd_1ct": 65.14,
+          "total_pts": 231.6
+        },
+        "holdout": {
+          "n": 9,
+          "trades_per_week": 0.69,
+          "net_exp_pts": 2.424,
+          "net_exp_usd": 4.85,
+          "pf": 1.102,
+          "win_rate": 0.333,
+          "time_exit_share": 0.111,
+          "max_consec_losses": 4,
+          "median_sl_pts": 37.77,
+          "median_risk_usd_1ct": 75.54,
+          "total_pts": 21.8
+        }
+      },
+      "status": "validated",
+      "provenance": {
+        "corpus": "MNQ glitch.market.snapshot.v2 2024-01..2025-12",
+        "mined_utc": "2026-07-11",
+        "miner": "fable/r06-mining",
+        "splits": "train 2024-01..2025-06 | valid 2025-Q3 | holdout 2025-Q4 (touched once)"
+      },
+      "post_holdout_verdict": "positive all splits; holdout thin (n=9, same Q4 trades as BREAK variant)"
+    },
+    {
+      "archetype_id": "MNQ-DTC-BOUNCE-SHORT-v1",
+      "name": "Bounce-fade short in downtrend (1m RSI spike vs 15m)",
+      "tier": "core",
+      "instrument": "MNQ",
+      "side": "short",
+      "regime_preconditions": {
+        "vol": [
+          "vol_md"
+        ],
+        "trend": [
+          "trend_down"
+        ],
+        "session": [
+          "US_mid"
+        ]
+      },
+      "trigger": [
+        {
+          "feature": "rsi_1m_15m_diff",
+          "op": ">=",
+          "value": 18.22
+        }
+      ],
+      "geometry": {
+        "sl_atr1m_mult": 4.0,
+        "rr": 1.0,
+        "time_cap_min": 60,
+        "entry": "next 1m open after trigger bar close"
+      },
+      "sizing": {
+        "contracts_base": 1,
+        "risk_usd_per_trade": "sl_points * 2.00 * contracts",
+        "cap_rule": "risk_usd <= per_trade_cap (M0: $100)"
+      },
+      "friction_model": {
+        "points_round_trip": 1.15,
+        "note": "$1.30 commission + 1 tick/side slippage"
+      },
+      "stats": {
+        "train": {
+          "n": 139,
+          "trades_per_week": 1.78,
+          "net_exp_pts": 7.073,
+          "net_exp_usd": 14.15,
+          "pf": 1.471,
+          "win_rate": 0.554,
+          "time_exit_share": 0.281,
+          "max_consec_losses": 6,
+          "median_sl_pts": 42.4,
+          "median_risk_usd_1ct": 84.8,
+          "total_pts": 983.1
+        },
+        "valid": {
+          "n": 35,
+          "trades_per_week": 2.69,
+          "net_exp_pts": 6.56,
+          "net_exp_usd": 13.12,
+          "pf": 1.435,
+          "win_rate": 0.514,
+          "time_exit_share": 0.429,
+          "max_consec_losses": 4,
+          "median_sl_pts": 49.52,
+          "median_risk_usd_1ct": 99.04,
+          "total_pts": 229.6
+        },
+        "holdout": {
+          "n": 3,
+          "trades_per_week": 0.23,
+          "net_exp_pts": 7.034,
+          "net_exp_usd": 14.07,
+          "pf": 1.46,
+          "win_rate": 0.667,
+          "time_exit_share": 0.667,
+          "max_consec_losses": 1,
+          "median_sl_pts": 67.3,
+          "median_risk_usd_1ct": 134.61,
+          "total_pts": 21.1
+        }
+      },
+      "status": "validated",
+      "provenance": {
+        "corpus": "MNQ glitch.market.snapshot.v2 2024-01..2025-12",
+        "mined_utc": "2026-07-11",
+        "miner": "fable/r06-mining",
+        "splits": "train 2024-01..2025-06 | valid 2025-Q3 | holdout 2025-Q4 (touched once)"
+      },
+      "post_holdout_verdict": "positive all splits; holdout n=3 inconclusive but not contradicted"
+    },
+    {
+      "archetype_id": "MNQ-LDN-WEAK-SHORT-v1",
+      "name": "London low-vol downtrend continuation short",
+      "tier": "core",
+      "instrument": "MNQ",
+      "side": "short",
+      "regime_preconditions": {
+        "vol": [
+          "vol_lo"
+        ],
+        "trend": [
+          "trend_down"
+        ],
+        "session": [
+          "Europe"
+        ]
+      },
+      "trigger": [
+        {
+          "feature": "rsi_15m",
+          "op": "<=",
+          "value": 41.09
+        },
+        {
+          "feature": "z_score_15m",
+          "op": "<=",
+          "value": -1.17
+        }
+      ],
+      "geometry": {
+        "sl_atr1m_mult": 2.5,
+        "rr": 1.5,
+        "time_cap_min": 60,
+        "entry": "next 1m open after trigger bar close"
+      },
+      "sizing": {
+        "contracts_base": 1,
+        "risk_usd_per_trade": "sl_points * 2.00 * contracts",
+        "cap_rule": "risk_usd <= per_trade_cap (M0: $100)"
+      },
+      "friction_model": {
+        "points_round_trip": 1.15,
+        "note": "$1.30 commission + 1 tick/side slippage"
+      },
+      "stats": {
+        "train": {
+          "n": 138,
+          "trades_per_week": 1.77,
+          "net_exp_pts": 2.529,
+          "net_exp_usd": 5.06,
+          "pf": 1.321,
+          "win_rate": 0.486,
+          "time_exit_share": 0.065,
+          "max_consec_losses": 7,
+          "median_sl_pts": 13.71,
+          "median_risk_usd_1ct": 27.43,
+          "total_pts": 349.0
+        },
+        "valid": {
+          "n": 55,
+          "trades_per_week": 4.23,
+          "net_exp_pts": 8.445,
+          "net_exp_usd": 16.89,
+          "pf": 2.202,
+          "win_rate": 0.6,
+          "time_exit_share": 0.055,
+          "max_consec_losses": 3,
+          "median_sl_pts": 16.17,
+          "median_risk_usd_1ct": 32.33,
+          "total_pts": 464.5
+        },
+        "holdout": {
+          "n": 7,
+          "trades_per_week": 0.54,
+          "net_exp_pts": -0.454,
+          "net_exp_usd": -0.91,
+          "pf": 0.951,
+          "win_rate": 0.429,
+          "time_exit_share": 0.143,
+          "max_consec_losses": 2,
+          "median_sl_pts": 14.4,
+          "median_risk_usd_1ct": 28.8,
+          "total_pts": -3.2
+        }
+      },
+      "status": "candidate",
+      "provenance": {
+        "corpus": "MNQ glitch.market.snapshot.v2 2024-01..2025-12",
+        "mined_utc": "2026-07-11",
+        "miner": "fable/r06-mining",
+        "splits": "train 2024-01..2025-06 | valid 2025-Q3 | holdout 2025-Q4 (touched once)"
+      },
+      "post_holdout_verdict": "strong train+valid; holdout -0.45 pts on n=7 \u2014 paper-only until live evidence"
+    },
+    {
+      "archetype_id": "MNQ-CLOSE-DIP-LONG-v1",
+      "name": "US-close dip buy (bull-era dependent \u2014 retire on regime flip)",
+      "tier": "conditional",
+      "instrument": "MNQ",
+      "side": "long",
+      "regime_preconditions": {
+        "vol": [
+          "vol_lo",
+          "vol_md",
+          "vol_hi"
+        ],
+        "trend": [
+          "trend_up",
+          "trend_down",
+          "range"
+        ],
+        "session": [
+          "US_close"
+        ]
+      },
+      "trigger": [
+        {
+          "feature": "stoch_k_15m",
+          "op": "<=",
+          "value": 32.21
+        }
+      ],
+      "geometry": {
+        "sl_atr1m_mult": 4.0,
+        "rr": 2.0,
+        "time_cap_min": 60,
+        "entry": "next 1m open after trigger bar close"
+      },
+      "sizing": {
+        "contracts_base": 1,
+        "risk_usd_per_trade": "sl_points * 2.00 * contracts",
+        "cap_rule": "risk_usd <= per_trade_cap (M0: $100)"
+      },
+      "friction_model": {
+        "points_round_trip": 1.15,
+        "note": "$1.30 commission + 1 tick/side slippage"
+      },
+      "stats": {
+        "train": {
+          "n": 212,
+          "trades_per_week": 2.72,
+          "net_exp_pts": 6.435,
+          "net_exp_usd": 12.87,
+          "pf": 1.276,
+          "win_rate": 0.5,
+          "time_exit_share": 0.505,
+          "max_consec_losses": 9,
+          "median_sl_pts": 47.59,
+          "median_risk_usd_1ct": 95.19,
+          "total_pts": 1364.3
+        },
+        "valid": {
+          "n": 34,
+          "trades_per_week": 2.62,
+          "net_exp_pts": 12.642,
+          "net_exp_usd": 25.28,
+          "pf": 2.029,
+          "win_rate": 0.588,
+          "time_exit_share": 0.441,
+          "max_consec_losses": 3,
+          "median_sl_pts": 31.17,
+          "median_risk_usd_1ct": 62.34,
+          "total_pts": 429.8
+        },
+        "holdout": {
+          "n": 33,
+          "trades_per_week": 2.54,
+          "net_exp_pts": -16.236,
+          "net_exp_usd": -32.47,
+          "pf": 0.457,
+          "win_rate": 0.364,
+          "time_exit_share": 0.485,
+          "max_consec_losses": 6,
+          "median_sl_pts": 50.6,
+          "median_risk_usd_1ct": 101.21,
+          "total_pts": -535.8
+        }
+      },
+      "status": "retired",
+      "provenance": {
+        "corpus": "MNQ glitch.market.snapshot.v2 2024-01..2025-12",
+        "mined_utc": "2026-07-11",
+        "miner": "fable/r06-mining",
+        "splits": "train 2024-01..2025-06 | valid 2025-Q3 | holdout 2025-Q4 (touched once)"
+      },
+      "post_holdout_verdict": "holdout FAILURE: -16.2 pts/trade, PF 0.46, n=33. Bull-era dependent. Reactivation requires explicit bull-regime gate + re-proof"
+    },
+    {
+      "archetype_id": "MNQ-OPEN-MOM-LONG-v1",
+      "name": "Quiet-open momentum long (range regime, 5m thrust)",
+      "tier": "core",
+      "instrument": "MNQ",
+      "side": "long",
+      "regime_preconditions": {
+        "vol": [
+          "vol_lo"
+        ],
+        "trend": [
+          "range"
+        ],
+        "session": [
+          "US_open"
+        ]
+      },
+      "trigger": [
+        {
+          "feature": "stoch_k_5m",
+          "op": ">=",
+          "value": 82.0
+        }
+      ],
+      "geometry": {
+        "sl_atr1m_mult": 4.0,
+        "rr": 1.5,
+        "time_cap_min": 60,
+        "entry": "next 1m open after trigger bar close"
+      },
+      "sizing": {
+        "contracts_base": 1,
+        "risk_usd_per_trade": "sl_points * 2.00 * contracts",
+        "cap_rule": "risk_usd <= per_trade_cap (M0: $100)"
+      },
+      "friction_model": {
+        "points_round_trip": 1.15,
+        "note": "$1.30 commission + 1 tick/side slippage"
+      },
+      "stats": {
+        "train": {
+          "n": 100,
+          "trades_per_week": 1.28,
+          "net_exp_pts": 5.92,
+          "net_exp_usd": 11.84,
+          "pf": 1.39,
+          "win_rate": 0.52,
+          "time_exit_share": 0.46,
+          "max_consec_losses": 5,
+          "median_sl_pts": 43.52,
+          "median_risk_usd_1ct": 87.05,
+          "total_pts": 592.0
+        },
+        "valid": {
+          "n": 33,
+          "trades_per_week": 2.54,
+          "net_exp_pts": 12.938,
+          "net_exp_usd": 25.88,
+          "pf": 2.137,
+          "win_rate": 0.727,
+          "time_exit_share": 0.576,
+          "max_consec_losses": 2,
+          "median_sl_pts": 47.33,
+          "median_risk_usd_1ct": 94.66,
+          "total_pts": 427.0
+        },
+        "holdout": {
+          "n": 15,
+          "trades_per_week": 1.15,
+          "net_exp_pts": -7.379,
+          "net_exp_usd": -14.76,
+          "pf": 0.676,
+          "win_rate": 0.467,
+          "time_exit_share": 0.533,
+          "max_consec_losses": 3,
+          "median_sl_pts": 50.62,
+          "median_risk_usd_1ct": 101.24,
+          "total_pts": -110.7
+        }
+      },
+      "status": "retired",
+      "provenance": {
+        "corpus": "MNQ glitch.market.snapshot.v2 2024-01..2025-12",
+        "mined_utc": "2026-07-11",
+        "miner": "fable/r06-mining",
+        "splits": "train 2024-01..2025-06 | valid 2025-Q3 | holdout 2025-Q4 (touched once)"
+      },
+      "post_holdout_verdict": "holdout failure: -7.4 pts/trade, PF 0.68, n=15. Long-side regime dependency. Same gate requirement"
+    },
+    {
+      "archetype_id": "MNQ-OPEN-FADE-SHORT-v1",
+      "name": "Opening uptrend exhaustion fade (counter-trend \u2014 watch tier)",
+      "tier": "watch",
+      "instrument": "MNQ",
+      "side": "short",
+      "regime_preconditions": {
+        "vol": [
+          "vol_lo"
+        ],
+        "trend": [
+          "trend_up"
+        ],
+        "session": [
+          "US_open"
+        ]
+      },
+      "trigger": [
+        {
+          "feature": "di_spread_60m",
+          "op": ">=",
+          "value": 12.4
+        }
+      ],
+      "geometry": {
+        "sl_atr1m_mult": 4.0,
+        "rr": 1.0,
+        "time_cap_min": 60,
+        "entry": "next 1m open after trigger bar close"
+      },
+      "sizing": {
+        "contracts_base": 1,
+        "risk_usd_per_trade": "sl_points * 2.00 * contracts",
+        "cap_rule": "risk_usd <= per_trade_cap (M0: $100)"
+      },
+      "friction_model": {
+        "points_round_trip": 1.15,
+        "note": "$1.30 commission + 1 tick/side slippage"
+      },
+      "stats": {
+        "train": {
+          "n": 138,
+          "trades_per_week": 1.77,
+          "net_exp_pts": 5.018,
+          "net_exp_usd": 10.04,
+          "pf": 1.331,
+          "win_rate": 0.558,
+          "time_exit_share": 0.232,
+          "max_consec_losses": 5,
+          "median_sl_pts": 42.62,
+          "median_risk_usd_1ct": 85.23,
+          "total_pts": 692.4
+        },
+        "valid": {
+          "n": 36,
+          "trades_per_week": 2.77,
+          "net_exp_pts": 21.908,
+          "net_exp_usd": 43.82,
+          "pf": 3.285,
+          "win_rate": 0.694,
+          "time_exit_share": 0.194,
+          "max_consec_losses": 2,
+          "median_sl_pts": 45.64,
+          "median_risk_usd_1ct": 91.27,
+          "total_pts": 788.7
+        },
+        "holdout": {
+          "n": 28,
+          "trades_per_week": 2.15,
+          "net_exp_pts": 9.414,
+          "net_exp_usd": 18.83,
+          "pf": 1.86,
+          "win_rate": 0.607,
+          "time_exit_share": 0.286,
+          "max_consec_losses": 4,
+          "median_sl_pts": 42.94,
+          "median_risk_usd_1ct": 85.88,
+          "total_pts": 263.6
+        }
+      },
+      "status": "validated",
+      "provenance": {
+        "corpus": "MNQ glitch.market.snapshot.v2 2024-01..2025-12",
+        "mined_utc": "2026-07-11",
+        "miner": "fable/r06-mining",
+        "splits": "train 2024-01..2025-06 | valid 2025-Q3 | holdout 2025-Q4 (touched once)"
+      },
+      "post_holdout_verdict": "promoted from watch: positive in ALL splits incl. holdout +9.4 pts PF 1.86 n=28 \u2014 most consistent archetype"
+    }
+  ]
+}

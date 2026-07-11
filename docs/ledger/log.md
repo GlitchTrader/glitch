@@ -2,6 +2,14 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-11 — R06 pattern mining v1 complete (Fable, parallel lane)
+
+- **Corpus:** 705,697 MNQ 1-min snapshots (2024-01→2025-12) mined end-to-end; pipeline in `Glitch-Collab/Research/r06-mining/` (ETL → triple-barrier labels net of 1.15 pts friction → regime-cell expectancy scan → frozen archetypes → locked Q4 holdout).
+- **Result:** 4 **validated** archetypes (3 downtrend-continuation shorts + opening-exhaustion fade), 1 candidate (London weakness, paper-only), 2 **retired** (US-close dip-buy and quiet-open momentum longs — destroyed in corrective Q4: bull-era beta, not edge).
+- **Hermes seed:** `glitch_hermes_docs/memory/archetypes.v1.json` + `mnq-playbook.md`; profile skills/instructions in `glitch_hermes_docs/docs/12_hermes_trading_skills_and_knowledge.md`.
+- **Method doc:** `docs/ai-program/r06-pattern-mining.md` (principles, metrics, validation spine, ongoing R06f loop).
+- **Next:** R13 replay proof of validated archetypes vs NOTHING baseline; R11 paper loop can now cite archetype_ids in intents.
+
 ## 2026-07-10 — R11 Hermes stub + telemetry reads (glitch/ai-rail)
 
 - `tools/hermes/suggest-trade.ps1` — GET market → POST paper NOTHING (cycles.jsonl).
