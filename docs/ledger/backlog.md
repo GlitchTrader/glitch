@@ -76,6 +76,7 @@ Version map: `docs/ai-program/roadmap.md`
 | R06d | GL-029 | H-1 | · Archetype JSON + MNQ playbook + Hermes memory seed | done (`glitch_hermes_docs/memory/` + doc 12 skills) |
 | R06e | GL-029 | H-1 | · Holdout pass (2025-Q4, locked) + R13 replay proof | partial — holdout done (2 longs retired); R13 replay proof pending |
 | R06f | GL-029 | H-1 | · Ongoing loop: monthly re-mine + live-stat reconciliation | **first pass done 2026-07-13** on GL-046 expanded corpus (2022→2026): v1 set demoted after era re-test; v2 set (5 validated incl. HV-LULL workhorse) holdout-proven on 2026-Q1 and seeded to `glitch_hermes_docs/memory/archetypes.v2.json`; next: fill 2023-Q4 corpus hole, DSR/PBO, order-flow re-export, R13 replay on v2 |
+| R06g | GL-029 | H-1 | · Management-layer mining + skill grading (exits, time-stops, scale-out) | **probes done 2026-07-13** (`out/expanded/probe_results.md`): trendiness forecast NULL; generic 2σ-fade skill FAILS grading (do not arm); DI-collapse exhaustion weak; **time-stop signal strong** (underwater@20min → −12/−14 pts vs in-profit@20min → +19/+33 pts on v2 flagships). Next: quantify per-archetype exit thresholds, mine breakeven/scale-out legs, XGBoost+SHAP take/skip meta-labeler, then fold into playbook + R13 replay |
 | R07 | GL-027 | v21 | External telemetry server (localhost GET) | done |
 | R08 | GL-030 | v22 | Intent endpoint (paper only) | done |
 | R09 | GL-030 | v22 | AI risk firewall | done |

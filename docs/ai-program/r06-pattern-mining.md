@@ -181,6 +181,31 @@ R06f  Ongoing loop: monthly re-mine + live-stat reconciliation (R17/R23 tie-in)
 
 *(appended as mining progresses — survives session cuts)*
 
+### 2026-07-13 — R06g probes: data patterns + first-principles skill grading
+
+Four probes run over the full 2022–2026 corpus (`mine_06_probes.py`, results in
+`out/expanded/probe_results.md`):
+
+- **P1 regime forecastability — NULL.** Next-hour path efficiency (trend vs chop) is
+  unpredictable from current ADX/ATR state (persistence corr −0.006; ADX quintile spread
+  0.133→0.129). Do not build confidence gating on trendiness forecasts from these features.
+- **P2 skill grade: "fade 2σ from 60m mean, target 50% reversion" — FAILS.** Negative in
+  every regime segment (range long: −2.9 pts PF 0.87; short of +2σ strength worst at −4.9 pts
+  PF 0.72; n=1.4–1.5k dedup each side). 50% reversion of a ~150-pt deviation within 60 min
+  almost never happens (TP rate 9–14%). Generic unconditioned deviation-fading is now an
+  evidence-graded DO-NOT-ARM at this timescale.
+- **P3 exhaustion (DI-spread collapse in strong trend) — WEAK.** Continuation drift drops
+  +0.57 → +0.37 pts but never flips negative; P(continue) ~0.51 both. Mild de-rating input
+  only; not an EXIT signal.
+- **P4 management mining — THE JUICE.** On both flagship v2 archetypes, PnL sign at minute
+  20 nearly separates the final population: QO-BREAKDOWN underwater@20min → E[final] −14.3 pts
+  vs in-profit@20min → **+32.5 pts**; HV-LULL −12.5 vs +19.4. The underwater cohort
+  deteriorates monotonically (10→20→30 min), which is also direct empirical proof that
+  averaging down is wrong on this data. Winners' MAE median 1.5–1.6×ATR (p90 3.6–4.4×) vs
+  mined SLs 2.5–4.0×ATR → breakeven-move and scale-out legs are mineable.
+  **Candidate skill: "in profit by minute 20 or get out" — quantify exact per-archetype
+  thresholds and add as R06g deliverable before R13 replay.**
+
 ### 2026-07-13 — R06f COMPLETE: v1 set invalidated by era re-test; v2 set mined, holdout-proven, seeded
 
 **Phase 1 — frozen v1 re-test on unseen eras (the humbling):** every v1 archetype failed
