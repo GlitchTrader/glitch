@@ -91,6 +91,22 @@ State the cell explicitly in your reasoning before matching archetypes.
   2023-10..12 corpus hole gets filled; order-flow re-export lands; every ~3 months
   of fresh live corpus otherwise.
 
+## 5b. Execution doctrine (measured 2026-07-13, `execution_probes.md`)
+
+Continuation entries decay with delay; reversion entries don't. Measured on train:
+
+- **QO-BREAKDOWN** is delay-robust ($27 → $17/trade from t+1 to t+5; survives 4 ticks/side)
+  — safe on the 5-minute cycle.
+- **QO-WEAK** and especially **HV-LULL** are execution-constrained. HV-LULL at 3-minute
+  delay with 2 ticks/side slippage = **$0.00/trade**. It must not be traded off the plain
+  5-minute LLM cycle: it requires the 1-minute deterministic trigger scan (script evaluates
+  archetype triggers on every snapshot write, no LLM; Hermes is invoked only on a match)
+  plus limit-quality entries.
+- **DC-DIP-LONG** improves with patience (+$5.9 → +$8.4 from t+1 to t+5): enter with
+  patient limit orders, never chase.
+- Geometry base: ATR1m anchoring stands for now; ATR60 anchoring showed +17% on QO-MOMDIV
+  only — revisit at next freeze, not a live change.
+
 ## 6. Known limits of v2 evidence (honesty section)
 
 - 2026 holdout is a single ~10-week corrective window; QO/HV shorts got a favorable

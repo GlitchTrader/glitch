@@ -181,6 +181,26 @@ R06f  Ongoing loop: monthly re-mine + live-stat reconciliation (R17/R23 tie-in)
 
 *(appended as mining progresses — survives session cuts)*
 
+### 2026-07-13 — R06g execution probes: delay cost measured, operator concern validated
+
+Operator challenged that thin per-trade edges are within Hermes→Glitch execution drift.
+Measured (`mine_07_execution.py`, `out/expanded/execution_probes.md`), train slice, all
+validated v2 archetypes, entry at trigger+1..+5 min and 1/2/4 ticks-per-side friction:
+
+- **Continuation entries decay with delay; reversion entries don't.** QO-BREAKDOWN robust
+  (+$27 → +$17/trade t+1→t+5, survives 4 ticks/side at +$21). QO-WEAK decays hard
+  (+$15 → +$5.5). **HV-LULL confirmed execution-constrained: +$4.6 baseline → $0.00 at
+  t+3 with 2 ticks/side; negative at 4 ticks.** DC-DIP-LONG *improves* with delay
+  (+$5.9 → +$8.4; anti-momentum) — patient limit entries.
+- **Architecture consequence (highest-value engineering change from these probes):**
+  a deterministic 1-minute trigger scan — script evaluates archetype-trigger JSON on every
+  snapshot write, no LLM; Hermes invoked only on a match — cuts entry delay from ~2.5–3 min
+  (5-min cycle median) to seconds and is what makes HV-LULL (and QO-WEAK) tradeable.
+  Fits cron doctrine (same shape as snapshot_sanity). Proposed as R06g-2/GL ticket.
+- ATR-base test (operator idea, regime-adaptive geometry): ATR60 anchoring +17% on
+  QO-MOMDIV only, worse elsewhere — archetype-specific refinement for the next freeze,
+  not a global change. Archetype JSON + playbook updated with execution notes.
+
 ### 2026-07-13 — R06g probes: data patterns + first-principles skill grading
 
 Four probes run over the full 2022–2026 corpus (`mine_06_probes.py`, results in

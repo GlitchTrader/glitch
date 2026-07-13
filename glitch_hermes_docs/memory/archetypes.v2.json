@@ -94,7 +94,8 @@
           0.003545470527819301
         ]
       },
-      "post_holdout_verdict": "positive all splits incl. 2026 holdout +11.2 pts PF 1.34; median SL can exceed $100/ct in high ATR \u2014 size or skip per cap"
+      "post_holdout_verdict": "positive all splits incl. 2026 holdout +11.2 pts PF 1.34; median SL can exceed $100/ct in high ATR \u2014 size or skip per cap",
+      "execution_notes_2026_07_13": "DELAY-ROBUST: +$27/trade at t+1 decaying to +$17 at t+5; survives 4 ticks/side (+$21). Tradeable on the 5-min cycle as-is."
     },
     {
       "archetype_id": "MNQ-QO-MOMDIV-SHORT-v2",
@@ -182,7 +183,8 @@
           0.003545470527819301
         ]
       },
-      "post_holdout_verdict": "positive all splits; holdout +20.0 pts PF 1.73 (n=9)"
+      "post_holdout_verdict": "positive all splits; holdout +20.0 pts PF 1.73 (n=9)",
+      "execution_notes_2026_07_13": "Delay-robust: ~$11-16 across t+1..t+5. ATR60-anchored geometry slightly better (+17%) \u2014 candidate for next freeze."
     },
     {
       "archetype_id": "MNQ-QO-WEAK-SHORT-v2",
@@ -265,7 +267,8 @@
           0.003545470527819301
         ]
       },
-      "post_holdout_verdict": "positive all splits; holdout +44.4 pts (n=7, thin); broad fallback of QO family"
+      "post_holdout_verdict": "positive all splits; holdout +44.4 pts (n=7, thin); broad fallback of QO family",
+      "execution_notes_2026_07_13": "Delay-SENSITIVE: +$15 at t+1 -> +$5.5 at t+5; at 4 ticks/side + t+3 only +$2.7. Requires fast path (1-min trigger scan)."
     },
     {
       "archetype_id": "MNQ-HV-LULL-SHORT-v2",
@@ -354,7 +357,8 @@
           0.003545470527819301
         ]
       },
-      "post_holdout_verdict": "workhorse: n=1065/118/107 all positive; highest-confidence archetype in program"
+      "post_holdout_verdict": "workhorse: n=1065/118/107 all positive; highest-confidence archetype in program",
+      "execution_notes_2026_07_13": "EXECUTION-CONSTRAINED: baseline +$4.6/trade; at t+3 with 2 ticks/side = $0.00; 4 ticks/side = negative. DEAD MONEY without 1-min deterministic trigger scan + quality fills (limit entry). Do not trade on the plain 5-min LLM cycle."
     },
     {
       "archetype_id": "MNQ-HV-EUR-BOUNCE-SHORT-v2",
@@ -603,7 +607,8 @@
           0.003545470527819301
         ]
       },
-      "post_holdout_verdict": "positive all splits; holdout n=5 thin \u2014 monitor closely, first retirement-review at 30 live/paper trades"
+      "post_holdout_verdict": "positive all splits; holdout n=5 thin \u2014 monitor closely, first retirement-review at 30 live/paper trades",
+      "execution_notes_2026_07_13": "ANTI-MOMENTUM: delay HELPS (+$5.9 at t+1 -> +$8.4 at t+5). Use patient limit entries; friction-sensitive at 4 ticks (breakeven)."
     },
     {
       "archetype_id": "MNQ-DT-MID-SHORT-v2",
