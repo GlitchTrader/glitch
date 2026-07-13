@@ -107,6 +107,17 @@ Continuation entries decay with delay; reversion entries don't. Measured on trai
 - Geometry base: ATR1m anchoring stands for now; ATR60 anchoring showed +17% on QO-MOMDIV
   only — revisit at next freeze, not a live change.
 
+**Speed classes (measured trade shapes):**
+
+| Class | Archetypes | Median hold | Risk/ct | TP/ct | Exec requirement |
+|---|---|---|---|---|---|
+| Swing | QO-BREAKDOWN, QO-WEAK | 43–60 min | ~$100 | $150–205 | 5-min cycle OK; absorbs $10–20 entry drift |
+| Mid | QO-MOMDIV, DC-DIP | 16–50 min | $55–70 | $83–102 | 5-min OK (DC-DIP: patient limit) |
+| Scalp | HV-LULL | 17 min | ~$47 | ~$71 | 1-min trigger scan + quality fills ONLY |
+
+Both classes are in the same book; the matcher picks whichever fires. Never trade the
+scalp class through the slow path.
+
 ## 6. Known limits of v2 evidence (honesty section)
 
 - 2026 holdout is a single ~10-week corrective window; QO/HV shorts got a favorable
