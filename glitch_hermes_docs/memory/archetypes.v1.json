@@ -92,14 +92,15 @@
           "total_pts": 21.8
         }
       },
-      "status": "validated",
+      "status": "retired",
       "provenance": {
         "corpus": "MNQ glitch.market.snapshot.v2 2024-01..2025-12",
         "mined_utc": "2026-07-11",
         "miner": "fable/r06-mining",
         "splits": "train 2024-01..2025-06 | valid 2025-Q3 | holdout 2025-Q4 (touched once)"
       },
-      "post_holdout_verdict": "positive all splits; holdout thin (n=9) because regime rare in Q4"
+      "post_holdout_verdict": "positive all splits; holdout thin (n=9) because regime rare in Q4",
+      "era_retest_verdict_2026_07_13": "era re-test: +6.3 pts in 2022 bear but -4.5 in 2023 recovery \u2014 bear-era conditional; succeeded by v2 set"
     },
     {
       "archetype_id": "MNQ-DTC-DI-SHORT-v1",
@@ -181,14 +182,15 @@
           "total_pts": 21.8
         }
       },
-      "status": "validated",
+      "status": "retired",
       "provenance": {
         "corpus": "MNQ glitch.market.snapshot.v2 2024-01..2025-12",
         "mined_utc": "2026-07-11",
         "miner": "fable/r06-mining",
         "splits": "train 2024-01..2025-06 | valid 2025-Q3 | holdout 2025-Q4 (touched once)"
       },
-      "post_holdout_verdict": "positive all splits; holdout thin (n=9, same Q4 trades as BREAK variant)"
+      "post_holdout_verdict": "positive all splits; holdout thin (n=9, same Q4 trades as BREAK variant)",
+      "era_retest_verdict_2026_07_13": "era re-test: +9.2 in 2022, -2.9 in 2023 (n=125), -11.3 in 2026 (n=5) \u2014 bear-era conditional"
     },
     {
       "archetype_id": "MNQ-DTC-BOUNCE-SHORT-v1",
@@ -270,14 +272,15 @@
           "total_pts": 21.1
         }
       },
-      "status": "validated",
+      "status": "retired",
       "provenance": {
         "corpus": "MNQ glitch.market.snapshot.v2 2024-01..2025-12",
         "mined_utc": "2026-07-11",
         "miner": "fable/r06-mining",
         "splits": "train 2024-01..2025-06 | valid 2025-Q3 | holdout 2025-Q4 (touched once)"
       },
-      "post_holdout_verdict": "positive all splits; holdout n=3 inconclusive but not contradicted"
+      "post_holdout_verdict": "positive all splits; holdout n=3 inconclusive but not contradicted",
+      "era_retest_verdict_2026_07_13": "era re-test: negative in BOTH 2022 (-1.8) and 2023 (-1.0)"
     },
     {
       "archetype_id": "MNQ-LDN-WEAK-SHORT-v1",
@@ -364,14 +367,15 @@
           "total_pts": -3.2
         }
       },
-      "status": "candidate",
+      "status": "retired",
       "provenance": {
         "corpus": "MNQ glitch.market.snapshot.v2 2024-01..2025-12",
         "mined_utc": "2026-07-11",
         "miner": "fable/r06-mining",
         "splits": "train 2024-01..2025-06 | valid 2025-Q3 | holdout 2025-Q4 (touched once)"
       },
-      "post_holdout_verdict": "strong train+valid; holdout -0.45 pts on n=7 \u2014 paper-only until live evidence"
+      "post_holdout_verdict": "strong train+valid; holdout -0.45 pts on n=7 \u2014 paper-only until live evidence",
+      "era_retest_verdict_2026_07_13": "era re-test: -6.5 in 2022 (n=4), +0.1 flat in 2023"
     },
     {
       "archetype_id": "MNQ-CLOSE-DIP-LONG-v1",
@@ -464,7 +468,8 @@
         "miner": "fable/r06-mining",
         "splits": "train 2024-01..2025-06 | valid 2025-Q3 | holdout 2025-Q4 (touched once)"
       },
-      "post_holdout_verdict": "holdout FAILURE: -16.2 pts/trade, PF 0.46, n=33. Bull-era dependent. Reactivation requires explicit bull-regime gate + re-proof"
+      "post_holdout_verdict": "holdout FAILURE: -16.2 pts/trade, PF 0.46, n=33. Bull-era dependent. Reactivation requires explicit bull-regime gate + re-proof",
+      "era_retest_verdict_2026_07_13": "retirement confirmed: -6.5 pts across n=167 in 2022 bear"
     },
     {
       "archetype_id": "MNQ-OPEN-MOM-LONG-v1",
@@ -553,7 +558,8 @@
         "miner": "fable/r06-mining",
         "splits": "train 2024-01..2025-06 | valid 2025-Q3 | holdout 2025-Q4 (touched once)"
       },
-      "post_holdout_verdict": "holdout failure: -7.4 pts/trade, PF 0.68, n=15. Long-side regime dependency. Same gate requirement"
+      "post_holdout_verdict": "holdout failure: -7.4 pts/trade, PF 0.68, n=15. Long-side regime dependency. Same gate requirement",
+      "era_retest_verdict_2026_07_13": "retirement confirmed: -6.4 in 2023 (n=44)"
     },
     {
       "archetype_id": "MNQ-OPEN-FADE-SHORT-v1",
@@ -635,14 +641,15 @@
           "total_pts": 263.6
         }
       },
-      "status": "validated",
+      "status": "candidate",
       "provenance": {
         "corpus": "MNQ glitch.market.snapshot.v2 2024-01..2025-12",
         "mined_utc": "2026-07-11",
         "miner": "fable/r06-mining",
         "splits": "train 2024-01..2025-06 | valid 2025-Q3 | holdout 2025-Q4 (touched once)"
       },
-      "post_holdout_verdict": "promoted from watch: positive in ALL splits incl. holdout +9.4 pts PF 1.86 n=28 \u2014 most consistent archetype"
+      "post_holdout_verdict": "promoted from watch: positive in ALL splits incl. holdout +9.4 pts PF 1.86 n=28 \u2014 most consistent archetype",
+      "era_retest_verdict_2026_07_13": "mixed eras: -3.2 in 2023 but +5.7 in 2026, +21.9 in 2025Q3 \u2014 paper-only pending era gate"
     }
   ]
 }

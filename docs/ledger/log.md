@@ -2,6 +2,157 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-13 — R06f expanded mining on GL-046 corpus: v1 archetypes invalidated, v2 set holdout-proven (Fable)
+
+- Mined the full expanded corpus (1,410,695 snapshots, 2022-01→2026-03-12; known hole 2023-10..12 — exporter stopped mid-backfill, operator should re-run that slice).
+- **Era re-test invalidated the v1 set:** profitable in 2022 bear, losing in 2023 recovery — 2 years of data cannot separate edge from era. All v1 archetypes demoted (retired/candidate) in `glitch_hermes_docs/memory/archetypes.v1.json`.
+- **v2 set** (train 2022→2025-H1 across three eras, valid 2025-H2, locked 2026-Q1 holdout touched once): 5 validated — quiet-open breakdown short family (3), **HV-LULL-SHORT workhorse** (1,290 positive dedup trades across 4 eras, 4–10/wk), quiet-midday dip long (thin); 2 retired at holdout; 1 bear-era candidate.
+- Seeded `glitch_hermes_docs/memory/archetypes.v2.json` + rewrote `mnq-playbook.md` (v2). Method + full tables: `docs/ai-program/r06-pattern-mining.md` §10; pipeline `Glitch-Collab/Research/r06-mining/` (mine_04/mine_05).
+- **Next:** R13 replay proof on v2 set; fill 2023-Q4 corpus; DSR/PBO deflation pass; R11 paper loop should now cite v2 archetype_ids.
+
+## 2026-07-13 — four-profile Hermes paper league
+
+- Implemented one Glitch runtime with four isolated Hermes profiles bound to the existing Glitch group masters: `glitch`→Sim101, `glitch-aggressive`→Sim201, `glitch-conservative`→Sim301, and `glitch-stay-revert`→Sim401. Intent v2 now requires `operator_profile`; Glitch rejects unknown profiles and profile/account mismatches before execution.
+- Group resolution remains owned by `AccountGroups.tsv`. Single-master groups are valid; Group 1 currently resolves Sim101/102/103 at 1:1:1 while Groups 2–4 resolve one 100K Sim master each. Cooldown and trade-count gates now scope to the master instead of throttling all profiles globally.
+- Parameterized preflight, inference, cycle journals, locks, and one-shot submission by profile/master. A global Sim-submission lock prevents concurrent profiles from entering the temporary arm gate; policy restoration remains mandatory and `executor_left_armed=false` remains part of submission evidence.
+- Installed all four profile SOULs and the five canonical Glitch skills. New profiles use `gpt-5.6-luna` with OpenAI Codex auth, stopped gateways, zero enabled cron jobs, and no arm.
+- Verification: 35/35 Python/source-safety tests pass; all Hermes PowerShell scripts parse; `git diff --check` has no patch errors. All four live paper preflights passed with fresh MNQ, flat/order-free groups, exact profile/master bindings, and paper-safe policy. Four preparation-only cycles built the expected one-contract contracts with `transmitted=false`.
+- Deployed the complete 78-file workspace AddOn folder once to NinjaTrader; source/live SHA-256 parity is 78/78. Runtime fixture `f6989d0f-e2a4-45f2-9be3-e4ef2e50b258` proved the new non-Sim101 binding: `glitch-aggressive`/Sim201 `NOTHING` returned 202 with `executor_mode_paper`; postconditions remained flat, order-free, `mode=paper`, and `executor_enabled=false`. No order was placed.
+
+## 2026-07-12 — deployed paper rail; first entry candidates remained unsubmitted
+
+- With operator approval, deployed the complete 78-file AddOn plus `GlitchMarketSnapshotRawJson.cs` in one combined invocation. AddOn hashes matched 78/78; the indicator matched semantically with CRLF-only normalization. NinjaTrader F5 completed without a compiler-error surface and recreated the Glitch window.
+- Fresh live snapshots now emit instrument `current_price`. Tightened preflight/Hermes freshness to the authoritative envelope `created_utc`, rejecting future-dated or stale envelopes; suite passed 22/22.
+- Closed GL-043 `NOTHING` endpoint idempotency: first exact fixture POST returned 202, duplicate returned 409, execution journal recorded `executor_mode_paper`, and before/after preflights proved Sim101/102/103 flat with no working orders.
+- Hermes then produced two valid `ENTER_SHORT` candidates at approximately $32 and $35 risk per contract, both within the $300 six-contract group cap. Neither was submitted because its exact latest-only snapshot rotated before arm; the executor remained paper/unarmed.
+- Fixed the root latency race without rebinding: Glitch now retains four writer-authenticated immutable recent snapshots, resolves only an exact embedded hash, and still enforces original age. Added a fail-closed Sim submitter that arms only after exact validation and restores paper state on any failure. AddOn redeployed and F5-compiled; suite passes 23/23.
+- The first cycle through the retained-snapshot path completed in-window and returned `NOTHING`: bearish pressure existed, but price was already near the Asia low and structural invalidation exceeded the $20–50 risk budget. No trade was forced. Final paper preflight is green; all accounts remain flat and order-free; executor remains disabled.
+
+## 2026-07-12 — GL-046 export still active at 1,394,655 rows
+
+- A fresh read-only expanded-corpus audit at 22:46Z observed 1,394,655 indexed `glitch.market.snapshot.v2` rows. Coverage remains 2022-01-04 through 2026-03-12; the append stream has progressed through 2023-10-06.
+- The index grew from 337,502,880 to 337,506,510 bytes during the audit, so freeze, full inventory, ETL, split design, mining, and holdout opening remain fail-closed. Exact duplicate IDs and malformed rows remain zero; 141 sampled payloads were clean. Timestamp sorting remains mandatory because the known append-block inversion persists.
+- Evidence: `Glitch-Collab/Research/r06-mining/out/expanded_corpus_audit.current.json`. No corpus mutation or archetype/policy promotion occurred.
+
+## 2026-07-12 — Sim101 master-intent / Glitch group contract
+
+- Locked the authority boundary: Hermes emits one logical Sim101 intent only; Glitch resolves and manages the complete enabled account group, including follower quantities, brackets, aggregate risk, recovery, and execution evidence.
+- Corrected the AI executor's previous equal-quantity behavior. Sim101 is multiplier 1 and enabled followers use canonical `AccountGroups.tsv` ratios; the current paper group therefore maps one master contract to Sim101:1, Sim102:2, Sim103:3.
+- Risk is now computed from actual scaled quantities: each account's daily-loss gate uses its own exposure and the group gate sums all six effective contracts. Duplicate accounts, invalid ratios, non-integral scaled quantities, non-Sim members, and unallowlisted members fail closed.
+- Added the permanent operator contract and source-safety coverage. Full Python suite passes 22/22; `git diff --check` has no patch errors. The privacy-redacted cycle prepare-only pass produced exact outbound evidence without transmission, and current paper preflight is fully green with all Sim group accounts flat and no working orders.
+- A combined full-AddOn plus snapshot-serializer deployment preview passed. No live files were copied because the indicator boundary still requires explicit operator approval. Policy remains `paper`, executor remains disabled, and no order was placed.
+- Strengthened paper preflight and GL-045 so group configuration now proves unique accounts, positive integral ratio-scaled quantities, and reports the exact execution geometry. Live evidence is Sim101:1, Sim102:2, Sim103:3, total multiplier 6. With the current `$300` group-loss cap, deterministic maximum risk is `$50` per contract; an `$80` per-contract trade would require a separately approved `$480` group cap and was not enabled.
+- Aligned privacy-redacted Hermes guidance with that deterministic capacity. The cycle now resolves the canonical local group, derives the per-contract exploration ceiling from aggregate capacity, fails closed on malformed group geometry, and transmits only the resulting bounded trading constraint—not private account or policy state. Prepare-only evidence `live-20260712T224443Z` shows `$20–50`, Sim101 quantity 1, no Sim102/103 identifiers, no private policy key, and no transmission; suite remains 22/22.
+
+## 2026-07-12 — active-rail reconciliation
+
+- Reconciled the task-selection rail with runtime evidence: GL-042 implementation is deployed/compiled, GL-044 is complete with a 4,141-snapshot three-day capsule and schema-valid dry/paper `NOTHING` proof, and the full automatic suite is 18/18.
+- `operations/pm/status.json` now selects GL-043 as primary. Current closeout is fresh-feed GL-043 POST/idempotency evidence, then GL-045 Sim-group fixtures. No arm or live promotion was authorized.
+
+## 2026-07-12 — market-open prearm green; Hermes dry cycle timed out
+
+- At 22:05Z the paper preflight turned fully green with fresh MNQ data, fresh complete Sim101/102/103 portfolio state, all accounts flat, zero working orders, and `mode=paper` / `executor_enabled=false`. Full GL-045 prearm passed the complete automatic matrix.
+- Exactly one unposted Hermes cycle ran under the 120-second hard timeout. It captured `tools/hermes/tests/out/live-20260712T220553Z/cycle.json`, then timed out with empty stdout/stderr and produced no intent or usage artifact. The sandbox also denied the runtime failure-journal append, but source evidence remains in the bounded output directory.
+- Fail-closed postconditions passed: `active-cycle.json` was removed, policy remained paper/unarmed, fresh preflight stayed green, and all Sim group accounts remained flat with no working orders. No idempotency run was attempted because no validated `NOTHING` intent existed; no POST, order, policy mutation, or account mutation occurred.
+- Follow-up diagnosis isolated the timeout to the execution sandbox: `hermes auth list` failed on denied access to the Glitch profile `auth.lock`. A minimal outside-sandbox diagnostic containing no market/account data returned exactly `HERMES_AUTH_OK` in 15 seconds, proving the OpenAI Codex OAuth/model path is healthy. The corrected live-cycle request was rejected at the data-transmission boundary because it would send bounded portfolio/account and policy state to the external model without fresh explicit operator approval. No workaround or second cycle ran.
+
+## 2026-07-12 — GL-043 fail-closed idempotency harness
+
+- Added `tools/hermes/verify-nothing-idempotency.ps1`, constrained to a schema-valid `NOTHING` intent while policy is `paper` and `executor_enabled=false`. It requires green preflight, proves first POST `202`, exact duplicate `409`, flat/no-working-order postconditions, and a skipped execution-journal record.
+- The script is PowerShell-parser clean; the complete Hermes validator/source-safety suite passes `19/19`; diff check is clean. Runtime proof was intentionally not run while MNQ freshness is red. No redeploy, arm, policy change, or order occurred.
+
+## 2026-07-12 — GL-045 full-suite and kill-switch gate
+
+- Corrected `gl045-prearm.ps1` to run the complete Hermes/source-safety suite rather than only the intent-validator subset.
+- Added the previously omitted kill-switch matrix case and a source contract proving `ai_kill_switch` is firewall check 1, before AI enablement, instrument, account, risk, or execution checks.
+- Full automatic suite is now `18/18`. GL-045 remains fail-closed only on stale Sunday MNQ data plus the intentionally pending operator Sim fixtures; executor remains disabled.
+
+## 2026-07-12 — GL-046 expanded-corpus audit gate
+
+- Added a read-only, memory-bounded expanded-corpus auditor under `Glitch-Collab/Research/r06-mining/`. It streams the index, proves exact duplicate IDs, records chronology transitions, samples payload schema deterministically, and can perform full index/file inventory fingerprints after export freezes.
+- Current live audit observed `1,388,653` indexed `glitch.market.snapshot.v2` rows spanning `2022-01-04T07:00Z` through `2026-03-12T20:59Z`; zero malformed rows, duplicate IDs, path/name mismatches, or errors in 140 sampled payloads.
+- The index is not globally chronological: line 772,357 transitions from `2026-03-12T20:59Z` back to `2022-01-04T07:00Z`. It also grew by 4,356 bytes during the 22-second audit, proving export is still active. No ETL, split, mining, or holdout selection may run until the export freezes; downstream code must sort by timestamp rather than trust append order.
+- A 21:31Z re-audit observed 1,390,411 rows and 141/141 clean payload samples. The index again grew during the pass, confirming the exporter remains active; the freeze/split gate stays closed.
+- Corrected a latent post-export deadlock in the audit: the known append-block inversion is now reported as `index_order_safe=false` / `requires_timestamp_sort=true` rather than making an otherwise frozen, inventory-matched set permanently ineligible for split design. Mutation, duplicates, malformed rows, inventory mismatch, path mismatch, or sampled payload failures still fail closed. Three focused gate tests and Python compilation pass; no mining ran.
+- Added `freeze_expanded_corpus.py`: it refuses skip-inventory or mutating audits, re-hashes the current stable index, requires exact audited size/hash parity, preserves the timestamp-sort contract, and writes a freeze manifest only after those checks. The audit/freeze suite passes 6/6; an attempted freeze against the current audit failed closed on the missing full inventory match and wrote no manifest.
+- Locked the expanded-run temporal doctrine before re-mining: 2025 is explicitly known evidence because Q4 was already opened and influenced the playbook; only purged 2026-Q1 may serve as the one-touch final holdout. The native validation bridge follows NinjaTrader's in-sample then forward unseen-test Walk Forward model, with local data and explicit costs; it cannot substitute for R13 replay parity or promotion approval.
+- Added `design_expanded_splits.py`, which accepts only a provenance-bearing freeze manifest, requires the timestamp-sort contract and 2026 coverage, labels 2025 as contaminated known evidence for existing archetypes, and emits the 2026 holdout as `locked=true, opened=false` with explicit opening prerequisites. The combined audit/freeze/split suite passes 9/9; no freeze manifest exists yet, so the live command fails before writing a split artifact.
+- Added `freeze_expanded_candidates.py`: it accepts only an unopened locked split, hashes the exact bytes and frozen geometry of each individual `MNQ-*.json`, rejects empty/malformed/duplicate-ID/geometry-less sets, and declares that any post-holdout mutation requires a new future holdout. The four-stage gate suite passes 12/12 and compilation/diff checks are clean; the live command correctly refuses while no split artifact exists.
+
+## 2026-07-12 — GL-043 snapshot-price binding deployed
+
+- Closed the market-price TOCTOU gap: one immutable snapshot read now binds the intent hash, creation-time freshness, instrument presence, and current price used for firewall risk/bracket geometry.
+- Group execution independently repeats that exact-hash read immediately before per-account/group risk computation, so a snapshot rotation between firewall approval and order submission fails closed.
+- Automatic suite is `17/17`; the complete 78-file AddOn was deployed once for this finished patch, source/live hashes match `78/78`, and NinjaTrader F5 returned without a compiler-error surface. Runtime preflight remains red only for the expected Sunday MNQ freshness gate; executor remains disabled.
+
+## 2026-07-12 — GL-043 bounded cycle failure evidence
+
+- Hardened `invoke-hermes-cycle.ps1` with a configurable hard Hermes timeout, captured stdout/stderr, durable `glitch.hermes.cycle_journal.v1` success/failure records, stage attribution, and guaranteed active-cycle cleanup.
+- Functional failure fixtures prove both nonzero model exit and a five-second forced timeout produce no POST, a journaled `hermes_inference` failure, and no residual `active-cycle.json`.
+- Automatic suite is now `16/16`; PowerShell parses cleanly and `git diff --check` reports no whitespace errors. Paper execution remains disabled.
+
+## 2026-07-12 — GL-042 NT8 compile and refreshed runtime schema
+
+- Sent F5 to the identified NinjaScript Editor through approved Windows control. NinjaTrader returned to the editor without opening a compiler-error window; the Glitch window was recreated, indicating the AddOn reloaded.
+- Fresh runtime preflight now sees the required group fields for Sim101/102/103: portfolio fresh and complete, all accounts flat, zero working orders, policy paper-safe, telemetry and intent servers running.
+- GL-045 automatic matrix passes every currently executable safety case. Readiness remains fail-closed solely on `mnq_fresh` because the market snapshot is stale on Sunday. Executor remains disabled; no order or account mutation occurred.
+
+## 2026-07-12 — GL-042 safety closure and full-folder NT8 deployment (F5 pending)
+
+- Three independent safety rereads drove fail-closed completion: exact account/instrument/net-position ownership before any flatten; fresh, complete, single-read portfolio risk state; explicit tracked-order terminal states; recovery remains tracked until account flat plus all orders terminal; malformed position arrays reject.
+- Automatic evidence: `15/15` Hermes/validator/source-safety tests pass; `git diff --check` clean; `preflight-open.ps1` parses and correctly rejects the closed-market stale MNQ feed plus the old running portfolio schema.
+- Deployment skill previewed and then copied the complete 78-file canonical `GlitchAddOn` folder once into the approved NinjaTrader AddOns target. No strategy/indicator tree, account configuration, policy arming, or order state was changed.
+- NinjaTrader F5 was not sent because Windows app-control approval timed out. Required next: operator-approved F5 compile, inspect compile output, restart/reopen Glitch so the new snapshot schema is live, then run GL-045 fixtures. Paper executor remains disabled.
+
+## 2026-07-12 — GL-042 group-safe executor source implementation (compile pending)
+
+- Replaced the single-account AI executor with canonical `AccountGroups.tsv` resolution for the configured Sim101 master and enabled Sim followers only. Direct follower intents and any non-Sim/unallowlisted group member fail closed.
+- Each enabled account receives its own market entry and native OCO stop/target pair. Signals use `GLT-AI-*`, so the normal fill-copy engine cannot duplicate AI follower orders.
+- Registered AI orders with the existing runtime `OrderUpdate` path. A late rejection starts group recovery: cancel tracked working orders, flatten any exposed member, and append per-account correlation/recovery evidence to `intents/executions.jsonl`.
+- Workspace checks: intent validator `6/6` pass; targeted diff check clean. NT8 F5 compile and GL-045 runtime matrix remain mandatory. No live-tree deployment, executor arming, or account mutation performed.
+
+## 2026-07-12 — Market-open readiness and first real Hermes paper POST
+
+- Added `tools/hermes/preflight-open.ps1`: fail-closed checks for telemetry/intent servers, AI/kill-switch state, executor account, MNQ freshness, Sim101 presence/flatness, and paper-safe policy. Closed-market proof failed only `mnq_fresh` (`mnq_age_seconds=121125.7`), as intended.
+- Added `tools/hermes/invoke-hermes-cycle.ps1`: reads authoritative market/portfolio through telemetry, builds the bounded capsule input, calls the isolated profile, validates externally, and optionally posts only while `mode=paper` and `executor_enabled=false`.
+- First production-shaped dry cycle passed: `NOTHING`, valid hash, no POST. First paper POST was rejected at firewall check 6 because the latest snapshot rotated during model latency. This proved fail-closed behavior and exposed the latest-only hash race.
+- Added a pre-POST telemetry hash gate. Rerun passed: intent `cycle-20260712T170806Z-nothing`, hash `-517467854`, firewall checks 1–15 passed, response `accepted` / `mode=paper`, execution journal `skipped` with `executor_mode_paper`.
+- Postcondition verified: policy remains `mode=paper`, `executor_enabled=false`, `executor_account=Sim101`; no order was created. At market open rerun preflight, then paper-cycle validation before any separately supervised sim arm.
+
+## 2026-07-12 — GL-043 Hermes contract scenarios, first live pass
+
+- Added `tools/hermes/run-contract-scenarios.ps1`, five bounded fixtures, external JSON Schema/custom invariant validation, and disposable per-run evidence under ignored `tools/hermes/tests/out/`.
+- Independent model results on `gpt-5.6-luna`/medium: `fresh_long_breakout → ENTER_LONG`, `fresh_short_breakdown → ENTER_SHORT`, `stale_snapshot_nothing → NOTHING`, `open_long_hold → HOLD`, `open_long_exit → EXIT`. All five passed exact-one-JSON, Intent v2 schema, MNQ/Sim101 scope, snapshot-hash echo, market-only entry, one-contract, tick geometry, and scenario risk-cap checks.
+- Fail-closed behavior was exercised during setup: two early runs returned valid `NOTHING` because the Docker fixture was unreadable, but the external validator rejected both for snapshot-hash mismatch. Root cause was malformed JSON serialization in profile `.env` for `TERMINAL_DOCKER_VOLUMES`/`TERMINAL_DOCKER_EXTRA_ARGS`; corrected to valid JSON and reruns passed.
+- Live Glitch pre-order check: telemetry `8787` and intent `8788` listen; policy remains `mode=paper`, `executor_enabled=false`, executor account `Sim101`; snapshot sanity reports fresh envelopes but rail feed has `fresh_roots=0/3`. Therefore no Sim101 order test was armed or fired. Restore a fresh MNQ feed and complete GL-042/GL-045 gates first.
+
+## 2026-07-12 — GL-044 isolated Hermes profile and Glitch-native skills
+
+- Inspected `architectonic/skills/dist`: no reusable trading/futures skill pack was present. Kept only the transferable regulated-domain pattern: isolated run folder, reproducible inputs, fingerprints, credential separation, and explicit promotion gates.
+- Added five canonical Glitch skills under `hermes-profile/skills`: `glitch-observe-market`, `glitch-assess-risk`, `glitch-form-thesis`, `glitch-build-intent`, and `glitch-review-outcomes`. All pass the skill validator. The first four compose the fast decision loop; review runs separately.
+- Added `tools/hermes/build-data-capsule.ps1`. It allowlists current market/portfolio/policy, selected MNQ history, promoted patterns/playbook, Intent v2 schema, and provenance-separated journals; writes SHA-256 evidence to `manifest.json`; never exposes canonical `GlitchData` directly.
+- Installed the five skills into Hermes profile `glitch`. Profile truth: `gpt-5.6-luna`, medium reasoning, memory off, curator off, delegation off, terminal-only toolset, Docker backend, no environment forwarding, no automatic cwd mount, no network, read-only capsule at `/opt/glitch-data`.
+- Docker isolation proof passed: only capsule files were visible; the Glitch repo was absent; a write under `/opt/glitch-data` failed. Gateway remains stopped and no cron/order execution was armed.
+- Attribution rule: Hermes starts at zero trades. Optional prior Sim101 records are labeled `legacy_sim101` and are context only, never Hermes performance.
+- Remaining GL-044 acceptance depends on GL-043: strict adapter/schema dry-run from one supplied cycle fixture. GL-042 remains the execution-safety predecessor.
+
+## 2026-07-12 — Hermes Sim101 group plan and profile reset (operator direction)
+
+- **Scope:** Hermes may observe bounded raw/normalized MNQ snapshots, portfolio/group state,
+  Apex 250k Legacy Sim policy, historical corpus, mined evidence, and versioned instructions.
+  It proposes one strict market-order intent for `MNQ` / **Sim101 only**; Glitch owns price/risk
+  revalidation, order creation, Sim102/103 replication, brackets, recovery, and journal.
+- **Readiness correction:** existing R12 safely brackets only the direct account. Existing
+  event-copy wiring mirrors fills but does not establish follower-native OCO brackets; direct
+  follower account intents are not yet blocked by executor-account enforcement.
+- **Plan:** GL-042 through GL-046 in `backlog.md` are the canonical Spec Kit task breakdown;
+  no standalone planning document was created. GL-042 → GL-043 → GL-044 → GL-045 is the
+  execution order; R06g runs after the incoming expanded corpus is complete.
+- **Hermes profile:** reset from inherited orchestrator state to a minimal Glitch operator
+  profile; model target `gpt-5.6-luna`, medium reasoning. It carries no broker/NT credentials,
+  no cron jobs, no retained memory, and no general-purpose skill library. The runtime adapter,
+  not prompt text, guarantees valid-or-no-trade intent handling.
+
 ## 2026-07-11 — R06 pattern mining v1 complete (Fable, parallel lane)
 
 - **Corpus:** 705,697 MNQ 1-min snapshots (2024-01→2025-12) mined end-to-end; pipeline in `Glitch-Collab/Research/r06-mining/` (ETL → triple-barrier labels net of 1.15 pts friction → regime-cell expectancy scan → frozen archetypes → locked Q4 holdout).

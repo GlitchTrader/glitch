@@ -181,6 +181,87 @@ R06f  Ongoing loop: monthly re-mine + live-stat reconciliation (R17/R23 tie-in)
 
 *(appended as mining progresses — survives session cuts)*
 
+### 2026-07-13 — R06f COMPLETE: v1 set invalidated by era re-test; v2 set mined, holdout-proven, seeded
+
+**Phase 1 — frozen v1 re-test on unseen eras (the humbling):** every v1 archetype failed
+generalization. DTC shorts: +6.3/+9.2 pts in 2022 bear but **−4.5/−2.9 in 2023 recovery**;
+BOUNCE negative in both; retired longs confirmed (CLOSE-DIP −6.5 pts × n=167 in 2022).
+**Lesson: 2 years of corpus cannot separate edge from era.** All v1 archetypes demoted
+(retired; OPEN-FADE → candidate). Full table: `Research/r06-mining/out/expanded/v1_retest.csv`.
+
+**Phase 2 — v2 mining (train 2022-01→2025-06 spanning bear+recovery+bull · valid 2025-H2
+· locked holdout 2026-01→03-12 touched once):** 8,966 tests → 304 train pass → 13 OOS
+survivors + pairs → 8 frozen → holdout verdicts:
+
+| v2 Archetype | Train | Valid | Holdout 2026 | Status |
+|---|---|---|---|---|
+| QO-BREAKDOWN-SHORT (quiet open, below prev low + cci15↓, 4.0/1.5) | +11.0, PF 1.65, n=178 | +17.8, PF 1.82, n=40 | **+11.2, PF 1.34, n=10** | validated |
+| QO-MOMDIV-SHORT (macd5↓↓ + cci15↓, 2.5/1.5) | +8.5, n=154 | +10.1, n=40 | +20.0, PF 1.73, n=9 | validated |
+| QO-WEAK-SHORT (z15 ≤ −1.79, 4.0/2.0) | +6.8, n=174 | +16.0, n=40 | +44.4, n=7 | validated |
+| **HV-LULL-SHORT (vol_hi downtrend, adx1 ≤ 13.8, 2.5/1.5)** | +2.2, **n=1065** | +4.6, n=118 | **+4.1, PF 1.20, n=107** | **validated — workhorse** |
+| HV-EUR-BOUNCE-SHORT | +4.6, n=419 | +3.3, n=47 | −8.2, PF 0.69, n=47 | RETIRED |
+| DC-DOWNDAY-LONG (prev day down, vol_md range) | +4.5, n=281 | +3.4, n=43 | −10.4, PF 0.52, n=30 | RETIRED |
+| DC-DIP-LONG (1m-vs-15m RSI dip, quiet midday) | +4.5, n=279 | +6.6, n=115 | +26.5, n=5 | validated (thin — review at 30 trades) |
+| DT-MID-SHORT (v1-family successor) | +9.4, n=155 | +7.4, n=26 | −16.4, n=8 | candidate (bear-era; paper-only) |
+
+**Program conclusions:** (1) era-robustness is the primary selection criterion from now on —
+multi-era train + fresh forward holdout is the minimum bar; (2) HV-LULL-SHORT is the
+highest-confidence, highest-frequency finding of the program (positive across 1,290 dedup
+trades spanning 4 eras); (3) the book is short-heavy — durably bullish tape ⇒ re-mine, not
+improvised longs; (4) v2 seeded to `glitch_hermes_docs/memory/archetypes.v2.json` +
+playbook v2 rewritten.
+
+**Follow-ups queued:** fill 2023-10→12 corpus hole (exporter stopped mid-backfill);
+DSR/PBO formal deflation; order-flow re-export; R13 replay proof on v2 set.
+
+### 2026-07-13 — R06f expanded run started (GL-046 corpus, 2022→2026)
+
+- Expanded corpus verified quiescent (index last write 2026-07-12 23:11Z): **1,410,695 files**,
+  coverage 2022-01-04 → 2026-03-12.
+- **Known hole:** backfill stopped mid-2023-10 (21,531 of ~29k files) and **2023-11 + 2023-12
+  are missing entirely**. Tolerated for mining (label span-guard invalidates gap-crossing
+  trades); operator should re-run the exporter for 2023-10→12 to fill.
+- Design (`mine_04_expanded.py`): Phase 1 re-tests the **frozen v1 archetypes** (original
+  thresholds) on three unseen eras — 2022 bear, 2023 recovery, 2026-01→03-12 post-freeze
+  forward. Phase 2 mines v2: TRAIN 2022-01→2025-06 · VALID 2025-07→2025-12 ·
+  **HOLDOUT 2026-01→03-12 locked** (scored once, by a separate script, after v2 freeze).
+  New daily-context features added for the long-side bull-gate hunt
+  (ret_1d, ret_5d, close_vs_5d_mean, prev_day_dir); vol_hi now populated by 2022.
+
+### 2026-07-12 — expanded-corpus validation contract (before re-mining)
+
+The incoming v2 export extends the corpus to 2022-01-04→2026-03-12. The original
+2025-Q4 holdout was opened once on 2026-07-11 and its verdicts changed the playbook;
+therefore it is **known evidence**, not an untouched holdout for any expanded run.
+Relabeling it as locked would be leakage.
+
+Expanded-run temporal contract:
+
+```text
+2022-01-04→2024-12-31  discovery / parameter fitting
+2025-01-01→2025-12-31  known forward evidence (never called locked)
+2026-01-01→2026-01-07  purge; excluded from fitting and scoring
+2026-01-08→2026-03-12  locked final holdout; open once after candidates freeze
+```
+
+The exact end is bounded by the frozen manifest. All rows are sorted by parsed UTC;
+raw `index.jsonl` append order is forbidden because the expanded export contains a
+known chronology inversion. New candidate definitions and geometry must be frozen
+before reading 2026 results. Existing archetypes may be evaluated on 2026, but no
+threshold, regime gate, or geometry may be tuned from those results without creating
+a new future holdout.
+
+The native cross-check uses NinjaTrader Strategy Analyzer with local data, explicit
+commission/slippage assumptions, and Walk Forward Optimization where parameters are
+fit on each in-sample segment and evaluated on the following unseen test segment.
+Native results complement the snapshot replay; they do not replace R13 parity proof
+or authorize policy promotion.
+
+Primary platform references:
+
+- NinjaTrader 8 Help Guide, `Strategy Analyzer > Backtest a Strategy`
+- NinjaTrader 8 Help Guide, `Strategy Analyzer > Walk Forward Optimization`
+
 ### 2026-07-11 — scan complete, archetypes frozen, holdout passed ONCE
 
 **Scan:** 65 regime cells × 98 conditions × 2 sides on train (2024-01→2025-06) with base
