@@ -8,6 +8,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Windows.Threading;
+using Glitch.Services;
 using NinjaTrader.Cbi;
 
 namespace Glitch.UI
@@ -189,6 +190,7 @@ namespace Glitch.UI
             if (_isReplicatingUi)
                 RefreshCopyEngineConfiguration(activeAccounts);
             UpdateHeaderMetricsFromRows(rows);
+            UpdateHermesModeUi(GlitchHermesControlStateStore.Load().TradingPaused);
             PublishGlitchShellState(rows);
 
             if (heavyTabWork)
@@ -197,6 +199,8 @@ namespace Glitch.UI
                     RefreshAnalyticsDashboard(activeAccounts);
                 if (GetSelectedMainTabIndex() == MainTabJournal)
                     UpdateJournalLicenseGateOverlay();
+                if (GetSelectedMainTabIndex() == MainTabAi)
+                    RefreshAiTab();
                 if (GetSelectedMainTabIndex() == MainTabSettings)
                     UpdateSettingsCopyTradingPolicyNotice();
             }

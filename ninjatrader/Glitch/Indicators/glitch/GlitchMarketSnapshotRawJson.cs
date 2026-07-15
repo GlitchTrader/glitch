@@ -9,7 +9,7 @@ using System.Text;
 namespace NinjaTrader.NinjaScript.Indicators
 {
     /// <summary>
-    /// glitch.market.snapshot.v2 — measurements only (OHLCV + indicator numbers). No scores, labels, or trade opinions.
+    /// glitch.market.snapshot.v2 — observations plus numeric derived analytics. No labels or trade opinions.
     /// </summary>
     internal static class GlitchMarketSnapshotRawJson
     {
@@ -34,6 +34,20 @@ namespace NinjaTrader.NinjaScript.Indicators
             public double? OrderFlowVwapDeviation { get; set; }
         }
 
+        internal sealed class DerivedAnalyticsPayload
+        {
+            public double? RawScore { get; set; }
+            public double? DirectionalScore { get; set; }
+            public double? TradeabilityScore { get; set; }
+            public double? EmaAlignment { get; set; }
+            public double? RegimeWeight { get; set; }
+            public double? OscillatorCompositeScore { get; set; }
+            public double? MaCompositeScore { get; set; }
+            public double? OrderFlowScore { get; set; }
+            public double? OrderFlowConfidence { get; set; }
+            public double? OrderFlowReliability { get; set; }
+        }
+
         internal sealed class RawTimeframeBarPayload
         {
             public int Minutes { get; set; }
@@ -44,12 +58,15 @@ namespace NinjaTrader.NinjaScript.Indicators
             public double? Close { get; set; }
             public double? Volume { get; set; }
             public RawIndicatorsPayload Indicators { get; set; }
+            public DerivedAnalyticsPayload DerivedAnalytics { get; set; }
         }
 
         internal sealed class RawInstrumentPayload
         {
             public string InstrumentRoot { get; set; }
+            public string InstrumentFullName { get; set; }
             public DateTime UpdatedUtc { get; set; }
+            public double? CurrentPrice { get; set; }
             public string SessionName { get; set; }
             public double? SessionHigh { get; set; }
             public double? SessionLow { get; set; }
@@ -149,7 +166,9 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             return "{"
                 + "\"instrument\":" + JsonString(snapshot.InstrumentRoot) + ","
+                + "\"instrument_full_name\":" + JsonString(snapshot.InstrumentFullName) + ","
                 + "\"timestamp_utc\":" + JsonString(GlitchMarketSnapshotJson.FormatUtc(snapshot.UpdatedUtc)) + ","
+                + "\"current_price\":" + JsonNullableNumber(snapshot.CurrentPrice) + ","
                 + "\"session\":{"
                 + "\"name\":" + JsonString(snapshot.SessionName) + ","
                 + "\"high\":" + JsonNullableNumber(snapshot.SessionHigh) + ","
@@ -165,6 +184,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         private static string BuildTimeframeBarJson(RawTimeframeBarPayload bar)
         {
             RawIndicatorsPayload ind = bar.Indicators ?? new RawIndicatorsPayload();
+            DerivedAnalyticsPayload derived = bar.DerivedAnalytics ?? new DerivedAnalyticsPayload();
             return "{"
                 + "\"minutes\":" + bar.Minutes.ToString(CultureInfo.InvariantCulture) + ","
                 + "\"utc_time\":" + JsonString(GlitchMarketSnapshotJson.FormatUtc(bar.UtcTime)) + ","
@@ -188,6 +208,18 @@ namespace NinjaTrader.NinjaScript.Indicators
                 + "\"order_flow_delta_change\":" + JsonNullableNumber(ind.OrderFlowDeltaChange) + ","
                 + "\"order_flow_vwap\":" + JsonNullableNumber(ind.OrderFlowVwap) + ","
                 + "\"order_flow_vwap_deviation\":" + JsonNullableNumber(ind.OrderFlowVwapDeviation)
+                + "},"
+                + "\"derived_analytics\":{"
+                + "\"raw_score\":" + JsonNullableNumber(derived.RawScore) + ","
+                + "\"directional_score\":" + JsonNullableNumber(derived.DirectionalScore) + ","
+                + "\"tradeability_score\":" + JsonNullableNumber(derived.TradeabilityScore) + ","
+                + "\"ema_alignment\":" + JsonNullableNumber(derived.EmaAlignment) + ","
+                + "\"regime_weight\":" + JsonNullableNumber(derived.RegimeWeight) + ","
+                + "\"oscillator_composite_score\":" + JsonNullableNumber(derived.OscillatorCompositeScore) + ","
+                + "\"ma_composite_score\":" + JsonNullableNumber(derived.MaCompositeScore) + ","
+                + "\"order_flow_score\":" + JsonNullableNumber(derived.OrderFlowScore) + ","
+                + "\"order_flow_confidence\":" + JsonNullableNumber(derived.OrderFlowConfidence) + ","
+                + "\"order_flow_reliability\":" + JsonNullableNumber(derived.OrderFlowReliability)
                 + "}"
                 + "}";
         }

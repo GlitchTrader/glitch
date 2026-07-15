@@ -142,7 +142,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                     ? root
                     : root + " " + contractSuffix;
 
-                AddDataSeries(instrumentName, BarsPeriodType.Minute, 1);
+                for (int timeframeIndex = 0; timeframeIndex < PrimaryTargetMinutes.Length; timeframeIndex++)
+                    AddDataSeries(instrumentName, BarsPeriodType.Minute, PrimaryTargetMinutes[timeframeIndex]);
             }
         }
 
@@ -219,13 +220,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (minutes <= 0)
                 return false;
 
-            bool isPrimaryRoot = !string.IsNullOrWhiteSpace(instrumentRoot) &&
-                string.Equals(instrumentRoot, _primaryInstrumentRoot, StringComparison.OrdinalIgnoreCase);
-
-            if (isPrimaryRoot && AddPrimaryTimeframes)
-                return IsPrimaryTargetMinutes(minutes);
-
-            return minutes == 1;
+            return IsPrimaryTargetMinutes(minutes);
         }
 
         private static bool IsPrimaryTargetMinutes(int minutes)
@@ -267,7 +262,12 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 string root = _rootByBip[bip];
                 if (!string.IsNullOrWhiteSpace(root))
+                {
                     roots.Add(root);
+                    Bars bars = BarsArray == null || bip >= BarsArray.Length ? null : BarsArray[bip];
+                    GlitchBridgeBusCompat.RegisterTradeInstrumentInstance(
+                        bars == null ? null : bars.Instrument);
+                }
             }
 
             foreach (string root in roots)

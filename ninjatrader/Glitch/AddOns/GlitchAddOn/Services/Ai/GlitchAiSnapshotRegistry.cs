@@ -46,34 +46,78 @@ namespace Glitch.Services
         public static bool IsSnapshotFresh(string snapshotHash, DateTime nowUtc, int maxAgeSeconds, out string failureCode)
         {
             failureCode = null;
-            GlitchAiMarketSnapshotMeta meta;
-            if (!TryGetLatestMarketMeta(out meta) || !meta.Exists)
-            {
-                failureCode = "snapshot_missing";
+            string json;
+            if (!TryReadSnapshotByHash(snapshotHash, out json, out failureCode))
                 return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(snapshotHash) ||
-                !string.Equals(snapshotHash, meta.SnapshotHash, StringComparison.Ordinal))
-            {
-                failureCode = "snapshot_hash_mismatch";
-                return false;
-            }
-
-            if (meta.CreatedUtc == DateTime.MinValue)
+            DateTime? createdUtc = GlitchAiJsonFields.TryExtractUtc(json, "created_utc");
+            if (!createdUtc.HasValue)
             {
                 failureCode = "snapshot_created_utc_missing";
                 return false;
             }
 
-            double ageSeconds = (nowUtc - meta.CreatedUtc).TotalSeconds;
-            if (ageSeconds > maxAgeSeconds)
+            double ageSeconds = (nowUtc - createdUtc.Value).TotalSeconds;
+            if (ageSeconds < -5 || ageSeconds > maxAgeSeconds)
             {
                 failureCode = "snapshot_stale";
                 return false;
             }
 
             return true;
+        }
+
+        public static bool TryGetFreshInstrumentPrice(
+            string snapshotHash,
+            string instrumentRoot,
+            DateTime nowUtc,
+            int maxAgeSeconds,
+            out double price,
+            out string failureCode)
+        {
+            price = 0;
+            failureCode = null;
+            try
+            {
+                string json;
+                if (!TryReadSnapshotByHash(snapshotHash, out json, out failureCode))
+                    return false;
+
+                DateTime? createdUtc = GlitchAiJsonFields.TryExtractUtc(json, "created_utc");
+                if (!createdUtc.HasValue)
+                {
+                    failureCode = "snapshot_created_utc_missing";
+                    return false;
+                }
+
+                double ageSeconds = (nowUtc - createdUtc.Value).TotalSeconds;
+                if (ageSeconds < -5 || ageSeconds > maxAgeSeconds)
+                {
+                    failureCode = "snapshot_stale";
+                    return false;
+                }
+
+                string marker = "\"instrument\":" + GlitchSnapshotJson.String(instrumentRoot.Trim().ToUpperInvariant());
+                int start = json.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+                if (start < 0)
+                {
+                    failureCode = "snapshot_instrument_missing";
+                    return false;
+                }
+
+                string slice = json.Substring(start, Math.Min(2500, json.Length - start));
+                if (!GlitchAiJsonFields.TryExtractNumber(slice, "current_price", out price) || price <= 0)
+                {
+                    failureCode = "snapshot_price_missing";
+                    return false;
+                }
+
+                return true;
+            }
+            catch
+            {
+                failureCode = "snapshot_read_failed";
+                return false;
+            }
         }
 
         public static bool TryGetInstrumentSession(string instrumentRoot, out string sessionName)
@@ -128,6 +172,28 @@ namespace Glitch.Services
             }
         }
 
+        public static bool TryGetInstrumentFullName(string snapshotHash, string instrumentRoot, out string instrumentFullName)
+        {
+            instrumentFullName = null;
+            if (string.IsNullOrWhiteSpace(instrumentRoot))
+                return false;
+
+            string json;
+            string failureCode;
+            if (!TryReadSnapshotByHash(snapshotHash, out json, out failureCode))
+                return false;
+
+            string marker = "\"instrument\":" + GlitchSnapshotJson.String(instrumentRoot.Trim().ToUpperInvariant());
+            int start = json.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (start < 0)
+                return false;
+
+            string slice = json.Substring(start, Math.Min(2500, json.Length - start));
+            instrumentFullName = GlitchAiJsonFields.ExtractString(slice, "instrument_full_name");
+            return !string.IsNullOrWhiteSpace(instrumentFullName)
+                && !string.Equals(instrumentFullName.Trim(), instrumentRoot.Trim(), StringComparison.OrdinalIgnoreCase);
+        }
+
         private static string StripSnapshotHashField(string json)
         {
             if (string.IsNullOrWhiteSpace(json))
@@ -138,6 +204,44 @@ namespace Glitch.Services
                 ",\"snapshot_hash\"\\s*:\\s*\"[^\"]*\"",
                 string.Empty,
                 System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        }
+
+        private static bool TryReadSnapshotByHash(string snapshotHash, out string json, out string failureCode)
+        {
+            json = null;
+            failureCode = null;
+            if (string.IsNullOrWhiteSpace(snapshotHash))
+            {
+                failureCode = "snapshot_hash_mismatch";
+                return false;
+            }
+
+            string latestPath = GlitchMarketSnapshotWriter.GetLatestSnapshotPath();
+            string recentPath = GlitchMarketSnapshotWriter.GetRecentSnapshotPath(snapshotHash);
+            string[] candidates = new[] { latestPath, recentPath };
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                string path = candidates[i];
+                if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                    continue;
+                try
+                {
+                    string candidate = File.ReadAllText(path);
+                    if (string.IsNullOrWhiteSpace(candidate))
+                        continue;
+                    string candidateHash = GlitchAiJsonFields.ExtractString(candidate, "snapshot_hash");
+                    if (string.IsNullOrWhiteSpace(candidateHash))
+                        candidateHash = GlitchSnapshotJson.ComputeStableHash(StripSnapshotHashField(candidate));
+                    if (!string.Equals(snapshotHash, candidateHash, StringComparison.Ordinal))
+                        continue;
+                    json = candidate;
+                    return true;
+                }
+                catch { }
+            }
+
+            failureCode = File.Exists(latestPath) ? "snapshot_hash_mismatch" : "snapshot_missing";
+            return false;
         }
     }
 }

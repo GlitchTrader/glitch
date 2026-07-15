@@ -16,6 +16,24 @@ Hermes proposes. Glitch validates, executes, journals, and protects.
 
 Duration is **open**. Advance the rail on **evidence**, not calendar. Parallelize compute wherever steps are read-only.
 
+## Product architecture decision (2026-07-14)
+
+The distributable product has **one centralized Hermes brain**, hosted as a persistent supervised service on a VPS. Customers do not install Hermes and do not receive a Glitch chat surface.
+
+```text
+central market ingestion -> canonical five-minute packet -> Hermes recommendation
+  -> authenticated recommendation API -> Glitch clients poll every five minutes
+  -> each Glitch validates against local state -> executes/manages locally
+  -> local replication, native brackets, compliance, journal, and Feed
+  -> bounded outcomes return to the central learning rail
+```
+
+The recommendation is advice, not an order. It carries stable identity, instrument, desired action/position, confidence, thesis, expiry, structural stop/targets, and risk metadata. Each client remains authoritative for account/group eligibility, quantity, prop rules, replication, orders, brackets, and emergency controls.
+
+The current local `glitch` Hermes profile and direct filesystem exchange are an **internal validation harness only**. They prove packet, decision, execution, replication, outcome, session-continuity, and learning contracts before the network boundary is introduced. They are not the customer deployment topology.
+
+Stabilization precedes expansion. The gate is: supervised gateway continuity; one persistent trading session; truthful portfolio snapshots; every completed group trade reconciled into learning outcomes; reproducible paper execution/replication/brackets; and an observable cycle trail. Only after that gate may central ingestion, recommendation APIs, Feed UI, dynamic quantity, multi-group, or multi-instrument work begin.
+
 ---
 
 ## 1. What we are building (first principles)
@@ -180,7 +198,7 @@ Advance when the step’s **acceptance** is met. Skip nothing in §4.5 safety. L
 | **R08** | v22 | `GlitchAiIntentServer` POST `/intent` — **no executor registered** | 100% intents journaled; zero `CreateOrder` in path (**done**) |
 | **R09** | v22 | `GlitchAiRiskFirewall` — 15-step chain | Adversarial intents rejected with per-check journal (**done**) |
 | **R10** | v22 | `GlitchAiJournalBridge` — intent ↔ snapshot_hash ↔ verdict | Round-trip reconstructable from journal alone (**done**) |
-| **R11** | v22 | Hermes `suggest_trade` → paper endpoint | End-to-end propose without execution |
+| **R11** | v22 | Hermes `suggest_trade` → paper endpoint | GL-043: strict JSON ingress; model/prose failure is a no-trade cycle, never an actionable fallback |
 
 **Gate:** GL-024 commission-true journal before Hermes learns from outcomes.
 
@@ -188,7 +206,7 @@ Advance when the step’s **acceptance** is met. Skip nothing in §4.5 safety. L
 
 | Step | Label | Work | Acceptance |
 |------|-------|------|------------|
-| **R12** | v23 | `GlitchAiOrderExecutor` Sim101 — bracket-mandatory, `GlitchAI*` signals | Zero naked entries; attach failure ⇒ entry cancelled (**ready** — `executor_enabled` + `mode=sim`) |
+| **R12** | v23 | `GlitchAiOrderExecutor` Sim101 group — bracket-mandatory, `GlitchAI*` signals | GL-042: Sim101 only; every enabled Sim102/103 follower receives its own native bracket; partial group failure cancels/flattens safely |
 | **R13** | v23 | Replay harness — archetypes vs baseline on Eval risk profile | ≥1 archetype beats baseline on replay evidence |
 
 **Gate:** R08–R11 clean (zero firewall bypasses, zero schema drift rejects) — **session count, not weeks**.
@@ -219,7 +237,7 @@ No pyramiding · no averaging down · no stop widening
 | **R18** | v25 | Confidence gating + no-trade reason respect | Churn down; PnL/trade flat or up |
 | **R19** | v26 | `ADJUST_STOP` tighten-only · `PARTIAL_EXIT` · optional 1m exit cadence | Widening attempts always rejected |
 | **R20** | v27 | Fleet: 2–3 evals; portfolio open-risk; correlation guard | Cap breach blocks intent |
-| **R21** | v28 | Shadow model + VPS 24/7 runbook | Shadow journaled; soak without stuck handoffs |
+| **R21** | v28 | Central Hermes VPS + canonical ingestion + recommendation service | Persistent supervised brain; schema parity; authenticated, expiring, idempotent recommendations |
 | **R22** | v29 | Self-heal: sanity fail → disable AI; schema drift → paper; fault → degrade | Injected faults recover without code deploy |
 | **R23** | v30 | Self-learn: promotion gate; versioned policy candidates | Promotion beats baseline on replay; audit trail |
 
@@ -237,30 +255,32 @@ No pyramiding · no averaging down · no stop widening
 
 ---
 
-## 5. Hermes cron (when armed)
+## 5. Cognitive cadence
 
 | Job | Cadence | LLM |
 |-----|---------|-----|
-| market + portfolio snapshot flush | 1 min | no |
-| snapshot_sanity | 5 min | no |
-| suggest_trade | 5 min | yes |
+| central market snapshot/packet build | 1 min / 5 min close | no |
+| packet and gateway sanity | 5 min | no |
+| central recommendation | 5 min | yes |
 | portfolio_risk_review | 1 hr | optional |
 | learning_pass | 6 hr | yes |
 | daily_learning | post-session | yes |
 
-Cron first. Daemon only if cron fails a measured need.
+The central VPS uses a supervised persistent Hermes gateway. Hermes native cron may schedule cognition inside that service. Client polling is transport and must not create one model call per customer.
 
 ---
 
 ## 6. Ponytail — do not build
 
-- Public telemetry/intent endpoints.
+- Per-client Hermes installations or per-client model calls for the shared recommendation.
+- A Glitch chat tab; the customer observability surface is Feed.
+- An API that can bypass local Glitch validation or submit broker orders directly.
 - AI inside replication engine.
 - Separate live vs historical snapshot shapes.
 - Martingale / buffer-chase logic.
 - Calendar gates (“wait 2 weeks”) — use evidence gates.
 - Extra indicators before bridge truth is exported.
-- Always-on Hermes microservice platform.
+- Separate central and client snapshot schemas.
 
 ---
 
@@ -280,7 +300,13 @@ Cron first. Daemon only if cron fails a measured need.
 
 ## 8. Active pointer
 
-**Next step:** R11 — Hermes `suggest_trade` paper loop, or arm R12 on Sim101 (`ai/policy.json`: `mode=sim`, `executor_enabled=true`).
+**Current stabilization pointer:** GL-047 through GL-049b close supervised gateway/session continuity, authoritative outcome learning, portfolio snapshot truth, and terminal follower brackets on copied exits. Preserve the working master-only intent -> Glitch replication -> account-local bracket path. No expansion implementation begins until these checks are green and the paper cycle is observable.
+
+**Expansion pointer after stabilization:** GL-050 through GL-054 implement central ingestion parity, the VPS brain, recommendation API/client polling, Feed, then quantity/group/instrument expansion. The older R11/R12 closeout text below is retained only as historical context and is superseded by these tickets.
+
+**Next step:** GL-042 — close master-only, native-bracket group execution before arming
+R12. Then GL-043 makes Hermes `suggest_trade` a strict paper loop; do not arm
+`ai/policy.json` (`mode=sim`, `executor_enabled=true`) before GL-045 evidence.
 
 **Parallel:** R06 — pattern mining on historical replay exports (Hermes sessions).
 

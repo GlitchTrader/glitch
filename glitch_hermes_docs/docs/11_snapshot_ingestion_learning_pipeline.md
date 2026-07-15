@@ -91,7 +91,7 @@ Do not let Hermes infer missing critical fields. Missing critical state forces `
 
 ## Layer 2 — five-minute operator
 
-Mode: Hermes LLM cron.
+Mode: one centralized Hermes LLM cycle. The local cron is the temporary validation harness.
 
 Cadence: every 5 minutes, aligned to the closed decision window.
 
@@ -100,7 +100,7 @@ Purpose:
 ```text
 read latest valid snapshot
 read recent Glitch-journaled outcomes
-read active rules/archetypes/lessons
+read active rules plus relevant hypotheses, evidence, and lessons
 emit one strict JSON intent per instrument or NOTHING
 ```
 
@@ -115,6 +115,24 @@ NOTHING
 ```
 
 Output stays small. The cost risk is input/context bloat, not the intent JSON.
+
+### Current stabilization transport
+
+Glitch writes a minute frame only after market and portfolio snapshots with the same `snapshot_id` are both present. Five consecutive frames ending on `xx:x0` or `xx:x5` are atomically published as one decision packet under `GlitchData/hermes/exchange/glitch`.
+
+Hermes native cron owns the wake-up under a supervised gateway. Its worker performs a zero-model check for a new packet, resumes only the named `trading` session in the isolated `glitch` profile, reads bounded Glitch journal tails, and submits strict intents to Glitch's authenticated receiver. It does not classify opportunities or impose trading archetypes before inference. Contract/scope validation cannot replace Hermes's probabilistic decision; Glitch's firewall remains the execution authority.
+
+Codex is not present in snapshot publication, scheduling, inference, delivery, execution, journaling, or learning.
+
+### Target central ingestion and delivery
+
+The central ingest service produces the same versioned minute snapshot and five-frame decision-packet formats as the client harness. Shared fixtures and hashes enforce schema parity; central code must not invent a second feature vocabulary.
+
+One canonical packet causes one Hermes recommendation. The stored recommendation includes a stable ID, packet/snapshot hashes, instrument, desired action/position, confidence, thesis, expiry, structural stop/targets, and risk metadata. Entitled Glitch clients poll for that record every five minutes. Clients do not trigger model calls.
+
+Each client combines the recommendation with current local portfolio and group state, validates it through Glitch, executes only the group master, and lets the existing replication engine own followers. The client posts bounded receipts/outcomes keyed by recommendation and local execution IDs. Raw credentials and direct order authority never leave the client.
+
+Learning distinguishes shared market evidence from client execution evidence. Central outcomes may aggregate slippage, rejection, bracket, and PnL statistics without treating one customer's account state as universal policy. Only completed, ledger-correlated outcomes enter the learning corpus.
 
 ## Layer 3 — hourly portfolio and risk review
 
@@ -132,9 +150,9 @@ review instrument concentration/correlation
 recommend risk posture changes
 ```
 
-This layer does not place trades. It produces reviewable recommendations or policy candidates.
+This layer does not place trades. It produces an hourly review, checks whether observed behavior matches the active plan, and may perform Tier 0 repairs only inside Hermes-owned state (for example rebuilding an index, retrying a receipt, quarantining a malformed memory item, or pausing its own unhealthy job). Risk-cap, account, Glitch-policy, deployment, and execution changes remain proposals requiring the authority defined in document 12.
 
-## Layer 4 — six-hour learning pass
+## Layer 4 — six-hour portfolio planning
 
 Mode: Hermes cron, LLM-driven or script-assisted.
 
@@ -143,14 +161,14 @@ Cadence: every 6 hours during active experimentation.
 Purpose:
 
 ```text
-read accepted/rejected intents
-read journaled outcomes
-compare expected vs actual behavior
-rank mistakes and useful setups
-produce candidate lesson/archetype changes
+read current portfolio state and authoritative outcomes
+compare progress with today's targets and risk budget
+adapt target ranges and risk allocation to regime and evidence
+identify what Hermes should test or avoid during the next horizon
+write a versioned plan without changing Glitch policy or execution settings
 ```
 
-Candidate lessons are not active policy until promoted through a versioned review step.
+The plan guides later cognition; it is not an execution gate. Any authority-changing recommendation remains pending until explicitly approved.
 
 ## Layer 5 — daily trader journal
 
@@ -165,10 +183,12 @@ summarize the day
 identify repeated mistakes
 summarize wins/losses by regime and setup
 produce a concise trader-style journal
+update episodic and semantic knowledge with provenance
+set evidence-backed targets and questions for tomorrow
 prepare candidate lessons for review
 ```
 
-The daily journal is how Hermes learns like a trader without rewriting live policy silently.
+The daily journal is how Hermes learns like a trader without rewriting Glitch policy silently. It preserves uncertainty and contradictory evidence instead of forcing every observation into a rule.
 
 ## Multi-instrument support
 
@@ -233,13 +253,13 @@ The output is not direct live authority. It becomes candidate archetypes, lesson
 
 ## Memory and skill layer
 
-Use wiki-style memory and skills for durable operator knowledge:
+Preserve Hermes's native memory, sessions, planning, and upkeep capabilities. Add Glitch-specific skills for durable operator knowledge:
 
 ```text
 wiki memory      stable project doctrine, model/cadence policy, glossary
 skills           reusable procedures and checks
 journal          trader-style reflection and outcomes
-archetypes       versioned setup definitions
+hypotheses       versioned setups, patterns, and competing explanations
 policy           promoted rules only
 ```
 
@@ -248,35 +268,50 @@ Do not store private/raw dumps or unreviewed lessons as active policy.
 ## Cadence map
 
 ```text
-1 minute   Glitch snapshot export + script-only snapshot_sanity
-5 minutes  Hermes suggest_trade LLM cron
+1 minute   central canonical ingest + packet assembly (client harness mirrors it)
+5 minutes  one central Hermes recommendation + client poll
 1 hour     Hermes portfolio/risk review
-6 hours    Hermes learning pass
-Daily      Hermes trader journal / summary
+6 hours    Hermes portfolio targets and risk planning
+Daily      Hermes lessons, memory upkeep, and tomorrow targets
 ```
 
 ## Ponytail constraints
 
-Do first:
+Activate in stages. Do first:
 
 ```text
 one snapshot schema
 one live exporter
 one historical exporter using the same schema
 one 5-minute operator job
-one script-only watchdog
-one daily journal
+one script-only packet check
+one persistent supervised Hermes profile/session with native capabilities intact
+interactive orientation, then only the 5-minute core
 ```
 
 Do not start with:
 
 ```text
-always-on AI daemon
+per-client AI runtime
 custom scheduler
 streaming LLM loop
 big feature store
 unreviewed auto-policy updates
-separate AI trading platform
+separate central/client schemas
 ```
 
-Add those only when the simple cron/exporter path fails a measured need.
+Add hourly supervision, six-hour planning, and daily learning only after the core packet-to-outcome cycle is observable and trustworthy. The complete cognitive and authority map is `12_hermes_trading_skills_and_knowledge.md`.
+
+## Optional Kanban learning layer (deferred)
+
+Kanban is useful for slow, inspectable learning work—not for the five-minute execution path and not as a second trade ledger.
+
+```text
+Glitch ledger       authoritative positions, orders, intents, rejects, fills, brackets, outcomes
+Hermes memory       hypotheses, distilled lessons, operator context
+Hermes Kanban       bounded review assignments with evidence links and completion criteria
+```
+
+After the direct core is validated, a small projector may create an unassigned informational card for an unusual closed trade or anomaly. Assignment is what authorizes model work, so ordinary positions must not spawn agents or model calls. A practical first assigned card is one daily review that compares closed outcomes, updates a hypothesis with evidence, and records what should be tested next. Hourly or six-hour cards should exist only when a material exception or decision needs attention.
+
+The board must never control trading mode, replication, flattening, order submission, stops, or targets. It links back to immutable Glitch IDs rather than copying market and order truth into `kanban.db`. Only one Hermes gateway may own the Kanban dispatcher. Model routing, automatic card creation, per-position tickets, and dashboard integration are expansion candidates after the core produces trustworthy data; none are required for initial deployment.

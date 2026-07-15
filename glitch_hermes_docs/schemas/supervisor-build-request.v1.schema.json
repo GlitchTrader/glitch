@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "glitch.supervisor.build_request.v1",
+  "type": "object",
+  "required": ["schema_version", "request_id", "created_utc", "status", "title", "scope", "requested_by"],
+  "properties": {
+    "schema_version": {"const": "glitch.supervisor.build_request.v1"},
+    "request_id": {"type": "string", "minLength": 8},
+    "created_utc": {"type": "string", "format": "date-time"},
+    "updated_utc": {"type": "string", "format": "date-time"},
+    "status": {"enum": ["proposed", "approved", "claimed", "in_progress", "completed", "blocked", "rejected"]},
+    "title": {"type": "string", "minLength": 1},
+    "scope": {"enum": ["hermes_profile", "hermes_exchange", "glitch_addon", "glitch_indicator", "docs", "tests"]},
+    "requested_by": {"const": "hermes-chat"},
+    "user_approval": {"type": "string"},
+    "description": {"type": "string"},
+    "acceptance": {"type": "array", "items": {"type": "string"}},
+    "evidence_refs": {"type": "array", "items": {"type": "string"}},
+    "risk_notes": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

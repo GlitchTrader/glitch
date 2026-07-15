@@ -75,7 +75,6 @@ namespace Glitch.UI
             Grid.SetColumn(_headerMetricHostGrid, 0);
             _headerRootGrid.Children.Add(_headerMetricHostGrid);
             UpdateWarningCountUi();
-
             _headerActionsGrid = new Grid
             {
                 HorizontalAlignment = HorizontalAlignment.Right,
@@ -83,6 +82,20 @@ namespace Glitch.UI
             };
             _headerActionsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             _headerActionsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            _headerActionsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            _aiTradingButton = new Button
+            {
+                MinWidth = 132,
+                MinHeight = actionButtonMinHeight,
+                MaxHeight = actionButtonMaxHeight,
+                Margin = new Thickness(0, 0, headerGap, 0),
+                Style = CreateAiTradingButtonStyle(_headerRootGrid)
+            };
+            _aiTradingButton.Click += OnAiTradingButtonClick;
+            UpdateHermesModeUi(GlitchHermesControlStateStore.Load().TradingPaused);
+            Grid.SetColumn(_aiTradingButton, 0);
+            _headerActionsGrid.Children.Add(_aiTradingButton);
 
             _replicateButton = new Button
             {
@@ -94,7 +107,7 @@ namespace Glitch.UI
             };
             _replicateButton.Click += OnReplicateButtonClick;
             UpdateReplicateButtonState();
-            Grid.SetColumn(_replicateButton, 0);
+            Grid.SetColumn(_replicateButton, 1);
             _headerActionsGrid.Children.Add(_replicateButton);
 
             _flattenAllButton = new Button
@@ -106,7 +119,7 @@ namespace Glitch.UI
                 Style = CreateFlattenButtonStyle(_headerRootGrid)
             };
             _flattenAllButton.Click += OnFlattenAllButtonClick;
-            Grid.SetColumn(_flattenAllButton, 1);
+            Grid.SetColumn(_flattenAllButton, 2);
             _headerActionsGrid.Children.Add(_flattenAllButton);
 
             Grid.SetRow(_headerActionsGrid, 0);
@@ -250,7 +263,7 @@ namespace Glitch.UI
         
                 private void ConfigureHeaderActionColumns(bool fillWidth)
                 {
-                    if (_headerActionsGrid == null || _replicateButton == null || _flattenAllButton == null)
+                    if (_headerActionsGrid == null || _aiTradingButton == null || _replicateButton == null || _flattenAllButton == null)
                         return;
         
                     _headerActionsGrid.ColumnDefinitions.Clear();
@@ -262,9 +275,18 @@ namespace Glitch.UI
                     {
                         Width = fillWidth ? new GridLength(1, GridUnitType.Star) : GridLength.Auto
                     });
+                    _headerActionsGrid.ColumnDefinitions.Add(new ColumnDefinition
+                    {
+                        Width = fillWidth ? new GridLength(1, GridUnitType.Star) : GridLength.Auto
+                    });
         
-                    Grid.SetColumn(_replicateButton, 0);
-                    Grid.SetColumn(_flattenAllButton, 1);
+                    Grid.SetColumn(_aiTradingButton, 0);
+                    Grid.SetColumn(_replicateButton, 1);
+                    Grid.SetColumn(_flattenAllButton, 2);
+
+                    _aiTradingButton.Margin = new Thickness(0, 0, fillWidth ? 6 : 8, 0);
+                    _aiTradingButton.MinWidth = fillWidth ? 108 : 132;
+                    _aiTradingButton.HorizontalAlignment = fillWidth ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
         
                     _replicateButton.Margin = new Thickness(0, 0, fillWidth ? 6 : 8, 0);
                     _replicateButton.MinWidth = fillWidth ? 108 : 132;

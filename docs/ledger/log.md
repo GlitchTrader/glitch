@@ -2,6 +2,59 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-15 - two-leg native scale-out and consistency pass (builder-only)
+
+- Completed the existing `glitch.intent.v2` TP2 contract through the active direct runner, firewall, master executor, and follower copy engine. A quantity split now creates two distinct native OCO stop/target pairs; follower leg quantities scale from the Glitch-configured ratio and non-integral splits reject before the master entry.
+- Preserved same-direction averaging as repeated independently protected entries rather than adding a deterministic averaging strategy or action. Partial master/follower entry fills fail closed into cancel/flatten recovery instead of remaining unprotected.
+- Removed stale two-working-order assumptions from managed-exit/legacy portfolio checks, aligned the canonical intent and roadmap language with initial per-leg protection plus later `MOVE_STOP`, and tightened follower recovery risk to the per-contract policy cap.
+- Corrected Journal reversal accounting: a single execution crossing through flat now allocates commission proportionally between the closing lifecycle and the newly opened remainder instead of charging the full commission twice. Added the requirement to mainline P0 `GL-055`.
+- Critical-path source checks cover snapshot analytics/freshness, instrument metadata, portfolio truth, journal sync/orphan-exit guards, intent normalization/schema, execution recovery, replication, follower brackets, and UI feed contracts. Python/schema/PowerShell parsing passed; 117/117 automated tests passed. NinjaTrader F5 compile and one 3-contract two-target Sim lifecycle remain operator acceptance. No deployment, order, cycle, account, policy, or scheduler state was changed.
+- Updated GL-053 and the existing mainline handoff. The AI executor itself remains an explicit non-backport; GL-060 now requires runtime-neutral multi-leg follower protection semantics on `main`, while GL-055 remains the first P0 journal backport.
+
+## 2026-07-15 - native follower close and truthful fleet flatten (builder-only)
+
+- Closed a follow-on protected-entry regression found in the next paper trade. The master received and filled its native SL, but Sim102/Sim103 had been copied into long positions without follower SL/TP orders. `TryGetReplicationProtection` had searched transient groups using `Account` object reference identity; the copy engine then treated a missing plan as optional and submitted naked AI follower entries. Protection lookup is now direct by the already-registered AI entry signal and validates stable account name/instrument identity. An AI follower entry is never submitted if that plan is unavailable.
+- Restored group-exit semantics for native master SL/TP fills. Master `GLT-AI-S` and `GLT-AI-T` executions are no longer filtered as replication-internal; they flow through the same complete-exit path and invoke NT native follower flatten. Account-local follower brackets remain independent fail-safes, while a filled master exit remains authoritative for group synchronization. Follower-owned `GLT-COPY`/`GLT-CATCHUP` events are still filtered to prevent loops.
+- Focused source-safety suite: 43/43 passing. The complete 81-file AddOn was deployed once; compile and one protected entry/master-SL fixture remain operator acceptance. Codex placed no orders and ran no Hermes cycle.
+- Reconstructed the orphan-bracket loss from NT evidence: copied master exits first flattened Sim102/Sim103, then stale follower targets filled against flat accounts and opened unprotected reverse shorts; a later disconnect caused Flatten All to omit those configured accounts and falsely report the fleet flat.
+- Removed Glitch's duplicate close-order/bracket-cancel state machine for complete follower exits. Full copied and catch-up exits now delegate to NinjaTrader AddOn `Account.Flatten(account/instrument)`, whose native close sequence cancels working orders, waits for cancellation confirmation, then closes the remaining position. Partial copied exits are refused with a critical warning until bracket resizing is explicitly supported; the existing protection remains in place.
+- Flatten All now builds an intended scope from configured group names plus currently available accounts, journals unresolved/disconnected configured accounts, performs best-effort flattening on resolvable accounts, and reports success only when every intended account is positively resolved, flat, and order-free. Missing accounts are never inferred flat.
+- Validation: all 88 Hermes/source-contract tests pass; diff check is clean. The complete 81-file AddOn was deployed once through the approved helper and workspace/live SHA-256 comparison reports zero mismatches. NinjaTrader compile and one protected entry/full-exit fixture remain operator acceptance; no order, cycle, account, policy, or scheduler state was changed by Codex.
+
+## 2026-07-14 - centralized-brain decision and stabilization pass (builder-only)
+
+- Recorded the product topology: one supervised Hermes brain on VPS, one canonical recommendation per five-minute window, authenticated Glitch client polling, local Glitch execution/management/replication/brackets/journal, and Feed without Chat. The local Hermes filesystem bridge is now explicitly an internal validation harness.
+- Added ordered Spec Kit tickets GL-047 through GL-054. Expansion remains blocked on gateway/session continuity, authoritative outcome learning, portfolio truth, follower exit/bracket terminality, and stable/profitable single-instrument paper evidence. No automatic Codex build or trading loop is authorized.
+- Fixed the outcome-learning design to join decisions and group lifecycle evidence to authoritative per-account `TradeLedger.tsv` round trips. A terminal flat/order-free group snapshot is required before learning. Real read-only reconstruction produced the two valid completed outcomes: -$72 and +$195 group PnL.
+- Fixed portfolio capture so top-level signed position, unrealized PnL, and total PnL derive from the same live nested position records.
+- Root-caused the third-trade drift: the copied master EXIT flattened Sim102/Sim103, but follower targets remained working because position state lagged the order callback; those targets later filled and opened reverse shorts. Source now marks copied/catch-up close orders before submission and cancels follower protection on the tracked close fill without relying on that lagging position callback.
+- Gateway installation now uses Hermes-native hidden Windows supervision and cron enablement refuses an unsupervised/stopped gateway. Validation: 87 Hermes tests pass; Python and PowerShell parse checks pass. Deployment was correctly blocked because Sim102 and Sim103 are currently short one MNQ each with no working protection while Sim101 is flat. No order, flatten, cycle, restart, or deployment was performed.
+
+## 2026-07-13 - Hermes cognitive operating map documented (builder-only)
+
+- Established one persistent `glitch` Hermes mind with four separated cognitive jobs: 5-minute core decisions on `gpt-5.6-luna`/medium, hourly portfolio supervision on `gpt-5.6-sol`/high, six-hour portfolio planning on Sol/high, and daily learning/tomorrow planning on Sol/high. Model/provider/effort are recorded defaults with no silent core-loop downgrade.
+- Preserved Hermes native skills, memory, sessions, planning, and upkeep. Glitch-specific skills are overlays. Documented the additional ledger, prop-rules, portfolio, planning, knowledge-upkeep, and self-heal skills required before supervisory jobs may activate; they were not implemented or installed in this pass.
+- Removed the conceptual four-personality constraint: groups and ratios are dynamic Glitch packet state, route names are execution identities/legacy compatibility labels, and patterns/archetypes are advisory evidence rather than deterministic gates. `no_archetype_match` alone is never a reason for `NOTHING`.
+- Defined single-writer ledger ownership, six memory layers, bounded self-heal tiers, per-loop inputs/outputs, and an evidence/rollback rule for future optimizations.
+- Staged activation is explicit: interactive orientation, then the 5-minute paper core only; hourly, six-hour, and daily jobs remain deferred until core packet-to-outcome evidence is trustworthy. No profile install, cron activation, model call, deployment, policy/account mutation, intent submission, or order occurred.
+- Added a static regression contract and aligned operator, ingestion, profile, and tool documentation. Verification: 63 Hermes Python/source-contract tests pass.
+
+## 2026-07-13 - direct Glitch/Hermes bridge implemented (builder-only)
+
+- Removed Codex from the designed runtime path. Glitch now owns five consecutive minute-frame publication and x0/x5 decision packets under `GlitchData/hermes/exchange/glitch`; Hermes owns outbox, delivery receipts, and cycle events under the sibling `hermes` branch. Physical streams have one writer each and join through stable IDs.
+- Added a Hermes-native worker and separate install/enable scripts. The worker makes zero model calls without a new complete packet, resumes the isolated `glitch` profile session, reads bounded authoritative Glitch journal tails, applies contract/scope checks only, and delivers through the existing authenticated Glitch intent firewall. It contains no directional opportunity gate or deterministic trading strategy.
+- Group count, route/master bindings, followers, and ratios come from the packet's live Glitch policy and `AccountGroups.tsv`; the batch contract supports the configured group count instead of hardcoding four books. The profile SOUL no longer hardcodes aggressive/conservative archetypes.
+- Workframe dogfood isolation is explicit: only the host `glitch` profile is configured by the installer; no Workframe container, volume, network, port, or profile is touched.
+- Verification: 60 offline Python/source-contract tests pass; the direct worker compiles; both PowerShell installers parse; scoped diff check passes. No profile installation, cron activation, NinjaTrader deployment, model call, policy/account mutation, intent submission, or order occurred.
+
+## 2026-07-13 — corrected to one Hermes operator with four strategy books
+
+- Replaced the briefly activated four-profile league with one persistent `glitch` Hermes profile, one shared NT journal/memory context, and four independently routed Sim books: balanced/Sim101 group, aggressive/Sim201, conservative/Sim301, and stay-revert/Sim401.
+- Added `glitch.intent.batch.v1`: one model call must return exactly four `glitch.intent.v2` decisions in fixed book order. Local validation enforces unique route/account binding, snapshot identity, one-contract market entries, bracket geometry, per-book risk, and `NOTHING` for ineligible books.
+- Added a single portfolio runner that can sequentially pass eligible entries through the existing one-shot Sim submission gate and proves paper/unarmed postconditions. No unified cron is enabled yet.
+- Live preparation passed all four books with `transmitted=false`; 41 tests pass. The first external model run was blocked before transmission pending explicit approval to send the privacy-redacted live MNQ snapshot and Sim-only journal/account labels through Hermes to the external GPT service.
+- Runtime remains paper/unarmed and all Sim groups remain flat/order-free. The earlier four cron jobs were removed and secondary Glitch gateway login services were uninstalled.
+
 ## 2026-07-13 — R06f expanded mining on GL-046 corpus: v1 archetypes invalidated, v2 set holdout-proven (Fable)
 
 - Mined the full expanded corpus (1,410,695 snapshots, 2022-01→2026-03-12; known hole 2023-10..12 — exporter stopped mid-backfill, operator should re-run that slice).

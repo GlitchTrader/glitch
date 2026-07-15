@@ -10,6 +10,94 @@ namespace Glitch.Services
 {
     internal static class GlitchAiPortfolioSnapshotReader
     {
+        public static bool TryGetFreshRiskState(
+            string accountName,
+            DateTime nowUtc,
+            int maxAgeSeconds,
+            out bool riskLocked,
+            out bool evalTargetLocked,
+            out double realizedPnl,
+            out string failure)
+        {
+            string accountJson;
+            return TryGetFreshRiskState(
+                accountName,
+                nowUtc,
+                maxAgeSeconds,
+                out riskLocked,
+                out evalTargetLocked,
+                out realizedPnl,
+                out accountJson,
+                out failure);
+        }
+
+        public static bool TryGetFreshRiskState(
+            string accountName,
+            DateTime nowUtc,
+            int maxAgeSeconds,
+            out bool riskLocked,
+            out bool evalTargetLocked,
+            out double realizedPnl,
+            out string accountJson,
+            out string failure)
+        {
+            riskLocked = false;
+            evalTargetLocked = false;
+            realizedPnl = 0;
+            accountJson = null;
+            failure = null;
+
+            string path = GlitchPortfolioSnapshotWriter.GetLatestSnapshotPath();
+            if (!File.Exists(path))
+            {
+                failure = "portfolio_snapshot_missing";
+                return false;
+            }
+
+            try
+            {
+                string json = File.ReadAllText(path);
+                DateTime? createdUtc = GlitchAiJsonFields.TryExtractUtc(json, "created_utc");
+                if (!createdUtc.HasValue)
+                {
+                    failure = "portfolio_snapshot_created_utc_missing";
+                    return false;
+                }
+
+                double ageSeconds = (nowUtc - createdUtc.Value).TotalSeconds;
+                if (ageSeconds < -5 || ageSeconds > maxAgeSeconds)
+                {
+                    failure = "portfolio_snapshot_stale";
+                    return false;
+                }
+
+                if (!TryGetAccountBlockFromJson(json, accountName, out accountJson))
+                {
+                    failure = "portfolio_account_missing_" + accountName;
+                    return false;
+                }
+
+                double workingOrders;
+                string positionsArray;
+                if (!GlitchAiJsonFields.TryExtractBool(accountJson, "is_risk_locked", out riskLocked)
+                    || !GlitchAiJsonFields.TryExtractBool(accountJson, "is_eval_target_locked", out evalTargetLocked)
+                    || !GlitchAiJsonFields.TryExtractNumber(accountJson, "realized_pnl", out realizedPnl)
+                    || !GlitchAiJsonFields.TryExtractNumber(accountJson, "working_orders", out workingOrders)
+                    || !TryExtractArray(accountJson, "positions", out positionsArray))
+                {
+                    failure = "portfolio_account_fields_incomplete_" + accountName;
+                    return false;
+                }
+
+                return true;
+            }
+            catch
+            {
+                failure = "portfolio_snapshot_unreadable";
+                return false;
+            }
+        }
+
         public static bool TryGetAccountBlock(string accountName, out string accountJson)
         {
             accountJson = null;
@@ -23,21 +111,7 @@ namespace Glitch.Services
             try
             {
                 string json = File.ReadAllText(path);
-                string marker = "\"account\":" + GlitchSnapshotJson.String(accountName.Trim());
-                int start = json.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
-                if (start < 0)
-                    return false;
-
-                int objectStart = json.LastIndexOf('{', start);
-                if (objectStart < 0)
-                    return false;
-
-                int end = FindMatchingBrace(json, objectStart);
-                if (end < 0)
-                    return false;
-
-                accountJson = json.Substring(objectStart, end - objectStart + 1);
-                return true;
+                return TryGetAccountBlockFromJson(json, accountName, out accountJson);
             }
             catch
             {
@@ -71,36 +145,74 @@ namespace Glitch.Services
             if (!TryGetAccountBlock(accountName, out accountJson) || string.IsNullOrWhiteSpace(instrumentRoot))
                 return 0;
 
-            string positionsArray = ExtractArray(accountJson, "positions");
-            if (string.IsNullOrWhiteSpace(positionsArray) || positionsArray == "[]")
-                return 0;
+            return GetOpenPositionQuantityFromAccountBlock(accountJson, instrumentRoot);
+        }
+
+        public static int GetOpenPositionQuantityFromAccountBlock(string accountJson, string instrumentRoot)
+        {
+            int quantity;
+            return TryGetOpenPositionQuantityFromAccountBlock(accountJson, instrumentRoot, out quantity)
+                ? quantity
+                : 0;
+        }
+
+        public static bool TryGetOpenPositionQuantityFromAccountBlock(
+            string accountJson,
+            string instrumentRoot,
+            out int quantity)
+        {
+            quantity = 0;
+            if (string.IsNullOrWhiteSpace(accountJson) || string.IsNullOrWhiteSpace(instrumentRoot))
+                return false;
+
+            string positionsArray;
+            if (!TryExtractArray(accountJson, "positions", out positionsArray))
+                return false;
+            if (positionsArray == "[]")
+                return true;
 
             string root = instrumentRoot.Trim().ToUpperInvariant();
             int total = 0;
-            int index = 0;
-            while (index < positionsArray.Length)
+            int index = 1;
+            int limit = positionsArray.Length - 1;
+            while (index < limit)
             {
-                int objectStart = positionsArray.IndexOf('{', index);
-                if (objectStart < 0)
+                while (index < limit && char.IsWhiteSpace(positionsArray[index]))
+                    index++;
+                if (index >= limit)
                     break;
+                if (positionsArray[index] != '{')
+                    return false;
 
-                int objectEnd = FindMatchingBrace(positionsArray, objectStart);
+                int objectEnd = FindMatchingBrace(positionsArray, index);
                 if (objectEnd < 0)
-                    break;
+                    return false;
 
-                string positionJson = positionsArray.Substring(objectStart, objectEnd - objectStart + 1);
+                string positionJson = positionsArray.Substring(index, objectEnd - index + 1);
                 string positionInstrument = GlitchAiJsonFields.ExtractString(positionJson, "instrument_root");
+                double qty;
+                if (string.IsNullOrWhiteSpace(positionInstrument)
+                    || !GlitchAiJsonFields.TryExtractNumber(positionJson, "quantity", out qty))
+                    return false;
                 if (string.Equals(positionInstrument, root, StringComparison.OrdinalIgnoreCase))
-                {
-                    double qty;
-                    if (GlitchAiJsonFields.TryExtractNumber(positionJson, "quantity", out qty))
-                        total += (int)Math.Round(qty, MidpointRounding.AwayFromZero);
-                }
+                    total += (int)Math.Round(qty, MidpointRounding.AwayFromZero);
 
                 index = objectEnd + 1;
+                while (index < limit && char.IsWhiteSpace(positionsArray[index]))
+                    index++;
+                if (index >= limit)
+                    break;
+                if (positionsArray[index] != ',')
+                    return false;
+                index++;
+                while (index < limit && char.IsWhiteSpace(positionsArray[index]))
+                    index++;
+                if (index >= limit)
+                    return false;
             }
 
-            return total;
+            quantity = total;
+            return true;
         }
 
         public static double GetRealizedPnlToday(string accountName)
@@ -113,19 +225,41 @@ namespace Glitch.Services
             return GlitchAiJsonFields.TryExtractNumber(accountJson, "realized_pnl", out pnl) ? pnl : 0;
         }
 
-        private static string ExtractArray(string json, string key)
+        private static bool TryGetAccountBlockFromJson(string json, string accountName, out string accountJson)
         {
+            accountJson = null;
+            if (string.IsNullOrWhiteSpace(json) || string.IsNullOrWhiteSpace(accountName))
+                return false;
+
+            string marker = "\"account\":" + GlitchSnapshotJson.String(accountName.Trim());
+            int start = json.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (start < 0)
+                return false;
+            int objectStart = json.LastIndexOf('{', start);
+            if (objectStart < 0)
+                return false;
+            int end = FindMatchingBrace(json, objectStart);
+            if (end < 0)
+                return false;
+            accountJson = json.Substring(objectStart, end - objectStart + 1);
+            return true;
+        }
+
+        private static bool TryExtractArray(string json, string key, out string value)
+        {
+            value = null;
             string pattern = "\"" + Regex.Escape(key) + "\"\\s*:\\s*\\[";
             Match match = Regex.Match(json, pattern, RegexOptions.CultureInvariant);
             if (!match.Success)
-                return "[]";
+                return false;
 
             int start = match.Index + match.Length - 1;
             int end = FindMatchingBracket(json, start);
             if (end < 0)
-                return "[]";
+                return false;
 
-            return json.Substring(start, end - start + 1);
+            value = json.Substring(start, end - start + 1);
+            return true;
         }
 
         private static int FindMatchingBrace(string json, int start)

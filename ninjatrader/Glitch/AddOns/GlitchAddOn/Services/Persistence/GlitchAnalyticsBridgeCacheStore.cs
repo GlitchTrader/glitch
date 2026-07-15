@@ -14,6 +14,7 @@ namespace Glitch.Services
         internal sealed class PersistedInstrumentFeed
         {
             public string InstrumentRoot { get; set; }
+            public string InstrumentFullName { get; set; }
             public DateTime LastUpdatedUtc { get; set; }
             public double? CurrentPrice { get; set; }
             public string SessionName { get; set; }

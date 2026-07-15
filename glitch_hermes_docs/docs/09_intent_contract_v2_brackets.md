@@ -33,20 +33,20 @@ Hermes analyzes the tape every **5 minutes** (candle close) and emits **at most 
 
 | Field | Required | Semantics |
 |-------|----------|-----------|
-| `stop_loss` | **yes** | protective stop for the full position. Loss side of entry. Defines the trade's risk. |
+| `stop_loss` | **yes** | protective stop for TP1 quantity (or the full position when TP2 is absent). Loss side of entry. Defines the maximum per-contract trade risk. |
 | `take_profit_1` | **yes** | first target. Profit side of entry. |
 | `take_profit_2` | no | second target for the runner. Must be beyond TP1. Requires `quantity ≥ 2` and `quantity_tp1` split. |
-| `stop_loss_2` | no | stop for the remaining quantity **after TP1 fills** (typically breakeven). Must be tighter than `stop_loss` relative to entry — SL2 may only reduce risk. Requires `take_profit_2`. |
+| `stop_loss_2` | no | optional initial stop for the TP2 runner quantity. It must remain on the loss side of entry and be tighter than `stop_loss`. When omitted, the runner starts with `stop_loss`. Requires `take_profit_2`. |
 | `quantity_tp1` | when TP2 present | contracts closed at TP1; remainder (`quantity − quantity_tp1 ≥ 1`) runs to TP2. |
 
 All prices must be tick-rounded for the instrument (Glitch validates against the instrument metadata registry; a non-aligned price is a reject, not a silent round).
 
 ## Execution semantics (Glitch-side, deterministic)
 
-1. Firewall passes (see `03_risk_firewall.md` + roadmap check chain) → executor submits **entry + OCO stop/target atomically** using NT order primitives, signal names `GlitchAIEntry` / `GlitchAIStop` / `GlitchAITarget`.
-2. If the bracket cannot be attached, the entry is **cancelled**. A naked position must be impossible by construction, not by monitoring.
-3. TP2 present → position is bracketed as two OCO pairs (TP1/SL for `quantity_tp1`, TP2/SL for the remainder).
-4. On TP1 fill and `stop_loss_2` present → **Glitch** amends the remainder's stop to SL2. This is deterministic Glitch logic reacting to a fill event — Hermes is not in the loop and no fresh intent is needed.
+1. Firewall passes (see `03_risk_firewall.md` + roadmap check chain) → executor submits the market entry using signal `GLT-AI-E-*`.
+2. On full entry fill, Glitch immediately submits one account-local OCO stop/target pair per leg using `GLT-AI-S-*` / `GLT-AI-T-*`. A partial entry fill fails closed into cancel/flatten recovery; protection construction or submission failure does the same.
+3. TP2 present → position is bracketed as two independent OCO pairs: TP1/SL for `quantity_tp1`, and TP2/SL2 (or TP2/SL when SL2 is omitted) for the remainder. A TP1 fill cancels only its paired stop; the runner remains protected.
+4. A later `MOVE_STOP` intent may tighten all remaining Glitch-owned stops. It cannot widen risk.
 5. `EXIT` → flatten the AI position via market order and cancel the bracket. Always allowed (risk-reducing), still journaled.
 6. Sizing: Hermes proposes `quantity`; the firewall caps it. Risk per trade = `|entry − stop_loss| × pointValue × quantity` — computable **before** any order exists because SL is mandatory.
 

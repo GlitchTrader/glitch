@@ -46,6 +46,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         private const int OrderFlowDepthLevels = 6;
         private static readonly TimeSpan OrderFlowTapeWindow = TimeSpan.FromSeconds(45);
         private static readonly TimeSpan OrderFlowDepthFreshness = TimeSpan.FromSeconds(20);
+        private static readonly TimeSpan BootstrapPrimaryMaxAge = TimeSpan.FromMinutes(3);
+        private static readonly TimeSpan BootstrapFutureTolerance = TimeSpan.FromMinutes(1);
 
         private EMA[] _emaFastByBip;
         private EMA[] _emaMedByBip;
@@ -237,6 +239,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 InitializeOrderFlowIndicators();
 
                 GlitchBridgeBusCompat.RegisterBridge(_instrumentRoot, PublishToGlitchUi);
+                GlitchBridgeBusCompat.RegisterTradeInstrumentInstance(Instrument);
                 GlitchBridgeBusCompat.TouchBridge(
                     _instrumentRoot,
                     PublishToGlitchUi,
@@ -246,6 +249,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             else if (State == State.Realtime)
             {
                 GlitchBridgeBusCompat.RegisterBridge(_instrumentRoot, PublishToGlitchUi);
+                GlitchBridgeBusCompat.RegisterTradeInstrumentInstance(Instrument);
                 GlitchBridgeBusCompat.TouchBridge(
                     _instrumentRoot,
                     PublishToGlitchUi,
@@ -322,6 +326,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                     (nowUtc - _lastBootstrapRegisterUtc) >= TimeSpan.FromSeconds(5))
                 {
                     _lastBootstrapRegisterUtc = nowUtc;
+                    // AddOn compilation resets its static dated-contract map while
+                    // this chart can remain alive. Refresh both callbacks together
+                    // so execution never falls back from MNQ 09-26 to generic MNQ.
+                    GlitchBridgeBusCompat.RegisterTradeInstrumentInstance(Instrument);
                     GlitchBridgeBusCompat.RegisterBridgeBootstrapPublisher(_instrumentRoot, RequestBootstrapFromExternal);
                 }
             }
@@ -355,7 +363,13 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
             }
 
-            bool shouldPublish = PublishToGlitchUi && bridgeAvailable && ShouldPublish(minutes, BarsInProgress);
+            // Historical chart replay and cache hydration are not live market observations.
+            // Only realtime bar events may advance the feed timestamp used by the AI rail.
+            bool shouldPublish =
+                State == State.Realtime &&
+                PublishToGlitchUi &&
+                bridgeAvailable &&
+                ShouldPublish(minutes, BarsInProgress);
             bool isStrategyAnalyzerHost = ChartControl == null;
             bool shouldComputeForExport =
                 EnableHistoricalSnapshotExport &&
@@ -518,6 +532,16 @@ namespace NinjaTrader.NinjaScript.Indicators
                 return;
 
             DateTime nowUtc = DateTime.UtcNow;
+            DateTime primaryBarUtc;
+            if (!TryGetFreshPrimaryBarUtc(nowUtc, out primaryBarUtc))
+            {
+                Log(
+                    "GlitchAnalyticsBridge bootstrap skipped for " + (_instrumentRoot ?? "(null)") +
+                    ": primary 1-minute bar is missing or stale.",
+                    NinjaTrader.Cbi.LogLevel.Warning);
+                return;
+            }
+
             int seriesCount = BarsArray.Length;
             int publishedCount = 0;
             for (int bip = 0; bip < seriesCount; bip++)
@@ -541,19 +565,15 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
 
                 SessionTracker session = UpdateSessionTracker(minutes, bip);
-                DateTime readingUtc = nowUtc;
-                if (Times != null && bip < Times.Length && Times[bip] != null && Times[bip].Count > 0)
-                {
-                    DateTime barTime = Times[bip][0];
-                    if (barTime != DateTime.MinValue)
-                        readingUtc = barTime.ToUniversalTime();
-                }
-
                 bool published = GlitchBridgeBusCompat.Publish(new GlitchBridgeBusCompat.BridgeReading
                 {
                     InstrumentRoot = _instrumentRoot,
+                    InstrumentFullName = Instrument == null ? null : Instrument.FullName,
                     Minutes = minutes,
-                    UtcTime = readingUtc,
+                    // This timestamp means "analytics observed from a verified-live chart".
+                    // The 60-minute bar's opening timestamp can naturally be much older;
+                    // freshness is anchored by the current primary 1-minute bar above.
+                    UtcTime = nowUtc,
                     CurrentPrice = ResolvePublishedCurrentPrice(signal.Close),
                     AveragePrice = signal.AveragePrice,
                     Atr = signal.Atr,
@@ -605,6 +625,23 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
+        private bool TryGetFreshPrimaryBarUtc(DateTime nowUtc, out DateTime primaryBarUtc)
+        {
+            primaryBarUtc = DateTime.MinValue;
+            if (Times == null || Times.Length == 0 || Times[0] == null || Times[0].Count == 0)
+                return false;
+
+            DateTime primaryBarTime = Times[0][0];
+            if (primaryBarTime == DateTime.MinValue)
+                return false;
+
+            primaryBarUtc = primaryBarTime.ToUniversalTime();
+            if (primaryBarUtc > nowUtc + BootstrapFutureTolerance)
+                return false;
+
+            return (nowUtc - primaryBarUtc) <= BootstrapPrimaryMaxAge;
+        }
+
         private SignalSnapshot BuildWarmupSignal(int bip, bool includeOrderFlowHint)
         {
             var signal = new SignalSnapshot();
@@ -625,6 +662,15 @@ namespace NinjaTrader.NinjaScript.Indicators
                 signal.StochK = _stochByBip[bip].K[0];
             if (_smaByBip != null && bip < _smaByBip.Length && _smaByBip[bip] != null && CurrentBars[bip] > 0)
                 signal.AveragePrice = _smaByBip[bip][0];
+            if (_dmByBip != null && bip < _dmByBip.Length && _dmByBip[bip] != null && CurrentBars[bip] >= 14)
+            {
+                signal.DiPlus = _dmByBip[bip].DiPlus[0];
+                signal.DiMinus = _dmByBip[bip].DiMinus[0];
+            }
+            if (_cciByBip != null && bip < _cciByBip.Length && _cciByBip[bip] != null && CurrentBars[bip] >= 20)
+                signal.Cci = _cciByBip[bip][0];
+            if (_macdByBip != null && bip < _macdByBip.Length && _macdByBip[bip] != null && CurrentBars[bip] >= 35)
+                signal.MacdHistogram = _macdByBip[bip].Default[0] - _macdByBip[bip].Avg[0];
 
             double atr = signal.Atr > 0 ? signal.Atr : Math.Max(_tickSize, 0.25);
             DateTime nowUtc = (_isOrderFlowRuntimeAvailable && EnableOrderFlowLayer) ? DateTime.UtcNow : DateTime.MinValue;
@@ -1100,13 +1146,15 @@ namespace NinjaTrader.NinjaScript.Indicators
                 _dmByBip[bip] != null &&
                 CurrentBars[bip] >= 14;
             double diDirection = 0;
+            double? diPlus = null;
+            double? diMinus = null;
             if (hasDmiSignal)
             {
-                double diPlus = _dmByBip[bip].DiPlus[0];
-                double diMinus = _dmByBip[bip].DiMinus[0];
-                double diSum = diPlus + diMinus;
+                diPlus = _dmByBip[bip].DiPlus[0];
+                diMinus = _dmByBip[bip].DiMinus[0];
+                double diSum = diPlus.Value + diMinus.Value;
                 if (diSum > 1e-8)
-                    diDirection = Clamp((diPlus - diMinus) / diSum, -1, 1);
+                    diDirection = Clamp((diPlus.Value - diMinus.Value) / diSum, -1, 1);
             }
 
             double adxDirectionalSignal = hasDmiSignal
@@ -1132,8 +1180,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                 bip < _ultimateOscillatorByBip.Length &&
                 _ultimateOscillatorByBip[bip] != null &&
                 CurrentBars[bip] >= 28;
-            double cciSignal = hasCciSignal
-                ? Clamp(_cciByBip[bip][0] / 180.0, -1, 1)
+            double? cci = hasCciSignal ? (double?)_cciByBip[bip][0] : null;
+            double cciSignal = cci.HasValue
+                ? Clamp(cci.Value / 180.0, -1, 1)
                 : 0;
             double momentumSignal = hasMomentumSignal
                 ? Clamp(_momentumByBip[bip][0] / (denominator * 3.2), -1, 1)
@@ -1159,6 +1208,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 CurrentBars[bip] >= 35;
             double macdHistogramSignal = 0;
             double macdSlopeSignal = 0;
+            double? macdHistogramValue = null;
             if (hasMacdSignal)
             {
                 double macdMain = _macdByBip[bip].Default[0];
@@ -1168,6 +1218,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 double macdHistogram = macdMain - macdSignalLine;
                 double macdHistogramPrev = macdMainPrev - macdSignalLinePrev;
+                macdHistogramValue = macdHistogram;
                 macdHistogramSignal = Clamp((macdHistogram / denominator) * 1.25, -1, 1);
                 macdSlopeSignal = Clamp(((macdHistogram - macdHistogramPrev) / denominator) * 0.90, -1, 1);
             }
@@ -1370,6 +1421,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Rsi = rsi,
                 StochK = stochK,
                 ZScore = zScore,
+                DiPlus = diPlus,
+                DiMinus = diMinus,
+                Cci = cci,
+                MacdHistogram = macdHistogramValue,
                 EmaAlignment = emaAlignment,
                 RegimeWeight = regimeWeight,
                 OscillatorCompositeScore = tvOscillatorCompositeSignal,
@@ -1737,10 +1792,11 @@ namespace NinjaTrader.NinjaScript.Indicators
             SignalSnapshot signal,
             SessionTracker session)
         {
-            DateTime readingUtc = Times[bip][0].ToUniversalTime();
+            DateTime readingUtc = DateTime.UtcNow;
             return new GlitchBridgeBusCompat.BridgeReading
             {
                 InstrumentRoot = _instrumentRoot,
+                InstrumentFullName = Instrument == null ? null : Instrument.FullName,
                 Minutes = minutes,
                 UtcTime = readingUtc,
                 Open = Opens[bip][0],
@@ -1763,6 +1819,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Rsi = signal.Rsi,
                 StochK = signal.StochK,
                 ZScore = signal.ZScore,
+                DiPlus = signal.DiPlus,
+                DiMinus = signal.DiMinus,
+                Cci = signal.Cci,
+                MacdHistogram = signal.MacdHistogram,
                 EmaAlignment = signal.EmaAlignment,
                 RegimeWeight = signal.RegimeWeight,
                 OscillatorCompositeScore = signal.OscillatorCompositeScore,
@@ -2502,6 +2562,10 @@ namespace NinjaTrader.NinjaScript.Indicators
             public double Rsi;
             public double StochK;
             public double ZScore;
+            public double? DiPlus;
+            public double? DiMinus;
+            public double? Cci;
+            public double? MacdHistogram;
             public double EmaAlignment;
             public double RegimeWeight;
             public double OscillatorCompositeScore;

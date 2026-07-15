@@ -15,21 +15,25 @@ namespace Glitch.Services
             string action = GlitchAiJsonFields.ExtractString(rawJson, "action");
             string instrument = GlitchAiJsonFields.ExtractString(rawJson, "instrument");
             string account = GlitchAiJsonFields.ExtractString(rawJson, "account");
+            string operatorProfile = GlitchAiJsonFields.ExtractString(rawJson, "operator_profile");
             string intentId = GlitchAiJsonFields.ExtractString(rawJson, "intent_id");
             string snapshotHash = GlitchAiJsonFields.ExtractString(rawJson, "snapshot_hash");
+            bool isEnter = IsEnterAction(action);
 
-            if (policy.AiKillSwitch)
-                return Reject(trail, 1, "kill_switch_on", "AI kill switch is enabled");
+            // Trading ON/OFF is the sole operational switch. Legacy ai_enabled
+            // and ai_kill_switch policy fields remain readable for file
+            // compatibility but do not create additional runtime gates.
+            trail.Add("01_trading_mode:delegated_to_control_state");
 
-            trail.Add("01_kill_switch:pass");
+            if (isEnter && GlitchHermesControlStateStore.Load().TradingPaused)
+                return Reject(trail, 2, "hermes_trading_paused", "Hermes trading is paused");
 
-            if (!policy.AiEnabled)
-                return Reject(trail, 2, "ai_disabled", "AI bridge is disabled");
+            trail.Add("02_hermes_trading_mode:pass");
 
             if (policy.RequireValidLicense && !IsLicenseValid(nowUtc))
                 return Reject(trail, 2, "license_invalid", "Valid license required for AI bridge");
 
-            trail.Add("02_ai_enabled:pass");
+            trail.Add("02_bridge_available:pass");
 
             if (string.IsNullOrWhiteSpace(instrument) || !policy.InstrumentAllowlist.Contains(instrument.Trim().ToUpperInvariant()))
                 return Reject(trail, 3, "instrument_not_allowlisted", instrument);
@@ -39,7 +43,14 @@ namespace Glitch.Services
             if (string.IsNullOrWhiteSpace(account) || !policy.AccountAllowlist.Contains(account.Trim()))
                 return Reject(trail, 4, "account_not_allowlisted", account);
 
-            trail.Add("04_account_allowlist:pass");
+            string boundAccount;
+            if (!policy.TryResolveProfileAccount(operatorProfile, out boundAccount))
+                return Reject(trail, 4, "operator_profile_not_bound", operatorProfile);
+
+            if (!string.Equals(account, boundAccount, StringComparison.OrdinalIgnoreCase))
+                return Reject(trail, 4, "profile_account_mismatch", boundAccount);
+
+            trail.Add("04_profile_account_binding:pass");
 
             string tickFailure;
             if (!AreIntentPricesTickRounded(rawJson, instrument, action, out tickFailure))
@@ -47,50 +58,69 @@ namespace Glitch.Services
 
             trail.Add("05_schema_tick_round:pass");
 
-            string snapshotFailure;
-            if (!GlitchAiSnapshotRegistry.IsSnapshotFresh(snapshotHash, nowUtc, policy.SnapshotMaxAgeSeconds, out snapshotFailure))
-                return Reject(trail, 6, snapshotFailure, snapshotHash);
+            double snapshotMarketPrice = 0;
+            bool portfolioRiskLocked = false;
+            bool portfolioEvalTargetLocked = false;
+            double portfolioRealizedToday = 0;
+            string portfolioAccountJson = null;
+            if (isEnter)
+            {
+                string snapshotFailure;
+                if (!GlitchAiSnapshotRegistry.TryGetFreshInstrumentPrice(
+                    snapshotHash,
+                    instrument,
+                    nowUtc,
+                    policy.SnapshotMaxAgeSeconds,
+                    out snapshotMarketPrice,
+                    out snapshotFailure))
+                    return Reject(trail, 6, snapshotFailure, snapshotHash);
 
-            trail.Add("06_snapshot_fresh:pass");
+                trail.Add("06_snapshot_hash_fresh_price_bound:pass");
+
+                string portfolioFailure;
+                if (!GlitchAiPortfolioSnapshotReader.TryGetFreshRiskState(
+                    account,
+                    nowUtc,
+                    policy.SnapshotMaxAgeSeconds,
+                    out portfolioRiskLocked,
+                    out portfolioEvalTargetLocked,
+                    out portfolioRealizedToday,
+                    out portfolioAccountJson,
+                    out portfolioFailure))
+                {
+                    return Reject(trail, 6, "portfolio_snapshot_invalid", portfolioFailure);
+                }
+
+                trail.Add("06_portfolio_snapshot_fresh_complete:pass");
+            }
+            else
+            {
+                // HOLD/NOTHING do not execute. EXIT only reduces existing risk.
+                // None should be vetoed by entry-grade analytical snapshot age.
+                trail.Add("06_snapshot_freshness:not_required_for_non_entry");
+                trail.Add("06_portfolio_snapshot:not_required_for_non_entry");
+            }
 
             if (GlitchAiIntentJournalWriter.HasIntentId(intentId))
                 return Reject(trail, 7, "intent_id_duplicate", intentId);
 
             trail.Add("07_intent_id_unique:pass");
 
-            bool isEnter = IsEnterAction(action);
-            if (isEnter || string.Equals(action, "EXIT", StringComparison.Ordinal))
+            if (!isEnter)
             {
-                DateTime? lastOrderUtc = GlitchAiIntentHistoryReader.GetLastEnterUtc(instrument, nowUtc);
-                if (lastOrderUtc.HasValue)
-                {
-                    double elapsedMinutes = (nowUtc - lastOrderUtc.Value).TotalMinutes;
-                    if (elapsedMinutes < policy.CooldownAfterLossMinutes)
-                    {
-                        return Reject(
-                            trail,
-                            8,
-                            "cooldown_active",
-                            elapsedMinutes.ToString("F1", CultureInfo.InvariantCulture) + "m");
-                    }
-                }
+                trail.Add("10_risk_per_trade:not_required_for_non_entry");
+                trail.Add("11_daily_loss_budget:not_required_for_non_entry");
+                trail.Add("12_bracket_sane:not_required_for_non_entry");
+                trail.Add("13_position_conflict:not_required_for_non_entry");
+                trail.Add("14_session_news_lockout:not_required_for_non_entry");
+                trail.Add("15_compliance:pass_risk_reducing_or_noop");
+                return GlitchAiRiskDecision.Approve(trail);
             }
-
-            trail.Add("08_cooldown:pass");
-
-            if (isEnter || string.Equals(action, "EXIT", StringComparison.Ordinal))
-            {
-                int tradesToday = GlitchAiIntentHistoryReader.CountTradesTodayUtc(nowUtc);
-                if (tradesToday >= policy.MaxTradesPerDay)
-                    return Reject(trail, 9, "max_trades_per_day", tradesToday.ToString(CultureInfo.InvariantCulture));
-            }
-
-            trail.Add("09_trades_today:pass");
 
             if (isEnter)
             {
                 double tradeRiskUsd;
-                if (!TryComputeTradeRiskUsd(rawJson, instrument, action, out tradeRiskUsd))
+                if (!TryComputeTradeRiskUsd(rawJson, instrument, action, snapshotMarketPrice, out tradeRiskUsd))
                     return Reject(trail, 10, "risk_not_computable", instrument);
 
                 if (tradeRiskUsd > policy.MaxLossPerTradeUsd)
@@ -101,10 +131,19 @@ namespace Glitch.Services
                         "max_loss_per_trade_exceeded",
                         tradeRiskUsd.ToString("F2", CultureInfo.InvariantCulture));
                 }
+                double requestedQuantity;
+                GlitchAiJsonFields.TryExtractNumber(rawJson, "quantity", out requestedQuantity);
+                if (requestedQuantity <= 0 || tradeRiskUsd / requestedQuantity > policy.MaxRiskPerContractUsd)
+                {
+                    return Reject(
+                        trail,
+                        10,
+                        "max_risk_per_contract_exceeded",
+                        (requestedQuantity <= 0 ? tradeRiskUsd : tradeRiskUsd / requestedQuantity).ToString("F2", CultureInfo.InvariantCulture));
+                }
 
-                double realizedToday = GlitchAiPortfolioSnapshotReader.GetRealizedPnlToday(account);
-                double lossToday = realizedToday < 0 ? -realizedToday : 0;
-                if (lossToday + tradeRiskUsd > policy.MaxDailyLossUsd)
+                double lossToday = portfolioRealizedToday < 0 ? -portfolioRealizedToday : 0;
+                if (policy.MaxDailyLossUsd > 0 && lossToday + tradeRiskUsd > policy.MaxDailyLossUsd)
                 {
                     return Reject(
                         trail,
@@ -120,7 +159,7 @@ namespace Glitch.Services
             if (isEnter)
             {
                 string bracketFailure;
-                if (!IsBracketSane(rawJson, instrument, action, out bracketFailure))
+                if (!IsBracketSane(rawJson, instrument, action, snapshotMarketPrice, out bracketFailure))
                     return Reject(trail, 12, "bracket_invalid", bracketFailure);
 
                 double quantity;
@@ -133,9 +172,20 @@ namespace Glitch.Services
 
             if (isEnter)
             {
-                int openQty = GlitchAiPortfolioSnapshotReader.GetOpenPositionQuantity(account, instrument);
-                if (openQty != 0)
-                    return Reject(trail, 13, "position_conflict", "open_position_exists");
+                int openQty;
+                if (!GlitchAiPortfolioSnapshotReader.TryGetOpenPositionQuantityFromAccountBlock(
+                    portfolioAccountJson,
+                    instrument,
+                    out openQty))
+                    return Reject(trail, 13, "portfolio_positions_invalid", account);
+                double requestedQuantity;
+                GlitchAiJsonFields.TryExtractNumber(rawJson, "quantity", out requestedQuantity);
+                bool opposite = (string.Equals(action, "ENTER_LONG", StringComparison.Ordinal) && openQty < 0)
+                    || (string.Equals(action, "ENTER_SHORT", StringComparison.Ordinal) && openQty > 0);
+                if (opposite)
+                    return Reject(trail, 13, "position_conflict", "opposite_position_exists");
+                if (Math.Abs(openQty) + requestedQuantity > policy.MaxContracts)
+                    return Reject(trail, 13, "max_contracts_exceeded", (Math.Abs(openQty) + requestedQuantity).ToString(CultureInfo.InvariantCulture));
             }
 
             trail.Add("13_position_conflict:pass");
@@ -152,10 +202,10 @@ namespace Glitch.Services
 
             trail.Add("14_session_news_lockout:pass");
 
-            if (GlitchAiPortfolioSnapshotReader.IsAccountRiskLocked(account))
+            if (portfolioRiskLocked)
                 return Reject(trail, 15, "account_risk_locked", account);
 
-            if (GlitchAiPortfolioSnapshotReader.IsEvalTargetLocked(account))
+            if (portfolioEvalTargetLocked)
                 return Reject(trail, 15, "eval_target_locked", account);
 
             trail.Add("15_compliance_pass:pass");
@@ -191,7 +241,8 @@ namespace Glitch.Services
         private static bool AreIntentPricesTickRounded(string rawJson, string instrument, string action, out string failure)
         {
             failure = null;
-            if (!IsEnterAction(action))
+            if (!IsEnterAction(action)
+                && !string.Equals(action, "MOVE_STOP", StringComparison.Ordinal))
                 return true;
 
             GlitchInstrumentMetadata metadata;
@@ -202,6 +253,17 @@ namespace Glitch.Services
             }
 
             double tick = metadata.TickSize;
+            if (string.Equals(action, "MOVE_STOP", StringComparison.Ordinal))
+            {
+                double movedStop;
+                if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss", out movedStop) || !IsTickRounded(movedStop, tick))
+                {
+                    failure = "stop_loss";
+                    return false;
+                }
+                return true;
+            }
+
             string orderType = GlitchAiJsonFields.ExtractString(rawJson, "order_type");
             if (string.Equals(orderType, "LIMIT", StringComparison.OrdinalIgnoreCase))
             {
@@ -253,7 +315,7 @@ namespace Glitch.Services
             return Math.Abs(ratio - Math.Round(ratio, MidpointRounding.AwayFromZero)) < 1e-6;
         }
 
-        private static bool TryComputeTradeRiskUsd(string rawJson, string instrument, string action, out double riskUsd)
+        internal static bool TryComputeTradeRiskUsd(string rawJson, string instrument, string action, double snapshotMarketPrice, out double riskUsd)
         {
             riskUsd = 0;
             GlitchInstrumentMetadata metadata;
@@ -275,10 +337,8 @@ namespace Glitch.Services
                 if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "limit_price", out entry))
                     return false;
             }
-            else if (!GlitchAiSnapshotRegistry.TryGetInstrumentPrice(instrument, out entry))
-            {
-                return false;
-            }
+            else
+                entry = snapshotMarketPrice;
 
             double pointsAtRisk = string.Equals(action, "ENTER_LONG", StringComparison.Ordinal)
                 ? entry - stopLoss
@@ -291,7 +351,7 @@ namespace Glitch.Services
             return riskUsd > 0;
         }
 
-        private static bool IsBracketSane(string rawJson, string instrument, string action, out string failure)
+        private static bool IsBracketSane(string rawJson, string instrument, string action, double snapshotMarketPrice, out string failure)
         {
             failure = null;
             double entry;
@@ -304,11 +364,8 @@ namespace Glitch.Services
                     return false;
                 }
             }
-            else if (!GlitchAiSnapshotRegistry.TryGetInstrumentPrice(instrument, out entry))
-            {
-                failure = "missing_market_entry";
-                return false;
-            }
+            else
+                entry = snapshotMarketPrice;
 
             double stopLoss;
             double takeProfit1;
@@ -378,15 +435,15 @@ namespace Glitch.Services
 
                 if (isLong)
                 {
-                    if (stopLoss2 <= stopLoss)
+                    if (stopLoss2 <= stopLoss || stopLoss2 >= entry)
                     {
-                        failure = "stop_loss_2_not_tighter";
+                        failure = "stop_loss_2_not_tighter_loss_side";
                         return false;
                     }
                 }
-                else if (stopLoss2 >= stopLoss)
+                else if (stopLoss2 >= stopLoss || stopLoss2 <= entry)
                 {
-                    failure = "stop_loss_2_not_tighter";
+                    failure = "stop_loss_2_not_tighter_loss_side";
                     return false;
                 }
             }

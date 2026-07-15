@@ -88,9 +88,9 @@ Summary of the operator's decisions (2026-07-08):
 
 - **Cadence:** Hermes analyzes the tape every 5 minutes (candle close) and emits at most one intent per instrument per cycle.
 - **Actions:** `ENTER_LONG` (BUY) · `ENTER_SHORT` (SELL) · `HOLD` (keep position, no change) · `EXIT` (close now) · `NOTHING` (flat, stay flat).
-- **Every ENTER intent MUST include `stop_loss` and `take_profit_1`.** Optional `take_profit_2` (quantity split) and `stop_loss_2` (post-TP1 stop for the runner, must reduce risk — typically breakeven). Firewall rejects TP2/SL2 when quantity < 2. M0 is 1-contract, so M0 runs TP1/SL only; the contract supports the full shape from day one.
-- **NT holds the bracket.** Glitch submits entry + OCO stop/target atomically; if the bracket cannot be attached, the entry is cancelled — a naked position must be impossible. On TP1 fill, Glitch (deterministically, not Hermes) moves the remainder's stop to SL2 if provided. Connection loss, Hermes crash, or Glitch crash leaves NT-managed protective orders working.
-- **AI never manages a loss mid-flight.** No stop widening, ever. Risk-reducing actions (`EXIT`, tightening via future `ADJUST_STOP` in M1) are the only in-flight changes allowed.
+- **Every ENTER intent MUST include `stop_loss` and `take_profit_1`.** For quantity ≥2, optional `take_profit_2` plus `quantity_tp1` creates a two-stage exit; optional `stop_loss_2` is an initially tighter loss-side stop for the runner. Firewall rejects incomplete or invalid splits.
+- **NT holds the bracket.** After the market entry fills, Glitch immediately submits one native OCO stop/target pair per leg. Partial entry fills and any protection failure enter cancel/flatten recovery. A TP1 fill cancels only its paired stop, leaving the runner's independent bracket working through Hermes or Glitch interruption.
+- **No stop widening.** Hermes may actively `EXIT` or `MOVE_STOP`; Glitch permits only risk-reducing stop changes.
 
 ## Deterministic firewall — check chain (executed in order, all journaled)
 

@@ -1,6 +1,7 @@
 param(
     [string]$Instrument = 'MNQ',
     [string]$Account = 'Sim101',
+    [string]$Profile = 'glitch',
     [switch]$DryRun
 )
 
@@ -35,11 +36,23 @@ $body = @{
     created_utc = (Get-Date).ToUniversalTime().ToString('o')
     instrument = $Instrument
     account = $Account
+    operator_profile = $Profile
     action = $action
     confidence = $confidence
     snapshot_hash = $hash
     model_version = 'hermes-stub-v1'
     reason = $reason
+    decision_audit = @{
+        bull_case = 'No validated bullish thesis was produced by this stub.'
+        bear_case = 'No validated bearish thesis was produced by this stub.'
+        flat_case = 'The stub is intentionally non-trading.'
+        aggressive_case = 'Unavailable in the non-trading stub.'
+        conservative_case = 'Remain flat.'
+        decisive_evidence = 'No model decision was requested.'
+        disconfirming_evidence = 'A validated model cycle would supersede this stub.'
+        change_condition = 'Run the guarded Hermes cycle.'
+        final_choice = 'NOTHING'
+    }
 } | ConvertTo-Json -Compress
 
 $cycleDir = Join-Path $gd 'hermes'

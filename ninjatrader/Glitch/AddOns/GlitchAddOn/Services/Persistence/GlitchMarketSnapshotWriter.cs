@@ -54,6 +54,8 @@ namespace Glitch.Services
                     File.Delete(path);
                 File.Move(tempPath, path);
 
+                WriteRecentSnapshot(hash, json);
+
                 GlitchHistoricalSnapshotExporter.TryArchiveMarketSnapshot(json, nowUtc);
 
                 _lastSnapshotHash = hash;
@@ -69,6 +71,45 @@ namespace Glitch.Services
         public static string GetLatestSnapshotPath()
         {
             return GlitchStateStore.GetDefaultPath(Path.Combine("snapshots", "market", "latest.json"));
+        }
+
+        public static string GetRecentSnapshotPath(string snapshotHash)
+        {
+            int parsedHash;
+            if (string.IsNullOrWhiteSpace(snapshotHash)
+                || !int.TryParse(snapshotHash, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsedHash))
+                return null;
+            return GlitchStateStore.GetDefaultPath(Path.Combine(
+                "snapshots",
+                "market",
+                "recent",
+                parsedHash.ToString(CultureInfo.InvariantCulture) + ".json"));
+        }
+
+        private static void WriteRecentSnapshot(string snapshotHash, string json)
+        {
+            string recentPath = GetRecentSnapshotPath(snapshotHash);
+            if (string.IsNullOrWhiteSpace(recentPath))
+                return;
+
+            string recentDirectory = Path.GetDirectoryName(recentPath);
+            if (!Directory.Exists(recentDirectory))
+                Directory.CreateDirectory(recentDirectory);
+            string tempPath = recentPath + ".tmp";
+            File.WriteAllText(tempPath, json, new UTF8Encoding(false));
+            if (File.Exists(recentPath))
+                File.Delete(recentPath);
+            File.Move(tempPath, recentPath);
+
+            FileInfo[] recent = new DirectoryInfo(recentDirectory)
+                .GetFiles("*.json")
+                .OrderByDescending(file => file.LastWriteTimeUtc)
+                .ToArray();
+            for (int i = 5; i < recent.Length; i++)
+            {
+                try { recent[i].Delete(); }
+                catch { }
+            }
         }
 
         public static string TryGetLatestSnapshotHash()
@@ -138,7 +179,9 @@ namespace Glitch.Services
             return new GlitchMarketSnapshotRawJson.RawInstrumentPayload
             {
                 InstrumentRoot = snapshot.InstrumentRoot,
+                InstrumentFullName = snapshot.InstrumentFullName,
                 UpdatedUtc = snapshot.UpdatedUtc,
+                CurrentPrice = snapshot.CurrentPrice,
                 SessionName = snapshot.SessionName,
                 SessionHigh = snapshot.SessionHigh,
                 SessionLow = snapshot.SessionLow,
@@ -167,10 +210,27 @@ namespace Glitch.Services
                     StochK = reading.StochK,
                     ZScore = reading.ZScore,
                     AveragePrice = reading.AveragePrice,
+                    DiPlus = reading.DiPlus,
+                    DiMinus = reading.DiMinus,
+                    Cci = reading.Cci,
+                    MacdHistogram = reading.MacdHistogram,
                     OrderFlowCumulativeDelta = reading.OrderFlowCumulativeDelta,
                     OrderFlowDeltaChange = reading.OrderFlowDeltaChange,
                     OrderFlowVwap = reading.OrderFlowVwap,
                     OrderFlowVwapDeviation = reading.OrderFlowVwapDeviation
+                },
+                DerivedAnalytics = new GlitchMarketSnapshotRawJson.DerivedAnalyticsPayload
+                {
+                    RawScore = reading.RawScore,
+                    DirectionalScore = reading.DirectionalScore,
+                    TradeabilityScore = reading.TradeabilityScore,
+                    EmaAlignment = reading.EmaAlignment,
+                    RegimeWeight = reading.RegimeWeight,
+                    OscillatorCompositeScore = reading.OscillatorCompositeScore,
+                    MaCompositeScore = reading.MaCompositeScore,
+                    OrderFlowScore = reading.OrderFlowScore,
+                    OrderFlowConfidence = reading.OrderFlowConfidence,
+                    OrderFlowReliability = reading.OrderFlowReliability
                 }
             };
         }

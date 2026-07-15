@@ -1,87 +1,294 @@
-# 12 — Hermes Trading Skills, Knowledge, and Instructions
+# 12 — Hermes Cognitive Operating Map
 
-**Status:** doctrine for the Hermes Glitch-operator profile (H-0/H-1 → R11+).
-**Author:** Fable · 2026-07-11 · complements `10_hermes_operator_contract.md` (contract)
-and `memory/mnq-playbook.md` + `memory/archetypes.v1.json` (mined knowledge).
+**Status:** canonical map for the persistent `glitch` Hermes profile.
+**Scope:** cognition, model routing, skills, memory, ledger upkeep, self-healing, and staged activation.
+**Authority:** contract 10 owns safety and execution boundaries; contract 11 owns data and cadence; this document owns how Hermes thinks and learns inside those boundaries.
 
-## 1. External landscape (researched 2026-07-11)
-
-Reviewed public "AI trading skill" work for reuse:
-
-- `tradermonty/claude-trading-skills` (MIT): discretionary equity-investor tooling
-  (chart-image analysis, breadth scoring, IBD monitors, discipline checklists).
-  **Not fit** for autonomous futures intents — EOD data, no order emission, human-in-loop
-  by design. Only the position-sizer's pure risk math transfers (we already encode it).
-- Research architectures worth borrowing *patterns* from, not code:
-  **QuantAgent** (split the cycle into small specialized analyses feeding one decision),
-  **TradingGPT/FinMem** (layered memory: working / episodic / doctrine),
-  **ATLAS / adversarial-decision frameworks** (structured justification + risk-reward
-  estimate mandatory in output; reflection pass every N trades).
-  Look-ahead-bias benchmarks reinforce: decide only on closed bars. Already our rule.
-
-Conclusion: no off-the-shelf skill pack fits the "propose-only, firewall-guarded,
-bracket-mandatory" shape. The skill set below is custom.
-
-## 2. Hermes skill set (the profile's capability list)
-
-| Skill | Cadence | What it does | Source of truth |
-|---|---|---|---|
-| `regime_read` | every cycle | snapshot → vol/trend/session cell, stated explicitly | playbook §1 |
-| `archetype_match` | every cycle | cell + triggers → matching non-retired archetypes | `archetypes.v1.json` |
-| `intent_build` | on match | archetype geometry → Intent v2 JSON (SL/TP1 mandatory, tick-rounded, archetype_id in `reason`) | contract 09 |
-| `risk_size` | on match | contracts = floor(cap / (SL_pts × $2)); NOTHING if unsizable | playbook §3.8 |
-| `position_manage` | when in a trade | HOLD/EXIT only; never widen; EXIT on archetype-invalidating regime flip | playbook §4 |
-| `snapshot_sanity` | script, 5 min | freshness/schema watchdog, no LLM | `tools/hermes/snapshot-sanity.ps1` |
-| `portfolio_review` | hourly | exposure, drawdown buffer, concentration vs prop rules | contract 10 §hourly |
-| `learning_pass` | 6 h | journal outcomes per archetype_id vs mined stats; candidate lessons only | playbook §6 |
-| `trader_journal` | daily | day summary by regime and archetype; repeated-mistake list | contract 11 layer 5 |
-| `reflection` | every 10 trades | ATLAS-style: were losses on-archetype (fine) or off-archetype (bug)? | this doc |
-
-Skills are prompt+procedure units in the Hermes profile; none touch orders directly.
-Glitch remains the only executor.
-
-## 3. Knowledge the profile must load (reading order)
-
-1. `memory/archetypes.v1.json` — executable setups (statuses are law).
-2. `memory/mnq-playbook.md` — regime recipe, decision procedure, risk doctrine.
-3. `docs/09_intent_contract_v2_brackets.md` — output format.
-4. `docs/10_hermes_operator_contract.md` — operator loop contract.
-5. Prop-firm rule summary for the target account (from portfolio snapshot `policy`).
-6. Live lessons file (append-only, produced by learning passes) — advisory, never
-   overrides archetype statuses.
-
-Instrument constants: MNQ point = $2.00, tick = 0.25 pt ($0.50), friction model
-1.15 pts round trip. CME ETH nearly 23 h; RTH 09:30–16:00 ET.
-
-## 4. Instruction skeleton (system prompt core for `suggest_trade`)
+## 1. Design principle
 
 ```text
-You are the Hermes trading operator for Glitch. You PROPOSE; Glitch validates,
-executes, journals, protects. You have no order API.
-
-Each cycle: (1) verify snapshot freshness, else NOTHING;
-(2) state the regime cell (vol / trend / session) from the snapshot;
-(3) match against archetypes.v1.json — validated only (candidates: paper accounts only);
-(4) no match → NOTHING with reason "no_archetype_match" — this is the normal outcome;
-(5) on match, emit exactly one Intent v2 JSON with SL and TP1 from the archetype
-    geometry, contracts from the risk cap, and reason "<archetype_id>: <one line>";
-(6) never widen stops, average down, pyramid, or trade vol_hi;
-(7) if daily loss budget is consumed, NOTHING until tomorrow.
-Output strict JSON only. State risk (USD at SL) in every ENTER intent.
+Protect the machine. Enable the brain.
 ```
 
-## 5. Continuous mining (how knowledge keeps growing)
+Glitch enforces hard execution facts: identity, account/group scope, prop-firm limits, current positions and orders, intent schema, idempotency, bracket protection, kill switches, and order execution.
+
+Hermes remains free to interpret context probabilistically: direction, regime, opportunity, trade frequency, risk posture inside the allowed envelope, target selection, portfolio allocation, novel patterns, and whether prior lessons still apply.
+
+Archetypes, mined patterns, adversarial bull/bear cases, and historical statistics are evidence. They are not entry gates, whitelists, or substitutes for current judgment. `no_archetype_match` is never by itself a reason to return `NOTHING`.
+
+## 2. One persistent agent, four cognitive loops
+
+All loops belong to the same `glitch` profile and share native Hermes memory, session history, Glitch evidence, and the Hermes-owned knowledge base. They are different jobs, not different agents or personalities.
+
+| Loop | Cadence | Model baseline | Primary question | Output authority |
+|---|---:|---|---|---|
+| Core decision | every closed 5-minute packet | `gpt-5.6-luna`, medium | What should each configured group do now? | Strict intent batch; Glitch may reject or execute |
+| Portfolio supervision | hourly | `gpt-5.6-sol`, high | Is exposure, performance, risk posture, or system health drifting? | Review, bounded self-heal, and plan recommendations; no order |
+| Portfolio planning | every 6 hours | `gpt-5.6-sol`, high | Given today’s progress and prop rules, what targets and risk allocation should govern the next block? | Active Hermes plan inside Glitch’s hard limits; no Glitch-policy mutation |
+| Daily learning | after session | `gpt-5.6-sol`, high | What was learned, what should change tomorrow, and which hypotheses deserve testing? | Journal, memory updates, hypotheses, and tomorrow plan; no live-policy promotion |
+
+Model IDs are explicit defaults, not permanent doctrine. Each job records provider, model, reasoning effort, prompt version, skill versions, token use, and latency so model routing can later be optimized from evidence. The core loop must never silently downgrade to a weaker fallback model. A failed model call produces no new intent. Supervisory loops may defer until their assigned model is available.
+
+No-model work remains script-only: packet completeness, freshness, duplicate detection, delivery retry with the same intent IDs, stale-lock cleanup, schema checks, and derived-index rebuilding.
+
+## 3. Loop contracts
+
+### Core decision loop
+
+Input:
+
+- one immutable five-frame Glitch packet;
+- latest portfolio, positions, working orders, group ratios, and hard risk state;
+- current prop-firm rules and account phase;
+- the active Hermes portfolio plan;
+- only recent relevant Glitch outcomes and lessons;
+- native session and episodic memory.
+
+Reasoning freedom:
+
+- independently evaluate bullish, bearish, stay-flat, stay-positioned, and exit cases;
+- use or reject known patterns;
+- create a falsifiable discretionary hypothesis;
+- choose risk and target geometry inside Glitch limits;
+- vary posture by regime and by configured group.
+
+Output: exactly one `glitch.intent.batch.v1`, containing one ordered `glitch.intent.v2` decision per route-bound group. Scheduled output is JSON only. Entries carry native protection. Glitch remains the only executor.
+
+### Hourly portfolio supervision loop
+
+Input: the last hour of packets, decisions, rejections, executions, open risk, realized/unrealized performance, delivery health, model usage, and the active plan.
+
+Output: `glitch.hermes.hourly_review.v1` containing:
+
+- portfolio and per-group state;
+- what is working, failing, or statistically unknowable;
+- exposure and drawdown posture;
+- anomalies such as churn, repeated rejection, stale data, delivery failure, or bracket inconsistency;
+- automatic Tier-0 repairs performed;
+- proposed changes to the current Hermes plan;
+- unresolved items requiring operator attention.
+
+It may reduce Hermes’s intended exposure or pause proposals. It may not raise Glitch caps, alter account groups, enable execution, or place an order.
+
+### Six-hour portfolio planning loop
+
+Input: current prop-firm phase and rules, daily and trailing PnL, drawdown buffer, remaining session, market regime, group-level performance, hourly reviews, and recent lessons.
+
+Output: `glitch.hermes.portfolio_plan.v1` containing:
+
+- objectives for the next six hours and the trading day;
+- per-group purpose and risk allocation;
+- preferred participation posture by market regime;
+- profit preservation, loss containment, and stop-trading conditions;
+- evaluation/PA progress targets where relevant;
+- hypotheses the core loop should actively test on Sim;
+- evidence that should trigger plan revision.
+
+The newest valid plan becomes active Hermes context automatically. It may narrow risk or redirect attention inside Glitch’s current envelope. It cannot widen hard limits or rewrite prop-firm rules.
+
+### Daily learning and tomorrow loop
+
+Input: the complete session ledger, closed outcomes, MAE/MFE/duration, rejected intents, missed or avoided opportunities when measurable, plan changes, market regimes, and system health.
+
+Output: `glitch.hermes.daily_journal.v1` containing:
+
+- concise trader journal;
+- performance and process attribution by group and regime;
+- lessons with evidence links and confidence;
+- mistakes, good decisions, and unresolved ambiguity;
+- candidate knowledge updates;
+- tomorrow’s targets, risk posture, experiments, and invalidation conditions.
+
+Verified observations and episodic lessons may enter Hermes memory automatically with provenance. New strategy hypotheses may be tested on Sim. Hard Glitch policy, prop rules, account mappings, and any live/eval promotion remain outside automatic learning authority.
+
+## 4. Skill architecture
+
+The Glitch skills are an overlay on Hermes’s native skills, memory, sessions, search, file, terminal, planning, and upkeep capabilities. Installation must not prune or replace native Hermes capabilities.
+
+Existing Glitch overlay:
+
+| Skill | Purpose |
+|---|---|
+| `glitch-observe-market` | Read packet and market structure without forcing a named setup |
+| `glitch-assess-risk` | Understand portfolio and trade risk inside Glitch limits |
+| `glitch-form-thesis` | Form falsifiable discretionary or pattern-supported hypotheses |
+| `glitch-build-intent` | Convert a chosen decision into the strict protected intent contract |
+| `glitch-submit-intent` | Deliver only through the authenticated Glitch receiver |
+| `glitch-review-outcomes` | Attribute Glitch-recorded outcomes and generate lessons |
+| `glitch-self-learning` | Promote attributable outcomes into append-only episodic and durable lessons without turning memory into truth |
+| `glitch-self-heal` | Reconcile Hermes-owned state to Glitch truth, append the correction, and resume safe operation |
+
+Required overlay before supervisory loops activate:
+
+| Skill | Required capability |
+|---|---|
+| `glitch-read-ledger` | Query Glitch-owned events by packet, intent, trade, group, account, and time |
+| `glitch-write-ledger` | Append only to Hermes-owned review, plan, journal, and knowledge streams |
+| `glitch-prop-firm-rules` | Interpret account phase, drawdown, consistency, payout, evaluation, and PA objectives from Glitch-supplied rules |
+| `glitch-portfolio-supervision` | Assess aggregate exposure, performance, concentration, and risk allocation |
+| `glitch-daily-planning` | Define targets and plan revisions inside the hard envelope |
+| `glitch-knowledge-upkeep` | Maintain provenance, deduplicate lessons, age weak hypotheses, and preserve contradictions |
+
+Skills teach procedures and expose resources. They do not encode a deterministic trading strategy, require an archetype match, force a trade quota, or silently become policy.
+
+## 5. Ledger and knowledge topology
+
+Source order:
 
 ```text
-live snapshots accumulate (R05 archiver, same schema as corpus)
-   └→ monthly re-mine (R06f): expanding window, same validation spine,
-      formal deflation (DSR/PBO) added from pass 2
-        └→ new candidates → R13 replay vs baseline → human promotion
-live journal outcomes per archetype_id (learning_pass)
-   └→ live-vs-mined retention tracking → retirement flags (playbook §6)
-regime coverage gaps (e.g. vol_hi, bull-gate for longs)
-   └→ explicit mining targets for the next pass, listed in r06 findings log
+live Glitch state and Glitch-owned events
+→ operator-confirmed facts
+→ Hermes plans and reviews
+→ structured Hermes knowledge
+→ native session memory
+→ inference
 ```
 
-The corpus outlives any single model: snapshots + labels + archetype provenance are
-files on disk, re-minable by any future agent.
+Glitch owns immutable trading truth:
+
+- market and portfolio snapshots;
+- account groups and ratios;
+- prop-firm rules and hard policy;
+- received intents and decisions;
+- executions, fills, brackets, rejections, and outcomes;
+- trade ledger and operator journal.
+
+Hermes owns interpretation and learning:
+
+```text
+GlitchData/hermes/exchange/hermes/
+  outbox/                 strict decisions awaiting delivery
+  receipts/               delivery evidence
+  events/cycles.jsonl     core-loop events
+  reviews/hourly/         hourly supervision outputs (planned)
+  plans/current.json      active cognitive plan (planned)
+  plans/history/          immutable prior plans (planned)
+  journal/daily/          daily journals (planned)
+  knowledge/observations/ evidence-linked facts (planned)
+  knowledge/hypotheses/   testable strategy/risk ideas (planned)
+  knowledge/lessons/      durable, provenance-linked lessons (planned)
+  health/                 self-heal and runtime-health evidence (planned)
+```
+
+One writer owns every physical stream. Records join through `packet_id`, `snapshot_hash`, `intent_id`, `trade_id`, `route_id`, `account`, model version, prompt version, and skill versions. Hermes never edits Glitch-owned records; corrections are new linked events.
+
+## 6. Memory lifecycle
+
+| Layer | Contents | Update rule |
+|---|---|---|
+| Working | current packet, open positions, current plan | replaced as state changes |
+| Episodic | decisions, trades, rejects, outcomes, operator conversations | append with Glitch evidence links |
+| Semantic | regimes, prop-rule interpretations, recurring market behavior | update with provenance and confidence |
+| Procedural | skills and output contracts | versioned source change |
+| Strategic | active targets, risk posture, experiment priorities | replaced by six-hour/daily plan; history retained |
+| Reflective | lessons, contradictions, model/process failures | append, merge duplicates, never erase contrary evidence |
+
+Memory is context, not execution truth. Hermes may revise beliefs freely as evidence changes. It must preserve the provenance and uncertainty of those revisions.
+
+## 7. Self-heal authority
+
+Tier 0 — automatic and evidence-recorded:
+
+- retry failed delivery using the same intent IDs;
+- clear a demonstrably stale Hermes-owned lock;
+- rebuild derived indexes from immutable ledgers;
+- quarantine malformed Hermes output;
+- compact or deduplicate Hermes memory without deleting source events;
+- isolate new entries only for an affected group when safety cannot be proven;
+- append the discrepancy and correction, verify current state, and resume the
+  affected capability automatically while unaffected groups continue.
+
+Self-heal uses NinjaTrader/Glitch positions, orders, fills, balances, PnL,
+brackets, receipts, and immutable events as authoritative. It repairs only
+Hermes-owned derived state or uses a supported Glitch reconciliation surface.
+It never resets accounts or baselines, rewrites journals, deletes losses,
+fabricates missing evidence, or marks recovery complete without current proof.
+Source defects may be recorded for later building, but runtime recovery does
+not wait for Codex or a human.
+
+Tier 1 — Hermes may propose and test on Sim:
+
+- prompt, model, reasoning-effort, context-window, or skill refinements;
+- portfolio-plan and target changes inside existing hard limits;
+- new discretionary hypotheses and knowledge candidates;
+- changes to review frequency when supported by cost/latency evidence.
+
+Tier 2 — explicit operator approval:
+
+- raising risk or contract caps;
+- changing Glitch policy, account groups, ratios, prop rules, or execution state;
+- enabling eval/live accounts;
+- deploying code, restarting NinjaTrader, or changing credentials/providers.
+
+Self-heal fixes Hermes’s ability to observe, reason, remember, and deliver. It never becomes a second execution or compliance engine.
+
+## 8. Input and output optimization
+
+Optimize relevance before shrinking intelligence:
+
+- send the core loop five complete frames, state deltas, active plan, applicable prop rules, and relevant recent outcomes—not the entire historical corpus;
+- keep raw evidence addressable by ID so Hermes can retrieve more when needed;
+- give supervisory loops aggregates plus links to exceptions;
+- give daily learning the full session summary and outcome set, not every repeated snapshot;
+- cache stable doctrine, skills, rule versions, and knowledge hashes;
+- record token cost, latency, malformed-output rate, rejection rate, and decision usefulness by model/job;
+- never remove context merely to make a test pass; remove duplication and irrelevant history.
+
+Core output remains tiny and executable. Supervisory outputs may be richer but must use versioned schemas and write only to Hermes-owned streams.
+
+## 9. Staged launch
+
+Only Stage A and then Stage B are in immediate scope.
+
+### Stage A — interactive orientation
+
+1. Install the source-controlled `glitch` profile overlay without enabling cron.
+2. Start Hermes interactively in the Glitch project/profile.
+3. Ask it to identify its role, hard boundaries, available packet/ledger/rule resources, memory layers, and current system state.
+4. Let it inspect existing snapshots and journal evidence and write one harmless Hermes-owned orientation note.
+5. Confirm native skills, memory, and sessions remain available alongside Glitch skills.
+
+### Stage B — core paper loop only
+
+1. Deploy and compile the Glitch packet writer.
+2. Confirm five consecutive minute frames and one x0/x5 packet.
+3. Enable only the Hermes core decision job.
+4. Validate: zero model calls without a new packet; one call per packet; one batch per configured group set; no duplicate delivery; receipts and Glitch decisions join by ID.
+5. Observe paper cycles and journal quality. Validate a complete protected open-to-close trade when Hermes chooses one; do not force an entry merely to satisfy infrastructure testing.
+
+### Deferred stages
+
+- Stage C: hourly supervision after core packet/intent/outcome evidence is trustworthy.
+- Stage D: six-hour planning after the hourly review schema and ledger are useful.
+- Stage E: daily learning after outcomes, commissions, MAE/MFE, and attribution are reliable.
+
+No additional cron is enabled merely because it appears in this map.
+
+## 10. Optimization rule
+
+Every optimization must name:
+
+```text
+observed problem
+affected loop
+proposed change
+expected benefit
+cost and failure mode
+evidence metric
+rollback
+```
+
+Optimize the loop that owns the problem. Do not add deterministic trading gates to compensate for weak prompts, weak snapshots, missing memory, poor model choice, or bad ledger attribution.
+
+## 11. Supervisor and builder handoff
+
+The chat/supervisor session is an overlay on the same persistent Hermes mind. It
+may analyze trading activity, maintain Hermes-owned lessons and health records,
+offer advisory guidance to the trading session, and escalate a source change to
+Codex. It does not become a second executor.
+
+Codex is a bounded builder above Hermes. It consumes only explicitly approved
+requests from the supervisor ledger on a two-hour cadence, works in the
+registered workspace, validates, performs one clean deployment when required,
+and records the handoff. It never polls snapshots, runs a trading cycle, or
+changes Glitch state merely because it woke up. See `13_three_layer_handoff.md`.

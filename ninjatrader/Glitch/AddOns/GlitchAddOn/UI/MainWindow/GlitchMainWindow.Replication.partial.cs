@@ -66,7 +66,9 @@ namespace Glitch.UI
                 string masterName = group.MasterAccount.Trim();
                 foreach (AccountGroupMemberRow member in group.Members)
                 {
-                    if (member == null || !member.IsEnabled || string.IsNullOrWhiteSpace(member.FollowerAccount))
+                    if (member == null || member.IsMasterRow || !member.IsEnabled || string.IsNullOrWhiteSpace(member.FollowerAccount))
+                        continue;
+                    if (string.Equals(member.FollowerAccount.Trim(), masterName, StringComparison.OrdinalIgnoreCase))
                         continue;
                     if (double.IsNaN(member.Ratio) || double.IsInfinity(member.Ratio) || member.Ratio <= 0)
                         continue;
@@ -105,7 +107,7 @@ namespace Glitch.UI
 
             foreach (AccountGroupMemberRow member in group.Members)
             {
-                if (member == null || !member.IsEnabled || string.IsNullOrWhiteSpace(member.FollowerAccount))
+                if (member == null || member.IsMasterRow || !member.IsEnabled || string.IsNullOrWhiteSpace(member.FollowerAccount))
                     continue;
                 if (double.IsNaN(member.Ratio) || double.IsInfinity(member.Ratio) || member.Ratio <= 0)
                     continue;
@@ -220,10 +222,14 @@ namespace Glitch.UI
 
         private void TryProcessCopyOrderRetryFromRuntimeEvent(string eventName, Account account, object eventArgs)
         {
-            if (account == null || eventArgs == null || _copyEngine == null)
+            if (account == null || eventArgs == null)
                 return;
-            if (_isFlattenAllInProgress || !_isReplicatingUi)
+            if (string.Equals(eventName, "PositionUpdate", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(eventName, "ExecutionUpdate", StringComparison.OrdinalIgnoreCase))
+            {
+                GlitchAiOrderExecutor.ProcessAccountStateUpdate(account);
                 return;
+            }
             if (!string.Equals(eventName, "OrderUpdate", StringComparison.OrdinalIgnoreCase))
                 return;
 
@@ -231,12 +237,19 @@ namespace Glitch.UI
             if (order == null)
                 return;
 
+            GlitchAiOrderExecutor.ProcessOrderUpdate(account, order);
+
+            if (_copyEngine == null || _isFlattenAllInProgress || !_isReplicatingUi)
+                return;
+
             _copyEngine.ProcessFollowerOrderUpdate(account, order);
         }
 
-        private List<Account> ResolveFlattenAllAccounts()
+        private List<Account> ResolveFlattenAllAccounts(out List<string> unresolvedConfiguredAccounts)
         {
             var accountsByName = new Dictionary<string, Account>(StringComparer.OrdinalIgnoreCase);
+            var configuredNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            unresolvedConfiguredAccounts = new List<string>();
 
             void TryAdd(Account account)
             {
@@ -270,7 +283,7 @@ namespace Glitch.UI
                     continue;
 
                 if (!string.IsNullOrWhiteSpace(group.MasterAccount))
-                    TryAdd(TryFindConnectedAccountByName(group.MasterAccount));
+                    configuredNames.Add(group.MasterAccount.Trim());
 
                 if (group.Members == null)
                     continue;
@@ -280,9 +293,23 @@ namespace Glitch.UI
                     if (member == null || string.IsNullOrWhiteSpace(member.FollowerAccount))
                         continue;
 
-                    TryAdd(TryFindConnectedAccountByName(member.FollowerAccount));
+                    configuredNames.Add(member.FollowerAccount.Trim());
                 }
             }
+
+            foreach (string accountName in configuredNames)
+            {
+                Account account = TryFindConnectedAccountByName(accountName);
+                if (account == null)
+                {
+                    unresolvedConfiguredAccounts.Add(accountName);
+                    continue;
+                }
+
+                TryAdd(account);
+            }
+
+            unresolvedConfiguredAccounts.Sort(StringComparer.OrdinalIgnoreCase);
 
             return accountsByName.Values
                 .OrderBy(account => account.Name, StringComparer.OrdinalIgnoreCase)

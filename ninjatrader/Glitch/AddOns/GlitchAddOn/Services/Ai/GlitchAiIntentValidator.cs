@@ -23,6 +23,7 @@ namespace Glitch.Services
             "created_utc",
             "instrument",
             "account",
+            "operator_profile",
             "action",
             "confidence",
             "snapshot_hash",
@@ -34,6 +35,7 @@ namespace Glitch.Services
             "ENTER_LONG",
             "ENTER_SHORT",
             "HOLD",
+            "MOVE_STOP",
             "EXIT",
             "NOTHING"
         };
@@ -85,6 +87,10 @@ namespace Glitch.Services
                 if (!TryExtractNumber(json, "take_profit_1", out _))
                     errors.Add("enter_requires_take_profit_1");
             }
+
+            if (string.Equals(action, "MOVE_STOP", StringComparison.Ordinal)
+                && !TryExtractNumber(json, "stop_loss", out _))
+                errors.Add("move_stop_requires_stop_loss");
 
             if (TryExtractNumber(json, "take_profit_2", out _))
             {

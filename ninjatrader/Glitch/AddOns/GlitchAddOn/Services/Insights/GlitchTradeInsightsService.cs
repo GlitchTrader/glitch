@@ -160,6 +160,17 @@ namespace Glitch.Services
             string key = BuildStateKey(evt.AccountName, evt.Instrument);
             if (!states.TryGetValue(key, out OpenPositionState state) || state == null || Math.Abs(state.NetQty) <= Epsilon)
             {
+                // Journal replay can begin after a position was opened (for example
+                // after a reset or when the retained window starts mid-trade). In
+                // that case Sell/BuyToCover is an orphan exit, not a new position.
+                // Treating it as an entry creates a phantom position that corrupts
+                // every later round trip for the account/instrument.
+                if (!IsOpeningAction(evt.Action))
+                {
+                    states.Remove(key);
+                    return;
+                }
+
                 states[key] = OpenPositionState.FromExecution(evt, signedQty);
                 AccumulateExecutionCommission(states[key], evt);
                 return;
@@ -195,7 +206,8 @@ namespace Glitch.Services
             }
 
             double closeQty = Math.Min(Math.Abs(previousQty), Math.Abs(signedQty));
-            AccumulateExecutionCommission(state, evt);
+            double executionQuantity = Math.Abs(signedQty);
+            AccumulateExecutionCommission(state, evt, closeQty / executionQuantity);
             double pointsPerContract = (evt.Price - state.AveragePrice) * previousSign;
             state.RealizedPoints += pointsPerContract * closeQty;
             state.ClosedContracts += closeQty;
@@ -227,7 +239,7 @@ namespace Glitch.Services
             if (fullyClosed)
             {
                 states[key] = OpenPositionState.FromRemainder(evt, remainderSign * remainder);
-                AccumulateExecutionCommission(states[key], evt);
+                AccumulateExecutionCommission(states[key], evt, remainder / executionQuantity);
                 return;
             }
 
@@ -235,7 +247,7 @@ namespace Glitch.Services
             if (Math.Sign(carryQty) != previousSign)
             {
                 states[key] = OpenPositionState.FromRemainder(evt, remainderSign * remainder);
-                AccumulateExecutionCommission(states[key], evt);
+                AccumulateExecutionCommission(states[key], evt, remainder / executionQuantity);
                 return;
             }
 
@@ -291,6 +303,11 @@ namespace Glitch.Services
 
         private static void AccumulateExecutionCommission(OpenPositionState state, ExecutionEvent evt)
         {
+            AccumulateExecutionCommission(state, evt, 1d);
+        }
+
+        private static void AccumulateExecutionCommission(OpenPositionState state, ExecutionEvent evt, double fraction)
+        {
             if (state == null || evt == null)
                 return;
 
@@ -298,7 +315,9 @@ namespace Glitch.Services
             if (double.IsNaN(commission) || double.IsInfinity(commission) || Math.Abs(commission) <= Epsilon)
                 return;
 
-            state.TotalCommission += Math.Abs(commission);
+            if (double.IsNaN(fraction) || double.IsInfinity(fraction) || fraction <= 0)
+                return;
+            state.TotalCommission += Math.Abs(commission) * Math.Min(1d, fraction);
         }
 
         private static string BuildStateKey(string accountName, string instrument)
@@ -331,6 +350,15 @@ namespace Glitch.Services
             }
 
             return 0;
+        }
+
+        private static bool IsOpeningAction(string action)
+        {
+            string token = NormalizeActionToken(action);
+            return token.Equals("BUY", StringComparison.OrdinalIgnoreCase) ||
+                   token.Equals("LONG", StringComparison.OrdinalIgnoreCase) ||
+                   token.Equals("SELLSHORT", StringComparison.OrdinalIgnoreCase) ||
+                   token.Equals("SHORT", StringComparison.OrdinalIgnoreCase);
         }
 
         private static ExecutionEvent TryParseExecutionEvent(TradeJournalEvent source)

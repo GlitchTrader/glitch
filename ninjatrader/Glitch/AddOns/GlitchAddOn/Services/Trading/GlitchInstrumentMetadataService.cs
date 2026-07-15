@@ -46,6 +46,8 @@ namespace Glitch.Services
     {
         private static readonly Dictionary<string, GlitchInstrumentMetadata> Cache =
             new Dictionary<string, GlitchInstrumentMetadata>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, Instrument> TradeInstruments =
+            new Dictionary<string, Instrument>(StringComparer.OrdinalIgnoreCase);
         private static readonly object Sync = new object();
 
         public static string NormalizeInstrumentRoot(string value)
@@ -99,6 +101,8 @@ namespace Glitch.Services
             if (string.IsNullOrWhiteSpace(root))
                 return false;
 
+            RegisterTradeInstrument(instrument);
+
             lock (Sync)
             {
                 if (Cache.TryGetValue(root, out metadata))
@@ -116,16 +120,114 @@ namespace Glitch.Services
             if (string.IsNullOrWhiteSpace(instrumentRoot))
                 return false;
 
+            string root = NormalizeInstrumentRoot(instrumentRoot);
+            lock (Sync)
+            {
+                if (!string.IsNullOrWhiteSpace(root)
+                    && TradeInstruments.TryGetValue(root, out instrument)
+                    && IsConcreteTradeInstrument(instrument, root))
+                    return true;
+            }
+
+            // Hermes intents carry a root (MNQ), not an expiry. A root-only
+            // Instrument object has metadata but no live simulation quote.
+            // Execution must wait for a dated chart contract registration.
+            if (string.Equals(instrumentRoot.Trim(), root, StringComparison.OrdinalIgnoreCase))
+            {
+                if (TryResolveKnownMicroIndexFrontContract(root, DateTime.UtcNow, out instrument))
+                    return true;
+                return false;
+            }
+
             foreach (string candidate in BuildLookupCandidates(instrumentRoot))
             {
                 instrument = TryGetInstrument(candidate, "GetInstrument");
                 if (instrument == null)
                     instrument = TryGetInstrument(candidate, "GetInstrumentFuzzy");
-                if (instrument != null)
+                if (IsConcreteTradeInstrument(instrument, root))
                     return true;
             }
 
             return false;
+        }
+
+        public static void RegisterTradeInstrument(string instrumentFullName)
+        {
+            Instrument instrument = TryGetInstrument(instrumentFullName, "GetInstrument");
+            if (instrument != null)
+                RegisterTradeInstrument(instrument);
+        }
+
+        public static void RegisterTradeInstrument(Instrument instrument)
+        {
+            string root = GetInstrumentRoot(instrument);
+            if (!IsConcreteTradeInstrument(instrument, root))
+                return;
+
+            lock (Sync)
+                TradeInstruments[root] = instrument;
+        }
+
+        private static bool IsConcreteTradeInstrument(Instrument instrument, string root)
+        {
+            if (instrument == null || string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(instrument.FullName))
+                return false;
+
+            return !string.Equals(instrument.FullName.Trim(), root.Trim(), StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool TryResolveKnownMicroIndexFrontContract(string root, DateTime utcNow, out Instrument instrument)
+        {
+            instrument = null;
+            string normalizedRoot = NormalizeInstrumentRoot(root);
+            if (string.IsNullOrWhiteSpace(normalizedRoot)
+                || (!string.Equals(normalizedRoot, "MNQ", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(normalizedRoot, "MES", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(normalizedRoot, "M2K", StringComparison.OrdinalIgnoreCase)))
+            {
+                return false;
+            }
+
+            string contractName = normalizedRoot + " " + GetEquityIndexFrontContractSuffix(utcNow);
+            instrument = TryGetInstrument(contractName, "GetInstrument");
+            if (instrument == null)
+                instrument = TryGetInstrument(contractName, "GetInstrumentFuzzy");
+            if (!IsConcreteTradeInstrument(instrument, normalizedRoot))
+            {
+                instrument = null;
+                return false;
+            }
+
+            RegisterTradeInstrument(instrument);
+            return true;
+        }
+
+        private static string GetEquityIndexFrontContractSuffix(DateTime utcNow)
+        {
+            DateTime date = utcNow.Date;
+            int year = date.Year;
+            int[] months = { 3, 6, 9, 12 };
+            for (int i = 0; i < months.Length; i++)
+            {
+                int month = months[i];
+                DateTime rollover = GetThirdFriday(year, month).AddDays(-8);
+                if (date < rollover)
+                    return FormatContractSuffix(month, year);
+            }
+
+            return FormatContractSuffix(3, year + 1);
+        }
+
+        private static DateTime GetThirdFriday(int year, int month)
+        {
+            DateTime cursor = new DateTime(year, month, 1);
+            int daysUntilFriday = ((int)DayOfWeek.Friday - (int)cursor.DayOfWeek + 7) % 7;
+            return cursor.AddDays(daysUntilFriday + 14);
+        }
+
+        private static string FormatContractSuffix(int month, int year)
+        {
+            return month.ToString("00") + "-" + (year % 100).ToString("00");
         }
 
         public static bool TryGetPointValue(string instrumentName, out double pointValue)
@@ -190,12 +292,64 @@ namespace Glitch.Services
             double tickSize = master?.TickSize ?? 0;
             string sessionTemplate = master?.TradingHours?.Name ?? string.Empty;
 
+            GlitchInstrumentMetadata knownMicroMetadata;
+            if (TryResolveKnownMicroIndexMetadata(root, pointValue, tickSize, sessionTemplate, out knownMicroMetadata))
+                return knownMicroMetadata;
+
             if (pointValue > 0 && tickSize > 0)
             {
                 return GlitchInstrumentMetadata.Resolved(root, pointValue, tickSize, sessionTemplate);
             }
 
             return GlitchInstrumentMetadata.Unknown(root);
+        }
+
+        private static bool TryResolveKnownMicroIndexMetadata(
+            string root,
+            double ntPointValue,
+            double ntTickSize,
+            string sessionTemplate,
+            out GlitchInstrumentMetadata metadata)
+        {
+            metadata = null;
+            string normalizedRoot = NormalizeInstrumentRoot(root);
+            if (string.IsNullOrWhiteSpace(normalizedRoot))
+                return false;
+
+            double expectedPointValue;
+            double expectedTickSize;
+            if (string.Equals(normalizedRoot, "MNQ", StringComparison.OrdinalIgnoreCase))
+            {
+                expectedPointValue = 2.0d;
+                expectedTickSize = 0.25d;
+            }
+            else if (string.Equals(normalizedRoot, "MES", StringComparison.OrdinalIgnoreCase))
+            {
+                expectedPointValue = 5.0d;
+                expectedTickSize = 0.25d;
+            }
+            else if (string.Equals(normalizedRoot, "M2K", StringComparison.OrdinalIgnoreCase))
+            {
+                expectedPointValue = 5.0d;
+                expectedTickSize = 0.1d;
+            }
+            else
+            {
+                return false;
+            }
+
+            double resolvedTickSize = ntTickSize > 0 ? ntTickSize : expectedTickSize;
+            if (Math.Abs(ntPointValue - expectedPointValue) > 0.0000001d || ntTickSize <= 0)
+            {
+                metadata = GlitchInstrumentMetadata.Resolved(
+                    normalizedRoot,
+                    expectedPointValue,
+                    resolvedTickSize,
+                    sessionTemplate);
+                return true;
+            }
+
+            return false;
         }
 
         private static void CacheMetadata(GlitchInstrumentMetadata metadata)

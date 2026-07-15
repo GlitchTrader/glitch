@@ -12,13 +12,13 @@ namespace Glitch.UI
 {
     public partial class GlitchMainWindow
     {
-        private void MaybeWritePortfolioSnapshot(DateTime nowUtc, string snapshotId = null)
+        private bool MaybeWritePortfolioSnapshot(DateTime nowUtc, string snapshotId = null)
         {
             GlitchPortfolioSnapshotCapture capture = BuildPortfolioSnapshotCapture();
             if (capture == null)
-                return;
+                return false;
 
-            GlitchPortfolioSnapshotWriter.TryWriteLatestIfDue(nowUtc, capture, snapshotId);
+            return GlitchPortfolioSnapshotWriter.TryWriteLatestIfDue(nowUtc, capture, snapshotId);
         }
 
         private GlitchPortfolioSnapshotCapture BuildPortfolioSnapshotCapture()
@@ -63,6 +63,9 @@ namespace Glitch.UI
             double headroomRatio = row.MaxDrawdownRaw > 0 && !double.IsNaN(row.BufferMarginRaw)
                 ? row.BufferMarginRaw / row.MaxDrawdownRaw
                 : double.NaN;
+            List<GlitchPortfolioSnapshotPositionRecord> positions = BuildPortfolioSnapshotPositions(account);
+            double liveUnrealizedPnl = positions.Sum(position => position.UnrealizedPnl);
+            string livePositionDisplay = BuildPortfolioPositionDisplay(positions);
 
             return new GlitchPortfolioSnapshotAccountRecord
             {
@@ -78,14 +81,32 @@ namespace Glitch.UI
                 BufferMargin = row.BufferMarginRaw,
                 HeadroomRatio = headroomRatio,
                 RealizedPnl = row.RealizedPnlRaw,
-                UnrealizedPnl = row.UnrealizedPnlRaw,
-                TotalPnl = row.TotalPnlRaw,
-                PositionDisplay = row.Position,
+                UnrealizedPnl = liveUnrealizedPnl,
+                TotalPnl = row.RealizedPnlRaw + liveUnrealizedPnl,
+                PositionDisplay = livePositionDisplay,
+                WorkingOrderCount = account?.Orders == null
+                    ? 0
+                    : account.Orders.Count(order => order != null && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState)),
                 MaxContracts = row.MaxContractsRaw,
                 IsRiskLocked = _riskLockedAccounts.Contains(row.DisplayName),
                 IsEvalTargetLocked = _evalTargetLockedAccounts.Contains(row.DisplayName),
-                Positions = BuildPortfolioSnapshotPositions(account)
+                Positions = positions
             };
+        }
+
+        private static string BuildPortfolioPositionDisplay(IEnumerable<GlitchPortfolioSnapshotPositionRecord> positions)
+        {
+            double signedContracts = 0;
+            foreach (GlitchPortfolioSnapshotPositionRecord position in positions ?? Enumerable.Empty<GlitchPortfolioSnapshotPositionRecord>())
+            {
+                double quantity = Math.Abs(position.Quantity);
+                if (string.Equals(position.MarketPosition, MarketPosition.Long.ToString(), StringComparison.OrdinalIgnoreCase))
+                    signedContracts += quantity;
+                else if (string.Equals(position.MarketPosition, MarketPosition.Short.ToString(), StringComparison.OrdinalIgnoreCase))
+                    signedContracts -= quantity;
+            }
+
+            return FormatSignedContracts(signedContracts);
         }
 
         private static List<GlitchPortfolioSnapshotPositionRecord> BuildPortfolioSnapshotPositions(Account account)

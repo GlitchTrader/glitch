@@ -2,8 +2,33 @@
 
 ## High-Level Topology
 
+### Target product topology (decision 2026-07-14)
+
 ```text
-Windows VPS / Local Windows Host
+Central VPS
+  canonical market ingestion (same snapshot schema as Glitch)
+    -> five-minute decision packet
+    -> one persistent supervised Hermes profile/session
+    -> versioned recommendation + learning store
+    -> authenticated recommendation API
+
+Glitch client
+  polls once per five-minute recommendation window
+    -> verifies identity, TTL, and idempotency
+    -> combines recommendation with local portfolio, group, and prop state
+    -> Glitch firewall validates
+    -> master order only
+    -> existing replication engine copies followers
+    -> account-local native brackets protect every position
+    -> journals outcomes and renders the Feed
+```
+
+Hermes has no NinjaTrader, broker, or customer account credentials. The central service cannot place orders. Glitch is the sole execution and management authority on each client. Customers receive Feed, not a Hermes Chat tab.
+
+### Current internal stabilization harness
+
+```text
+Local Windows host (not the customer deployment topology)
   └─ NinjaTrader 8
       └─ Glitch AddOn
           ├─ GlitchAnalyticsBridge indicator
@@ -17,7 +42,7 @@ Windows VPS / Local Windows Host
           └─ existing compliance / replication / ledger services
 
 Hermes Runtime
-  └─ native cron first
+  └─ supervised native gateway + cron (validation harness)
       ├─ snapshot_sanity script job, no LLM
       ├─ suggest_trade LLM job every 5 minutes
       ├─ portfolio_risk_review hourly job
@@ -147,34 +172,47 @@ Every entry requires SL + TP1. Glitch rejects anything stale, malformed, over-ri
 
 Post-session routine. Produces candidate lessons from Glitch-journaled outcomes; it does not silently mutate active policy.
 
-## Deferred Runtime
+## Stabilization gate
 
-Do not start with Docker services, a custom scheduler, or an always-on Hermes daemon. Add a small deterministic bridge daemon only after cron proves insufficient for a measured need.
+Centralization does not begin until the local harness proves:
+
+```text
+supervised hidden gateway survives terminal/Codex exit
+one named trading session continues across cycles
+portfolio top-level values equal nested live positions
+every completed group round trip becomes one learning outcome
+master-only intent replicates through Glitch with native brackets per account
+packet -> decision -> validation -> execution/reject -> outcome is inspectable
+```
 
 ## Deployment Layouts
 
-### Minimal
+### Internal validation
 
 ```text
-Single Windows machine:
+Single Windows machine (not shipped to customers):
   NT8 + Glitch
   Hermes native cron jobs
 ```
 
-### Later, only if needed
+### Product deployment after stabilization
 
 ```text
-Windows VPS:
-  NT8 + Glitch
+Central Linux VPS/container:
+  supervised Hermes gateway + persistent profile/session
+  canonical ingestion + packet builder
+  recommendation/outcome/learning stores
 
-Optional deterministic bridge worker:
-  file/event watcher, retries, schema checks
+Backend API:
+  customer authentication + entitlement
+  expiring recommendation delivery
+  bounded outcome ingestion and observability
 
-Optional Hermes data store:
-  only if file-backed cron state is no longer enough
-
-Network, if split-host:
-  Tailscale / WireGuard
+Customer Windows host:
+  NT8 + Glitch only
+  five-minute HTTPS polling
+  local validation/execution/replication/brackets/journal
+  Feed UI, no Chat UI
 ```
 
-Even in the preferred deployment, Glitch bridge should be private, authenticated, and allowlisted.
+The existing localhost bridge remains private to the customer host. The remote recommendation API is authenticated, entitlement-scoped, versioned, replay-safe, and incapable of direct order submission. Use streaming only for Feed freshness if measured need justifies it; the trading rail begins with five-minute HTTPS polling.

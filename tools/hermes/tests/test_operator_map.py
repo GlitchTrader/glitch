@@ -1,0 +1,64 @@
+import json
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[3]
+
+
+class OperatorMapTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.operator = json.loads(
+            (ROOT / "hermes-profile" / "operator.json").read_text(encoding="utf-8")
+        )
+        cls.cognitive_map = (
+            ROOT
+            / "glitch_hermes_docs"
+            / "docs"
+            / "12_hermes_trading_skills_and_knowledge.md"
+        ).read_text(encoding="utf-8")
+
+    def test_one_native_profile_uses_dynamic_glitch_groups(self):
+        self.assertEqual(self.operator["operator_profile"], "glitch")
+        self.assertEqual(self.operator["books_source"], "dynamic_from_glitch_packet")
+        self.assertTrue(self.operator["skills"]["native_hermes_preserved"])
+
+    def test_loop_model_routing_and_initial_activation(self):
+        loops = {item["id"]: item for item in self.operator["loops"]}
+        self.assertEqual(loops["core_decision"]["model"], "gpt-5.6-luna")
+        for loop_id in (
+            "portfolio_supervision",
+            "portfolio_planning",
+            "daily_learning",
+        ):
+            self.assertEqual(loops[loop_id]["model"], "gpt-5.6-sol")
+            self.assertEqual(loops[loop_id]["initial_activation"], "disabled")
+        self.assertEqual(self.operator["activation"]["enable_now"], [])
+
+    def test_patterns_are_evidence_not_deterministic_gates(self):
+        lowered = self.cognitive_map.lower()
+        self.assertIn("archetypes, mined patterns", lowered)
+        self.assertIn("are evidence", lowered)
+        self.assertIn("no_archetype_match", lowered)
+        self.assertNotIn("no match → nothing", lowered)
+        self.assertNotIn("statuses are law", lowered)
+
+    def test_self_learning_and_self_heal_are_installed_capabilities(self):
+        installed = self.operator["skills"]["installed_overlay"]
+        required = self.operator["skills"]["required_before_supervisory_activation"]
+        self.assertIn("glitch-self-learning", installed)
+        self.assertIn("glitch-self-heal", installed)
+        self.assertNotIn("glitch-self-heal", required)
+
+        heal = (ROOT / "hermes-profile/skills/glitch-self-heal/SKILL.md").read_text(encoding="utf-8")
+        learn = (ROOT / "hermes-profile/skills/glitch-self-learning/SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("Never reset an account", heal)
+        self.assertIn("Never fabricate a fill", heal)
+        self.assertIn("self-heal does not wait", heal)
+        self.assertIn("Never erase the earlier lesson", learn)
+        self.assertIn("memory as interpretations", learn)
+
+
+if __name__ == "__main__":
+    unittest.main()

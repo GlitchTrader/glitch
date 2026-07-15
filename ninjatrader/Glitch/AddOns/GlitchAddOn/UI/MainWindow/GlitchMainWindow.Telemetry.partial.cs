@@ -24,10 +24,33 @@ namespace Glitch.UI
             {
                 WireIntentHandlers();
                 GlitchAiOrderExecutor.UiInvoke = InvokeOnUiThread;
+                GlitchAiOrderExecutor.RaiseCritical = (account, message, key) =>
+                    RaiseCriticalWarning(account, message, key, unlocksTrading: false);
                 AppendJournal(
                     "System",
                     "Intent",
                     "intent_server_started|bind=127.0.0.1:8788|mode=paper|executor=none|token_file=GlitchData/telemetry.token");
+            }
+
+            GlitchHermesControlServer.SetReplication = enabled =>
+                (bool)Dispatcher.Invoke(new Func<bool>(() => SetReplicationFromExternalSurface(enabled, "hermes")));
+            GlitchHermesControlServer.GetReplication = () =>
+                (bool)Dispatcher.Invoke(new Func<bool>(IsReplicationEnabledFromExternalSurface));
+            GlitchHermesControlServer.FlattenAll = () =>
+            {
+                Dispatcher.BeginInvoke(new Action(FlattenAllFromExternalSurface));
+                return true;
+            };
+            GlitchHermesControlServer.TradingModeChanged = paused =>
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    UpdateHermesModeUi(paused);
+                    AppendJournal("System", "Glitch AI", paused ? "trading_off" : "trading_on");
+                }));
+            if (GlitchHermesControlServer.TryStart())
+            {
+                UpdateHermesModeUi(GlitchHermesControlStateStore.Load().TradingPaused);
+                AppendJournal("System", "Glitch AI", "control_server_started|bind=127.0.0.1:8789");
             }
 
             GlitchRailSelfCheckWriter.TryWrite(System.DateTime.UtcNow);
@@ -37,6 +60,13 @@ namespace Glitch.UI
         {
             GlitchExternalTelemetryServer.TryStop();
             GlitchAiIntentServer.TryStop();
+            GlitchHermesControlServer.TryStop();
+            GlitchHermesControlServer.SetReplication = null;
+            GlitchHermesControlServer.GetReplication = null;
+            GlitchHermesControlServer.FlattenAll = null;
+            GlitchHermesControlServer.TradingModeChanged = null;
+            GlitchAiOrderExecutor.UiInvoke = null;
+            GlitchAiOrderExecutor.RaiseCritical = null;
             GlitchRailSelfCheckWriter.TryWrite(System.DateTime.UtcNow);
         }
 

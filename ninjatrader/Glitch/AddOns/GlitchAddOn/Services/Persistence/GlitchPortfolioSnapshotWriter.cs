@@ -34,6 +34,7 @@ namespace Glitch.Services
         public double UnrealizedPnl { get; set; }
         public double TotalPnl { get; set; }
         public string PositionDisplay { get; set; }
+        public int WorkingOrderCount { get; set; }
         public double MaxContracts { get; set; }
         public bool IsRiskLocked { get; set; }
         public bool IsEvalTargetLocked { get; set; }
@@ -234,6 +235,7 @@ namespace Glitch.Services
                 + "\"unrealized_pnl\":" + GlitchSnapshotJson.Number(account.UnrealizedPnl) + ","
                 + "\"total_pnl\":" + GlitchSnapshotJson.Number(account.TotalPnl) + ","
                 + "\"position_display\":" + GlitchSnapshotJson.String(account.PositionDisplay) + ","
+                + "\"working_orders\":" + account.WorkingOrderCount.ToString(CultureInfo.InvariantCulture) + ","
                 + "\"max_contracts\":" + GlitchSnapshotJson.Number(account.MaxContracts) + ","
                 + "\"is_risk_locked\":" + GlitchSnapshotJson.Bool(account.IsRiskLocked) + ","
                 + "\"is_eval_target_locked\":" + GlitchSnapshotJson.Bool(account.IsEvalTargetLocked) + ","

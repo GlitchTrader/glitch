@@ -17,7 +17,8 @@ namespace Glitch.UI
         private const int MainTabDashboard = 0;
         private const int MainTabAnalytics = 1;
         private const int MainTabJournal = 2;
-        private const int MainTabSettings = 3;
+        private const int MainTabAi = 3;
+        private const int MainTabSettings = 4;
 
         private const int MaxSummaryRecentTradesDisplayed = 200;
         private const int MaxPendingJournalBatch = 500;
@@ -362,6 +363,8 @@ namespace Glitch.UI
             }
             else if (tabIndex == MainTabJournal)
                 RefreshSummaryInsightsIfNeeded(DateTime.UtcNow);
+            else if (tabIndex == MainTabAi)
+                RefreshAiTab();
             else if (tabIndex == MainTabSettings)
                 UpdateSettingsCopyTradingPolicyNotice();
         }

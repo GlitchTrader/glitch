@@ -251,10 +251,11 @@ namespace Glitch.Services
 
         private static string BuildHealthJson()
         {
+            string mode = GlitchAiRailPolicyStore.Load().Mode ?? "paper";
             return "{"
                 + "\"schema_version\":" + GlitchSnapshotJson.String(SchemaVersion) + ","
                 + "\"status\":" + GlitchSnapshotJson.String("ok") + ","
-                + "\"mode\":" + GlitchSnapshotJson.String("paper") + ","
+                + "\"mode\":" + GlitchSnapshotJson.String(mode) + ","
                 + "\"created_utc\":" + GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(DateTime.UtcNow)) + ","
                 + "\"bind_address\":" + GlitchSnapshotJson.String(BindAddress) + ","
                 + "\"is_running\":" + GlitchSnapshotJson.Bool(IsRunning) + ","
@@ -280,10 +281,11 @@ namespace Glitch.Services
 
         private static string BuildFirewallRejectedJson(string intentId, GlitchAiRiskDecision decision)
         {
+            string mode = GlitchAiRailPolicyStore.Load().Mode ?? "paper";
             return "{"
                 + "\"schema_version\":" + GlitchSnapshotJson.String("glitch.intent.response.v1") + ","
                 + "\"status\":" + GlitchSnapshotJson.String("rejected") + ","
-                + "\"mode\":" + GlitchSnapshotJson.String("paper") + ","
+                + "\"mode\":" + GlitchSnapshotJson.String(mode) + ","
                 + "\"intent_id\":" + GlitchSnapshotJson.String(intentId) + ","
                 + "\"failed_check_number\":" + (decision == null ? "0" : decision.FailedCheckNumber.ToString(CultureInfo.InvariantCulture)) + ","
                 + "\"failed_check_code\":" + GlitchSnapshotJson.String(decision == null ? "firewall_rejected" : decision.FailedCheckCode) + ","

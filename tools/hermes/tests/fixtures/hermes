@@ -1,0 +1,6 @@
+"""Timeout fixture for invoke-hermes-cycle.ps1; ignores Hermes CLI arguments."""
+
+import time
+
+
+time.sleep(30)

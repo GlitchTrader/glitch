@@ -8,10 +8,12 @@
     "created_utc",
     "instrument",
     "account",
+    "operator_profile",
     "action",
     "confidence",
     "snapshot_hash",
-    "model_version"
+    "model_version",
+    "decision_audit"
   ],
   "properties": {
     "schema_version": {
@@ -33,20 +35,25 @@
       "type": "string",
       "description": "Target account name. Must be in the firewall allowlist."
     },
+    "operator_profile": {
+      "type": "string",
+      "description": "Hermes profile identity. Glitch binds this value to exactly one group master account."
+    },
     "action": {
       "enum": [
         "ENTER_LONG",
         "ENTER_SHORT",
         "HOLD",
+        "MOVE_STOP",
         "EXIT",
         "NOTHING"
       ],
-      "description": "BUY=ENTER_LONG, SELL=ENTER_SHORT, DO-NOTHING=NOTHING. ADJUST_STOP/PARTIAL_EXIT reserved for M1."
+      "description": "ENTER actions create independently protected tranches. MOVE_STOP tightens Glitch-owned native stops."
     },
     "quantity": {
       "type": "integer",
       "minimum": 0,
-      "description": "Required > 0 for ENTER_*. Firewall caps (M0: 1)."
+      "description": "Required > 0 for ENTER_*. Glitch caps aggregate master exposure from policy."
     },
     "order_type": {
       "enum": [
@@ -88,7 +95,7 @@
         "number",
         "null"
       ],
-      "description": "Optional post-TP1 stop for the runner. Must be tighter than stop_loss relative to entry (risk-reducing only). Requires take_profit_2."
+      "description": "Optional initial stop for the TP2 runner leg. Must remain on the loss side of entry and be tighter than stop_loss. Requires take_profit_2."
     },
     "quantity_tp1": {
       "type": [
@@ -116,6 +123,35 @@
     },
     "prompt_version": {
       "type": "string"
+    },
+    "decision_audit": {
+      "type": "object",
+      "required": [
+        "bull_case",
+        "bear_case",
+        "flat_case",
+        "aggressive_case",
+        "conservative_case",
+        "decisive_evidence",
+        "disconfirming_evidence",
+        "change_condition",
+        "final_choice"
+      ],
+      "properties": {
+        "bull_case": { "type": "string", "maxLength": 500 },
+        "bear_case": { "type": "string", "maxLength": 500 },
+        "flat_case": { "type": "string", "maxLength": 500 },
+        "aggressive_case": { "type": "string", "maxLength": 500 },
+        "conservative_case": { "type": "string", "maxLength": 500 },
+        "decisive_evidence": { "type": "string", "maxLength": 500 },
+        "disconfirming_evidence": { "type": "string", "maxLength": 500 },
+        "change_condition": { "type": "string", "maxLength": 500 },
+        "final_choice": {
+          "enum": ["ENTER_LONG", "ENTER_SHORT", "HOLD", "MOVE_STOP", "EXIT", "NOTHING"]
+        }
+      },
+      "additionalProperties": false,
+      "description": "Compact adversarial evidence audit; not a chain-of-thought transcript. final_choice must match action and is checked by the external validator."
     }
   },
   "allOf": [
@@ -147,6 +183,15 @@
             "type": "number"
           }
         }
+      }
+    },
+    {
+      "if": {
+        "properties": { "action": { "const": "MOVE_STOP" } }
+      },
+      "then": {
+        "required": ["stop_loss"],
+        "properties": { "stop_loss": { "type": "number" } }
       }
     },
     {

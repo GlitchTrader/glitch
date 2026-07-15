@@ -1,128 +1,84 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
-using System.Linq;
-using System.Text;
 
 namespace Glitch.Services
 {
     internal static class GlitchAiIntentHistoryReader
     {
-        public static int CountTradesTodayUtc(DateTime nowUtc)
+        private const string FilledExecutionCode = "group_entry_filled";
+
+        public static int CountTradesTodayUtc(string account, DateTime nowUtc)
         {
-            return CountMatchingIntents(nowUtc, intentJson =>
+            var intentIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            EnumerateFilledEntries(nowUtc, (line, recordedUtc) =>
             {
-                string action = GlitchAiJsonFields.ExtractString(intentJson, "action");
-                return string.Equals(action, "ENTER_LONG", StringComparison.Ordinal)
-                    || string.Equals(action, "ENTER_SHORT", StringComparison.Ordinal)
-                    || string.Equals(action, "EXIT", StringComparison.Ordinal);
+                string message = GlitchAiJsonFields.ExtractString(line, "message");
+                if (!MessageHasToken(message, "master", account))
+                    return;
+
+                string intentId = GlitchAiJsonFields.ExtractString(line, "intent_id");
+                if (!string.IsNullOrWhiteSpace(intentId))
+                    intentIds.Add(intentId.Trim());
             });
+            return intentIds.Count;
         }
 
-        public static DateTime? GetLastEnterUtc(string instrumentRoot, DateTime nowUtc)
+        public static DateTime? GetLastEnterUtc(string account, string instrumentRoot, DateTime nowUtc)
         {
             DateTime? last = null;
             string root = instrumentRoot == null ? null : instrumentRoot.Trim().ToUpperInvariant();
-            EnumerateAcceptedIntents(nowUtc, intentJson =>
+            EnumerateFilledEntries(nowUtc, (line, recordedUtc) =>
             {
-                string instrument = GlitchAiJsonFields.ExtractString(intentJson, "instrument");
-                if (!string.Equals(instrument, root, StringComparison.OrdinalIgnoreCase))
+                string message = GlitchAiJsonFields.ExtractString(line, "message");
+                if (!MessageHasToken(message, "master", account)
+                    || !MessageHasToken(message, "instrument", root))
                     return;
 
-                string action = GlitchAiJsonFields.ExtractString(intentJson, "action");
-                if (!string.Equals(action, "ENTER_LONG", StringComparison.Ordinal)
-                    && !string.Equals(action, "ENTER_SHORT", StringComparison.Ordinal)
-                    && !string.Equals(action, "EXIT", StringComparison.Ordinal))
-                {
-                    return;
-                }
-
-                DateTime? created = GlitchAiJsonFields.TryExtractUtc(intentJson, "created_utc");
-                if (!created.HasValue)
-                    return;
-
-                if (!last.HasValue || created.Value > last.Value)
-                    last = created.Value;
+                if (!last.HasValue || recordedUtc > last.Value)
+                    last = recordedUtc;
             });
-
             return last;
         }
 
-        private static int CountMatchingIntents(DateTime nowUtc, Func<string, bool> predicate)
+        private static void EnumerateFilledEntries(DateTime nowUtc, Action<string, DateTime> onEntry)
         {
-            int count = 0;
-            EnumerateAcceptedIntents(nowUtc, intentJson =>
-            {
-                if (predicate(intentJson))
-                    count++;
-            });
-            return count;
-        }
+            string path = GlitchAiExecutionJournalWriter.GetExecutionsJsonlPath();
+            if (!File.Exists(path))
+                return;
 
-        private static void EnumerateAcceptedIntents(DateTime nowUtc, Action<string> onIntent)
-        {
-            string decisionsPath = GlitchAiJournalBridge.GetDecisionsJsonlPath();
-            string receivedPath = GlitchAiIntentJournalWriter.GetReceivedJsonlPath();
             DateTime dayStart = new DateTime(nowUtc.Year, nowUtc.Month, nowUtc.Day, 0, 0, 0, DateTimeKind.Utc);
-
-            if (File.Exists(decisionsPath))
-                ReadLines(decisionsPath, dayStart, onIntent, true);
-
-            if (File.Exists(receivedPath))
-                ReadLines(receivedPath, dayStart, onIntent, false);
-        }
-
-        private static void ReadLines(string path, DateTime dayStart, Action<string> onIntent, bool decisionsFormat)
-        {
             foreach (string line in File.ReadLines(path))
             {
-                if (string.IsNullOrWhiteSpace(line))
+                if (string.IsNullOrWhiteSpace(line)
+                    || !string.Equals(GlitchAiJsonFields.ExtractString(line, "code"), FilledExecutionCode, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                DateTime? recordedUtc = GlitchAiJsonFields.TryExtractUtc(line, "recorded_utc");
+                if (!recordedUtc.HasValue || recordedUtc.Value < dayStart || recordedUtc.Value > nowUtc)
                     continue;
 
-                string status = GlitchAiJsonFields.ExtractString(line, "status");
-                if (decisionsFormat && !string.Equals(status, "approved", StringComparison.OrdinalIgnoreCase))
-                    continue;
-                if (!decisionsFormat && !string.Equals(status, "accepted", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                DateTime? received = GlitchAiJsonFields.TryExtractUtc(line, decisionsFormat ? "recorded_utc" : "received_utc");
-                if (!received.HasValue || received.Value < dayStart)
-                    continue;
-
-                int intentStart = line.IndexOf("\"intent\":", StringComparison.Ordinal);
-                if (intentStart < 0)
-                    continue;
-
-                int braceStart = line.IndexOf('{', intentStart + 8);
-                if (braceStart < 0)
-                    continue;
-
-                int braceEnd = FindMatchingBrace(line, braceStart);
-                if (braceEnd < 0)
-                    continue;
-
-                onIntent(line.Substring(braceStart, braceEnd - braceStart + 1));
+                onEntry(line, recordedUtc.Value);
             }
         }
 
-        private static int FindMatchingBrace(string json, int start)
+        private static bool MessageHasToken(string message, string key, string expectedValue)
         {
-            int depth = 0;
-            for (int i = start; i < json.Length; i++)
+            if (string.IsNullOrWhiteSpace(message) || string.IsNullOrWhiteSpace(expectedValue))
+                return false;
+
+            string prefix = key + "=";
+            foreach (string token in message.Split('|'))
             {
-                char ch = json[i];
-                if (ch == '{')
-                    depth++;
-                else if (ch == '}')
+                if (token.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(token.Substring(prefix.Length).Trim(), expectedValue, StringComparison.OrdinalIgnoreCase))
                 {
-                    depth--;
-                    if (depth == 0)
-                        return i;
+                    return true;
                 }
             }
-
-            return -1;
+            return false;
         }
     }
 }

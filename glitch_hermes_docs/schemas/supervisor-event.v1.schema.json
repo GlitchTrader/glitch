@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "glitch.supervisor.event.v1",
+  "type": "object",
+  "required": ["schema_version", "event_id", "recorded_utc", "event", "source"],
+  "properties": {
+    "schema_version": {"const": "glitch.supervisor.event.v1"},
+    "event_id": {"type": "string", "minLength": 8},
+    "recorded_utc": {"type": "string", "format": "date-time"},
+    "event": {"enum": ["observation", "guidance", "claim", "progress", "result", "blocker"]},
+    "source": {"enum": ["hermes-chat", "codex-builder"]},
+    "request_id": {"type": "string"},
+    "packet_id": {"type": "string"},
+    "intent_id": {"type": "string"},
+    "payload": {"type": "object"}
+  },
+  "additionalProperties": true
+}

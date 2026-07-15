@@ -1,0 +1,24 @@
+{
+  "schema_version": "0.1",
+  "updated": "2026-07-14",
+  "pm_role": "pm-glitch",
+  "discipline": "Explicitly approved builder work only; stabilization before expansion; no Codex trading loop; no live authority.",
+  "lanes": [
+    {
+      "id": "stabilization",
+      "items": ["GL-047", "GL-048", "GL-049", "GL-049b"],
+      "next_item": "GL-047",
+      "status": "in_progress",
+      "terminal_gate": "Supervised continuous session, truthful portfolio snapshots, complete ledger-correlated learning outcomes, and terminal follower brackets on copied exits",
+      "stop_line": "No expansion, automatic Codex loop, eval, or live account path."
+    },
+    {
+      "id": "central-expansion",
+      "items": ["GL-050", "GL-051", "GL-052", "GL-053", "GL-054"],
+      "next_item": "GL-050",
+      "status": "blocked_by_stabilization_and_profitability",
+      "terminal_gate": "GL-047 through GL-049b green plus stable/profitable single-instrument paper evidence",
+      "stop_line": "Map and specify now; do not implement before the stabilization gate."
+    }
+  ]
+}

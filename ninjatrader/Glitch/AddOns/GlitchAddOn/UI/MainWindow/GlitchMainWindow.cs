@@ -193,6 +193,10 @@ namespace Glitch.UI
         private TextBlock _paHeadroomValueText;
         private TextBlock _globalHeadroomValueText;
         private TextBlock _warningCountValueText;
+        private Button _aiTradingButton;
+        private StackPanel _aiScopeRowsHost;
+        private StackPanel _aiFeedHost;
+        private TextBlock _aiFeedStatusText;
         private TextBlock _analyticsCurrentPriceText;
         private TextBlock _analyticsOverallSignalText;
         private TextBlock _analyticsSessionText;
@@ -448,6 +452,13 @@ namespace Glitch.UI
             BindLocalizedHeader(journalTab, "tab.journal", "Journal");
             tabs.Items.Add(journalTab);
 
+            var aiTab = new TabItem
+            {
+                Content = CreateAiTab()
+            };
+            BindLocalizedHeader(aiTab, "tab.glitch_ai", "Glitch AI");
+            tabs.Items.Add(aiTab);
+
             var settingsTab = new TabItem
             {
                 Content = CreateSettingsTab()
@@ -496,6 +507,11 @@ namespace Glitch.UI
         private UIElement CreateSettingsTab()
         {
             return CreateSettingsTabImpl();
+        }
+
+        private UIElement CreateAiTab()
+        {
+            return CreateAiTabImpl();
         }
 
         // Keeps responsive breakpoints from oscillating when layout changes alter available width.
@@ -549,6 +565,14 @@ namespace Glitch.UI
 
         private Style CreateReplicateButtonStyle(FrameworkElement context)
         {
+            return CreateStateToggleButtonStyle(
+                context,
+                L("header.button.replicate", "Replicate"),
+                L("header.button.replicating", "Replicating"));
+        }
+
+        private Style CreateStateToggleButtonStyle(FrameworkElement context, string stoppedContent, string runningContent)
+        {
             var baseStyle = FindSkinStyle(context, typeof(Button));
             var style = new Style(typeof(Button), baseStyle);
 
@@ -569,11 +593,11 @@ namespace Glitch.UI
             style.Setters.Add(new Setter(Control.FocusVisualStyleProperty, null));
 
             var stoppedTrigger = new Trigger { Property = FrameworkElement.TagProperty, Value = "Stopped" };
-            stoppedTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, L("header.button.replicate", "Replicate")));
+            stoppedTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, stoppedContent));
             style.Triggers.Add(stoppedTrigger);
 
             var runningTrigger = new Trigger { Property = FrameworkElement.TagProperty, Value = "Running" };
-            runningTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, L("header.button.replicating", "Replicating")));
+            runningTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, runningContent));
             runningTrigger.Setters.Add(new Setter(Control.BackgroundProperty, TealAccentBrush));
             runningTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, TealAccentBrush));
             runningTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
@@ -597,6 +621,18 @@ namespace Glitch.UI
             hoverRunning.Setters.Add(new Setter(ContentControl.ContentProperty, L("header.button.stop", "Stop")));
             style.Triggers.Add(hoverRunning);
 
+            return style;
+        }
+
+        private Style CreateAiTradingButtonStyle(FrameworkElement context)
+        {
+            Style style = CreateStateToggleButtonStyle(context, "Glitch AI", "AI Auto On");
+            var staleTrigger = new Trigger { Property = FrameworkElement.TagProperty, Value = "Stale" };
+            staleTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, "AI Auto Stale"));
+            staleTrigger.Setters.Add(new Setter(Control.BackgroundProperty, OrangeAccentBrush));
+            staleTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, OrangeAccentBrush));
+            staleTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
+            style.Triggers.Add(staleTrigger);
             return style;
         }
 
@@ -735,7 +771,15 @@ namespace Glitch.UI
 
         private void OnReplicateButtonClick(object sender, RoutedEventArgs e)
         {
-            if (!_isReplicatingUi)
+            SetReplicationFromExternalSurface(!_isReplicatingUi, "user_click");
+        }
+
+        internal bool SetReplicationFromExternalSurface(bool enabled, string origin)
+        {
+            if (_isReplicatingUi == enabled)
+                return true;
+
+            if (enabled)
             {
                 if (!CanEnableReplication(out string denialReason))
                 {
@@ -745,18 +789,18 @@ namespace Glitch.UI
                         "Replication start blocked: " + denialReason,
                         "PolicyReplicationBlocked",
                         unlocksTrading: false);
-                    return;
+                    return false;
                 }
 
                 ApplyPlanLimitsToAccountGroups("replication_start");
             }
 
-            _isReplicatingUi = !_isReplicatingUi;
+            _isReplicatingUi = enabled;
             _lastUiRefreshUtc = DateTime.MinValue;
             List<Account> activeAccounts = GetActiveAccountsSnapshot();
             if (_isReplicatingUi)
             {
-                AppendJournal("System", "Replication", "replication_enabled|origin=user_click");
+                AppendJournal("System", "Replication", "replication_enabled|origin=" + (origin ?? "external"));
             }
             else
             {
@@ -778,6 +822,7 @@ namespace Glitch.UI
             UpdateRefreshTimerCadence();
             PersistReplicationUiState();
             PublishGlitchShellState();
+            return true;
         }
 
         internal void ToggleReplicationFromExternalSurface()
@@ -787,7 +832,43 @@ namespace Glitch.UI
 
         internal void FlattenAllFromExternalSurface()
         {
-            _ = RunFlattenAllAsync(showHeaderButtonFeedback: false);
+            _ = RunFlattenAllAsync(showHeaderButtonFeedback: true);
+        }
+
+        internal bool IsReplicationEnabledFromExternalSurface() => _isReplicatingUi;
+
+        private void UpdateHermesModeUi(bool paused)
+        {
+            if (_aiTradingButton == null)
+                return;
+            _aiTradingButton.Tag = paused ? "Stopped" : (IsAiDecisionLoopHealthy() ? "Running" : "Stale");
+        }
+
+        private static bool IsAiDecisionLoopHealthy()
+        {
+            try
+            {
+                string path = GlitchStateStore.GetDefaultPath(Path.Combine("hermes", "exchange", "hermes", "events", "cycles.jsonl"));
+                if (!File.Exists(path))
+                    return false;
+                TimeSpan age = DateTime.UtcNow - File.GetLastWriteTimeUtc(path);
+                return age >= TimeSpan.Zero && age <= TimeSpan.FromMinutes(12);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void OnAiTradingButtonClick(object sender, RoutedEventArgs e)
+        {
+            GlitchHermesControlState state = GlitchHermesControlStateStore.Load();
+            state.TradingPaused = !state.TradingPaused;
+            state.LastCommandId = "ui-" + Guid.NewGuid().ToString("N");
+            GlitchHermesControlStateStore.Save(state);
+            UpdateHermesModeUi(state.TradingPaused);
+            AppendJournal("System", "Glitch AI", state.TradingPaused ? "trading_off|origin=user_click" : "trading_on|origin=user_click");
+            RefreshAiTab();
         }
 
         private async void OnFlattenAllButtonClick(object sender, RoutedEventArgs e)
@@ -1473,9 +1554,26 @@ namespace Glitch.UI
                 if (restoreCopyEngine)
                     _copyEngine?.Configure(false, null);
 
-                var accounts = ResolveFlattenAllAccounts();
+                var accounts = ResolveFlattenAllAccounts(out List<string> unresolvedAccounts);
+                foreach (string unresolvedAccount in unresolvedAccounts)
+                {
+                    AppendJournal(
+                        unresolvedAccount,
+                        "Risk",
+                        "flatten_all|origin=user_button|result=unresolved_or_disconnected|instruments=unknown");
+                }
+
                 if (accounts.Count == 0)
-                    return true;
+                {
+                    RaiseCriticalWarning(
+                        "System",
+                        unresolvedAccounts.Count > 0
+                            ? "Flatten All could not reach configured accounts: " + string.Join(", ", unresolvedAccounts) + "."
+                            : "Flatten All could not positively resolve any accounts.",
+                        "FlattenAllNoResolvedAccounts",
+                        unlocksTrading: false);
+                    return false;
+                }
 
                 flattenSubmitCount = await Dispatcher.InvokeAsync(() => IssueFlattenOrdersForAccounts(accounts));
 
@@ -1483,7 +1581,7 @@ namespace Glitch.UI
                 AppendJournal(
                     "System",
                     "Perf",
-                    $"METRIC|flatten_submit_ms={flattenStopwatch.ElapsedMilliseconds}|orders={flattenSubmitCount}|accounts={accounts.Count}");
+                    $"METRIC|flatten_submit_ms={flattenStopwatch.ElapsedMilliseconds}|orders={flattenSubmitCount}|accounts_resolved={accounts.Count}|accounts_unresolved={unresolvedAccounts.Count}");
 
                 bool flattened = await WaitForAllAccountsFlatAsync(accounts, TimeSpan.FromSeconds(8));
 
@@ -1502,7 +1600,8 @@ namespace Glitch.UI
                     }
                 }
 
-                if (flattened)
+                bool complete = flattened && unresolvedAccounts.Count == 0;
+                if (complete)
                 {
                     string flattenSummary = flattenSubmitCount > 0
                         ? "Flatten All executed successfully."
@@ -1512,14 +1611,18 @@ namespace Glitch.UI
                 }
                 else
                 {
+                    string unresolvedSuffix = unresolvedAccounts.Count == 0
+                        ? string.Empty
+                        : " Unresolved configured accounts: " + string.Join(", ", unresolvedAccounts) + ".";
                     RaiseCriticalWarning(
                         "System",
-                        "Flatten All completed but one or more accounts still have open positions or working orders. No additional flatten orders were submitted.",
+                        "Flatten All is incomplete: one or more accounts could not be positively verified flat and order-free."
+                            + unresolvedSuffix,
                         "FlattenAllIncomplete",
                         unlocksTrading: false);
                 }
 
-                return flattened;
+                return complete;
             }
             catch
             {
@@ -3602,10 +3705,11 @@ namespace Glitch.UI
             _replicationUserIntentLive = true;
             if (_isReplicatingUi)
             {
+                AlignAllEnabledFollowersToMaster("startup");
                 AppendJournal(
                     "System",
                     "Replication",
-                    "replication_restored|origin=startup|catchup=skipped");
+                    "replication_restored|origin=startup|catchup=applied");
             }
 
             _refreshTimer.Start();
@@ -3691,6 +3795,11 @@ namespace Glitch.UI
             {
                 _replicateButton.Click -= OnReplicateButtonClick;
                 _replicateButton = null;
+            }
+            if (_aiTradingButton != null)
+            {
+                _aiTradingButton.Click -= OnAiTradingButtonClick;
+                _aiTradingButton = null;
             }
             if (_flattenAllButton != null)
             {
@@ -3784,8 +3893,10 @@ namespace Glitch.UI
 
             DateTime nowUtc = DateTime.UtcNow;
             string snapshotId = nowUtc.ToString("yyyyMMdd'T'HHmmss'Z'", System.Globalization.CultureInfo.InvariantCulture);
-            GlitchMarketSnapshotWriter.TryWriteLatestIfDue(nowUtc, snapshotId);
-            MaybeWritePortfolioSnapshot(nowUtc, snapshotId);
+            bool marketSnapshotReady = GlitchMarketSnapshotWriter.TryWriteLatestIfDue(nowUtc, snapshotId);
+            bool portfolioSnapshotReady = MaybeWritePortfolioSnapshot(nowUtc, snapshotId);
+            if (marketSnapshotReady && portfolioSnapshotReady)
+                GlitchHermesExchangeWriter.TryCaptureMinute(nowUtc, snapshotId);
             GlitchHistoricalSnapshotExporter.TryWriteReplayBundleIfDue(
                 nowUtc,
                 TimeSpan.FromMinutes(15),
@@ -5274,6 +5385,7 @@ namespace Glitch.UI
                 }
 
                 GlitchStateStore.SaveAccountGroups(_accountGroupsFilePath, records);
+                ReconcileAiTradingScopeWithGroups();
             }
             catch
             {
@@ -5579,7 +5691,9 @@ namespace Glitch.UI
             if (string.IsNullOrWhiteSpace(signalName))
                 return false;
 
-            return signalName.Trim().StartsWith("GLT-", StringComparison.OrdinalIgnoreCase);
+            string normalized = signalName.Trim();
+            return normalized.StartsWith(GlitchCopyEngine.CopySignalName, StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith(GlitchCopyEngine.CatchUpSignalName, StringComparison.OrdinalIgnoreCase);
         }
 
         private void TryAppendRuntimeEventJournalEntry(string eventName, Account account, object eventArgs)

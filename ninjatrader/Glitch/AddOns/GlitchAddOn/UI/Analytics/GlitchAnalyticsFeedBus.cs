@@ -83,6 +83,8 @@ namespace Glitch.UI
                 }
 
                 state.LastUpdatedUtc = heartbeatUtc;
+                if (!string.IsNullOrWhiteSpace(normalizedReading.InstrumentFullName))
+                    state.InstrumentFullName = normalizedReading.InstrumentFullName;
                 if (normalizedReading.CurrentPrice.HasValue && normalizedReading.CurrentPrice.Value > 0)
                     state.CurrentPrice = normalizedReading.CurrentPrice;
 
@@ -177,9 +179,12 @@ namespace Glitch.UI
                         StateByInstrument[normalizedRoot] = state;
                     }
 
-                    if (feed.LastUpdatedUtc != DateTime.MinValue && feed.LastUpdatedUtc >= state.LastUpdatedUtc)
-                        state.LastUpdatedUtc = feed.LastUpdatedUtc;
+                    DateTime feedUpdatedUtc = NormalizeUtcTimestamp(feed.LastUpdatedUtc, DateTime.MinValue);
+                    if (feedUpdatedUtc != DateTime.MinValue && feedUpdatedUtc >= state.LastUpdatedUtc)
+                        state.LastUpdatedUtc = feedUpdatedUtc;
 
+                    if (!string.IsNullOrWhiteSpace(feed.InstrumentFullName))
+                        state.InstrumentFullName = feed.InstrumentFullName;
                     if (HasPositiveValue(feed.CurrentPrice))
                         state.CurrentPrice = feed.CurrentPrice;
                     if (!string.IsNullOrWhiteSpace(feed.SessionName))
@@ -262,6 +267,7 @@ namespace Glitch.UI
                 feeds.Add(new GlitchAnalyticsBridgeCacheStore.PersistedInstrumentFeed
                 {
                     InstrumentRoot = state.InstrumentRoot,
+                    InstrumentFullName = state.InstrumentFullName,
                     LastUpdatedUtc = state.LastUpdatedUtc,
                     CurrentPrice = state.CurrentPrice,
                     SessionName = state.SessionName,
@@ -309,6 +315,17 @@ namespace Glitch.UI
                 state.PublishToGlitchUi = publishToGlitchUi;
                 state.LastHeartbeatUtc = nowUtc;
             }
+        }
+
+        public static void RegisterTradeInstrument(string instrumentFullName)
+        {
+            Glitch.Services.GlitchInstrumentMetadataService.RegisterTradeInstrument(instrumentFullName);
+        }
+
+        public static void RegisterTradeInstrumentInstance(object instrument)
+        {
+            Glitch.Services.GlitchInstrumentMetadataService.RegisterTradeInstrument(
+                instrument as NinjaTrader.Cbi.Instrument);
         }
 
         public static void TouchBridge(
@@ -622,6 +639,7 @@ namespace Glitch.UI
             snapshot = new GlitchIndicatorInstrumentSnapshot
             {
                 InstrumentRoot = normalizedRoot,
+                InstrumentFullName = state.InstrumentFullName,
                 UpdatedUtc = state.LastUpdatedUtc,
                 CurrentPrice = freshestPriceReading != null && HasPositiveValue(freshestPriceReading.CurrentPrice)
                     ? freshestPriceReading.CurrentPrice
@@ -797,7 +815,7 @@ namespace Glitch.UI
 
             GlitchIndicatorReading clone = reading.Clone();
             clone.InstrumentRoot = normalizedRoot;
-            DateTime incomingUtc = reading.UtcTime;
+            DateTime incomingUtc = NormalizeUtcTimestamp(reading.UtcTime, DateTime.MinValue);
             if (incomingUtc == default || incomingUtc > DateTime.UtcNow.AddMinutes(5))
                 clone.UtcTime = DateTime.UtcNow;
             else
@@ -820,6 +838,10 @@ namespace Glitch.UI
             clone.Rsi = NormalizeFinite(clone.Rsi);
             clone.StochK = NormalizeFinite(clone.StochK);
             clone.ZScore = NormalizeFinite(clone.ZScore);
+            clone.DiPlus = NormalizeFinite(clone.DiPlus);
+            clone.DiMinus = NormalizeFinite(clone.DiMinus);
+            clone.Cci = NormalizeFinite(clone.Cci);
+            clone.MacdHistogram = NormalizeFinite(clone.MacdHistogram);
             clone.EmaAlignment = NormalizeFinite(clone.EmaAlignment);
             clone.RegimeWeight = NormalizeFinite(clone.RegimeWeight);
             clone.OscillatorCompositeScore = NormalizeFinite(clone.OscillatorCompositeScore);
@@ -895,7 +917,7 @@ namespace Glitch.UI
                 if (legacyState == null)
                     continue;
 
-                DateTime legacyUpdatedUtc = ReadLegacyDateTime(legacyState, "LastUpdatedUtc", DateTime.MinValue);
+                DateTime legacyUpdatedUtc = NormalizeUtcTimestamp(ReadLegacyDateTime(legacyState, "LastUpdatedUtc", DateTime.MinValue), DateTime.MinValue);
                 double? legacyCurrentPrice = ReadLegacyNullableDouble(legacyState, "CurrentPrice");
                 string legacySessionName = ReadLegacyString(legacyState, "SessionName");
                 double? legacySessionHigh = ReadLegacyNullableDouble(legacyState, "SessionHigh");
@@ -998,7 +1020,7 @@ namespace Glitch.UI
                 int legacyActiveInstances = ConvertToInt(ReadLegacyMemberValue(legacyState, "ActiveInstanceCount"), 0);
                 bool legacyPublishToGlitchUi = ConvertToBool(ReadLegacyMemberValue(legacyState, "PublishToGlitchUi"), false);
                 bool legacyTrackedPrimaryTf = ConvertToBool(ReadLegacyMemberValue(legacyState, "IsTrackedPrimaryTimeframe"), false);
-                DateTime legacyHeartbeatUtc = ReadLegacyDateTime(legacyState, "LastHeartbeatUtc", DateTime.MinValue);
+                DateTime legacyHeartbeatUtc = NormalizeUtcTimestamp(ReadLegacyDateTime(legacyState, "LastHeartbeatUtc", DateTime.MinValue), DateTime.MinValue);
 
                 lock (SyncRoot)
                 {
@@ -1083,6 +1105,10 @@ namespace Glitch.UI
                 return null;
 
             reading.UtcTime = ReadLegacyDateTime(legacyReading, "UtcTime", fallbackUtc);
+            reading.Open = ReadLegacyNullableDouble(legacyReading, "Open");
+            reading.High = ReadLegacyNullableDouble(legacyReading, "High");
+            reading.Low = ReadLegacyNullableDouble(legacyReading, "Low");
+            reading.Volume = ReadLegacyNullableDouble(legacyReading, "Volume");
             reading.CurrentPrice = ReadLegacyNullableDouble(legacyReading, "CurrentPrice");
             reading.AveragePrice = ReadLegacyNullableDouble(legacyReading, "AveragePrice");
             reading.Atr = ReadLegacyNullableDouble(legacyReading, "Atr");
@@ -1099,6 +1125,10 @@ namespace Glitch.UI
             reading.Rsi = ReadLegacyNullableDouble(legacyReading, "Rsi");
             reading.StochK = ReadLegacyNullableDouble(legacyReading, "StochK");
             reading.ZScore = ReadLegacyNullableDouble(legacyReading, "ZScore");
+            reading.DiPlus = ReadLegacyNullableDouble(legacyReading, "DiPlus");
+            reading.DiMinus = ReadLegacyNullableDouble(legacyReading, "DiMinus");
+            reading.Cci = ReadLegacyNullableDouble(legacyReading, "Cci");
+            reading.MacdHistogram = ReadLegacyNullableDouble(legacyReading, "MacdHistogram");
             reading.EmaAlignment = ReadLegacyNullableDouble(legacyReading, "EmaAlignment");
             reading.RegimeWeight = ReadLegacyNullableDouble(legacyReading, "RegimeWeight");
             reading.OscillatorCompositeScore = ReadLegacyNullableDouble(legacyReading, "OscillatorCompositeScore");
@@ -1217,9 +1247,29 @@ namespace Glitch.UI
 
             DateTime converted;
             if (DateTime.TryParse(value.ToString(), out converted))
-                return converted;
+                return NormalizeUtcTimestamp(converted, fallback);
 
             return fallback;
+        }
+
+        private static DateTime NormalizeUtcTimestamp(DateTime value, DateTime fallbackUtc)
+        {
+            if (value == DateTime.MinValue)
+                return fallbackUtc;
+
+            DateTime normalized;
+            if (value.Kind == DateTimeKind.Utc)
+                normalized = value;
+            else if (value.Kind == DateTimeKind.Local)
+                normalized = value.ToUniversalTime();
+            else
+                normalized = DateTime.SpecifyKind(value, DateTimeKind.Utc);
+
+            DateTime nowUtc = DateTime.UtcNow;
+            if (normalized > nowUtc.AddMinutes(5))
+                return nowUtc;
+
+            return normalized;
         }
 
         private static void PruneBridgeState(DateTime nowUtc, TimeSpan maxAge)
@@ -1296,6 +1346,7 @@ namespace Glitch.UI
             }
 
             public string InstrumentRoot { get; }
+            public string InstrumentFullName { get; set; }
             public DateTime LastUpdatedUtc { get; set; }
             public double? CurrentPrice { get; set; }
             public string SessionName { get; set; }
@@ -1334,6 +1385,7 @@ namespace Glitch.UI
     internal sealed class GlitchIndicatorInstrumentSnapshot
     {
         public string InstrumentRoot { get; set; }
+        public string InstrumentFullName { get; set; }
         public DateTime UpdatedUtc { get; set; }
         public double? CurrentPrice { get; set; }
         public string SessionName { get; set; }
@@ -1347,6 +1399,7 @@ namespace Glitch.UI
     public sealed class GlitchIndicatorReading
     {
         public string InstrumentRoot { get; set; }
+        public string InstrumentFullName { get; set; }
         public int Minutes { get; set; }
         public DateTime UtcTime { get; set; }
         public double? Open { get; set; }
@@ -1369,6 +1422,10 @@ namespace Glitch.UI
         public double? Rsi { get; set; }
         public double? StochK { get; set; }
         public double? ZScore { get; set; }
+        public double? DiPlus { get; set; }
+        public double? DiMinus { get; set; }
+        public double? Cci { get; set; }
+        public double? MacdHistogram { get; set; }
         public double? EmaAlignment { get; set; }
         public double? RegimeWeight { get; set; }
         public double? OscillatorCompositeScore { get; set; }
@@ -1394,6 +1451,7 @@ namespace Glitch.UI
             return new GlitchIndicatorReading
             {
                 InstrumentRoot = InstrumentRoot,
+                InstrumentFullName = InstrumentFullName,
                 Minutes = Minutes,
                 UtcTime = UtcTime,
                 Open = Open,
@@ -1416,6 +1474,10 @@ namespace Glitch.UI
                 Rsi = Rsi,
                 StochK = StochK,
                 ZScore = ZScore,
+                DiPlus = DiPlus,
+                DiMinus = DiMinus,
+                Cci = Cci,
+                MacdHistogram = MacdHistogram,
                 EmaAlignment = EmaAlignment,
                 RegimeWeight = RegimeWeight,
                 OscillatorCompositeScore = OscillatorCompositeScore,
