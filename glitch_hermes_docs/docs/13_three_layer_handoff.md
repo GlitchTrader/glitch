@@ -60,3 +60,14 @@ investigation. It never runs a Hermes trading cycle or polls market state.
 
 Computer use is permitted only when a compile/reload or deployment step truly
 requires it, and then as one bounded interaction followed by handoff.
+
+## Continuation pointer
+
+The one task-selection rail is `docs/ledger/backlog.md`; `docs/ledger/now.md`
+is the compact continuation handoff. This document defines authority only and
+must not accumulate implementation tickets.
+
+As of source baseline `d7975fb`, Codex has handed the runtime path back to
+Glitch + Hermes. Future builders begin from the backlog, compare the named
+commit to current HEAD, and leave market operation, paper monitoring, and
+learning cadence to the runtime layers above.

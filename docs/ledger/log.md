@@ -2,6 +2,15 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-15 - four-day AI-rail session closeout and handoff (builder-only)
+
+- Read the complete Codex transcript for thread `019f5786-3f54-7ab1-b809-1407b9e53136`: 230 user messages across 2026-07-12 through 2026-07-15. Reconciled repeated corrections around role ownership, over-gating, replication/brackets, session learning, observability, and performance into `docs/ledger/now.md` rather than creating a parallel lessons document.
+- Reconciled the rail to committed source baseline `d7975fb`. Marked local Feed, gateway/session, outcome-learning, portfolio-truth, Journal, and two-leg slices as implemented where source exists while leaving their explicit runtime proof open. Removed the stale active pointer to the old GL-042/043 arm ritual.
+- Added only two uncovered work items to the authoritative backlog: GL-063 for shared temporal/prop-rule compliance truth (news, maintenance, weekends/holidays, must-flat windows, and current official rule evidence), and GL-064 for versioned paper performance/regime calibration without turning findings into a deterministic strategy.
+- Reviewed the mainline handoff against exact refs: `main`/`origin/main=d216015`, AI source baseline `d7975fb`. GL-055 remains first; the handoff now records committed Journal/reversal fixes and the operator's green F5/reset state, while preserving the explicit AI non-backport boundary.
+- Preserved the three-layer authority document as an authority boundary and pointed continuation to the one backlog plus compact `now.md` handoff. No new queue, scheduler, runtime ledger, or architecture layer was created.
+- Verification: 118/118 Hermes/source-contract tests pass. Documentation consistency and Git diff checks are recorded in the closeout commit. Local `__pycache__` and `tmp/session-0655.jsonl` artifacts remain untracked. No deployment, restart, model call, market poll, policy/account mutation, intent, or order occurred.
+
 ## 2026-07-15 - two-leg native scale-out and consistency pass (builder-only)
 
 - Completed the existing `glitch.intent.v2` TP2 contract through the active direct runner, firewall, master executor, and follower copy engine. A quantity split now creates two distinct native OCO stop/target pairs; follower leg quantities scale from the Glitch-configured ratio and non-integral splits reject before the master entry.

@@ -251,7 +251,8 @@ No pyramiding · no averaging down · no stop widening
 - Every ENTER: SL + TP1; NT OCO; AI never manages loss mid-flight.
 - Glitch firewall runs before any order; failure ⇒ no order.
 - GL-041 before live eval AI.
-- Replication path and AI path stay separate.
+- Hermes trades only a configured group master. Glitch alone owns replication, follower protection, and reconciliation.
+- One effective temporal/prop-rule decision must be shared by UI, snapshots, firewall, and execution. Entry lockouts never disable exits or risk reduction.
 
 ---
 
@@ -278,7 +279,7 @@ The central VPS uses a supervised persistent Hermes gateway. Hermes native cron 
 - AI inside replication engine.
 - Separate live vs historical snapshot shapes.
 - Martingale / buffer-chase logic.
-- Calendar gates (“wait 2 weeks”) — use evidence gates.
+- Development calendar gates (“wait 2 weeks”) — use evidence gates. This does not waive real exchange-session, maintenance, weekend/holiday, or firm event rules.
 - Extra indicators before bridge truth is exported.
 - Separate central and client snapshot schemas.
 
@@ -300,13 +301,13 @@ The central VPS uses a supervised persistent Hermes gateway. Hermes native cron 
 
 ## 8. Active pointer
 
-**Current stabilization pointer:** GL-047 through GL-049b close supervised gateway/session continuity, authoritative outcome learning, portfolio snapshot truth, and terminal follower brackets on copied exits. Preserve the working master-only intent -> Glitch replication -> account-local bracket path. No expansion implementation begins until these checks are green and the paper cycle is observable.
+**Current stabilization pointer:** source implementation through `d7975fb` includes the direct persistent Hermes bridge, Glitch AI Feed, master-only execution, follower-native protection/terminal close repairs, truthful portfolio capture, Journal orphan/reversal fixes, native self-learning overlays, and optional two-leg scale-out. Close the remaining runtime evidence for GL-047 through GL-049b, GL-053, GL-055, and temporal compliance GL-063. Preserve the master-only intent -> Glitch replication -> account-local bracket path.
 
-**Expansion pointer after stabilization:** GL-050 through GL-054 implement central ingestion parity, the VPS brain, recommendation API/client polling, Feed, then quantity/group/instrument expansion. The older R11/R12 closeout text below is retained only as historical context and is superseded by these tickets.
+**Evidence pointer:** GL-064 owns versioned paper performance/regime calibration after Journal and outcome truth are green. A profitable-looking directional slice is evidence to analyze, not a license to encode a deterministic strategy or declare profitability.
 
-**Next step:** GL-042 — close master-only, native-bracket group execution before arming
-R12. Then GL-043 makes Hermes `suggest_trade` a strict paper loop; do not arm
-`ai/policy.json` (`mode=sim`, `executor_enabled=true`) before GL-045 evidence.
+**Expansion pointer after stabilization:** finish GL-050 acceptance, then GL-051 through GL-052 central ingestion/VPS/API, and GL-054 multi-instrument work. GL-053's two-leg local slice already exists; do not build arbitrary leg arrays before its 3-contract runtime proof.
+
+**Next bounded builder work:** consume the single backlog in `docs/ledger/backlog.md`. Do not revive the historical GL-042/GL-043 arm ritual or any Codex market-monitoring loop.
 
 **Parallel:** R06 — pattern mining on historical replay exports (Hermes sessions).
 
