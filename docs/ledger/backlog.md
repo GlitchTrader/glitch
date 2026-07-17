@@ -8,6 +8,26 @@
 
 Key paths: `ninjatrader/Glitch/AddOns/GlitchAddOn/` · `Indicators/glitch/GlitchAnalyticsBridge.cs`
 
+## 2026-07-17 clean shared-core candidate
+
+Branch `cleanup/main-core` implements the non-AI shared-core work without importing
+Hermes, AI services, intent endpoints, prompts, sessions, or the AI Feed:
+
+- producer-neutral master-to-follower routes, ratios, native follower OCO protection,
+  exact execution deduplication, explicit resync, and cross-zero refusal;
+- one truthful Replicate state, Replicate OFF preserving existing protection, observe-only
+  startup, and one native Flatten All path that reports unresolved accounts as incomplete;
+- Journal orphan-exit/reversal-commission repair, canonical instrument metadata, richer
+  Analytics identity/freshness fields, and explicit Master/Group/Fleet Journal scope;
+- corrected Apex Legacy 30% consistency metadata and directional-only metadata. Automation
+  eligibility is not a Glitch execution gate.
+
+Twenty focused source checks pass, including the absence of an automation-eligibility gate,
+async protection rejection, independent
+multi-leg stop identity, and live metadata replacing a stale negative cache. NinjaTrader F5 and bounded Sim fixtures remain mandatory before merge,
+deployment, packaging, or any claim that the runtime is fixed. The tables below describe the
+shipped v0.0.1.9 baseline and historical rail; this section is the current candidate status.
+
 ---
 
 ## Closed — v0.0.1.9 "Trust" (non-AI operator)

@@ -735,7 +735,16 @@ namespace Glitch.UI
 
         private void OnReplicateButtonClick(object sender, RoutedEventArgs e)
         {
-            if (!_isReplicatingUi)
+            SetReplicationFromExternalSurface(!IsReplicationEnabledFromExternalSurface(), "user_click");
+        }
+
+        internal bool SetReplicationFromExternalSurface(bool enabled, string origin)
+        {
+            bool runtimeEnabled = _isReplicatingUi && _copyEngine?.IsEnabled == true;
+            if ((enabled && runtimeEnabled) || (!enabled && !_isReplicatingUi))
+                return true;
+
+            if (enabled)
             {
                 if (!CanEnableReplication(out string denialReason))
                 {
@@ -745,23 +754,17 @@ namespace Glitch.UI
                         "Replication start blocked: " + denialReason,
                         "PolicyReplicationBlocked",
                         unlocksTrading: false);
-                    return;
+                    return false;
                 }
 
                 ApplyPlanLimitsToAccountGroups("replication_start");
             }
 
-            _isReplicatingUi = !_isReplicatingUi;
+            _isReplicatingUi = enabled;
             _lastUiRefreshUtc = DateTime.MinValue;
             List<Account> activeAccounts = GetActiveAccountsSnapshot();
             if (_isReplicatingUi)
-            {
-                AppendJournal("System", "Replication", "replication_enabled|origin=user_click");
-            }
-            else
-            {
-                CancelGlitchWorkingOrdersOnFollowers(activeAccounts);
-            }
+                AppendJournal("System", "Replication", "replication_enabled|origin=" + (origin ?? "external"));
 
             RefreshCopyEngineConfiguration(activeAccounts);
 
@@ -778,6 +781,7 @@ namespace Glitch.UI
             UpdateRefreshTimerCadence();
             PersistReplicationUiState();
             PublishGlitchShellState();
+            return !enabled || (_copyEngine?.IsEnabled == true);
         }
 
         internal void ToggleReplicationFromExternalSurface()
@@ -787,8 +791,11 @@ namespace Glitch.UI
 
         internal void FlattenAllFromExternalSurface()
         {
-            _ = RunFlattenAllAsync(showHeaderButtonFeedback: false);
+            _ = RunFlattenAllAsync(showHeaderButtonFeedback: true);
         }
+
+        internal bool IsReplicationEnabledFromExternalSurface() =>
+            _isReplicatingUi && _copyEngine?.IsEnabled == true;
 
         private async void OnFlattenAllButtonClick(object sender, RoutedEventArgs e)
         {
@@ -859,7 +866,9 @@ namespace Glitch.UI
             if (_replicateButton == null)
                 return;
 
-            _replicateButton.Tag = _isReplicatingUi ? "Running" : "Stopped";
+            _replicateButton.Tag = _isReplicatingUi && _copyEngine?.IsEnabled == true
+                ? "Running"
+                : "Stopped";
         }
 
         private void UpdateRefreshTimerCadence()
@@ -1103,8 +1112,8 @@ namespace Glitch.UI
             if (_mainTabControl == null)
                 return;
 
-            if (_mainTabControl.Items.Count > 3)
-                _mainTabControl.SelectedIndex = 3;
+            if (_mainTabControl.Items.Count > MainTabSettings)
+                _mainTabControl.SelectedIndex = MainTabSettings;
 
             if (_settingsLicenseKeyTextBox != null)
             {
@@ -1467,15 +1476,32 @@ namespace Glitch.UI
             _isFlattenAllInProgress = true;
             var flattenStopwatch = Stopwatch.StartNew();
             int flattenSubmitCount = 0;
-            bool restoreCopyEngine = _isReplicatingUi && !UseLegacyReplicationEngine();
+            bool restoreCopyEngine = _isReplicatingUi;
             try
             {
                 if (restoreCopyEngine)
                     _copyEngine?.Configure(false, null);
 
-                var accounts = ResolveFlattenAllAccounts();
+                var accounts = ResolveFlattenAllAccounts(out List<string> unresolvedAccounts);
+                foreach (string unresolvedAccount in unresolvedAccounts)
+                {
+                    AppendJournal(
+                        unresolvedAccount,
+                        "Risk",
+                        "flatten_all|origin=user_button|result=unresolved_or_disconnected|instruments=unknown");
+                }
+
                 if (accounts.Count == 0)
-                    return true;
+                {
+                    RaiseCriticalWarning(
+                        "System",
+                        unresolvedAccounts.Count > 0
+                            ? "Flatten All could not reach configured accounts: " + string.Join(", ", unresolvedAccounts) + "."
+                            : "Flatten All could not positively resolve any accounts.",
+                        "FlattenAllNoResolvedAccounts",
+                        unlocksTrading: false);
+                    return false;
+                }
 
                 flattenSubmitCount = await Dispatcher.InvokeAsync(() => IssueFlattenOrdersForAccounts(accounts));
 
@@ -1483,26 +1509,12 @@ namespace Glitch.UI
                 AppendJournal(
                     "System",
                     "Perf",
-                    $"METRIC|flatten_submit_ms={flattenStopwatch.ElapsedMilliseconds}|orders={flattenSubmitCount}|accounts={accounts.Count}");
+                    $"METRIC|flatten_submit_ms={flattenStopwatch.ElapsedMilliseconds}|orders={flattenSubmitCount}|accounts_resolved={accounts.Count}|accounts_unresolved={unresolvedAccounts.Count}");
 
                 bool flattened = await WaitForAllAccountsFlatAsync(accounts, TimeSpan.FromSeconds(8));
 
-                if (!flattened)
-                {
-                    List<Account> stillExposed = accounts
-                        .Where(account =>
-                            account != null &&
-                            (!GlitchReplicationEngine.IsAccountFlat(account) ||
-                             GlitchReplicationEngine.HasAnyWorkingOrders(account)))
-                        .ToList();
-                    if (stillExposed.Count > 0)
-                    {
-                        await Dispatcher.InvokeAsync(() => IssueFlattenOrdersForAccounts(stillExposed));
-                        flattened = await WaitForAllAccountsFlatAsync(accounts, TimeSpan.FromSeconds(4));
-                    }
-                }
-
-                if (flattened)
+                bool complete = flattened && unresolvedAccounts.Count == 0;
+                if (complete)
                 {
                     string flattenSummary = flattenSubmitCount > 0
                         ? "Flatten All executed successfully."
@@ -1512,14 +1524,18 @@ namespace Glitch.UI
                 }
                 else
                 {
+                    string unresolvedSuffix = unresolvedAccounts.Count == 0
+                        ? string.Empty
+                        : " Unresolved configured accounts: " + string.Join(", ", unresolvedAccounts) + ".";
                     RaiseCriticalWarning(
                         "System",
-                        "Flatten All completed but one or more accounts still have open positions or working orders. No additional flatten orders were submitted.",
+                        "Flatten All is incomplete: one or more accounts could not be positively verified flat and order-free."
+                            + unresolvedSuffix,
                         "FlattenAllIncomplete",
                         unlocksTrading: false);
                 }
 
-                return flattened;
+                return complete;
             }
             catch
             {
@@ -5548,7 +5564,7 @@ namespace Glitch.UI
 
                 TryAppendRuntimeEventJournalEntry(eventName, account, eventArgs);
                 TryProcessCopyExecutionFromRuntimeEvent(eventName, account, eventArgs);
-                TryProcessCopyOrderRetryFromRuntimeEvent(eventName, account, eventArgs);
+                TryProcessReplicationOrderStateFromRuntimeEvent(eventName, account, eventArgs);
             }
             catch (Exception ex)
             {
@@ -5561,7 +5577,9 @@ namespace Glitch.UI
             if (string.IsNullOrWhiteSpace(signalName))
                 return false;
 
-            return signalName.Trim().StartsWith("GLT-", StringComparison.OrdinalIgnoreCase);
+            string normalized = signalName.Trim();
+            return normalized.StartsWith(GlitchCopyEngine.CopySignalName, StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith(GlitchCopyEngine.CatchUpSignalName, StringComparison.OrdinalIgnoreCase);
         }
 
         private void TryAppendRuntimeEventJournalEntry(string eventName, Account account, object eventArgs)

@@ -2,6 +2,16 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-17 - clean non-AI shared-core candidate (builder-only, not deployed)
+
+- Built `cleanup/main-core` from clean `main=d216015`; the dirty AI worktree was not modified or merged.
+- Added the producer-neutral replication/protection core only. No AI service, Hermes runtime, intent endpoint, prompt, memory, session, or Feed code entered main.
+- Fixed self-copy routes, cross-zero closes, blind retries, startup catch-up, Replicate-state truth, Replicate-OFF protection cancellation, duplicate Flatten All submission, unresolved-account truth, and follower protection commit ordering.
+- Closed the remaining follower-protection races: an asynchronously rejected Glitch stop/target now submits one native flatten with no retry; each multi-leg follower stop is keyed to its source master OCO so changing SL1 cannot move SL2/SL3.
+- Ported the shared Journal, instrument metadata, Analytics, scope, and Apex 30% metadata corrections.
+- Live contract registration now replaces stale negative metadata cache entries, and rich OHLCV fields are finite/null-normalized before publication.
+- Verification is source-only: 20 focused shared-core checks pass, including a regression check that automation eligibility cannot become an execution gate. NinjaTrader F5 and bounded Sim fixtures remain required. No deployment, runtime operation, account mutation, or order occurred.
+
 ## 2026-07-09 — ABX memory system (ABKB)
 
 - Glitch agent memory routes through ABKB (`knowledge/llm/memory-routing.md`), not Cursor `AGENTS.md` Learned bullets.

@@ -224,6 +224,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 InitializeOrderFlowIndicators();
 
                 BridgeBusCompat.RegisterBridge(_instrumentRoot, PublishToGlitchUi);
+                BridgeBusCompat.RegisterTradeInstrumentInstance(Instrument);
                 BridgeBusCompat.TouchBridge(
                     _instrumentRoot,
                     PublishToGlitchUi,
@@ -233,6 +234,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             else if (State == State.Realtime)
             {
                 BridgeBusCompat.RegisterBridge(_instrumentRoot, PublishToGlitchUi);
+                BridgeBusCompat.RegisterTradeInstrumentInstance(Instrument);
                 BridgeBusCompat.TouchBridge(
                     _instrumentRoot,
                     PublishToGlitchUi,
@@ -309,6 +311,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                     (nowUtc - _lastBootstrapRegisterUtc) >= TimeSpan.FromSeconds(5))
                 {
                     _lastBootstrapRegisterUtc = nowUtc;
+                    BridgeBusCompat.RegisterTradeInstrumentInstance(Instrument);
                     BridgeBusCompat.RegisterBridgeBootstrapPublisher(_instrumentRoot, RequestBootstrapFromExternal);
                 }
             }
@@ -370,8 +373,13 @@ namespace NinjaTrader.NinjaScript.Indicators
             BridgeBusCompat.Publish(new BridgeBusCompat.BridgeReading
             {
                 InstrumentRoot = _instrumentRoot,
+                InstrumentFullName = Instrument == null ? null : Instrument.FullName,
                 Minutes = minutes,
-                UtcTime = Times[BarsInProgress][0].ToUniversalTime(),
+                UtcTime = DateTime.UtcNow,
+                Open = Opens[BarsInProgress][0],
+                High = Highs[BarsInProgress][0],
+                Low = Lows[BarsInProgress][0],
+                Volume = Volumes[BarsInProgress][0],
                 CurrentPrice = ResolvePublishedCurrentPrice(signal.Close),
                 AveragePrice = signal.AveragePrice,
                 Atr = signal.Atr,
@@ -388,6 +396,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Rsi = signal.Rsi,
                 StochK = signal.StochK,
                 ZScore = signal.ZScore,
+                DiPlus = signal.DiPlus,
+                DiMinus = signal.DiMinus,
+                Cci = signal.Cci,
+                MacdHistogram = signal.MacdHistogram,
                 EmaAlignment = signal.EmaAlignment,
                 RegimeWeight = signal.RegimeWeight,
                 OscillatorCompositeScore = signal.OscillatorCompositeScore,
@@ -559,19 +571,16 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
 
                 SessionTracker session = UpdateSessionTracker(minutes, bip);
-                DateTime readingUtc = nowUtc;
-                if (Times != null && bip < Times.Length && Times[bip] != null && Times[bip].Count > 0)
-                {
-                    DateTime barTime = Times[bip][0];
-                    if (barTime != DateTime.MinValue)
-                        readingUtc = barTime.ToUniversalTime();
-                }
-
                 bool published = BridgeBusCompat.Publish(new BridgeBusCompat.BridgeReading
                 {
                     InstrumentRoot = _instrumentRoot,
+                    InstrumentFullName = Instrument == null ? null : Instrument.FullName,
                     Minutes = minutes,
-                    UtcTime = readingUtc,
+                    UtcTime = nowUtc,
+                    Open = Opens[bip][0],
+                    High = Highs[bip][0],
+                    Low = Lows[bip][0],
+                    Volume = Volumes[bip][0],
                     CurrentPrice = ResolvePublishedCurrentPrice(signal.Close),
                     AveragePrice = signal.AveragePrice,
                     Atr = signal.Atr,
@@ -588,6 +597,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                     Rsi = signal.Rsi,
                     StochK = signal.StochK,
                     ZScore = signal.ZScore,
+                    DiPlus = signal.DiPlus,
+                    DiMinus = signal.DiMinus,
+                    Cci = signal.Cci,
+                    MacdHistogram = signal.MacdHistogram,
                     EmaAlignment = signal.EmaAlignment,
                     RegimeWeight = signal.RegimeWeight,
                     OscillatorCompositeScore = signal.OscillatorCompositeScore,
@@ -641,6 +654,15 @@ namespace NinjaTrader.NinjaScript.Indicators
                 signal.Rsi = _rsiByBip[bip][0];
             if (_stochByBip != null && bip < _stochByBip.Length && _stochByBip[bip] != null && CurrentBars[bip] > 0)
                 signal.StochK = _stochByBip[bip].K[0];
+            if (_dmByBip != null && bip < _dmByBip.Length && _dmByBip[bip] != null && CurrentBars[bip] >= 14)
+            {
+                signal.DiPlus = _dmByBip[bip].DiPlus[0];
+                signal.DiMinus = _dmByBip[bip].DiMinus[0];
+            }
+            if (_cciByBip != null && bip < _cciByBip.Length && _cciByBip[bip] != null && CurrentBars[bip] >= 20)
+                signal.Cci = _cciByBip[bip][0];
+            if (_macdByBip != null && bip < _macdByBip.Length && _macdByBip[bip] != null && CurrentBars[bip] >= 35)
+                signal.MacdHistogram = _macdByBip[bip].Default[0] - _macdByBip[bip].Avg[0];
             if (_smaByBip != null && bip < _smaByBip.Length && _smaByBip[bip] != null && CurrentBars[bip] > 0)
                 signal.AveragePrice = _smaByBip[bip][0];
 
@@ -1115,13 +1137,15 @@ namespace NinjaTrader.NinjaScript.Indicators
                 _dmByBip[bip] != null &&
                 CurrentBars[bip] >= 14;
             double diDirection = 0;
+            double? diPlus = null;
+            double? diMinus = null;
             if (hasDmiSignal)
             {
-                double diPlus = _dmByBip[bip].DiPlus[0];
-                double diMinus = _dmByBip[bip].DiMinus[0];
-                double diSum = diPlus + diMinus;
+                diPlus = _dmByBip[bip].DiPlus[0];
+                diMinus = _dmByBip[bip].DiMinus[0];
+                double diSum = diPlus.Value + diMinus.Value;
                 if (diSum > 1e-8)
-                    diDirection = Clamp((diPlus - diMinus) / diSum, -1, 1);
+                    diDirection = Clamp((diPlus.Value - diMinus.Value) / diSum, -1, 1);
             }
 
             double adxDirectionalSignal = hasDmiSignal
@@ -1147,8 +1171,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                 bip < _ultimateOscillatorByBip.Length &&
                 _ultimateOscillatorByBip[bip] != null &&
                 CurrentBars[bip] >= 28;
-            double cciSignal = hasCciSignal
-                ? Clamp(_cciByBip[bip][0] / 180.0, -1, 1)
+            double? cci = hasCciSignal ? (double?)_cciByBip[bip][0] : null;
+            double cciSignal = cci.HasValue
+                ? Clamp(cci.Value / 180.0, -1, 1)
                 : 0;
             double momentumSignal = hasMomentumSignal
                 ? Clamp(_momentumByBip[bip][0] / (denominator * 3.2), -1, 1)
@@ -1174,6 +1199,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 CurrentBars[bip] >= 35;
             double macdHistogramSignal = 0;
             double macdSlopeSignal = 0;
+            double? macdHistogramValue = null;
             if (hasMacdSignal)
             {
                 double macdMain = _macdByBip[bip].Default[0];
@@ -1183,6 +1209,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 double macdHistogram = macdMain - macdSignalLine;
                 double macdHistogramPrev = macdMainPrev - macdSignalLinePrev;
+                macdHistogramValue = macdHistogram;
                 macdHistogramSignal = Clamp((macdHistogram / denominator) * 1.25, -1, 1);
                 macdSlopeSignal = Clamp(((macdHistogram - macdHistogramPrev) / denominator) * 0.90, -1, 1);
             }
@@ -1385,6 +1412,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Rsi = rsi,
                 StochK = stochK,
                 ZScore = zScore,
+                DiPlus = diPlus,
+                DiMinus = diMinus,
+                Cci = cci,
+                MacdHistogram = macdHistogramValue,
                 EmaAlignment = emaAlignment,
                 RegimeWeight = regimeWeight,
                 OscillatorCompositeScore = tvOscillatorCompositeSignal,
@@ -2284,6 +2315,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             private static Type _readingType;
             private static MethodInfo _publishMethod;
             private static MethodInfo _registerBridgeMethod;
+            private static MethodInfo _registerTradeInstrumentInstanceMethod;
             private static MethodInfo _touchBridgeMethod;
             private static MethodInfo _unregisterBridgeMethod;
             private static MethodInfo _registerBootstrapPublisherMethod;
@@ -2292,8 +2324,13 @@ namespace NinjaTrader.NinjaScript.Indicators
             public sealed class BridgeReading
             {
                 public string InstrumentRoot { get; set; }
+                public string InstrumentFullName { get; set; }
                 public int Minutes { get; set; }
                 public DateTime UtcTime { get; set; }
+                public double? Open { get; set; }
+                public double? High { get; set; }
+                public double? Low { get; set; }
+                public double? Volume { get; set; }
                 public double? CurrentPrice { get; set; }
                 public double? AveragePrice { get; set; }
                 public double? Atr { get; set; }
@@ -2310,6 +2347,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                 public double? Rsi { get; set; }
                 public double? StochK { get; set; }
                 public double? ZScore { get; set; }
+                public double? DiPlus { get; set; }
+                public double? DiMinus { get; set; }
+                public double? Cci { get; set; }
+                public double? MacdHistogram { get; set; }
                 public double? EmaAlignment { get; set; }
                 public double? RegimeWeight { get; set; }
                 public double? OscillatorCompositeScore { get; set; }
@@ -2343,6 +2384,14 @@ namespace NinjaTrader.NinjaScript.Indicators
                     return;
 
                 TryInvoke(method, new object[] { instrumentRoot, publishToGlitchUi });
+            }
+
+            public static void RegisterTradeInstrumentInstance(object instrument)
+            {
+                if (!EnsureResolved() || _registerTradeInstrumentInstanceMethod == null)
+                    return;
+
+                TryInvoke(_registerTradeInstrumentInstanceMethod, new object[] { instrument });
             }
 
             public static void TouchBridge(string instrumentRoot, bool publishToGlitchUi, bool isTrackedPrimaryTimeframe)
@@ -2447,6 +2496,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                     MethodInfo publish = busType.GetMethod("Publish", BindingFlags.Public | BindingFlags.Static);
                     MethodInfo registerBridge = busType.GetMethod("RegisterBridge", BindingFlags.Public | BindingFlags.Static);
+                    MethodInfo registerTradeInstrumentInstance = busType.GetMethod("RegisterTradeInstrumentInstance", BindingFlags.Public | BindingFlags.Static);
                     MethodInfo touchBridge = busType.GetMethod("TouchBridge", BindingFlags.Public | BindingFlags.Static);
                     MethodInfo unregisterBridge = busType.GetMethod("UnregisterBridge", BindingFlags.Public | BindingFlags.Static);
                     MethodInfo registerPublisher = busType.GetMethod("RegisterBridgeBootstrapPublisher", BindingFlags.Public | BindingFlags.Static);
@@ -2462,6 +2512,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                     _readingType = readingType;
                     _publishMethod = publish;
                     _registerBridgeMethod = registerBridge;
+                    _registerTradeInstrumentInstanceMethod = registerTradeInstrumentInstance;
                     _touchBridgeMethod = touchBridge;
                     _unregisterBridgeMethod = unregisterBridge;
                     _registerBootstrapPublisherMethod = registerPublisher;
@@ -2476,6 +2527,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 _readingType = null;
                 _publishMethod = null;
                 _registerBridgeMethod = null;
+                _registerTradeInstrumentInstanceMethod = null;
                 _touchBridgeMethod = null;
                 _unregisterBridgeMethod = null;
                 _registerBootstrapPublisherMethod = null;
@@ -2574,8 +2626,13 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
 
                 SetProperty(message, "InstrumentRoot", reading.InstrumentRoot);
+                SetProperty(message, "InstrumentFullName", reading.InstrumentFullName);
                 SetProperty(message, "Minutes", reading.Minutes);
                 SetProperty(message, "UtcTime", reading.UtcTime);
+                SetProperty(message, "Open", reading.Open);
+                SetProperty(message, "High", reading.High);
+                SetProperty(message, "Low", reading.Low);
+                SetProperty(message, "Volume", reading.Volume);
                 SetProperty(message, "CurrentPrice", reading.CurrentPrice);
                 SetProperty(message, "AveragePrice", reading.AveragePrice);
                 SetProperty(message, "Atr", reading.Atr);
@@ -2592,6 +2649,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                 SetProperty(message, "Rsi", reading.Rsi);
                 SetProperty(message, "StochK", reading.StochK);
                 SetProperty(message, "ZScore", reading.ZScore);
+                SetProperty(message, "DiPlus", reading.DiPlus);
+                SetProperty(message, "DiMinus", reading.DiMinus);
+                SetProperty(message, "Cci", reading.Cci);
+                SetProperty(message, "MacdHistogram", reading.MacdHistogram);
                 SetProperty(message, "EmaAlignment", reading.EmaAlignment);
                 SetProperty(message, "RegimeWeight", reading.RegimeWeight);
                 SetProperty(message, "OscillatorCompositeScore", reading.OscillatorCompositeScore);
@@ -2680,6 +2741,10 @@ namespace NinjaTrader.NinjaScript.Indicators
             public double Rsi;
             public double StochK;
             public double ZScore;
+            public double? DiPlus;
+            public double? DiMinus;
+            public double? Cci;
+            public double? MacdHistogram;
             public double EmaAlignment;
             public double RegimeWeight;
             public double OscillatorCompositeScore;

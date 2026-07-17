@@ -14,12 +14,7 @@ namespace Glitch.Services
     {
         public static string GetInstrumentRoot(Instrument instrument)
         {
-            if (instrument == null)
-                return string.Empty;
-
-            return instrument.MasterInstrument?.Name ??
-                   instrument.FullName ??
-                   string.Empty;
+            return GlitchInstrumentMetadataService.GetInstrumentRoot(instrument);
         }
 
         public static int GetNetQuantityForInstrumentRoot(Account account, string instrumentRoot)
@@ -30,7 +25,7 @@ namespace Glitch.Services
             int netQuantity = 0;
             try
             {
-                foreach (Position position in account.Positions)
+                foreach (Position position in SnapshotPositions(account))
                 {
                     if (position == null || position.Instrument == null)
                         continue;
@@ -54,14 +49,14 @@ namespace Glitch.Services
 
             try
             {
-                Position position = account.Positions.FirstOrDefault(p =>
+                Position position = SnapshotPositions(account).FirstOrDefault(p =>
                     p != null &&
                     p.Instrument != null &&
                     string.Equals(GetInstrumentRoot(p.Instrument), instrumentRoot, StringComparison.OrdinalIgnoreCase));
                 if (position?.Instrument != null)
                     return position.Instrument;
 
-                Order order = account.Orders.FirstOrDefault(o =>
+                Order order = SnapshotOrders(account).FirstOrDefault(o =>
                     o != null &&
                     o.Instrument != null &&
                     IsWorkingOrderState(o.OrderState) &&
@@ -82,12 +77,12 @@ namespace Glitch.Services
 
             try
             {
-                var positionInstruments = account.Positions
+                var positionInstruments = SnapshotPositions(account)
                     .Where(position => position != null && position.Instrument != null && position.MarketPosition != MarketPosition.Flat)
                     .Select(position => position.Instrument)
                     .ToList();
 
-                var workingOrderInstruments = account.Orders
+                var workingOrderInstruments = SnapshotOrders(account)
                     .Where(order => order != null && order.Instrument != null && IsWorkingOrderState(order.OrderState))
                     .Select(order => order.Instrument)
                     .ToList();
@@ -128,7 +123,7 @@ namespace Glitch.Services
 
             try
             {
-                return !account.Positions.Any(position => position != null && position.MarketPosition != MarketPosition.Flat);
+                return !SnapshotPositions(account).Any(position => position != null && position.MarketPosition != MarketPosition.Flat);
             }
             catch
             {
@@ -143,11 +138,11 @@ namespace Glitch.Services
 
             try
             {
-                return account.Orders.Any(order => order != null && IsWorkingOrderState(order.OrderState));
+                return SnapshotOrders(account).Any(order => order != null && IsWorkingOrderState(order.OrderState));
             }
             catch
             {
-                return false;
+                return true;
             }
         }
 
@@ -211,7 +206,7 @@ namespace Glitch.Services
 
             try
             {
-                foreach (Position position in account.Positions)
+                foreach (Position position in SnapshotPositions(account))
                 {
                     if (position == null || position.Instrument == null || position.MarketPosition == MarketPosition.Flat)
                         continue;
@@ -225,22 +220,20 @@ namespace Glitch.Services
             {
             }
         }
-
-        public static bool TryResolveCatchUpOrder(int signedQty, int delta, out OrderAction action, out int quantity)
+        private static Position[] SnapshotPositions(Account account)
         {
-            action = OrderAction.Buy;
-            quantity = Math.Abs(delta);
-            if (quantity < 1)
-                return false;
+            if (account?.Positions == null)
+                return Array.Empty<Position>();
+            lock (account.Positions)
+                return account.Positions.ToArray();
+        }
 
-            if (delta > 0)
-            {
-                action = signedQty < 0 ? OrderAction.BuyToCover : OrderAction.Buy;
-                return true;
-            }
-
-            action = signedQty > 0 ? OrderAction.Sell : OrderAction.SellShort;
-            return true;
+        private static Order[] SnapshotOrders(Account account)
+        {
+            if (account?.Orders == null)
+                return Array.Empty<Order>();
+            lock (account.Orders)
+                return account.Orders.ToArray();
         }
 
         private static int GetSignedQuantity(Position position)
