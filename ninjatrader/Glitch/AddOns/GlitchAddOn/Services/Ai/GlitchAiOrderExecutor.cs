@@ -6,28 +6,6 @@ using NinjaTrader.Cbi;
 
 namespace Glitch.Services
 {
-    internal sealed class GlitchReplicationProtectionLeg
-    {
-        public int MasterQuantity { get; set; }
-        public double StopDistance { get; set; }
-        public double TargetDistance { get; set; }
-        public bool UseAbsolutePrices { get; set; }
-        public double AbsoluteStopPrice { get; set; }
-        public double AbsoluteTargetPrice { get; set; }
-    }
-
-    internal sealed class GlitchReplicationProtectionPlan
-    {
-        public string IntentId { get; set; }
-        public string GroupId { get; set; }
-        public string Correlation { get; set; }
-        public bool IsLong { get; set; }
-        public List<GlitchReplicationProtectionLeg> Legs { get; set; } = new List<GlitchReplicationProtectionLeg>();
-        public double TickSize { get; set; }
-        public double PointValue { get; set; }
-        public double MaxRiskPerContractUsd { get; set; }
-    }
-
     internal static class GlitchAiOrderExecutor
     {
         public const string SignalEntry = "GLT-AI-E";
@@ -42,6 +20,7 @@ namespace Glitch.Services
 
         public static Func<Func<GlitchAiExecutionResult>, GlitchAiExecutionResult> UiInvoke;
         public static Action<string, string, string> RaiseCritical;
+        public static Func<Account, Instrument, OrderAction, int, string> GetReplicationEntryDenialReason;
 
         public static GlitchAiExecutionResult TryExecuteApprovedIntent(string rawJson, DateTime nowUtc)
         {
@@ -115,15 +94,23 @@ namespace Glitch.Services
                 && order.Filled > 0
                 && order.OrderState != OrderState.Filled)
             {
+                // A multi-contract market entry can fill in several native
+                // executions. Aggregate while the entry remains working and build
+                // the structural bracket once the terminal Filled state arrives.
+                // A terminal incomplete entry cannot use the full requested plan
+                // and therefore takes the existing one-shot recovery path.
+                if (GlitchReplicationEngine.IsWorkingOrderState(order.OrderState))
+                    return;
+
                 GlitchAiExecutionJournalWriter.TryAppend(
                     group.IntentId,
                     GlitchAiExecutionResult.Failed(
-                        "group_partial_entry_fill_recovery",
+                        "group_terminal_partial_entry_fill_recovery",
                         "account=" + CleanToken(account.Name)
                             + "|filled=" + order.Filled.ToString(CultureInfo.InvariantCulture)
                             + "|quantity=" + order.Quantity.ToString(CultureInfo.InvariantCulture)),
                     DateTime.UtcNow);
-                RecoverGroup(group, "partial_entry_fill_" + account.Name);
+                RecoverGroup(group, "terminal_partial_entry_fill_" + account.Name);
                 return;
             }
 
@@ -167,50 +154,6 @@ namespace Glitch.Services
                 if (accountIndex >= 0)
                     TryRecoverLateFill(group, accountIndex, "account_state_update_" + account.Name);
                 TryCompleteGroup(group);
-            }
-        }
-
-        public static bool TryGetReplicationProtection(
-            Account masterAccount,
-            Instrument instrument,
-            string entrySignal,
-            out GlitchReplicationProtectionPlan plan)
-        {
-            plan = null;
-            if (masterAccount == null || instrument == null || string.IsNullOrWhiteSpace(entrySignal))
-                return false;
-
-            lock (GroupSync)
-            {
-                if (!GroupsBySignal.TryGetValue(entrySignal.Trim(), out ExecutionGroupContext group)
-                    || group == null
-                    || group.RecoveryStarted
-                    || group.Accounts.Count != 1
-                    || group.Accounts[0] == null
-                    || !string.Equals(
-                        group.Accounts[0].Name,
-                        masterAccount.Name,
-                        StringComparison.OrdinalIgnoreCase)
-                    || !SameInstrument(group.Instrument, instrument))
-                    return false;
-
-                plan = new GlitchReplicationProtectionPlan
-                {
-                    IntentId = group.IntentId,
-                    GroupId = group.GroupId,
-                    Correlation = group.Correlation,
-                    IsLong = group.IsLong,
-                    Legs = group.ProtectionLegs.Select(leg => new GlitchReplicationProtectionLeg
-                    {
-                        MasterQuantity = leg.Quantity,
-                        StopDistance = leg.StopDistance,
-                        TargetDistance = leg.TargetDistance
-                    }).ToList(),
-                    TickSize = group.TickSize,
-                    PointValue = group.PointValue,
-                    MaxRiskPerContractUsd = group.MaxLossPerMasterContractUsd
-                };
-                return true;
             }
         }
 
@@ -303,50 +246,23 @@ namespace Glitch.Services
             }
 
             GlitchStateStore.AccountGroupRecord selected = matching[0];
-            var configuredMembers = new List<ConfiguredGroupMember>
+            string name = selected.MasterAccount.Trim();
+            if (!policy.AccountAllowlist.Contains(name))
             {
-                new ConfiguredGroupMember { AccountName = selected.MasterAccount.Trim(), Ratio = 1d }
-            };
-            if (selected.Members != null)
-            {
-                configuredMembers.AddRange(selected.Members
-                    .Where(member => member != null && member.IsEnabled && !string.IsNullOrWhiteSpace(member.FollowerAccount))
-                    .Select(member => new ConfiguredGroupMember
-                    {
-                        AccountName = member.FollowerAccount.Trim(),
-                        Ratio = member.Ratio
-                    }));
-            }
-
-            if (configuredMembers.Select(member => member.AccountName).Distinct(StringComparer.OrdinalIgnoreCase).Count() != configuredMembers.Count)
-            {
-                failure = "executor_group_duplicate_account";
+                failure = "unallowlisted_master_" + name;
                 return false;
             }
 
-            foreach (ConfiguredGroupMember configured in configuredMembers)
+            Account account = FindAccount(name);
+            if (account == null)
             {
-                string name = configured.AccountName;
-                if (double.IsNaN(configured.Ratio) || double.IsInfinity(configured.Ratio) || configured.Ratio <= 0)
-                {
-                    failure = "invalid_group_ratio_" + name;
-                    return false;
-                }
-                if (!policy.AccountAllowlist.Contains(name))
-                {
-                    failure = "unallowlisted_group_member_" + name;
-                    return false;
-                }
-
-                Account account = FindAccount(name);
-                if (account == null)
-                {
-                    failure = "group_account_not_found_" + name;
-                    return false;
-                }
-
-                members.Add(new ExecutionGroupMember { Account = account, Ratio = configured.Ratio });
+                failure = "master_account_not_found_" + name;
+                return false;
             }
+
+            // AI owns one account: the configured group master. The replication
+            // engine independently owns follower discovery, ratios and protection.
+            members.Add(new ExecutionGroupMember { Account = account });
 
             groupId = selected.GroupId;
             return true;
@@ -466,23 +382,7 @@ namespace Glitch.Services
                     return GlitchAiExecutionResult.Failed("master_quantity_split_invalid");
             }
 
-            foreach (ExecutionGroupMember member in members)
-            {
-                double scaledQuantity = masterQuantity * member.Ratio;
-                int quantity = (int)Math.Round(scaledQuantity, MidpointRounding.AwayFromZero);
-                if (quantity < 1 || Math.Abs(scaledQuantity - quantity) > 0.0000001d)
-                    return GlitchAiExecutionResult.Failed("group_ratio_quantity_not_integer", member.Account.Name);
-                if (hasSecondTarget)
-                {
-                    double scaledTp1 = quantityTp1 * member.Ratio;
-                    double scaledTp2 = (masterQuantity - quantityTp1) * member.Ratio;
-                    if (scaledTp1 < 1 || scaledTp2 < 1
-                        || Math.Abs(scaledTp1 - Math.Round(scaledTp1, MidpointRounding.AwayFromZero)) > 0.0000001d
-                        || Math.Abs(scaledTp2 - Math.Round(scaledTp2, MidpointRounding.AwayFromZero)) > 0.0000001d)
-                        return GlitchAiExecutionResult.Failed("group_ratio_leg_quantity_not_integer", member.Account.Name);
-                }
-                member.Quantity = quantity;
-            }
+            members[0].Quantity = masterQuantity;
 
             int masterCurrentNet = GetNetPosition(members[0].Account, instrument);
             int requestedDirection = isLong ? 1 : -1;
@@ -507,51 +407,43 @@ namespace Glitch.Services
                     "max_loss_per_trade_exceeded_at_execution",
                     masterLiveRisk.ToString("F2", CultureInfo.InvariantCulture));
             }
-            double groupRisk = members.Sum(member => perContractRisk * member.Quantity);
-            if (policy.MaxGroupLossPerTradeUsd > 0 && groupRisk > policy.MaxGroupLossPerTradeUsd)
-            {
-                return GlitchAiExecutionResult.Failed(
-                    "max_group_loss_per_trade_exceeded",
-                    groupRisk.ToString("F2", CultureInfo.InvariantCulture));
-            }
+            Account masterAccount = members[0].Account;
+            if (masterCurrentNet != 0 && !HasCompleteAiProtection(masterAccount, instrument, out _))
+                return GlitchAiExecutionResult.Failed("existing_master_position_not_fully_ai_protected", masterAccount.Name);
+            if (HasWorkingNonProtectionOrder(masterAccount, instrument))
+                return GlitchAiExecutionResult.Failed("master_order_in_flight_or_not_ai_owned", masterAccount.Name);
 
-            foreach (ExecutionGroupMember member in members)
-            {
-                Account account = member.Account;
-                double expectedCurrentValue = masterCurrentNet * member.Ratio;
-                int expectedCurrent = (int)Math.Round(expectedCurrentValue, MidpointRounding.AwayFromZero);
-                if (Math.Abs(expectedCurrentValue - expectedCurrent) > 0.0000001d
-                    || GetNetPosition(account, instrument) != expectedCurrent)
-                    return GlitchAiExecutionResult.Failed("group_position_not_aligned", account.Name);
-                if (expectedCurrent != 0 && !HasCompleteAiProtection(account, instrument, out _))
-                    return GlitchAiExecutionResult.Failed("existing_position_not_fully_ai_protected", account.Name);
-                if (HasWorkingNonProtectionOrder(account, instrument))
-                    return GlitchAiExecutionResult.Failed("group_order_in_flight_or_not_ai_owned", account.Name);
-                bool riskLocked;
-                bool evalTargetLocked;
-                double realizedToday;
-                string portfolioFailure;
-                if (!GlitchAiPortfolioSnapshotReader.TryGetFreshRiskState(
-                    account.Name,
-                    DateTime.UtcNow,
-                    policy.SnapshotMaxAgeSeconds,
-                    out riskLocked,
-                    out evalTargetLocked,
-                    out realizedToday,
-                    out portfolioFailure))
-                    return GlitchAiExecutionResult.Failed("group_portfolio_snapshot_invalid", portfolioFailure);
-                if (riskLocked)
-                    return GlitchAiExecutionResult.Failed("group_account_risk_locked", account.Name);
-                if (evalTargetLocked)
-                    return GlitchAiExecutionResult.Failed("group_account_eval_target_locked", account.Name);
+            bool riskLocked;
+            bool evalTargetLocked;
+            double realizedToday;
+            string portfolioFailure;
+            if (!GlitchAiPortfolioSnapshotReader.TryGetFreshRiskState(
+                masterAccount.Name,
+                DateTime.UtcNow,
+                policy.SnapshotMaxAgeSeconds,
+                out riskLocked,
+                out evalTargetLocked,
+                out realizedToday,
+                out portfolioFailure))
+                return GlitchAiExecutionResult.Failed("master_portfolio_snapshot_invalid", portfolioFailure);
+            if (riskLocked)
+                return GlitchAiExecutionResult.Failed("master_account_risk_locked", masterAccount.Name);
+            if (evalTargetLocked)
+                return GlitchAiExecutionResult.Failed("master_account_eval_target_locked", masterAccount.Name);
 
-                double lossToday = realizedToday < 0 ? -realizedToday : 0;
-                double accountRisk = perContractRisk * member.Quantity;
-                if (policy.MaxDailyLossUsd > 0 && lossToday + accountRisk > policy.MaxDailyLossUsd)
-                    return GlitchAiExecutionResult.Failed("group_account_daily_loss_exceeded", account.Name);
-            }
+            double lossToday = realizedToday < 0 ? -realizedToday : 0;
+            if (policy.MaxDailyLossUsd > 0 && lossToday + masterLiveRisk > policy.MaxDailyLossUsd)
+                return GlitchAiExecutionResult.Failed("master_account_daily_loss_exceeded", masterAccount.Name);
 
             OrderAction entryAction = isLong ? OrderAction.Buy : OrderAction.SellShort;
+            string replicationDenial = GetReplicationEntryDenialReason?.Invoke(
+                masterAccount,
+                instrument,
+                entryAction,
+                masterQuantity);
+            if (!string.IsNullOrWhiteSpace(replicationDenial))
+                return GlitchAiExecutionResult.Failed("replication_entry_blocked", replicationDenial);
+
             string correlation = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture).Substring(0, 10);
             ExecutionGroupMember masterMember = members[0];
             var protectionLegs = new List<StructuralProtectionLeg>
@@ -634,9 +526,9 @@ namespace Glitch.Services
                     + "|contract=" + CleanToken(instrument.FullName)
                     + "|master=" + CleanToken(masterMember.Account.Name)
                     + "|master_quantity=" + masterMember.Quantity.ToString(CultureInfo.InvariantCulture)
-                    + "|expected_accounts=" + string.Join(",", members.Select(member => CleanToken(member.Account.Name)))
+                    + "|followers=replication_engine"
                     + "|replication_owner=GlitchCopyEngine"
-                    + "|group_risk=" + groupRisk.ToString("F2", CultureInfo.InvariantCulture)
+                    + "|master_risk=" + masterLiveRisk.ToString("F2", CultureInfo.InvariantCulture)
                     + "|snapshot_price=" + snapshotMarketPrice.ToString(CultureInfo.InvariantCulture)
                     + "|live_price=" + liveExecutionPrice.ToString(CultureInfo.InvariantCulture)
                     + "|stop_price=" + stopLoss.ToString(CultureInfo.InvariantCulture)
@@ -873,23 +765,13 @@ namespace Glitch.Services
             if ((isLong && stopPrice >= livePrice) || (!isLong && stopPrice <= livePrice))
                 return GlitchAiExecutionResult.Failed("move_stop_market_side_invalid");
 
-            var changes = new List<Tuple<Account, Order>>();
-            foreach (ExecutionGroupMember member in members)
-            {
-                double expectedValue = masterNet * member.Ratio;
-                int expectedNet = (int)Math.Round(expectedValue, MidpointRounding.AwayFromZero);
-                if (Math.Abs(expectedValue - expectedNet) > 0.0000001d
-                    || GetNetPosition(member.Account, instrument) != expectedNet)
-                    return GlitchAiExecutionResult.Failed("move_stop_group_position_not_aligned", member.Account.Name);
-                if (!HasCompleteAiProtection(member.Account, instrument, out List<Order> stops))
-                    return GlitchAiExecutionResult.Failed("move_stop_protection_incomplete", member.Account.Name);
-                foreach (Order stop in stops)
-                {
-                    bool tightens = isLong ? stopPrice > stop.StopPrice : stopPrice < stop.StopPrice;
-                    if (tightens)
-                        changes.Add(Tuple.Create(member.Account, stop));
-                }
-            }
+            Account masterAccount = members[0].Account;
+            if (!HasCompleteAiProtection(masterAccount, instrument, out List<Order> masterStops))
+                return GlitchAiExecutionResult.Failed("move_stop_protection_incomplete", masterAccount.Name);
+            var changes = masterStops
+                .Where(stop => isLong ? stopPrice > stop.StopPrice : stopPrice < stop.StopPrice)
+                .Select(stop => Tuple.Create(masterAccount, stop))
+                .ToList();
 
             var failures = new List<string>();
             foreach (IGrouping<Account, Tuple<Account, Order>> accountChanges in changes.GroupBy(item => item.Item1))
@@ -912,7 +794,8 @@ namespace Glitch.Services
                 changes.Count == 0 ? "move_stop_already_tighter" : "move_stop_submitted",
                 "group=" + CleanToken(groupId)
                     + "|stop_price=" + stopPrice.ToString(CultureInfo.InvariantCulture)
-                    + "|orders=" + changes.Count.ToString(CultureInfo.InvariantCulture));
+                    + "|master_orders=" + changes.Count.ToString(CultureInfo.InvariantCulture)
+                    + "|followers=replication_engine");
         }
 
         private static List<ExecutionGroupContext> RecoverOwnedGroupsFromLiveOrders(
@@ -1728,16 +1611,9 @@ namespace Glitch.Services
             public double TargetDistance { get; set; }
         }
 
-        private sealed class ConfiguredGroupMember
-        {
-            public string AccountName { get; set; }
-            public double Ratio { get; set; }
-        }
-
         private sealed class ExecutionGroupMember
         {
             public Account Account { get; set; }
-            public double Ratio { get; set; }
             public int Quantity { get; set; }
         }
     }

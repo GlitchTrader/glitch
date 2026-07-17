@@ -42,7 +42,7 @@ Deterministic slash commands are handled directly by the plugin, without an LLM 
 /glitch_status   show Glitch mode, job state, and replication state
 ```
 
-Commands use the existing bearer token and the localhost Glitch control endpoint on `127.0.0.1:8789`. Command IDs are idempotent. The Glitch header shows `Hermes: OFF` or `Hermes: ON / Paper`; replication and flatten continue to use the existing Glitch UI/state paths. ON/OFF is the only paper activation switch: `/trade_mode paper` starts the gateway hidden when needed, then reconciles the scheduler and Glitch gate. It needs neither a gateway-service install nor a separate executor-arm ritual. Live remains uninstalled and requires explicit human authorization.
+Commands use the existing bearer token and the localhost Glitch control endpoint on `127.0.0.1:8789`. Command IDs are idempotent. The Glitch header shows the product-facing `AI Auto` state; replication and flatten continue to use the existing Glitch UI/state paths. ON/OFF is the only activation switch. Paper and live are execution-policy modes, not extra arm rituals; live still requires explicit human authorization.
 
 Bias commands write one expiring advisory to the Hermes-owned exchange. The direct trading worker consumes it on the next valid packet, records it in the prompt, and marks it consumed after producing a validated batch. Biases never bypass Glitch risk, bracket, account, or execution validation; they are not persistent memory and older directives cannot affect later cycles.
 
@@ -81,6 +81,7 @@ manually; filesystem cleanup is not an account-balance reset.
 ## Legacy development harnesses
 
 The scripts below remain offline/debugging fixtures; they are not the production scheduler. **Glitch window must be open for runtime fixtures.**
+Their historical one-contract/four-book/opportunity-gate assumptions are not active Glitch policy and do not define current correctness. The active direct worker, schema, executor, and focused tests use dynamic Glitch-supplied capacity and probabilistic decisions.
 
 | Script | What it does |
 |--------|--------------|

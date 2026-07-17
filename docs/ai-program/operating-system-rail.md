@@ -206,7 +206,7 @@ Advance when the step’s **acceptance** is met. Skip nothing in §4.5 safety. L
 
 | Step | Label | Work | Acceptance |
 |------|-------|------|------------|
-| **R12** | v23 | `GlitchAiOrderExecutor` Sim101 group — bracket-mandatory, `GlitchAI*` signals | GL-042: Sim101 only; every enabled Sim102/103 follower receives its own native bracket; partial group failure cancels/flattens safely |
+| **R12** | v23 | Master-only `GlitchAiOrderExecutor` plus producer-neutral replication | GL-042: AI submits one protected master order; CopyEngine independently creates ratio-scaled, follower-native OCO protection |
 | **R13** | v23 | Replay harness — archetypes vs baseline on Eval risk profile | ≥1 archetype beats baseline on replay evidence |
 
 **Gate:** R08–R11 clean (zero firewall bypasses, zero schema drift rejects) — **session count, not weeks**.
@@ -301,7 +301,7 @@ The central VPS uses a supervised persistent Hermes gateway. Hermes native cron 
 
 ## 8. Active pointer
 
-**Current stabilization pointer:** source implementation through `d7975fb` includes the direct persistent Hermes bridge, Glitch AI Feed, master-only execution, follower-native protection/terminal close repairs, truthful portfolio capture, Journal orphan/reversal fixes, native self-learning overlays, and optional two-leg scale-out. Close the remaining runtime evidence for GL-047 through GL-049b, GL-053, GL-055, and temporal compliance GL-063. Preserve the master-only intent -> Glitch replication -> account-local bracket path.
+**Current stabilization pointer:** `cleanup/main-core` and `cleanup/ai-core` consolidate one producer-neutral replication/protection core. AI submits and manages only a configured master; replication owns followers, ratios, follower-native OCO protection, and explicit resync. Source checks are green; F5 and bounded Sim evidence remain open. Preserve the master-only intent -> Glitch replication -> account-local bracket path.
 
 **Evidence pointer:** GL-064 owns versioned paper performance/regime calibration after Journal and outcome truth are green. A profitable-looking directional slice is evidence to analyze, not a license to encode a deterministic strategy or declare profitability.
 

@@ -26,6 +26,8 @@ namespace Glitch.UI
                 GlitchAiOrderExecutor.UiInvoke = InvokeOnUiThread;
                 GlitchAiOrderExecutor.RaiseCritical = (account, message, key) =>
                     RaiseCriticalWarning(account, message, key, unlocksTrading: false);
+                GlitchAiOrderExecutor.GetReplicationEntryDenialReason =
+                    GetAiEntryDenialReason;
                 AppendJournal(
                     "System",
                     "Intent",
@@ -56,6 +58,40 @@ namespace Glitch.UI
             GlitchRailSelfCheckWriter.TryWrite(System.DateTime.UtcNow);
         }
 
+        private string GetAiEntryDenialReason(
+            NinjaTrader.Cbi.Account account,
+            NinjaTrader.Cbi.Instrument instrument,
+            NinjaTrader.Cbi.OrderAction action,
+            int quantity)
+        {
+            AccountGridRow row = FindAccountRowByName(account?.Name);
+            if (row != null
+                && !string.IsNullOrWhiteSpace(row.PropFirmId)
+                && _firmRules.TryGetValue(row.PropFirmId, out FirmRuleMetadata firmRule)
+                && firmRule?.DirectionalTradingOnly == true)
+            {
+                int requestedDirection = action == NinjaTrader.Cbi.OrderAction.Buy ? 1 : -1;
+                string root = GlitchReplicationEngine.GetInstrumentRoot(instrument);
+                foreach (AccountGridRow candidateRow in _accountRows)
+                {
+                    if (candidateRow == null
+                        || !string.Equals(candidateRow.PropFirmId, row.PropFirmId, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    NinjaTrader.Cbi.Account candidate = TryFindConnectedAccountByName(candidateRow.DisplayName);
+                    int openQuantity = GlitchReplicationEngine.GetNetQuantityForInstrumentRoot(candidate, root);
+                    if (openQuantity != 0 && Math.Sign(openQuantity) != requestedDirection)
+                    {
+                        return "firm_direction_conflict|firm=" + row.PropFirmId
+                            + "|account=" + candidateRow.DisplayName
+                            + "|instrument=" + root;
+                    }
+                }
+            }
+
+            return _copyEngine?.GetEntryDenialReason(account, instrument, action, quantity);
+        }
+
         private void StopRailInfrastructure()
         {
             GlitchExternalTelemetryServer.TryStop();
@@ -67,6 +103,7 @@ namespace Glitch.UI
             GlitchHermesControlServer.TradingModeChanged = null;
             GlitchAiOrderExecutor.UiInvoke = null;
             GlitchAiOrderExecutor.RaiseCritical = null;
+            GlitchAiOrderExecutor.GetReplicationEntryDenialReason = null;
             GlitchRailSelfCheckWriter.TryWrite(System.DateTime.UtcNow);
         }
 

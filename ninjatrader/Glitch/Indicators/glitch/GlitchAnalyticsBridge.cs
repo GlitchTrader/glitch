@@ -29,7 +29,6 @@ using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Windows.Media;
 using NinjaTrader.Cbi;
-using NinjaTrader.Cbi;
 using NinjaTrader.Data;
 using NinjaTrader.NinjaScript;
 using NinjaTrader.NinjaScript.Indicators;

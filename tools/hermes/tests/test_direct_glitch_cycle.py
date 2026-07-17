@@ -432,7 +432,7 @@ class DirectCycleTests(unittest.TestCase):
         old["window_close_utc"] = "2000-01-01T00:00:00Z"
         self.assertFalse(MODULE.packet_is_current(old))
 
-    def test_runtime_off_or_non_paper_spends_no_model_call(self):
+    def test_runtime_accepts_paper_and_live_but_not_off_or_unsupported_modes(self):
         with tempfile.TemporaryDirectory() as root:
             glitch_data = Path(root)
             (glitch_data / "hermes").mkdir(parents=True)

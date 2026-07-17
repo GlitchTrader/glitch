@@ -2,6 +2,8 @@
 
 Lane: LANE-4 (external-truth). Research only, no code changes. Every claim below is cited with a source URL. Anything I could not confirm from an authoritative or corroborated source is marked **UNVERIFIED**.
 
+> Historical research only. Per product-owner decision on 2026-07-17, firm automation-policy eligibility is not a Glitch execution gate. This document must not be used to invent or restore one.
+
 ---
 
 ## Red Flags (read this first)

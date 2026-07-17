@@ -1,5 +1,5 @@
 //
-// GlitchInstrumentMetadataService — point value, tick size, session from NT MasterInstrument (R01 / GL-025).
+// Canonical point value, tick size and session metadata from NinjaTrader.
 //
 
 using System;
@@ -166,6 +166,11 @@ namespace Glitch.Services
 
             lock (Sync)
                 TradeInstruments[root] = instrument;
+
+            // A previous root-only lookup may have cached "unknown" before the
+            // dated contract existed. Registration is stronger live evidence and
+            // must replace that negative cache entry.
+            CacheMetadata(BuildFromInstrument(root, instrument));
         }
 
         private static bool IsConcreteTradeInstrument(Instrument instrument, string root)
@@ -270,8 +275,8 @@ namespace Glitch.Services
 
             lock (Sync)
             {
-                if (Cache.TryGetValue(root, out metadata))
-                    return metadata.IsResolved;
+                if (Cache.TryGetValue(root, out metadata) && metadata.IsResolved)
+                    return true;
             }
 
             Instrument instrument = TryGetInstrument(candidate, "GetInstrument");

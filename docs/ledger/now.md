@@ -4,7 +4,7 @@
 
 **Branch:** `glitch/ai-rail`
 
-**Source baseline:** `e964cd9` (`document AI rail session handoff`) plus the current docs-only closeout
+**Source baseline:** `f82e1f5` plus the uncommitted `cleanup/ai-core` consolidation; the historical dirty checkout remains untouched
 
 **Main baseline:** `main` / `origin/main` at `d216015`
 
@@ -33,6 +33,12 @@ contract-validation harness.
 
 ## What landed in this session
 
+- Clean shared-core consolidation: `cleanup/main-core` and `cleanup/ai-core` use the same producer-neutral CopyEngine and native follower-protection implementation. AI submits/manages only the group master; no AI type or policy is present in the replication core.
+- Replication is event-driven and single-submit: no legacy poll switch, blind retry, startup catch-up, broad `GLT-*` ownership, hidden quarantine, or Replicate-OFF protection cancellation. Replicate state reflects the effective engine, and Flatten All has one native submission path with unresolved accounts reported as incomplete.
+- Follower protection handles synchronous and asynchronous rejection with one native flatten and no retry. Multi-leg stop identity is per native master OCO, so one source-leg move cannot rewrite every follower leg.
+- Shared Journal, point-value, Analytics, and scope corrections are now present on the clean main branch rather than remaining an AI-only handoff.
+- The active AI test suite no longer includes retired one-shot/four-book/opportunity-gate tests or their one-contract assumptions.
+
 - Direct Glitch <-> Hermes exchange with five one-minute frames, sealed five-minute packets, stable IDs, named `chat`/`trading` sessions, hidden supervised gateway tooling, and no Codex runtime dependency.
 - One native Hermes `glitch` profile with native memory/session capabilities preserved; Glitch-specific observe, risk, thesis, intent, outcome, self-learning, self-heal, ledger, and escalation overlays added.
 - Minimal proactive prompt correction: probabilistic bull/bear/flat/adversarial review; no archetype whitelist, daily trade quota, deterministic cooldown, or forced abstention from ordinary uncertainty. Runtime packet strips stale `max_trades_per_day` state.
@@ -47,7 +53,7 @@ contract-validation harness.
 
 ## Evidence and current limits
 
-- Current direct-rail/source-contract suite: 79/79 passed. The complete 84-file AddOn was deployed during the session and the operator reported a green NinjaTrader F5 compile after the final reset. This docs closeout does not redeploy, restart, poll, arm, or inspect market/runtime state.
+- The previously deployed AI baseline compiled and produced bounded Sim evidence, but the clean consolidation described above is not deployed yet. Its current evidence is source/tests only; NinjaTrader F5 and bounded Sim lifecycle acceptance are mandatory before either clean branch is merged.
 - The current paper harness is configured with Sim101 as master and Sim102/Sim103 as configured followers. The portfolio packet derives valid master quantities from each enabled account's current rule ceiling, open exposure, and ratio; it does not impose a separate AI-only contract cap. The latest verified flat Sim snapshots report simulated Apex Legacy Eval context and a 27-contract account ceiling.
 - The post-audit acceptance covered three independent protected master legs with matching follower protection and a separate 1:2:3 ratio run in which one Sim101 contract produced two Sim102 and three Sim103 contracts; native exits returned all three accounts flat and order-free. This validates the local group/bracket path, not profitability or live promotion.
 - The first usable paper sample was promising but not proof: NinjaTrader's full-day screenshot showed `+$401.50` across 71 trades (42.25% wins, profit factor 1.30, $350 max drawdown), while a later 08:00-scoped report showed `+$291.50` across 66 trades. Directional shorts worked better; chop gave back gains. The contemporaneous Glitch Journal showed 44 trades and `-$1,374.50`, which led to GL-055. Treat the different scopes and corrupted Journal as a diagnostic sample only.
@@ -67,16 +73,17 @@ contract-validation harness.
 8. Prompt tuning is high leverage and high risk. Change minimally, freeze versions during evaluation, and measure by regime; trend success does not justify choppy overtrading.
 9. Paper mode relaxes discovery posture, not accounting, replication, protection, truth, or prop-rule semantics.
 10. Codex completes bounded builder work and lets go. No minute/five-minute Codex loops, no visible PowerShell polling, and no model-heavy idle checks.
+11. Do not invent policy. Automation eligibility is not a Glitch execution gate; only explicit product requirements and intentionally enforced account rules belong in the compliance path.
 
 ## Next bounded work
 
 Use the ordered backlog, not this list as a queue:
 
-1. Close fresh runtime evidence for GL-047 through GL-050 and GL-055/GL-065, especially learning retrieval and reload/manual-action ownership.
-2. Implement and prove GL-063 temporal/prop-rule compliance from current official rule sources; exits always remain available.
-3. Run GL-064 versioned one-instrument paper calibration before declaring profitability or centralizing.
-4. Finish GL-051/052 central VPS/API work, then GL-054 multi-instrument expansion.
-5. Mainline work starts at GL-055 and follows the ordered backlog; never merge the AI rail wholesale.
+1. Review and F5-compile `cleanup/main-core`; then run the shared protected 1:1 and 1:2:3 Sim fixtures, reload proof, manual-control proof, and disconnected Flatten All proof.
+2. Reconcile `cleanup/ai-core` onto the proven shared core, F5-compile it, and run only the AI-specific master-entry/management fixtures.
+3. Close fresh runtime evidence for GL-047 through GL-050 and GL-055/GL-065, especially learning retrieval and Journal/NT reconciliation.
+4. Implement and prove GL-063 time-policy truth without adding unrelated eligibility gates; exits always remain available.
+5. Run GL-064 versioned one-instrument paper calibration before declaring profitability or centralizing, then continue GL-051/052 and GL-054.
 
 `R14` remains a separate named-commit, current-rule, and explicit operator gate
 for any non-simulation AI promotion.

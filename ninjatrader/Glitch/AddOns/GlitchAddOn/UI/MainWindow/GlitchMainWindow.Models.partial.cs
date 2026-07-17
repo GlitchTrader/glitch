@@ -303,6 +303,7 @@ namespace Glitch.UI
             public string FirmId { get; set; }
             public string UiDisplayName { get; set; }
             public string Status { get; set; }
+            public bool? DirectionalTradingOnly { get; set; }
             public string DrawdownType { get; set; }
             public string MaxLossTracking { get; set; }
             public string MaxLossThresholdUpdate { get; set; }

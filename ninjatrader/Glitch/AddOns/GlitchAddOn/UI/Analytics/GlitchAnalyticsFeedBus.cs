@@ -815,6 +815,7 @@ namespace Glitch.UI
 
             GlitchIndicatorReading clone = reading.Clone();
             clone.InstrumentRoot = normalizedRoot;
+            clone.InstrumentFullName = ClampText(clone.InstrumentFullName, 96);
             DateTime incomingUtc = NormalizeUtcTimestamp(reading.UtcTime, DateTime.MinValue);
             if (incomingUtc == default || incomingUtc > DateTime.UtcNow.AddMinutes(5))
                 clone.UtcTime = DateTime.UtcNow;
@@ -828,6 +829,12 @@ namespace Glitch.UI
             clone.OrderFlowHint = ClampText(clone.OrderFlowHint, 128);
             clone.SessionName = ClampText(clone.SessionName, 32);
 
+            clone.Open = NormalizePositiveFinite(clone.Open);
+            clone.High = NormalizePositiveFinite(clone.High);
+            clone.Low = NormalizePositiveFinite(clone.Low);
+            clone.Volume = NormalizeFinite(clone.Volume);
+            if (clone.Volume.HasValue && clone.Volume.Value < 0)
+                clone.Volume = null;
             clone.CurrentPrice = NormalizePositiveFinite(clone.CurrentPrice);
             clone.AveragePrice = NormalizePositiveFinite(clone.AveragePrice);
             clone.Atr = NormalizePositiveFinite(clone.Atr);

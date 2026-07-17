@@ -2,6 +2,17 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-17 - main/AI shared-core consolidation (builder-only, not deployed)
+
+- Built from clean worktrees at `main=d216015` and `glitch/ai-rail=f82e1f5`; the historical dirty AI checkout was not edited or treated as a merge source.
+- Replaced AI-coupled follower logic with one producer-neutral replication/protection core shared by both branches. AI submits and manages only the configured group master; replication independently owns follower discovery, ratios, entries, native OCO protection, explicit resync, and terminal close handling.
+- Removed the legacy replication switch, broad `GLT-*` ownership, blind submission retries, Replicate-OFF order cancellation, startup catch-up, duplicate flatten submission, hidden follower quarantine, and follower mutation from the AI executor.
+- Fixed route self-copy, cross-zero close/reconcile, truthful Replicate state, unresolved-account Flatten All truth, follower protection commit ordering, Journal orphan exits/reversal commission, canonical point-value handling, Journal scope labels, and rich Analytics identity/freshness fields.
+- Closed three final source defects found during bounded review: asynchronously rejected follower protection now fails closed once without retry; multi-leg stop mirroring uses each native source OCO rather than the whole trade correlation; live contract registration replaces stale negative metadata cache entries.
+- Removed four obsolete test modules that asserted the retired one-shot/four-book/deterministic opportunity-gate architecture. Active tests now describe the direct persistent-session rail only.
+- Corrected Apex Legacy consistency metadata to 30% and retained the explicit same-direction check. No automation-eligibility execution gate exists in metadata, executor policy, or active tests; historical policy research is non-authoritative.
+- Verification at this stage is source-only: 20 focused shared architecture checks and 70 active AI/Hermes checks pass, including a regression check that automation eligibility cannot become an execution gate. NinjaTrader F5 compilation and bounded Sim lifecycle evidence remain mandatory before deployment or merge.
+
 ## 2026-07-17 - post-audit Sim acceptance and clean Hermes epoch (builder-only)
 
 - Reconciled cognition and execution sizing to one dynamic capacity truth. Sim portfolio snapshots now use Glitch's existing Apex Legacy Eval rules for their configured account size while remaining explicitly marked simulated; the direct packet publishes each account's ceiling, current MNQ exposure, ratio, valid master quantities, and maximum-exposure account. Removed the separate AI-only contract cap from Hermes input and changed firewall/executor checks to current rule-derived account ceilings.

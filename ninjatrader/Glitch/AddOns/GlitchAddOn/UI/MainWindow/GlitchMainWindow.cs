@@ -771,12 +771,13 @@ namespace Glitch.UI
 
         private void OnReplicateButtonClick(object sender, RoutedEventArgs e)
         {
-            SetReplicationFromExternalSurface(!_isReplicatingUi, "user_click");
+            SetReplicationFromExternalSurface(!IsReplicationEnabledFromExternalSurface(), "user_click");
         }
 
         internal bool SetReplicationFromExternalSurface(bool enabled, string origin)
         {
-            if (_isReplicatingUi == enabled)
+            bool runtimeEnabled = _isReplicatingUi && _copyEngine?.IsEnabled == true;
+            if ((enabled && runtimeEnabled) || (!enabled && !_isReplicatingUi))
                 return true;
 
             if (enabled)
@@ -802,10 +803,6 @@ namespace Glitch.UI
             {
                 AppendJournal("System", "Replication", "replication_enabled|origin=" + (origin ?? "external"));
             }
-            else
-            {
-                CancelGlitchWorkingOrdersOnFollowers(activeAccounts);
-            }
 
             RefreshCopyEngineConfiguration(activeAccounts);
 
@@ -822,7 +819,7 @@ namespace Glitch.UI
             UpdateRefreshTimerCadence();
             PersistReplicationUiState();
             PublishGlitchShellState();
-            return true;
+            return !enabled || (_copyEngine?.IsEnabled == true);
         }
 
         internal void ToggleReplicationFromExternalSurface()
@@ -835,7 +832,8 @@ namespace Glitch.UI
             _ = RunFlattenAllAsync(showHeaderButtonFeedback: true);
         }
 
-        internal bool IsReplicationEnabledFromExternalSurface() => _isReplicatingUi;
+        internal bool IsReplicationEnabledFromExternalSurface() =>
+            _isReplicatingUi && _copyEngine?.IsEnabled == true;
 
         private void UpdateHermesModeUi(bool paused)
         {
@@ -940,7 +938,9 @@ namespace Glitch.UI
             if (_replicateButton == null)
                 return;
 
-            _replicateButton.Tag = _isReplicatingUi ? "Running" : "Stopped";
+            _replicateButton.Tag = _isReplicatingUi && _copyEngine?.IsEnabled == true
+                ? "Running"
+                : "Stopped";
         }
 
         private void UpdateRefreshTimerCadence()
@@ -1184,8 +1184,8 @@ namespace Glitch.UI
             if (_mainTabControl == null)
                 return;
 
-            if (_mainTabControl.Items.Count > 3)
-                _mainTabControl.SelectedIndex = 3;
+            if (_mainTabControl.Items.Count > MainTabSettings)
+                _mainTabControl.SelectedIndex = MainTabSettings;
 
             if (_settingsLicenseKeyTextBox != null)
             {
@@ -1548,7 +1548,7 @@ namespace Glitch.UI
             _isFlattenAllInProgress = true;
             var flattenStopwatch = Stopwatch.StartNew();
             int flattenSubmitCount = 0;
-            bool restoreCopyEngine = _isReplicatingUi && !UseLegacyReplicationEngine();
+            bool restoreCopyEngine = _isReplicatingUi;
             try
             {
                 if (restoreCopyEngine)
@@ -1584,21 +1584,6 @@ namespace Glitch.UI
                     $"METRIC|flatten_submit_ms={flattenStopwatch.ElapsedMilliseconds}|orders={flattenSubmitCount}|accounts_resolved={accounts.Count}|accounts_unresolved={unresolvedAccounts.Count}");
 
                 bool flattened = await WaitForAllAccountsFlatAsync(accounts, TimeSpan.FromSeconds(8));
-
-                if (!flattened)
-                {
-                    List<Account> stillExposed = accounts
-                        .Where(account =>
-                            account != null &&
-                            (!GlitchReplicationEngine.IsAccountFlat(account) ||
-                             GlitchReplicationEngine.HasAnyWorkingOrders(account)))
-                        .ToList();
-                    if (stillExposed.Count > 0)
-                    {
-                        await Dispatcher.InvokeAsync(() => IssueFlattenOrdersForAccounts(stillExposed));
-                        flattened = await WaitForAllAccountsFlatAsync(accounts, TimeSpan.FromSeconds(4));
-                    }
-                }
 
                 bool complete = flattened && unresolvedAccounts.Count == 0;
                 if (complete)
@@ -3705,11 +3690,10 @@ namespace Glitch.UI
             _replicationUserIntentLive = true;
             if (_isReplicatingUi)
             {
-                AlignAllEnabledFollowersToMaster("startup");
                 AppendJournal(
                     "System",
                     "Replication",
-                    "replication_restored|origin=startup|catchup=applied");
+                    "replication_restored|origin=startup|catchup=skipped");
             }
 
             _refreshTimer.Start();
@@ -5678,7 +5662,7 @@ namespace Glitch.UI
 
                 TryAppendRuntimeEventJournalEntry(eventName, account, eventArgs);
                 TryProcessCopyExecutionFromRuntimeEvent(eventName, account, eventArgs);
-                TryProcessCopyOrderRetryFromRuntimeEvent(eventName, account, eventArgs);
+                TryProcessReplicationOrderStateFromRuntimeEvent(eventName, account, eventArgs);
             }
             catch (Exception ex)
             {

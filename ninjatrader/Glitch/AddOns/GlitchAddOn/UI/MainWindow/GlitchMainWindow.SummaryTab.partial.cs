@@ -54,6 +54,8 @@ namespace Glitch.UI
         private TextBlock _summaryProfitFactorValueText;
         private TextBlock _summaryAccountsValueText;
         private TextBlock _summaryAsOfText;
+        private ComboBox _summaryScopeCombo;
+        private ComboBox _summaryGroupCombo;
         private int _summaryLastExecutionCount = -1;
         private long _summaryLastExecutionTicks = -1;
         private int _summaryLastWarningCount = -1;
@@ -79,13 +81,41 @@ namespace Glitch.UI
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var title = new TextBlock { Text = L("summary.title", "Trading Summary"), FontWeight = FontWeights.SemiBold };
             BindLocalizedText(title, "summary.title", "Trading Summary");
             ApplySkinResource(title, TextBlock.ForegroundProperty, "FontHeaderLevel3Brush", "FontHeaderLevel4Brush", "FontControlBrush", "FontTableBrush");
             header.Children.Add(title);
+            _summaryScopeCombo = new ComboBox
+            {
+                MinWidth = 92,
+                Margin = new Thickness(0, 0, 8, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                ItemsSource = new[] { "Master", "Group", "Fleet" },
+                SelectedItem = "Group"
+            };
+            _summaryScopeCombo.SelectionChanged += OnSummaryScopeChanged;
+            Grid.SetColumn(_summaryScopeCombo, 1);
+            header.Children.Add(_summaryScopeCombo);
+
+            _summaryGroupCombo = new ComboBox
+            {
+                MinWidth = 110,
+                Margin = new Thickness(0, 0, 8, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                ItemsSource = _accountGroups,
+                DisplayMemberPath = nameof(AccountGroupDefinition.MasterAccount),
+                SelectedValuePath = nameof(AccountGroupDefinition.GroupId),
+                SelectedIndex = _accountGroups != null && _accountGroups.Count > 0 ? 0 : -1
+            };
+            _summaryGroupCombo.SelectionChanged += OnSummaryScopeChanged;
+            Grid.SetColumn(_summaryGroupCombo, 2);
+            header.Children.Add(_summaryGroupCombo);
+
             _summaryAsOfText = new TextBlock { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
             ApplySkinResource(_summaryAsOfText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
-            Grid.SetColumn(_summaryAsOfText, 1);
+            Grid.SetColumn(_summaryAsOfText, 3);
             header.Children.Add(_summaryAsOfText);
 
             var resetDataButton = new Button
@@ -99,7 +129,7 @@ namespace Glitch.UI
             };
             BindLocalizedContent(resetDataButton, "summary.reset_data", "Reset Data");
             resetDataButton.Click += OnResetSummaryAndJournalDataClick;
-            Grid.SetColumn(resetDataButton, 2);
+            Grid.SetColumn(resetDataButton, 4);
             header.Children.Add(resetDataButton);
 
             Grid.SetRow(header, 0);
@@ -110,8 +140,8 @@ namespace Glitch.UI
                 Margin = new Thickness(0, 0, 0, 10),
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
-            cards.Children.Add(CreateSummaryCard(root, "summary.card.trades", "Closed Trades", out _summaryTradesValueText));
-            cards.Children.Add(CreateSummaryCard(root, "summary.card.fleet_trades", "Fleet Trades", out _summaryFleetTradesValueText));
+            cards.Children.Add(CreateSummaryCard(root, "summary.card.logical_trades", "Logical Trades", out _summaryTradesValueText));
+            cards.Children.Add(CreateSummaryCard(root, "summary.card.account_trades", "Account Trades", out _summaryFleetTradesValueText));
             cards.Children.Add(CreateSummaryCard(root, "summary.card.win_rate", "Win Rate", out _summaryWinRateValueText));
             cards.Children.Add(CreateSummaryCard(root, "summary.card.net_pnl", "Net PnL", out _summaryNetPointsValueText));
             cards.Children.Add(CreateSummaryCard(root, "summary.card.profit_factor", "Profit Factor", out _summaryProfitFactorValueText));
@@ -162,6 +192,13 @@ namespace Glitch.UI
             ApplySummaryResponsiveLayout(root.ActualWidth > 0 ? root.ActualWidth : Width);
             RegisterLocalizationBinding(() => RefreshSummaryInsightsIfNeeded(DateTime.UtcNow, true));
             return root;
+        }
+
+        private void OnSummaryScopeChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_summaryGroupCombo != null)
+                _summaryGroupCombo.IsEnabled = !string.Equals(_summaryScopeCombo?.SelectedItem as string, "Fleet", StringComparison.OrdinalIgnoreCase);
+            RefreshSummaryInsightsIfNeeded(DateTime.UtcNow, true);
         }
 
         private Border CreateSummaryCard(FrameworkElement context, string titleKey, string titleFallback, out TextBlock value)
@@ -407,9 +444,10 @@ namespace Glitch.UI
             _riskLockLedgerService.MergeAndGetSnapshot(warningEvents, nowUtc);
             IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> usdLedgerTrades = NormalizeTradesToUsd(ledgerTrades);
             TryEmitJournalReconcileNotices(usdLedgerTrades);
+            IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> scopedTrades = ApplySummaryScope(usdLedgerTrades);
             GlitchTradeInsightsService.TradeInsightsSnapshot accountSnapshot =
-                _tradeInsightsService.BuildSnapshotFromClosedTrades(usdLedgerTrades, warningEvents, nowUtc);
-            List<FleetTradeAggregate> fleetTrades = BuildFleetTradeAggregates(usdLedgerTrades);
+                _tradeInsightsService.BuildSnapshotFromClosedTrades(scopedTrades, warningEvents, nowUtc);
+            List<FleetTradeAggregate> fleetTrades = BuildFleetTradeAggregates(scopedTrades);
             GlitchTradeInsightsService.TradeInsightsSnapshot snapshot =
                 _tradeInsightsService.BuildSnapshotFromClosedTrades(
                     fleetTrades.Select(aggregate => aggregate.Trade).ToList(),
@@ -425,19 +463,14 @@ namespace Glitch.UI
 
             _summaryTradesValueText.Text = snapshot.All.Trades.ToString("N0", CultureInfo.CurrentCulture);
             if (_summaryFleetTradesValueText != null)
-                _summaryFleetTradesValueText.Text = FormatSignedCurrency(snapshot.All.AvgWinningTradePoints);
+                _summaryFleetTradesValueText.Text = accountSnapshot.All.Trades.ToString("N0", CultureInfo.CurrentCulture);
             _summaryWinRateValueText.Text = snapshot.All.WinRate.ToString("P1", CultureInfo.CurrentCulture);
             FrameworkElement summarySkinContext = (FrameworkElement)_summaryRootGrid ?? _summaryNetPointsValueText;
             _summaryNetPointsValueText.Text = FormatSignedCurrency(snapshot.All.NetPoints);
             _summaryNetPointsValueText.Foreground = ResolveSignedBrush(snapshot.All.NetPoints, summarySkinContext);
             _summaryProfitFactorValueText.Text = snapshot.All.ProfitFactor > 0 ? snapshot.All.ProfitFactor.ToString("N2", CultureInfo.CurrentCulture) : "-";
-            _summaryAccountsValueText.Text = FormatSignedCurrency(snapshot.All.AvgLosingTradePoints);
+            _summaryAccountsValueText.Text = distinctAccountsTraded.ToString("N0", CultureInfo.CurrentCulture);
             _summaryAsOfText.Text = L("summary.updated", "Updated") + ": " + nowUtc.ToLocalTime().ToString("MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
-
-            if (_summaryFleetTradesValueText != null)
-                _summaryFleetTradesValueText.Foreground = ResolveSignedBrush(snapshot.All.AvgWinningTradePoints, summarySkinContext);
-            if (_summaryAccountsValueText != null)
-                _summaryAccountsValueText.Foreground = ResolveSignedBrush(snapshot.All.AvgLosingTradePoints, summarySkinContext);
 
             _summaryMetricRows.Clear();
             _summaryMetricRows.Add(new SummaryMetricRow { Metric = L("summary.total_trades", "Total Trades"), All = snapshot.All.Trades.ToString("N0"), Long = snapshot.Long.Trades.ToString("N0"), Short = snapshot.Short.Trades.ToString("N0") });
@@ -492,6 +525,38 @@ namespace Glitch.UI
                     CloseReason = LocalizeCloseReason(trade.CloseReason)
                 });
             }
+        }
+
+        private IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> ApplySummaryScope(
+            IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> trades)
+        {
+            List<GlitchTradeInsightsService.TradeRoundTrip> all = (trades ?? Array.Empty<GlitchTradeInsightsService.TradeRoundTrip>())
+                .Where(trade => trade != null)
+                .ToList();
+            string scope = _summaryScopeCombo?.SelectedItem as string ?? "Group";
+            if (string.Equals(scope, "Fleet", StringComparison.OrdinalIgnoreCase))
+                return all;
+
+            AccountGroupDefinition group = _summaryGroupCombo?.SelectedItem as AccountGroupDefinition
+                ?? (_accountGroups == null ? null : _accountGroups.FirstOrDefault());
+            if (group == null || string.IsNullOrWhiteSpace(group.MasterAccount))
+                return Array.Empty<GlitchTradeInsightsService.TradeRoundTrip>();
+
+            var accountNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                group.MasterAccount.Trim()
+            };
+            if (string.Equals(scope, "Group", StringComparison.OrdinalIgnoreCase) && group.Members != null)
+            {
+                foreach (AccountGroupMemberRow member in group.Members)
+                {
+                    if (member == null || member.IsMasterRow || !member.IsEnabled || string.IsNullOrWhiteSpace(member.FollowerAccount))
+                        continue;
+                    accountNames.Add(member.FollowerAccount.Trim());
+                }
+            }
+
+            return all.Where(trade => accountNames.Contains(trade.AccountName ?? string.Empty)).ToList();
         }
 
         private void OnSummaryRootSizeChanged(object sender, SizeChangedEventArgs e)
@@ -947,7 +1012,7 @@ namespace Glitch.UI
             string symbol = string.IsNullOrWhiteSpace(instrumentName) ? "unknown" : instrumentName.Trim();
             RaiseCriticalWarning(
                 "System",
-                Lf("summary.point_value_unknown", "Point value unknown for {0}; PnL display may be wrong.", symbol),
+                Lf("summary.point_value_unknown", "Point value unknown for {0}; this trade is omitted from currency PnL.", symbol),
                 $"PointValueUnknown|{symbol}",
                 unlocksTrading: false);
         }
