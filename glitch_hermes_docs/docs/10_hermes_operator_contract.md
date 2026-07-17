@@ -208,6 +208,9 @@ take_profit_1
 optional take_profit_2
 optional stop_loss_2
 optional quantity_tp1
+optional take_profit_3
+optional stop_loss_3
+optional quantity_tp2
 confidence
 bounded_reason_codes
 ```
@@ -215,7 +218,8 @@ bounded_reason_codes
 Bracket mandate:
 
 - `ENTER_LONG` / `ENTER_SHORT` require `stop_loss` and `take_profit_1`.
-- TP2/SL2 are optional and only valid when quantity supports a runner.
+- TP2/SL2 and TP3/SL3 are optional and only valid when quantity supports positive leg splits.
+- Quantity must be one of Glitch's supplied valid master quantities. Glitch derives that list dynamically from every enabled account's current prop-rule ceiling, open MNQ exposure, and configured follower ratio; the maximum-exposure account limits the group.
 - A naked entry must be impossible.
 - NT/Glitch hold the protective bracket.
 - Hermes may not manage a loss mid-flight and may never widen a stop.
@@ -245,7 +249,7 @@ Glitch must reject before order creation if any check fails. Minimum check chain
 16. trading is ON at the final submit boundary?
 ```
 
-Trade frequency, cooldown, and minimum reward/risk are Hermes decisions, not deterministic firewall gates. In paper mode, `/trade_mode paper` is the single activation command; no separate executor-arm ritual exists.
+Trade frequency, cooldown, and minimum reward/risk are Hermes decisions, not deterministic firewall gates. `/trade_mode` is the single activation command for the account scope selected in Glitch AI; no separate mode, kill-switch, or executor-arm ritual exists.
 
 Failure result:
 

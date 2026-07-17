@@ -1,10 +1,10 @@
 # Now — AI-rail continuation handoff
 
-**Updated:** 2026-07-15
+**Updated:** 2026-07-17
 
 **Branch:** `glitch/ai-rail`
 
-**Source baseline:** `d7975fb` (`build autonomous Glitch AI paper rail`)
+**Source baseline:** `e964cd9` (`document AI rail session handoff`) plus the current docs-only closeout
 
 **Main baseline:** `main` / `origin/main` at `d216015`
 
@@ -47,10 +47,11 @@ contract-validation harness.
 
 ## Evidence and current limits
 
-- Current source suite: 118/118 Python/source-contract tests pass on `d7975fb` plus this documentation closeout.
-- The complete AddOn was deployed during the session; the operator reported a green NinjaTrader compile after the final reset. This closeout did not redeploy, restart, poll, arm, or inspect market/runtime state.
+- Current direct-rail/source-contract suite: 79/79 passed. The complete 84-file AddOn was deployed during the session and the operator reported a green NinjaTrader F5 compile after the final reset. This docs closeout does not redeploy, restart, poll, arm, or inspect market/runtime state.
+- The current paper harness is configured with Sim101 as master and Sim102/Sim103 as configured followers. The portfolio packet derives valid master quantities from each enabled account's current rule ceiling, open exposure, and ratio; it does not impose a separate AI-only contract cap. The latest verified flat Sim snapshots report simulated Apex Legacy Eval context and a 27-contract account ceiling.
+- The post-audit acceptance covered three independent protected master legs with matching follower protection and a separate 1:2:3 ratio run in which one Sim101 contract produced two Sim102 and three Sim103 contracts; native exits returned all three accounts flat and order-free. This validates the local group/bracket path, not profitability or live promotion.
 - The first usable paper sample was promising but not proof: NinjaTrader's full-day screenshot showed `+$401.50` across 71 trades (42.25% wins, profit factor 1.30, $350 max drawdown), while a later 08:00-scoped report showed `+$291.50` across 66 trades. Directional shorts worked better; chop gave back gains. The contemporaneous Glitch Journal showed 44 trades and `-$1,374.50`, which led to GL-055. Treat the different scopes and corrupted Journal as a diagnostic sample only.
-- Fresh post-reset Journal-to-NT reconciliation, learning retrieval, gateway continuity, one open/flat portfolio snapshot, follower terminality, and a full 3-contract/two-target lifecycle remain runtime evidence—not source claims.
+- Fresh post-reset Journal-to-NT reconciliation, learning retrieval, gateway continuity, durable Feed rebuild, and one open/flat portfolio snapshot remain runtime evidence to keep rechecking. The protected three-leg and 1:2:3 group proofs are now recorded as completed local acceptance evidence.
 - Current compliance gap is explicit: the analytics news banner and AI firewall do not share one effective lockout decision; the FRED-derived event schedule can fabricate times. Maintenance/weekend/holiday and must-flat semantics are not yet proved end to end. See GL-063.
 - Untracked `__pycache__` folders and `tmp/session-0655.jsonl` are local runtime artifacts and are intentionally excluded from Git.
 
@@ -71,12 +72,11 @@ contract-validation harness.
 
 Use the ordered backlog, not this list as a queue:
 
-1. Close fresh runtime evidence for GL-047 through GL-049b and GL-055.
-2. Prove GL-053 with one 3-contract Sim lifecycle: TP1 reduction, surviving runner protection, terminal TP2/SL, followers, reconnect, Journal/outcome reconciliation.
-3. Implement and prove GL-063 temporal/prop-rule compliance from current official rule sources; exits always remain available.
-4. Run GL-064 versioned paper calibration before declaring profitability or centralizing.
-5. Finish GL-050 restart/durability acceptance, then GL-051/052 central VPS/API work, then GL-054 multi-instrument expansion.
-6. Mainline work starts at GL-055 and follows GL-055 -> GL-056 -> GL-058/059 -> GL-057 -> GL-060 -> GL-061; never merge the AI rail wholesale.
+1. Close fresh runtime evidence for GL-047 through GL-050 and GL-055/GL-065, especially learning retrieval and reload/manual-action ownership.
+2. Implement and prove GL-063 temporal/prop-rule compliance from current official rule sources; exits always remain available.
+3. Run GL-064 versioned one-instrument paper calibration before declaring profitability or centralizing.
+4. Finish GL-051/052 central VPS/API work, then GL-054 multi-instrument expansion.
+5. Mainline work starts at GL-055 and follows the ordered backlog; never merge the AI rail wholesale.
 
 `R14` remains a separate named-commit, current-rule, and explicit operator gate
 for any non-simulation AI promotion.
