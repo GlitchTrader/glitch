@@ -1,6 +1,6 @@
 {
   "schemaVersion": "2.2.0",
-  "updatedAtUtc": "2026-07-17T00:00:00Z",
+  "updatedAtUtc": "2026-07-18T00:00:00Z",
   "globalInstrumentSizingDefaults": {
     "microContractRootRegex": "^M[A-Z0-9]+$",
     "microContractMultiplier": 10
@@ -15,16 +15,18 @@
         "https://support.apextraderfunding.com/hc/en-us/articles/32631092410771-How-does-the-Trailing-Static-Drawdown-Threshold-Work",
         "https://apextraderfunding.com/help-center/legacy-helpful-items/legacy-30-consistency-rule-windfall/",
         "https://apextraderfunding.com/help-center/legacy-helpful-items/hedging-and-correlated-instruments-rule/",
-        "https://apextraderfunding.com/help-center/performance-accounts-pa/legacy-performance-account-pa-compliance/"
+        "https://apextraderfunding.com/help-center/performance-accounts-pa/legacy-performance-account-pa-compliance/",
+        "https://apextraderfunding.com/help-center/getting-started/futures-trading-times/",
+        "https://dashboard.apextraderfunding.com/agreement/user-agreement"
       ],
-      "lastVerifiedDate": "2026-07-17",
+      "lastVerifiedDate": "2026-07-18",
       "status": "Supported",
       "copyTradingPolicy": {
         "allowed": "conditional",
         "sameOwnerOnly": true,
         "maxAccounts": 20,
-        "notes": "Same-owner, single-master, same-direction replication only; ~20 account cap per trader.",
-        "sourceUrl": "https://tradedupe.com/apex-copy-trading-rules"
+        "notes": "Current Apex agreement: same-owner copying only from manually placed originating orders; autonomous AI/automation is prohibited. Glitch surfaces this as compliance information and does not silently infer account authority.",
+        "sourceUrl": "https://dashboard.apextraderfunding.com/agreement/user-agreement"
       },
       "tiers": [
         {
@@ -96,10 +98,19 @@
       "officialSourceUrls": [
         "https://support.apextraderfunding.com/hc/en-us/articles/39730154872467-Apex-EOD-Evaluations-PA-Accounts",
         "https://support.apextraderfunding.com/hc/en-us/articles/40463582041371-Apex-EOD-Drawdown-Explained",
-        "https://support.apextraderfunding.com/hc/en-us/articles/40435813415187-Daily-Loss-Limit-DLL"
+        "https://support.apextraderfunding.com/hc/en-us/articles/40435813415187-Daily-Loss-Limit-DLL",
+        "https://apextraderfunding.com/help-center/getting-started/futures-trading-times/",
+        "https://dashboard.apextraderfunding.com/agreement/user-agreement"
       ],
       "lastVerifiedDate": "2026-03-04",
       "status": "Supported",
+      "copyTradingPolicy": {
+        "allowed": "conditional",
+        "sameOwnerOnly": true,
+        "maxAccounts": 20,
+        "notes": "Current Apex agreement: same-owner copying only from manually placed originating orders; autonomous AI/automation is prohibited. Glitch surfaces this as compliance information and does not silently infer account authority.",
+        "sourceUrl": "https://dashboard.apextraderfunding.com/agreement/user-agreement"
+      },
       "tiers": [
         {
           "accountSize": 25000,
@@ -318,10 +329,19 @@
       "legalName": "Apex Trader Funding Intraday",
       "officialSourceUrls": [
         "https://support.apextraderfunding.com/hc/en-us/articles/39730299425811-Apex-Intraday-Evaluations-PA-Accounts",
-        "https://support.apextraderfunding.com/hc/en-us/articles/40435813415187-Daily-Loss-Limit-DLL"
+        "https://support.apextraderfunding.com/hc/en-us/articles/40435813415187-Daily-Loss-Limit-DLL",
+        "https://apextraderfunding.com/help-center/getting-started/futures-trading-times/",
+        "https://dashboard.apextraderfunding.com/agreement/user-agreement"
       ],
       "lastVerifiedDate": "2026-03-04",
       "status": "Supported",
+      "copyTradingPolicy": {
+        "allowed": "conditional",
+        "sameOwnerOnly": true,
+        "maxAccounts": 20,
+        "notes": "Current Apex agreement: same-owner copying only from manually placed originating orders; autonomous AI/automation is prohibited. Glitch surfaces this as compliance information and does not silently infer account authority.",
+        "sourceUrl": "https://dashboard.apextraderfunding.com/agreement/user-agreement"
+      },
       "tiers": [
         {
           "accountSize": 25000,
@@ -540,10 +560,19 @@
       "legalName": "WealthCharts via Apex Trader Funding",
       "officialSourceUrls": [
         "https://support.apextraderfunding.com/hc/en-us/articles/39730154872467-Apex-EOD-Evaluations-PA-Accounts",
-        "https://support.apextraderfunding.com/hc/en-us/articles/40463582041371-Apex-EOD-Drawdown-Explained"
+        "https://support.apextraderfunding.com/hc/en-us/articles/40463582041371-Apex-EOD-Drawdown-Explained",
+        "https://apextraderfunding.com/help-center/getting-started/futures-trading-times/",
+        "https://dashboard.apextraderfunding.com/agreement/user-agreement"
       ],
       "lastVerifiedDate": "2026-03-04",
       "status": "SupportedWithAssumptions",
+      "copyTradingPolicy": {
+        "allowed": "conditional",
+        "sameOwnerOnly": true,
+        "maxAccounts": 20,
+        "notes": "WealthCharts accounts supplied through Apex inherit the current Apex agreement: same-owner copying only from manually placed originating orders; autonomous AI/automation is prohibited.",
+        "sourceUrl": "https://dashboard.apextraderfunding.com/agreement/user-agreement"
+      },
       "tiers": [
         {
           "accountSize": 25000,

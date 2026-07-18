@@ -373,6 +373,27 @@ namespace Glitch.UI
             return grid;
         }
 
+        private void RefreshTradeLedgerFromJournal(DateTime nowUtc)
+        {
+            var journalEvents = (_journalEntries ?? new ObservableCollection<JournalEntry>())
+                .Where(entry => entry != null && !string.IsNullOrWhiteSpace(entry.Message))
+                .Select(entry => new GlitchTradeInsightsService.TradeJournalEvent
+                {
+                    UtcTime = entry.TimestampUtc.ToUniversalTime(),
+                    AccountName = entry.AccountName,
+                    Category = entry.Category,
+                    Message = entry.Message
+                })
+                .ToList();
+
+            GlitchTradeInsightsService.TradeInsightsSnapshot snapshot =
+                _tradeInsightsService.BuildSnapshot(
+                    journalEvents,
+                    new List<GlitchTradeInsightsService.TradeWarningEvent>(),
+                    nowUtc);
+            _tradeLedgerService.MergeAndGetAll(snapshot.ClosedTrades, nowUtc);
+        }
+
         private void RefreshSummaryInsightsIfNeeded(DateTime nowUtc, bool force = false)
         {
             if (_summaryAsOfText == null)

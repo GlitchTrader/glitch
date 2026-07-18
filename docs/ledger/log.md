@@ -2,6 +2,19 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-18 - weekend clean-candidate freeze
+
+- Completed the clean non-AI consolidation on `cleanup/main-core` without importing
+  any Hermes/AI runtime surface.
+- Final red-team pass added fail-closed native-state/capacity checks, explicit manual
+  follower divergence ownership, one-shot protection failure recovery, truthful
+  effective Replicate state, and FRED-context/event-alert separation.
+- Verification: 32/32 shared contracts, five production builds, five lint runs,
+  Python/PowerShell/JSON/diff/secret checks. The byte-identical shared C# core
+  compiled green inside the deployed AI superset.
+- Exact non-AI clean-target F5 and one market-open Sim lifecycle remain the honest
+  promotion gate. See `audits/2026-07-18-weekend-clean-candidate-audit.md`.
+
 ## 2026-07-17 - clean non-AI shared-core candidate (builder-only, not deployed)
 
 - Built `cleanup/main-core` from clean `main=d216015`; the dirty AI worktree was not modified or merged.

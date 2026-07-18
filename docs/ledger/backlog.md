@@ -22,10 +22,11 @@ Hermes, AI services, intent endpoints, prompts, sessions, or the AI Feed:
 - corrected Apex Legacy 30% consistency metadata and directional-only metadata. Automation
   eligibility is not a Glitch execution gate.
 
-Twenty focused source checks pass, including the absence of an automation-eligibility gate,
-async protection rejection, independent
-multi-leg stop identity, and live metadata replacing a stale negative cache. NinjaTrader F5 and bounded Sim fixtures remain mandatory before merge,
-deployment, packaging, or any claim that the runtime is fixed. The tables below describe the
+Thirty-two focused source checks pass, including the absence of an automation-eligibility gate,
+async protection rejection, independent multi-leg stop identity, manual-divergence ownership,
+FRED context separation, and live metadata replacing a stale negative cache. The identical
+shared core compiles inside the deployed AI superset; exact non-AI clean-target F5 and bounded
+Sim fixtures remain mandatory before merge, deployment, packaging, or any claim that the runtime is fixed. The tables below describe the
 shipped v0.0.1.9 baseline and historical rail; this section is the current candidate status.
 
 ---

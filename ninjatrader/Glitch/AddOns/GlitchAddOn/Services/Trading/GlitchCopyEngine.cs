@@ -21,6 +21,8 @@ namespace Glitch.Services
         public OrderAction Action { get; set; }
         public OrderType OrderType { get; set; }
         public int Quantity { get; set; }
+        public int EntryOrderFilledQuantity { get; set; }
+        public int MasterNetAfterExecution { get; set; }
         public string OrderSignalName { get; set; }
         public string Oco { get; set; }
     }
@@ -54,6 +56,8 @@ namespace Glitch.Services
             new Dictionary<string, FollowerEntryLifecycle>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _flattenSubmitted =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _suppressedFollowerRoots =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         private bool _enabled;
 
@@ -70,6 +74,17 @@ namespace Glitch.Services
             get { lock (_gate) return _routesByMaster.Values.Sum(routes => routes.Count); }
         }
 
+        public int GetActiveRouteCount(string masterAccount)
+        {
+            lock (_gate)
+            {
+                return !string.IsNullOrWhiteSpace(masterAccount)
+                    && _routesByMaster.TryGetValue(masterAccount.Trim(), out List<GlitchCopyFollowerRoute> routes)
+                    ? routes.Count
+                    : 0;
+            }
+        }
+
         public string GetEntryDenialReason(
             Account masterAccount,
             Instrument instrument,
@@ -83,12 +98,18 @@ namespace Glitch.Services
 
             string root = GlitchReplicationEngine.GetInstrumentRoot(instrument);
             int direction = action == OrderAction.Buy ? 1 : -1;
-            int masterNet = GlitchReplicationEngine.GetNetQuantityForInstrumentRoot(masterAccount, root);
+            if (!GlitchReplicationEngine.TryGetNetQuantityForInstrumentRoot(masterAccount, root, out int masterNet))
+                return "master_positions_unavailable|account=" + CleanToken(masterAccount.Name);
+            if (masterNet != 0 && Math.Sign(masterNet) != direction)
+                return "master_direction_conflict|account=" + CleanToken(masterAccount.Name);
             int projectedMaster = masterNet + (direction * masterQuantity);
             foreach (GlitchCopyFollowerRoute route in routes)
             {
                 Account follower = route.FollowerAccount;
-                int actual = GlitchReplicationEngine.GetNetQuantityForInstrumentRoot(follower, root);
+                if (IsFollowerRootSuppressed(follower, root))
+                    return "follower_requires_explicit_resync|account=" + CleanToken(follower.Name);
+                if (!GlitchReplicationEngine.TryGetNetQuantityForInstrumentRoot(follower, root, out int actual))
+                    return "follower_positions_unavailable|account=" + CleanToken(follower.Name);
                 if (actual != 0 && Math.Sign(actual) != direction)
                     return "follower_direction_conflict|account=" + CleanToken(follower.Name);
 
@@ -98,11 +119,23 @@ namespace Glitch.Services
                 if (expected <= 0)
                     return "follower_quantity_rounds_to_zero|account=" + CleanToken(follower.Name);
 
-                int inFlight = GetInFlightOpeningQuantity(follower, root, direction);
+                if (!TryGetInFlightOpeningQuantity(follower, root, direction, out int inFlight)
+                    || !TryGetTotalInFlightOpeningQuantity(follower, out int totalInFlight)
+                    || !TryGetTotalOpenContracts(follower, out int totalOpen))
+                    return "follower_state_unavailable|account=" + CleanToken(follower.Name);
+                int expectedCurrent = masterNet == 0
+                    ? 0
+                    : (int)Math.Round(Math.Abs(masterNet) * route.Ratio, MidpointRounding.AwayFromZero);
+                if (Math.Abs(actual) + inFlight != expectedCurrent)
+                    return "follower_requires_explicit_resync|account=" + CleanToken(follower.Name)
+                        + "|actual=" + Math.Abs(actual).ToString(CultureInfo.InvariantCulture)
+                        + "|inflight=" + inFlight.ToString(CultureInfo.InvariantCulture)
+                        + "|expected=" + expectedCurrent.ToString(CultureInfo.InvariantCulture);
                 int needed = Math.Max(0, expected - Math.Abs(actual) - inFlight);
-                int cap = ResolveRouteContractCap(route, root);
-                int projected = GetTotalOpenContracts(follower) + GetTotalInFlightOpeningQuantity(follower) + needed;
-                if (cap > 0 && projected > cap)
+                if (!TryResolveRouteContractCap(route, root, out int cap))
+                    return "follower_contract_cap_unavailable|account=" + CleanToken(follower.Name);
+                int projected = totalOpen + totalInFlight + needed;
+                if (projected > cap)
                     return "follower_max_contracts|account=" + CleanToken(follower.Name)
                         + "|projected=" + projected.ToString(CultureInfo.InvariantCulture)
                         + "|cap=" + cap.ToString(CultureInfo.InvariantCulture);
@@ -137,6 +170,15 @@ namespace Glitch.Services
                 }
 
                 _enabled = enabled && _routesByMaster.Values.Any(bucket => bucket.Count > 0);
+                var activeFollowerRoots = new HashSet<string>(
+                    _routesByMaster.Values
+                        .SelectMany(bucket => bucket)
+                        .Select(route => (route.FollowerAccount?.Name?.Trim() ?? string.Empty) + "|"),
+                    StringComparer.OrdinalIgnoreCase);
+                foreach (string key in _suppressedFollowerRoots
+                    .Where(key => !activeFollowerRoots.Any(prefix => key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                    .ToList())
+                    _suppressedFollowerRoots.Remove(key);
                 if (!_enabled)
                     _pendingMasterCopies.Clear();
             }
@@ -166,11 +208,38 @@ namespace Glitch.Services
             }
 
             bool isLong = context.Action == OrderAction.Buy;
-            if (!GlitchReplicationProtection.TryResolveMasterPlan(
+            if (!GlitchApexDirectionGuard.TryApproveEntry(
+                masterAccount,
+                context.Instrument,
+                isLong ? 1 : -1,
+                out string directionFailure))
+            {
+                string directionRoot = GlitchReplicationEngine.GetInstrumentRoot(context.Instrument);
+                Journal?.Invoke(masterAccount.Name,
+                    "master_entry_not_replicated|reason=apex_direction_compliance|instrument="
+                    + CleanToken(directionRoot) + "|detail=" + CleanToken(directionFailure));
+                RaiseCritical?.Invoke(
+                    masterAccount.Name,
+                    "A manual/native master entry conflicts with Apex portfolio direction. Glitch preserved the human position but refused to replicate it.",
+                    "ApexCrossDirectionDetected|" + directionRoot);
+                return;
+            }
+            int copyMasterQuantity = ResolveContextMasterQuantity(context);
+            string root = GlitchReplicationEngine.GetInstrumentRoot(context.Instrument);
+            if (!GlitchReplicationEngine.TryGetNetQuantityForInstrumentRoot(masterAccount, root, out int currentMasterNet))
+            {
+                RaiseCritical?.Invoke(masterAccount.Name,
+                    "Master position state is unavailable; followers were left unchanged.",
+                    "MasterPositionsUnavailable|" + root);
+                return;
+            }
+            context.MasterNetAfterExecution = currentMasterNet;
+            if (Math.Abs(currentMasterNet) < copyMasterQuantity
+                || !GlitchReplicationProtection.TryResolveMasterPlan(
                 masterAccount,
                 context.Instrument,
                 context.OrderSignalName,
-                context.Quantity,
+                copyMasterQuantity,
                 isLong,
                 out GlitchReplicationProtectionPlan plan))
             {
@@ -222,14 +291,6 @@ namespace Glitch.Services
             {
                 if (order.Filled <= 0)
                     return;
-
-                if (HasCompleteFollowerProtectionForCurrentPosition(followerAccount, order.Instrument))
-                {
-                    Journal?.Invoke(followerAccount.Name,
-                        "follower_protection|entry=" + CleanToken(signal)
-                        + "|result=restored_native_orders_observed");
-                    return;
-                }
 
                 if (!IsRecentOrder(order, TimeSpan.FromMinutes(2))
                     || !TryRecoverRecentFollowerLifecycle(followerAccount, order, signal, out lifecycle))
@@ -337,7 +398,8 @@ namespace Glitch.Services
             // Rejection is broker/NT evidence that a Glitch-owned protective leg
             // is not live. Cancellation is not equivalent: it can be a normal OCO
             // transition or an explicit human action and is deliberately preserved.
-            if (GlitchReplicationEngine.GetNetQuantityForInstrumentRoot(followerAccount, root) == 0)
+            if (GlitchReplicationEngine.TryGetNetQuantityForInstrumentRoot(followerAccount, root, out int followerNet)
+                && followerNet == 0)
                 return;
 
             RequestFollowerFlattenOnce(followerAccount, order.Instrument, "protection_order_rejected");
@@ -361,13 +423,33 @@ namespace Glitch.Services
                 || double.IsNaN(ratio) || double.IsInfinity(ratio))
                 return;
 
+            GlitchCopyFollowerRoute configuredRoute = FindConfiguredRoute(masterAccount, followerAccount);
+            if (configuredRoute == null)
+            {
+                RaiseCritical?.Invoke(
+                    followerAccount.Name,
+                    "Explicit resync has no active configured route; no order was submitted.",
+                    "CatchUpRouteUnavailable");
+                return;
+            }
+            ratio = configuredRoute.Ratio;
+            ClearFollowerSuppressions(followerAccount);
             var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             GlitchReplicationEngine.CollectPositionInstrumentRoots(masterAccount, roots);
             GlitchReplicationEngine.CollectPositionInstrumentRoots(followerAccount, roots);
             foreach (string root in roots)
             {
-                int masterNet = GlitchReplicationEngine.GetNetQuantityForInstrumentRoot(masterAccount, root);
-                int actual = GlitchReplicationEngine.GetNetQuantityForInstrumentRoot(followerAccount, root);
+                if (!GlitchReplicationEngine.TryGetNetQuantityForInstrumentRoot(masterAccount, root, out int masterNet)
+                    || !GlitchReplicationEngine.TryGetNetQuantityForInstrumentRoot(followerAccount, root, out int actual))
+                {
+                    RaiseCritical?.Invoke(
+                        followerAccount.Name,
+                        "Explicit resync could not verify native position state; no order was submitted.",
+                        "CatchUpStateUnavailable|" + root);
+                    continue;
+                }
+
+                ClearFollowerRootSuppression(followerAccount, root);
                 int expected = (int)Math.Round(masterNet * ratio, MidpointRounding.AwayFromZero);
                 if (expected == actual)
                     continue;
@@ -407,15 +489,8 @@ namespace Glitch.Services
                     continue;
                 }
 
-                var route = new GlitchCopyFollowerRoute
-                {
-                    MasterAccount = masterAccount.Name,
-                    MasterAccountInstance = masterAccount,
-                    FollowerAccount = followerAccount,
-                    Ratio = ratio
-                };
                 SubmitProtectedFollowerEntry(
-                    route,
+                    configuredRoute,
                     instrument,
                     isLong ? OrderAction.Buy : OrderAction.SellShort,
                     quantity,
@@ -440,11 +515,38 @@ namespace Glitch.Services
 
             string root = GlitchReplicationEngine.GetInstrumentRoot(context.Instrument);
             int direction = context.Action == OrderAction.Buy ? 1 : -1;
-            int masterNet = GlitchReplicationEngine.GetNetQuantityForInstrumentRoot(masterAccount, root);
+            if (!GlitchReplicationEngine.TryGetNetQuantityForInstrumentRoot(masterAccount, root, out int masterNet))
+            {
+                RaiseCritical?.Invoke(masterAccount.Name,
+                    "Master position state is unavailable; followers were left unchanged.",
+                    "MasterPositionsUnavailable|" + root);
+                return;
+            }
+            int masterNetAtExecution = context.MasterNetAfterExecution != 0
+                && Math.Sign(context.MasterNetAfterExecution) == direction
+                ? context.MasterNetAfterExecution
+                : masterNet;
+            int masterBeforeFill = masterNetAtExecution - (direction * Math.Max(0, context.Quantity));
             foreach (GlitchCopyFollowerRoute route in routes)
             {
                 Account follower = route.FollowerAccount;
-                int actual = GlitchReplicationEngine.GetNetQuantityForInstrumentRoot(follower, root);
+                if (IsFollowerRootSuppressed(follower, root))
+                {
+                    JournalCopy(route, context, 0, "copy_skip|explicit_resync_required");
+                    continue;
+                }
+                if (!GlitchReplicationEngine.TryGetNetQuantityForInstrumentRoot(follower, root, out int actual)
+                    || !TryGetInFlightOpeningQuantity(follower, root, direction, out int inFlight)
+                    || !TryGetTotalInFlightOpeningQuantity(follower, out int totalInFlight)
+                    || !TryGetTotalOpenContracts(follower, out int totalOpen))
+                {
+                    JournalCopy(route, context, 0, "copy_reject|native_state_unavailable");
+                    RaiseCritical?.Invoke(
+                        follower.Name,
+                        "Follower position or order state is unavailable; no copy order was submitted.",
+                        "FollowerStateUnavailable|" + root);
+                    continue;
+                }
                 if (actual != 0 && Math.Sign(actual) != direction)
                 {
                     RaiseCritical?.Invoke(
@@ -454,11 +556,29 @@ namespace Glitch.Services
                     continue;
                 }
 
-                int requested = (int)Math.Round(context.Quantity * route.Ratio, MidpointRounding.AwayFromZero);
+                int expectedBeforeFill = masterBeforeFill == 0 || Math.Sign(masterBeforeFill) != direction
+                    ? 0
+                    : (int)Math.Round(Math.Abs(masterBeforeFill) * route.Ratio, MidpointRounding.AwayFromZero);
+                if (Math.Abs(actual) + inFlight != expectedBeforeFill)
+                {
+                    SuppressFollowerRoot(follower, root);
+                    JournalCopy(route, context, 0,
+                        "copy_skip|manual_or_external_divergence|actual=" + Math.Abs(actual)
+                        + "|inflight=" + inFlight
+                        + "|expected_before=" + expectedBeforeFill);
+                    RaiseCritical?.Invoke(
+                        follower.Name,
+                        "Follower exposure changed outside replication. Glitch will not reopen it until Replicate is explicitly resynchronized.",
+                        "FollowerExplicitResyncRequired|" + root);
+                    continue;
+                }
+
+                int requested = (int)Math.Round(
+                    ResolveContextMasterQuantity(context) * route.Ratio,
+                    MidpointRounding.AwayFromZero);
                 int expected = masterNet == 0 || Math.Sign(masterNet) != direction
                     ? Math.Abs(actual) + requested
                     : (int)Math.Round(Math.Abs(masterNet) * route.Ratio, MidpointRounding.AwayFromZero);
-                int inFlight = GetInFlightOpeningQuantity(follower, root, direction);
                 int needed = Math.Max(0, expected - Math.Abs(actual) - inFlight);
                 int quantity = Math.Min(requested, needed);
                 if (quantity <= 0)
@@ -467,9 +587,17 @@ namespace Glitch.Services
                     continue;
                 }
 
-                int cap = ResolveRouteContractCap(route, root);
-                int projected = GetTotalOpenContracts(follower) + GetTotalInFlightOpeningQuantity(follower) + quantity;
-                if (cap > 0 && projected > cap)
+                if (!TryResolveRouteContractCap(route, root, out int cap))
+                {
+                    JournalCopy(route, context, 0, "copy_reject|contract_cap_unavailable");
+                    RaiseCritical?.Invoke(
+                        follower.Name,
+                        "Follower contract ceiling is unavailable; no copy order was submitted.",
+                        "FollowerContractCapUnavailable|" + root);
+                    continue;
+                }
+                int projected = totalOpen + totalInFlight + quantity;
+                if (projected > cap)
                 {
                     JournalCopy(route, context, 0, "copy_reject|max_contracts|projected=" + projected + "|cap=" + cap);
                     RaiseCritical?.Invoke(
@@ -499,7 +627,14 @@ namespace Glitch.Services
             string root = GlitchReplicationEngine.GetInstrumentRoot(context.Instrument);
             foreach (GlitchCopyFollowerRoute route in routes)
             {
-                int followerNet = GlitchReplicationEngine.GetNetQuantityForInstrumentRoot(route.FollowerAccount, root);
+                if (!GlitchReplicationEngine.TryGetNetQuantityForInstrumentRoot(route.FollowerAccount, root, out int followerNet))
+                {
+                    JournalCopy(route, context, 0, "copy_close_skip|native_state_unavailable");
+                    RaiseCritical?.Invoke(route.FollowerAccount.Name,
+                        "Follower position state is unavailable; no close order was submitted.",
+                        "FollowerCloseStateUnavailable|" + root);
+                    continue;
+                }
                 int closable = context.Action == OrderAction.Sell
                     ? Math.Max(0, followerNet)
                     : context.Action == OrderAction.BuyToCover
@@ -537,11 +672,47 @@ namespace Glitch.Services
         {
             if (route?.FollowerAccount == null || instrument == null || quantity <= 0 || plan == null)
                 return;
+            int direction = action == OrderAction.Buy ? 1 : action == OrderAction.SellShort ? -1 : 0;
+            if (!GlitchApexDirectionGuard.TryApproveEntry(
+                route.FollowerAccount,
+                instrument,
+                direction,
+                out string directionFailure))
+            {
+                string root = GlitchReplicationEngine.GetInstrumentRoot(instrument);
+                Journal?.Invoke(route.FollowerAccount.Name,
+                    "entry_rejected|reason=apex_direction_compliance|instrument="
+                    + CleanToken(root) + "|detail=" + CleanToken(directionFailure));
+                RaiseCritical?.Invoke(
+                    route.FollowerAccount.Name,
+                    "Permission denied: Apex cross-direction compliance rule.",
+                    "ApexCrossDirectionBlocked|" + root);
+                return;
+            }
             if (!GlitchReplicationProtection.TryScalePlan(plan, quantity, out List<GlitchScaledProtectionLeg> scaled))
             {
                 RaiseCritical?.Invoke(route.FollowerAccount.Name,
                     "Follower protection could not be scaled to the configured ratio.",
                     "FollowerProtectionScaleFailed|" + GlitchReplicationEngine.GetInstrumentRoot(instrument));
+                return;
+            }
+
+            string instrumentRoot = GlitchReplicationEngine.GetInstrumentRoot(instrument);
+            if (!TryGetTotalOpenContracts(route.FollowerAccount, out int totalOpen)
+                || !TryGetTotalInFlightOpeningQuantity(route.FollowerAccount, out int totalInFlight)
+                || !TryResolveRouteContractCap(route, instrumentRoot, out int contractCap))
+            {
+                RaiseCritical?.Invoke(route.FollowerAccount.Name,
+                    "Follower state or contract ceiling is unavailable at submission; no copy order was submitted.",
+                    "FollowerFinalAdmissionUnavailable|" + instrumentRoot);
+                return;
+            }
+            int projectedContracts = totalOpen + totalInFlight + quantity;
+            if (projectedContracts > contractCap)
+            {
+                RaiseCritical?.Invoke(route.FollowerAccount.Name,
+                    "Follower copy would exceed the account contract cap at submission.",
+                    "FollowerFinalMaxContracts|" + instrumentRoot);
                 return;
             }
 
@@ -689,7 +860,8 @@ namespace Glitch.Services
                 return false;
 
             string root = GlitchReplicationEngine.GetInstrumentRoot(entryOrder.Instrument);
-            int masterNet = GlitchReplicationEngine.GetNetQuantityForInstrumentRoot(masterAccount, root);
+            if (!GlitchReplicationEngine.TryGetNetQuantityForInstrumentRoot(masterAccount, root, out int masterNet))
+                return false;
             if (masterNet == 0 || (masterNet > 0) != isLong)
                 return false;
 
@@ -744,16 +916,17 @@ namespace Glitch.Services
             }
         }
 
-        private static bool HasCompleteFollowerProtectionForCurrentPosition(Account account, Instrument instrument)
+        private GlitchCopyFollowerRoute FindConfiguredRoute(Account masterAccount, Account followerAccount)
         {
-            if (account == null || instrument == null)
-                return false;
-            string root = GlitchReplicationEngine.GetInstrumentRoot(instrument);
-            int net = GlitchReplicationEngine.GetNetQuantityForInstrumentRoot(account, root);
-            if (net == 0)
-                return true;
-            return TryCountCompleteFollowerProtection(account, instrument, null, net > 0, out int protectedQuantity)
-                && protectedQuantity == Math.Abs(net);
+            if (masterAccount == null || followerAccount == null)
+                return null;
+            lock (_gate)
+            {
+                if (!_routesByMaster.TryGetValue(masterAccount.Name?.Trim() ?? string.Empty, out List<GlitchCopyFollowerRoute> routes))
+                    return null;
+                return routes.FirstOrDefault(route => route?.FollowerAccount != null
+                    && string.Equals(route.FollowerAccount.Name, followerAccount.Name, StringComparison.OrdinalIgnoreCase));
+            }
         }
 
         private static bool TryCountCompleteFollowerProtection(
@@ -766,10 +939,12 @@ namespace Glitch.Services
             protectedQuantity = 0;
             if (account == null || instrument == null)
                 return false;
+            if (!TrySnapshotOrders(account, out Order[] orders))
+                return false;
             string root = GlitchReplicationEngine.GetInstrumentRoot(instrument);
             string tokenNeedle = string.IsNullOrWhiteSpace(entryToken) ? null : "-" + entryToken + "-";
             OrderAction expectedExitAction = isLong ? OrderAction.Sell : OrderAction.BuyToCover;
-            List<Order> protection = SnapshotOrders(account)
+            List<Order> protection = orders
                 .Where(order => order?.Instrument != null
                     && string.Equals(GlitchReplicationEngine.GetInstrumentRoot(order.Instrument), root, StringComparison.OrdinalIgnoreCase)
                     && order.OrderAction == expectedExitAction
@@ -844,17 +1019,21 @@ namespace Glitch.Services
 
                 bool isLong = item.Context.Action == OrderAction.Buy;
                 string root = GlitchReplicationEngine.GetInstrumentRoot(item.Context.Instrument);
-                int masterNet = GlitchReplicationEngine.GetNetQuantityForInstrumentRoot(account, root);
+                if (!GlitchReplicationEngine.TryGetNetQuantityForInstrumentRoot(account, root, out int masterNet))
+                    continue;
                 if (masterNet == 0 || (masterNet > 0) != isLong)
                 {
                     lock (_gate) _pendingMasterCopies.Remove(pair.Key);
                     continue;
                 }
+                int copyMasterQuantity = ResolveContextMasterQuantity(item.Context);
+                if (Math.Abs(masterNet) < copyMasterQuantity)
+                    continue;
                 if (!GlitchReplicationProtection.TryResolveMasterPlan(
                     account,
                     item.Context.Instrument,
                     item.Context.OrderSignalName,
-                    item.Context.Quantity,
+                    copyMasterQuantity,
                     isLong,
                     out GlitchReplicationProtectionPlan plan))
                     continue;
@@ -878,7 +1057,14 @@ namespace Glitch.Services
             string root = GlitchReplicationEngine.GetInstrumentRoot(masterOrder.Instrument);
             foreach (GlitchCopyFollowerRoute route in routes)
             {
-                List<Order> changes = SnapshotOrders(route.FollowerAccount)
+                if (!TrySnapshotOrders(route.FollowerAccount, out Order[] orders))
+                {
+                    RaiseCritical?.Invoke(route.FollowerAccount.Name,
+                        "Follower order state is unavailable; the master stop was not mirrored.",
+                        "FollowerStopMirrorStateUnavailable|" + root);
+                    continue;
+                }
+                List<Order> changes = orders
                     .Where(order => order?.Instrument != null
                         && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState)
                         && (order.Name ?? string.Empty).StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
@@ -906,7 +1092,8 @@ namespace Glitch.Services
         {
             if (!IsConfiguredFollower(account))
                 return;
-            Order[] orders = SnapshotOrders(account);
+            if (!TrySnapshotOrders(account, out Order[] orders))
+                return;
             foreach (IGrouping<string, Order> group in orders
                 .Where(order => order?.Instrument != null
                     && IsFollowerProtectionSignal(order.Name)
@@ -918,7 +1105,9 @@ namespace Glitch.Services
                     && IsFollowerEntrySignal(order.Name)
                     && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState)
                     && string.Equals(GlitchReplicationEngine.GetInstrumentRoot(order.Instrument), root, StringComparison.OrdinalIgnoreCase));
-                if (entryPending || GlitchReplicationEngine.GetNetQuantityForInstrumentRoot(account, root) != 0)
+                if (entryPending
+                    || !GlitchReplicationEngine.TryGetNetQuantityForInstrumentRoot(account, root, out int netQuantity)
+                    || netQuantity != 0)
                     continue;
                 try
                 {
@@ -933,15 +1122,33 @@ namespace Glitch.Services
                 }
             }
 
-            if (GlitchReplicationEngine.IsAccountFlat(account))
+            string accountPrefix = (account.Name?.Trim() ?? string.Empty) + "|";
+            List<string> submittedRoots;
+            lock (_gate)
+                submittedRoots = _flattenSubmitted
+                    .Where(key => key.StartsWith(accountPrefix, StringComparison.OrdinalIgnoreCase))
+                    .Select(key => key.Substring(accountPrefix.Length))
+                    .ToList();
+
+            foreach (string root in submittedRoots)
             {
-                string accountPrefix = (account.Name?.Trim() ?? string.Empty) + "|";
+                bool hasWorkingRootOrder = orders.Any(order => order?.Instrument != null
+                    && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState)
+                    && string.Equals(GlitchReplicationEngine.GetInstrumentRoot(order.Instrument), root, StringComparison.OrdinalIgnoreCase));
+                if (hasWorkingRootOrder
+                    || !GlitchReplicationEngine.TryGetNetQuantityForInstrumentRoot(account, root, out int netQuantity)
+                    || netQuantity != 0)
+                    continue;
+
                 lock (_gate)
                 {
-                    foreach (string key in _flattenSubmitted.Where(key => key.StartsWith(accountPrefix, StringComparison.OrdinalIgnoreCase)).ToList())
-                        _flattenSubmitted.Remove(key);
+                    _flattenSubmitted.Remove(accountPrefix + root);
                     foreach (string signal in _entriesBySignal
-                        .Where(item => string.Equals(item.Value?.Account?.Name, account.Name, StringComparison.OrdinalIgnoreCase))
+                        .Where(item => string.Equals(item.Value?.Account?.Name, account.Name, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(
+                                GlitchReplicationEngine.GetInstrumentRoot(item.Value?.Instrument),
+                                root,
+                                StringComparison.OrdinalIgnoreCase))
                         .Select(item => item.Key)
                         .ToList())
                         _entriesBySignal.Remove(signal);
@@ -1019,6 +1226,7 @@ namespace Glitch.Services
         {
             return route != null
                 && !string.IsNullOrWhiteSpace(route.MasterAccount)
+                && route.MasterAccountInstance != null
                 && route.FollowerAccount != null
                 && route.Ratio > 0
                 && !double.IsNaN(route.Ratio)
@@ -1065,58 +1273,82 @@ namespace Glitch.Services
             return null;
         }
 
-        private static int ResolveRouteContractCap(GlitchCopyFollowerRoute route, string instrumentRoot)
+        private static bool TryResolveRouteContractCap(
+            GlitchCopyFollowerRoute route,
+            string instrumentRoot,
+            out int cap)
         {
+            cap = 0;
             if (route == null)
-                return 0;
+                return false;
             if (route.MaxMicroContracts > 0 && !string.IsNullOrWhiteSpace(route.MicroContractRootRegex))
             {
                 try
                 {
                     if (Regex.IsMatch(instrumentRoot ?? string.Empty, route.MicroContractRootRegex, RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(50)))
-                        return route.MaxMicroContracts;
+                    {
+                        cap = route.MaxMicroContracts;
+                        return true;
+                    }
                 }
                 catch
                 {
+                    return false;
                 }
             }
-            return route.MaxContracts;
+            cap = route.MaxContracts;
+            return cap > 0;
         }
 
-        private static int GetTotalOpenContracts(Account account)
+        private static bool TryGetTotalOpenContracts(Account account, out int total)
         {
+            total = 0;
             try
             {
                 if (account?.Positions == null)
-                    return 0;
+                    return false;
                 lock (account.Positions)
-                    return account.Positions.Where(position => position != null && position.MarketPosition != MarketPosition.Flat)
+                    total = account.Positions.Where(position => position != null && position.MarketPosition != MarketPosition.Flat)
                         .Sum(position => Math.Abs(position.Quantity));
+                return true;
             }
             catch
             {
-                return 0;
+                total = 0;
+                return false;
             }
         }
 
-        private static int GetInFlightOpeningQuantity(Account account, string root, int direction)
+        private static bool TryGetInFlightOpeningQuantity(
+            Account account,
+            string root,
+            int direction,
+            out int quantity)
         {
-            return SnapshotOrders(account)
+            quantity = 0;
+            if (!TrySnapshotOrders(account, out Order[] orders))
+                return false;
+            quantity = orders
                 .Where(order => order?.Instrument != null
                     && IsFollowerEntrySignal(order.Name)
                     && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState)
                     && GlitchReplicationEngine.GetOrderActionSign(order.OrderAction) == direction
                     && string.Equals(GlitchReplicationEngine.GetInstrumentRoot(order.Instrument), root, StringComparison.OrdinalIgnoreCase))
                 .Sum(RemainingQuantity);
+            return true;
         }
 
-        private static int GetTotalInFlightOpeningQuantity(Account account)
+        private static bool TryGetTotalInFlightOpeningQuantity(Account account, out int quantity)
         {
-            return SnapshotOrders(account)
+            quantity = 0;
+            if (!TrySnapshotOrders(account, out Order[] orders))
+                return false;
+            quantity = orders
                 .Where(order => order != null
                     && IsFollowerEntrySignal(order.Name)
                     && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState))
                 .Sum(RemainingQuantity);
+            return true;
         }
 
         private static int RemainingQuantity(Order order)
@@ -1124,18 +1356,65 @@ namespace Glitch.Services
             return order == null ? 0 : Math.Max(0, Math.Abs(order.Quantity) - Math.Max(0, order.Filled));
         }
 
-        private static Order[] SnapshotOrders(Account account)
+        private static int ResolveContextMasterQuantity(GlitchCopyExecutionContext context)
         {
+            if (context == null)
+                return 0;
+            return Math.Max(
+                Math.Max(0, context.Quantity),
+                Math.Max(0, context.EntryOrderFilledQuantity));
+        }
+
+        private static bool TrySnapshotOrders(Account account, out Order[] orders)
+        {
+            orders = Array.Empty<Order>();
             try
             {
                 if (account?.Orders == null)
-                    return Array.Empty<Order>();
+                    return false;
                 lock (account.Orders)
-                    return account.Orders.ToArray();
+                    orders = account.Orders.ToArray();
+                return true;
             }
             catch
             {
-                return Array.Empty<Order>();
+                orders = Array.Empty<Order>();
+                return false;
+            }
+        }
+
+        private static string BuildFollowerRootKey(Account account, string root)
+        {
+            return (account?.Name?.Trim() ?? string.Empty) + "|" + (root?.Trim() ?? string.Empty);
+        }
+
+        private bool IsFollowerRootSuppressed(Account account, string root)
+        {
+            lock (_gate)
+                return _suppressedFollowerRoots.Contains(BuildFollowerRootKey(account, root));
+        }
+
+        private void SuppressFollowerRoot(Account account, string root)
+        {
+            lock (_gate)
+                _suppressedFollowerRoots.Add(BuildFollowerRootKey(account, root));
+        }
+
+        private void ClearFollowerRootSuppression(Account account, string root)
+        {
+            lock (_gate)
+                _suppressedFollowerRoots.Remove(BuildFollowerRootKey(account, root));
+        }
+
+        private void ClearFollowerSuppressions(Account account)
+        {
+            string prefix = (account?.Name?.Trim() ?? string.Empty) + "|";
+            lock (_gate)
+            {
+                foreach (string key in _suppressedFollowerRoots
+                    .Where(key => key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    .ToList())
+                    _suppressedFollowerRoots.Remove(key);
             }
         }
 
@@ -1185,6 +1464,8 @@ namespace Glitch.Services
                 Action = source.Action,
                 OrderType = source.OrderType,
                 Quantity = source.Quantity,
+                EntryOrderFilledQuantity = source.EntryOrderFilledQuantity,
+                MasterNetAfterExecution = source.MasterNetAfterExecution,
                 OrderSignalName = source.OrderSignalName,
                 Oco = source.Oco
             };

@@ -1136,6 +1136,10 @@ namespace Glitch.Services
             var relevantCurrencies = ResolveRelevantCurrencies(instrumentRoot);
             EconomicEvent activeEvent = events
                 .Where(x => x != null && x.ImpactLevel >= 2)
+                // FRED publishes dataset-release schedules, not an authoritative
+                // live economic-event calendar. Keep those rows as analytics
+                // context, but never present them as an active compliance alert.
+                .Where(x => !string.Equals(x.Source, "FRED", StringComparison.OrdinalIgnoreCase))
                 .Where(x => IsEventRelevantToCurrencies(x, relevantCurrencies))
                 .Where(x =>
                 {
