@@ -1,15 +1,15 @@
 ---
 name: glitch-submit-intent
-description: Submit a completed Glitch intent batch through the direct local Hermes-to-Glitch bridge.
+description: Explain the supported interactive path for steering the persistent Glitch trading session without bypassing its worker.
 ---
 
 # Submit Glitch Intent
 
-Use this only when an interactive operator session—not the installed cron worker—needs to deliver a completed decision.
+Interactive chat never writes an outbox decision or posts a raw intent.
 
-1. Read the current packet from `GlitchData/hermes/exchange/glitch/latest-decision-packet.json`.
-2. Write exactly one `glitch.intent.batch.v1` object to `GlitchData/hermes/exchange/hermes/outbox/<packet_id>.json`.
-3. Run the installed `run-direct-glitch-cycle.py`; it validates scope and delivers the intent through Glitch's authenticated localhost firewall.
-4. Read `GlitchData/hermes/exchange/hermes/receipts/<packet_id>.json` for the authoritative delivery result.
+1. Use `/bias_long`, `/bias_short`, or `/bias_neutral` for a one-cycle advisory.
+2. Use `/long` or `/short` only for an operator-directed paper experiment. The command writes a bounded directive; the persistent trading session still calculates structure and emits the next decision.
+3. The installed worker alone validates the batch, writes the outbox, and delivers each intent through Glitch's authenticated receiver.
+4. Receipts and Glitch execution events are authoritative. A chat response is never evidence that an order exists.
 
-Never mutate Glitch policy, account groups, snapshots, Glitch-owned ledgers, or the executor. Never place an order through any path other than Glitch's intent receiver.
+Never write or replace an outbox file, invoke the worker manually to force a second decision, mutate policy/groups/snapshots, or place an order outside Glitch.

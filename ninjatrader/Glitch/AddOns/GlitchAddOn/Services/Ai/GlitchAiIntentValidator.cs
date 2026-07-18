@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
@@ -27,7 +28,19 @@ namespace Glitch.Services
             "action",
             "confidence",
             "snapshot_hash",
-            "model_version"
+            "model_version",
+            "prompt_version",
+            "reason",
+            "decision_audit"
+        };
+
+        private static readonly HashSet<string> AllowedFields = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "schema_version", "intent_id", "created_utc", "instrument", "account",
+            "operator_profile", "action", "quantity", "order_type",
+            "stop_loss", "take_profit_1", "take_profit_2", "stop_loss_2", "quantity_tp1",
+            "take_profit_3", "stop_loss_3", "quantity_tp2", "confidence", "snapshot_hash",
+            "model_version", "prompt_version", "reason", "decision_audit"
         };
 
         private static readonly HashSet<string> AllowedActions = new HashSet<string>(StringComparer.Ordinal)
@@ -49,7 +62,21 @@ namespace Glitch.Services
                 return Failure(errors);
             }
 
-            string schemaVersion = ExtractString(json, "schema_version");
+            if (!GlitchAiJsonFields.TryParseObject(json, out IDictionary parsed))
+            {
+                errors.Add("body_must_be_valid_json_object");
+                return Failure(errors);
+            }
+
+            RejectDuplicateContractFields(json, errors);
+            foreach (object rawKey in parsed.Keys)
+            {
+                string key = rawKey as string;
+                if (string.IsNullOrWhiteSpace(key) || !AllowedFields.Contains(key))
+                    errors.Add("unknown_field_" + (key ?? "non_string"));
+            }
+
+            string schemaVersion = ExtractString(parsed, "schema_version");
             if (!string.Equals(schemaVersion, "glitch.intent.v2", StringComparison.Ordinal))
                 errors.Add("schema_version_must_be_glitch.intent.v2");
 
@@ -61,51 +88,121 @@ namespace Glitch.Services
 
                 if (field == "confidence")
                 {
-                    if (!TryExtractNumber(json, field, out _))
+                    if (!TryExtractNumber(parsed, field, out double confidence)
+                        || confidence < 0 || confidence > 1)
                         errors.Add("missing_or_invalid_confidence");
                     continue;
                 }
 
-                if (string.IsNullOrWhiteSpace(ExtractString(json, field)))
+                if (field == "decision_audit")
+                {
+                    ValidateDecisionAudit(parsed, errors);
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(ExtractString(parsed, field)))
                     errors.Add("missing_" + field);
             }
 
-            string action = ExtractString(json, "action");
+            string action = ExtractString(parsed, "action");
             if (!string.IsNullOrWhiteSpace(action) && !AllowedActions.Contains(action))
                 errors.Add("invalid_action");
+
+            string intentIdText = ExtractString(parsed, "intent_id");
+            if (!Guid.TryParse(intentIdText, out _))
+                errors.Add("intent_id_must_be_uuid");
+
+            string createdUtcText = ExtractString(parsed, "created_utc");
+            bool hasUtcDesignator = !string.IsNullOrWhiteSpace(createdUtcText)
+                && (createdUtcText.EndsWith("Z", StringComparison.OrdinalIgnoreCase)
+                    || Regex.IsMatch(createdUtcText, "[+-]\\d{2}:\\d{2}$", RegexOptions.CultureInvariant));
+            if (!hasUtcDesignator || !DateTimeOffset.TryParse(
+                    createdUtcText,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                    out _))
+                errors.Add("created_utc_must_be_date_time");
 
             bool isEnter = string.Equals(action, "ENTER_LONG", StringComparison.Ordinal)
                 || string.Equals(action, "ENTER_SHORT", StringComparison.Ordinal);
             if (isEnter)
             {
-                if (!TryExtractNumber(json, "quantity", out double quantity) || quantity < 1)
+                if (!TryExtractNumber(parsed, "quantity", out double quantity) || quantity < 1 || !IsInteger(quantity))
                     errors.Add("enter_requires_quantity_ge_1");
 
-                if (!TryExtractNumber(json, "stop_loss", out _))
+                if (!TryExtractNumber(parsed, "stop_loss", out _))
                     errors.Add("enter_requires_stop_loss");
 
-                if (!TryExtractNumber(json, "take_profit_1", out _))
+                if (!TryExtractNumber(parsed, "take_profit_1", out _))
                     errors.Add("enter_requires_take_profit_1");
+
+                if (!string.Equals(ExtractString(parsed, "order_type"), "MARKET", StringComparison.Ordinal)
+                    || parsed.Contains("limit_price"))
+                    errors.Add("entry_must_be_market_only");
             }
 
             if (string.Equals(action, "MOVE_STOP", StringComparison.Ordinal)
-                && !TryExtractNumber(json, "stop_loss", out _))
+                && !TryExtractNumber(parsed, "stop_loss", out _))
                 errors.Add("move_stop_requires_stop_loss");
 
-            if (TryExtractNumber(json, "take_profit_2", out _))
+            if (TryExtractNumber(parsed, "take_profit_2", out _))
             {
-                if (!TryExtractNumber(json, "quantity", out double quantity) || quantity < 2)
+                if (!TryExtractNumber(parsed, "quantity", out double quantity) || quantity < 2 || !IsInteger(quantity))
                     errors.Add("tp2_requires_quantity_ge_2");
 
-                if (!TryExtractNumber(json, "quantity_tp1", out double quantityTp1) || quantityTp1 < 1)
+                if (!TryExtractNumber(parsed, "quantity_tp1", out double quantityTp1) || quantityTp1 < 1 || !IsInteger(quantityTp1))
                     errors.Add("tp2_requires_quantity_tp1");
             }
 
-            if (TryExtractNumber(json, "stop_loss_2", out _) && !TryExtractNumber(json, "take_profit_2", out _))
+            if (TryExtractNumber(parsed, "stop_loss_2", out _) && !TryExtractNumber(parsed, "take_profit_2", out _))
                 errors.Add("stop_loss_2_requires_take_profit_2");
 
-            string intentId = ExtractString(json, "intent_id");
-            string instrument = ExtractString(json, "instrument");
+            if (TryExtractNumber(parsed, "take_profit_3", out _))
+            {
+                if (!TryExtractNumber(parsed, "take_profit_2", out _))
+                    errors.Add("tp3_requires_take_profit_2");
+                if (!TryExtractNumber(parsed, "quantity", out double quantity) || quantity < 3 || !IsInteger(quantity))
+                    errors.Add("tp3_requires_quantity_ge_3");
+                if (!TryExtractNumber(parsed, "quantity_tp1", out double quantityTp1) || quantityTp1 < 1 || !IsInteger(quantityTp1)
+                    || !TryExtractNumber(parsed, "quantity_tp2", out double quantityTp2) || quantityTp2 < 1 || !IsInteger(quantityTp2)
+                    || quantityTp1 + quantityTp2 >= quantity)
+                    errors.Add("tp3_requires_valid_quantity_split");
+            }
+
+            if (TryExtractNumber(parsed, "stop_loss_3", out _) && !TryExtractNumber(parsed, "take_profit_3", out _))
+                errors.Add("stop_loss_3_requires_take_profit_3");
+
+            if (!isEnter && !string.Equals(action, "MOVE_STOP", StringComparison.Ordinal))
+            {
+                string[] prohibited =
+                {
+                    "quantity", "order_type", "limit_price", "stop_loss", "take_profit_1",
+                    "take_profit_2", "stop_loss_2", "quantity_tp1", "take_profit_3",
+                    "stop_loss_3", "quantity_tp2"
+                };
+                for (int i = 0; i < prohibited.Length; i++)
+                {
+                    if (parsed.Contains(prohibited[i]))
+                        errors.Add("field_not_allowed_for_" + action + "_" + prohibited[i]);
+                }
+            }
+
+            if (string.Equals(action, "MOVE_STOP", StringComparison.Ordinal))
+            {
+                string[] prohibited =
+                {
+                    "quantity", "order_type", "limit_price", "take_profit_1", "take_profit_2",
+                    "stop_loss_2", "quantity_tp1", "take_profit_3", "stop_loss_3", "quantity_tp2"
+                };
+                for (int i = 0; i < prohibited.Length; i++)
+                {
+                    if (parsed.Contains(prohibited[i]))
+                        errors.Add("field_not_allowed_for_MOVE_STOP_" + prohibited[i]);
+                }
+            }
+
+            string intentId = ExtractString(parsed, "intent_id");
+            string instrument = ExtractString(parsed, "instrument");
 
             if (errors.Count > 0)
             {
@@ -138,28 +235,100 @@ namespace Glitch.Services
             };
         }
 
-        private static string ExtractString(string json, string key)
+        private static void ValidateDecisionAudit(IDictionary parsed, List<string> errors)
         {
-            if (string.IsNullOrWhiteSpace(json) || string.IsNullOrWhiteSpace(key))
-                return null;
+            object rawAudit = parsed != null && parsed.Contains("decision_audit")
+                ? parsed["decision_audit"]
+                : null;
+            IDictionary audit = rawAudit as IDictionary;
+            if (audit == null)
+            {
+                errors.Add("missing_or_invalid_decision_audit");
+                return;
+            }
 
-            string pattern = "\"" + Regex.Escape(key) + "\"\\s*:\\s*\"([^\"]*)\"";
-            Match match = Regex.Match(json, pattern, RegexOptions.CultureInvariant);
-            return match.Success ? match.Groups[1].Value : null;
+            string[] fields =
+            {
+                "bull_case",
+                "bear_case",
+                "flat_case",
+                "aggressive_case",
+                "conservative_case",
+                "decisive_evidence",
+                "disconfirming_evidence",
+                "change_condition",
+                "final_choice"
+            };
+            var allowedAuditFields = new HashSet<string>(fields, StringComparer.Ordinal);
+            foreach (object rawKey in audit.Keys)
+            {
+                string key = rawKey as string;
+                if (string.IsNullOrWhiteSpace(key) || !allowedAuditFields.Contains(key))
+                    errors.Add("decision_audit_unknown_" + (key ?? "non_string"));
+            }
+            for (int i = 0; i < fields.Length; i++)
+            {
+                string field = fields[i];
+                object rawValue = audit.Contains(field) ? audit[field] : null;
+                if (!(rawValue is string value) || string.IsNullOrWhiteSpace(value))
+                    errors.Add("decision_audit_missing_" + field);
+            }
+
+            string finalChoice = audit.Contains("final_choice") ? audit["final_choice"] as string : null;
+            string action = ExtractString(parsed, "action");
+            if (!string.IsNullOrWhiteSpace(finalChoice)
+                && !string.Equals(finalChoice, action, StringComparison.Ordinal))
+                errors.Add("decision_audit_final_choice_mismatch");
         }
 
-        private static bool TryExtractNumber(string json, string key, out double value)
+        private static void RejectDuplicateContractFields(string json, List<string> errors)
+        {
+            string[] fields =
+            {
+                "schema_version", "intent_id", "created_utc", "instrument", "account",
+                "operator_profile", "action", "quantity", "order_type", "limit_price",
+                "stop_loss", "take_profit_1", "take_profit_2", "stop_loss_2", "quantity_tp1",
+                "take_profit_3", "stop_loss_3", "quantity_tp2", "confidence", "snapshot_hash",
+                "model_version", "prompt_version", "reason", "decision_audit"
+            };
+            for (int i = 0; i < fields.Length; i++)
+            {
+                string pattern = "\"" + Regex.Escape(fields[i]) + "\"\\s*:";
+                if (Regex.Matches(json, pattern, RegexOptions.CultureInvariant).Count > 1)
+                    errors.Add("duplicate_" + fields[i]);
+            }
+        }
+
+        private static bool IsInteger(double value)
+        {
+            return Math.Abs(value - Math.Round(value)) < 0.0000001;
+        }
+
+        private static string ExtractString(IDictionary parsed, string key)
+        {
+            if (parsed == null || string.IsNullOrWhiteSpace(key) || !parsed.Contains(key))
+                return null;
+            return parsed[key] as string;
+        }
+
+        private static bool TryExtractNumber(IDictionary parsed, string key, out double value)
         {
             value = 0;
-            if (string.IsNullOrWhiteSpace(json) || string.IsNullOrWhiteSpace(key))
+            if (parsed == null || string.IsNullOrWhiteSpace(key) || !parsed.Contains(key))
                 return false;
-
-            string pattern = "\"" + Regex.Escape(key) + "\"\\s*:\\s*(-?(?:\\d+(?:\\.\\d+)?|\\.\\d+))";
-            Match match = Regex.Match(json, pattern, RegexOptions.CultureInvariant);
-            if (!match.Success)
+            object raw = parsed[key];
+            if (raw == null || raw is bool || raw is string)
                 return false;
-
-            return double.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+            try
+            {
+                value = Convert.ToDouble(raw, CultureInfo.InvariantCulture);
+                return !double.IsNaN(value) && !double.IsInfinity(value);
+            }
+            catch
+            {
+                value = 0;
+                return false;
+            }
         }
     }
 }

@@ -194,6 +194,8 @@ namespace Glitch.UI
         private TextBlock _globalHeadroomValueText;
         private TextBlock _warningCountValueText;
         private Button _aiTradingButton;
+        private bool _aiAutoTransitionInProgress;
+        private bool _aiAutoTransitionTargetEnabled;
         private StackPanel _aiScopeRowsHost;
         private StackPanel _aiFeedHost;
         private TextBlock _aiFeedStatusText;
@@ -627,6 +629,12 @@ namespace Glitch.UI
         private Style CreateAiTradingButtonStyle(FrameworkElement context)
         {
             Style style = CreateStateToggleButtonStyle(context, "Glitch AI", "AI Auto On");
+            var startingTrigger = new Trigger { Property = FrameworkElement.TagProperty, Value = "Starting" };
+            startingTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, "AI Auto Starting..."));
+            style.Triggers.Add(startingTrigger);
+            var stoppingTrigger = new Trigger { Property = FrameworkElement.TagProperty, Value = "Stopping" };
+            stoppingTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, "AI Auto Stopping..."));
+            style.Triggers.Add(stoppingTrigger);
             var staleTrigger = new Trigger { Property = FrameworkElement.TagProperty, Value = "Stale" };
             staleTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, "AI Auto Stale"));
             staleTrigger.Setters.Add(new Setter(Control.BackgroundProperty, OrangeAccentBrush));
@@ -839,7 +847,19 @@ namespace Glitch.UI
         {
             if (_aiTradingButton == null)
                 return;
-            _aiTradingButton.Tag = paused ? "Stopped" : (IsAiDecisionLoopHealthy() ? "Running" : "Stale");
+            if (_aiAutoTransitionInProgress)
+            {
+                _aiTradingButton.Tag = _aiAutoTransitionTargetEnabled ? "Starting" : "Stopping";
+                return;
+            }
+
+            bool tradingJobEnabled = GlitchAiAutoRuntimeController.IsTradingJobEnabled();
+            if (paused && !tradingJobEnabled)
+                _aiTradingButton.Tag = "Stopped";
+            else if (!paused && tradingJobEnabled && IsAiDecisionLoopHealthy())
+                _aiTradingButton.Tag = "Running";
+            else
+                _aiTradingButton.Tag = "Stale";
         }
 
         private static bool IsAiDecisionLoopHealthy()
@@ -858,14 +878,58 @@ namespace Glitch.UI
             }
         }
 
-        private void OnAiTradingButtonClick(object sender, RoutedEventArgs e)
+        private async void OnAiTradingButtonClick(object sender, RoutedEventArgs e)
         {
+            if (_aiAutoTransitionInProgress)
+                return;
+
             GlitchHermesControlState state = GlitchHermesControlStateStore.Load();
-            state.TradingPaused = !state.TradingPaused;
-            state.LastCommandId = "ui-" + Guid.NewGuid().ToString("N");
-            GlitchHermesControlStateStore.Save(state);
+            bool tradingJobEnabled = GlitchAiAutoRuntimeController.IsTradingJobEnabled();
+            bool targetEnabled = state.TradingPaused || !tradingJobEnabled;
+
+            // OFF closes Glitch's execution gate synchronously before waiting
+            // for the background scheduler to pause.
+            if (!targetEnabled)
+            {
+                state.TradingPaused = true;
+                state.LastCommandId = "ui-" + Guid.NewGuid().ToString("N");
+                GlitchHermesControlStateStore.Save(state);
+            }
+
+            _aiAutoTransitionInProgress = true;
+            _aiAutoTransitionTargetEnabled = targetEnabled;
+            if (_aiTradingButton != null)
+                _aiTradingButton.IsEnabled = false;
             UpdateHermesModeUi(state.TradingPaused);
-            AppendJournal("System", "Glitch AI", state.TradingPaused ? "trading_off|origin=user_click" : "trading_on|origin=user_click");
+
+            GlitchAiAutoRuntimeResult result = await GlitchAiAutoRuntimeController.SetEnabledAsync(targetEnabled);
+            _aiAutoTransitionInProgress = false;
+            if (_aiTradingButton != null)
+                _aiTradingButton.IsEnabled = true;
+
+            state = GlitchHermesControlStateStore.Load();
+            UpdateHermesModeUi(state.TradingPaused);
+            if (result.Success)
+            {
+                AppendJournal(
+                    "System",
+                    "Glitch AI",
+                    targetEnabled
+                        ? "trading_on|cron=resumed|origin=user_click"
+                        : "trading_off|cron=paused|origin=user_click");
+            }
+            else
+            {
+                state.TradingPaused = true;
+                state.LastCommandId = "ui-failed-" + Guid.NewGuid().ToString("N");
+                GlitchHermesControlStateStore.Save(state);
+                UpdateHermesModeUi(true);
+                RaiseCriticalWarning(
+                    "System",
+                    "Glitch AI Auto could not change the background job: " + result.Message,
+                    "AiAutoControl",
+                    unlocksTrading: false);
+            }
             RefreshAiTab();
         }
 
@@ -5205,6 +5269,7 @@ namespace Glitch.UI
 
                 UpdateWarningCountUi();
                 RefreshWarningCollectionViews();
+                RefreshTradeLedgerFromJournal(DateTime.UtcNow);
             }
             catch
             {

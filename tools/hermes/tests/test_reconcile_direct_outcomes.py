@@ -19,12 +19,12 @@ def dotnet_ticks(value):
     return int(stamp.timestamp() * 10_000_000) + MODULE.DOTNET_EPOCH_TICKS
 
 
-def ledger_row(account, entry_utc, exit_utc, entry_price, exit_price, correlation=""):
-    points = exit_price - entry_price
-    signal = f"GLT-AI-E-{correlation.upper()}-0" if correlation else "GLT-COPY"
-    trade_id = f"{account}|MNQ|L|{dotnet_ticks(entry_utc)}|{dotnet_ticks(exit_utc)}|1|{entry_price}|{exit_price}"
+def ledger_row(account, entry_utc, exit_utc, entry_price, exit_price, correlation="", quantity=1, entry_signal=None):
+    points = (exit_price - entry_price) * quantity
+    signal = entry_signal or (f"GLT-AI-E-{correlation.upper()}-0" if correlation else "GLT-COPY")
+    trade_id = f"{account}|MNQ|L|{dotnet_ticks(entry_utc)}|{dotnet_ticks(exit_utc)}|{quantity}|{entry_price}|{exit_price}"
     return "\t".join(map(str, [
-        trade_id, dotnet_ticks(entry_utc), dotnet_ticks(exit_utc), account, "MNQ", "Long", 1,
+        trade_id, dotnet_ticks(entry_utc), dotnet_ticks(exit_utc), account, "MNQ", "Long", quantity,
         entry_price, exit_price, points, signal, "Manual / Other", "Asia", "Asia",
         "Strategy" if correlation else "Replication", "SYNC", "SYNC", signal, "GLT-EXIT", 0,
     ])) + "\n"
@@ -42,8 +42,8 @@ class DirectOutcomeReconcileTests(unittest.TestCase):
             (gd / "snapshots" / "historical" / "portfolio").mkdir(parents=True)
             (gd / "AccountGroups.tsv").write_text(
                 "G\tg1\tSim101\t100000\n"
-                "M\tg1\tSim102\t100000\t1\t100000\t1\n"
-                "M\tg1\tSim103\t100000\t1\t100000\t1\n",
+                "M\tg1\tSim102\t100000\t2\t100000\t1\n"
+                "M\tg1\tSim103\t100000\t3\t100000\t1\n",
                 encoding="utf-8",
             )
             intent_id = "00000000-0000-4000-8000-000000000001"
@@ -61,8 +61,6 @@ class DirectOutcomeReconcileTests(unittest.TestCase):
             events = [
                 ("2026-07-14T12:00:01Z", "master_entry_submitted", f"contract=MNQ 09-26|correlation={correlation}|expected_accounts=Sim101,Sim102,Sim103"),
                 ("2026-07-14T12:00:02Z", "group_structural_brackets_submitted", "account=Sim101|fill=20000|sl=19980|tp1=20040|quantity=1"),
-                ("2026-07-14T12:00:03Z", "follower_structural_brackets_submitted", "account=Sim102|fill=20001|sl=19981|tp1=20041|quantity=1"),
-                ("2026-07-14T12:00:04Z", "follower_structural_brackets_submitted", "account=Sim103|fill=20002|sl=19982|tp1=20042|quantity=1"),
                 ("2026-07-14T12:05:01Z", "group_trade_closed", "state=flat_and_orders_terminal"),
             ]
             execution_path = gd / "intents" / "executions.jsonl"
@@ -71,15 +69,26 @@ class DirectOutcomeReconcileTests(unittest.TestCase):
             }) + "\n" for stamp, code, message in events), encoding="utf-8")
 
             ledger = gd / "TradeLedger.tsv"
+            sim102_signal = "GLT-COPY-E-SIM102-ENTRY1"
+            sim103_signal = "GLT-COPY-E-SIM103-ENTRY1"
             ledger.write_text(
                 ledger_row("Sim101", "2026-07-14T12:00:02Z", "2026-07-14T12:05:01Z", 20000, 20010, correlation)
-                + ledger_row("Sim102", "2026-07-14T12:00:03Z", "2026-07-14T12:05:02Z", 20001, 20010),
+                + ledger_row("Sim102", "2026-07-14T12:00:03Z", "2026-07-14T12:05:02Z", 20001, 20010, quantity=2, entry_signal=sim102_signal),
+                encoding="utf-8",
+            )
+            (gd / "Journal.tsv").write_text(
+                f"{dotnet_ticks('2026-07-14T12:00:03Z')}\tSim102\tReplication\tfollower_protection|entry={sim102_signal}|protected_qty=2|result=submitted\n",
                 encoding="utf-8",
             )
             self.assertEqual(MODULE.reconcile(gd, None, output, outbox), [])
 
             with ledger.open("a", encoding="utf-8") as stream:
-                stream.write(ledger_row("Sim103", "2026-07-14T12:00:04Z", "2026-07-14T12:05:03Z", 20002, 20010))
+                stream.write(ledger_row("Sim103", "2026-07-14T12:00:04Z", "2026-07-14T12:05:03Z", 20002, 20010, quantity=3, entry_signal=sim103_signal))
+            with (gd / "Journal.tsv").open("a", encoding="utf-8") as stream:
+                stream.write(
+                    f"{dotnet_ticks('2026-07-14T12:00:04Z')}\tSim103\tReplication\t"
+                    f"follower_protection|entry={sim103_signal}|protected_qty=3|result=submitted\n"
+                )
             snapshots = [
                 ("2026-07-14T12:00:00Z", {"Sim101": 0, "Sim102": 0, "Sim103": 0}),
                 ("2026-07-14T12:05:04Z", {"Sim101": 20, "Sim102": 18, "Sim103": 16}),
@@ -94,8 +103,17 @@ class DirectOutcomeReconcileTests(unittest.TestCase):
             rows = MODULE.reconcile(gd, None, output, outbox)
             self.assertEqual(len(rows), 1)
             self.assertEqual([row["account"] for row in rows[0]["account_outcomes"]], ["Sim101", "Sim102", "Sim103"])
-            self.assertEqual(rows[0]["group_realized_pnl_usd"], 54)
+            self.assertEqual([row["quantity"] for row in rows[0]["account_outcomes"]], [1, 2, 3])
+            self.assertEqual(rows[0]["group_realized_pnl_usd"], 104)
             self.assertTrue(all(row["trade_id"] for row in rows[0]["account_outcomes"]))
+            self.assertEqual(
+                [row["close_kind"] for row in rows[0]["account_outcomes"]],
+                ["managed_exit", "managed_exit", "managed_exit"],
+            )
+            self.assertEqual(
+                [row["protection_evidence"] for row in rows[0]["account_outcomes"]],
+                ["execution_receipt", "copy_engine_journal", "copy_engine_journal"],
+            )
 
 
 if __name__ == "__main__":

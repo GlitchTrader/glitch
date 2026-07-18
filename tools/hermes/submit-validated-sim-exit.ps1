@@ -95,44 +95,36 @@ if ($boundAge -lt -5 -or $boundAge -gt [double]$policyBefore.snapshot_max_age_se
 }
 
 $originalPolicyJson = Get-Content -LiteralPath $policyPath -Raw
-if ($policyBefore.mode -ne 'paper' -or [bool]$policyBefore.executor_enabled) {
-    throw 'Expected paper/unarmed policy before managed exit.'
+if ($policyBefore.mode -ne 'paper') {
+    throw 'Bounded Sim exit requires Glitch paper mode.'
 }
 $submitLockPath = Join-Path $gd 'ai\sim-submit.lock'
 $submitLock = $null
+if (Test-Path -LiteralPath $submitLockPath) {
+    try {
+        $staleLock = [IO.File]::Open($submitLockPath, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+        $staleLock.Dispose()
+        Remove-Item -LiteralPath $submitLockPath -Force
+    } catch {
+        throw 'Another profile is already inside the one-shot Sim submission gate.'
+    }
+}
 try {
     $submitLock = [IO.File]::Open($submitLockPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
 } catch {
     throw 'Another profile is already inside the one-shot Sim submission gate.'
 }
 
-$armed = $false
-$tempPolicy = $null
 try {
-    $policyBefore.mode = 'sim'
-    $policyBefore.executor_enabled = $true
-    $tempPolicy = "$policyPath.$([guid]::NewGuid().ToString('N')).tmp"
-    $policyBefore | ConvertTo-Json -Depth 10 -Compress | Set-Content -LiteralPath $tempPolicy -Encoding UTF8
-    Move-Item -LiteralPath $tempPolicy -Destination $policyPath -Force
-    $tempPolicy = $null
-    $armed = $true
-
-    $simPreflight = Get-ManagedPreflight 'sim'
-    $managedGroup = Assert-ExactManagedGroup $simPreflight
     $boundAgePrePost = ([datetime]::UtcNow - [datetime]::Parse($boundSnapshot.created_utc).ToUniversalTime()).TotalSeconds
     if ($boundAgePrePost -lt -5 -or $boundAgePrePost -gt [double]$policyBefore.snapshot_max_age_seconds) {
-        throw 'Validated exit snapshot expired during arm; no POST performed.'
+        throw 'Validated exit snapshot expired before POST.'
     }
 
     $body = $intent | ConvertTo-Json -Depth 10 -Compress
     $response = Invoke-WebRequest -Uri 'http://127.0.0.1:8788/intent' -Method Post -Headers $headers `
         -ContentType 'application/json' -Body $body -UseBasicParsing -TimeoutSec 15
     if ($response.StatusCode -ne 202) { throw "Sim EXIT expected 202, got $($response.StatusCode)." }
-
-    $disarmTemp = "$policyPath.$([guid]::NewGuid().ToString('N')).disarm"
-    $originalPolicyJson | Set-Content -LiteralPath $disarmTemp -Encoding UTF8
-    Move-Item -LiteralPath $disarmTemp -Destination $policyPath -Force
-    $armed = $false
 
     $executionJournal = Join-Path $gd 'intents\executions.jsonl'
     $executionRecord = $null
@@ -171,15 +163,11 @@ try {
         accounts = $managedGroup.accounts
         execution = $executionRecord
         executor_left_armed = $false
+        temporary_executor_arm_used = $false
+        trading_state_unchanged = $true
         postcondition = 'group_flat_no_working_orders'
     } | ConvertTo-Json -Depth 10
 } finally {
-    if ($armed) {
-        $restoreTemp = "$policyPath.$([guid]::NewGuid().ToString('N')).restore"
-        $originalPolicyJson | Set-Content -LiteralPath $restoreTemp -Encoding UTF8
-        Move-Item -LiteralPath $restoreTemp -Destination $policyPath -Force
-    }
-    if ($tempPolicy -and (Test-Path -LiteralPath $tempPolicy)) { Remove-Item -LiteralPath $tempPolicy -Force }
     if ($submitLock) { $submitLock.Dispose() }
     Remove-Item -LiteralPath $submitLockPath -Force -ErrorAction SilentlyContinue
 }

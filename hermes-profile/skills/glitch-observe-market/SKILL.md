@@ -1,17 +1,16 @@
 ---
 name: glitch-observe-market
-description: Read one completed Glitch MNQ market snapshot and bounded historical context, verify data quality, and classify the observable regime without issuing a trade.
+description: Read the supplied direct Glitch decision packet and describe observable MNQ state without issuing a trade.
 ---
 
 # Observe Market
 
-Use only files supplied in `/opt/glitch-data`.
+Use only `CURRENT_CYCLE.decision_packet` for current market facts.
 
-1. For a supplied `glitch.hermes.portfolio_cycle.v1`, treat that cycle's market envelope and `local_safety_attestation` as the only current-cycle authority. Require its snapshot hash, MNQ, completed bars, and machine features. Do not inspect or use `current/policy.json`, `current/portfolio.latest.json`, or old journal records to re-decide current account eligibility; Glitch already performed that private local check. For other cycle types, require the explicitly supplied current market and policy inputs. Mark the cycle invalid only when a required supplied item is absent or stale.
-2. Describe only observable state: session, price location, trend/alignment across 1m/5m/15m/60m, volatility, momentum, liquidity/order flow when present, and conflicts.
-3. Use supplied `market.machine_features` and `market.archetype_evaluation` as the exact local measurement layer. Compare with active `knowledge/archetypes.v2.json` and retrieved examples under `history/market/`. V2 statuses and regime preconditions are authoritative evidence; archetypes remain priors rather than a whitelist.
-4. Never claim or tag an archetype match unless its supplied `exact_match` is true. If no exact match exists, a falsifiable novel thesis remains allowed but must be tagged `discretionary_candidate:<short_name>` and must name the mismatch with the closest archetype.
-5. Do not recompute or override supplied machine features, infer indicators that are missing, or use future bars.
-6. Pass a compact observation to the risk and thesis steps: `data_valid`, `regime`, `supporting_signals`, `conflicting_signals`, `matched_archetypes`, and `novel_pattern_notes`.
+1. Require five consecutive frames, the current MNQ snapshot hash, and the scoped portfolio rows. Do not open old policy or current-state files to re-decide this cycle.
+2. Treat each timeframe row as a live in-progress observation unless explicitly marked closed. Its UTC value is observation time, not proof of candle close. Confirmation is probabilistic: infer it from the five-frame path and current structure rather than requiring a closed candle.
+3. Use 1m and 5m for entry timing, local structure, and noise. Use 15m and 60m for regime and location. Higher-timeframe disagreement changes confidence and quantity; it does not automatically veto or force a short-term trade.
+4. Describe price location, recent five-frame path, support/resistance, volatility, momentum, trend, and order flow when present. Missing order flow is neutral and must not become evidence against a trade. Numeric scores are lossy evidence, not authority over raw price.
+5. Never invent missing indicators, future bars, sentiment, news, or a pattern match. Archetypes may inform judgment but are never a whitelist.
 
-This skill never emits or submits an intent.
+Pass a compact observation to risk and thesis: data quality, regime, local path, structure, volatility/noise, supporting evidence, conflicts, and missing evidence. This skill never emits or submits an intent.

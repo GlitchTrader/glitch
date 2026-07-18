@@ -114,7 +114,7 @@ cooldown
 trade count
 stale data checks
 duplicate intent checks
-news lockout checks
+authoritative session-open, entry-cutoff, and must-flat checks
 ```
 
 ### GlitchAiOrderExecutor

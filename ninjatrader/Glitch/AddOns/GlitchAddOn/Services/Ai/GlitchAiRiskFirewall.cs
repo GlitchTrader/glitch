@@ -11,6 +11,8 @@ namespace Glitch.Services
         {
             var trail = new List<string>();
             GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
+            if (policy == null || !policy.IsValid)
+                return Reject(trail, 1, "policy_invalid", policy?.ValidationError ?? "policy_unavailable");
 
             string action = GlitchAiJsonFields.ExtractString(rawJson, "action");
             string instrument = GlitchAiJsonFields.ExtractString(rawJson, "instrument");
@@ -20,9 +22,8 @@ namespace Glitch.Services
             string snapshotHash = GlitchAiJsonFields.ExtractString(rawJson, "snapshot_hash");
             bool isEnter = IsEnterAction(action);
 
-            // Trading ON/OFF is the sole operational switch. Legacy ai_enabled
-            // and ai_kill_switch policy fields remain readable for file
-            // compatibility but do not create additional runtime gates.
+            // Trading ON/OFF is the sole operational switch. The policy store
+            // removes retired ai_enabled/ai_kill_switch fields during migration.
             trail.Add("01_trading_mode:delegated_to_control_state");
 
             if (isEnter && GlitchHermesControlStateStore.Load().TradingPaused)
@@ -61,8 +62,9 @@ namespace Glitch.Services
             double snapshotMarketPrice = 0;
             bool portfolioRiskLocked = false;
             bool portfolioEvalTargetLocked = false;
-            double portfolioRealizedToday = 0;
+            int portfolioMaxContracts = 0;
             string portfolioAccountJson = null;
+            GlitchAiTradingWindowStatus tradingWindow = null;
             if (isEnter)
             {
                 string snapshotFailure;
@@ -84,12 +86,23 @@ namespace Glitch.Services
                     policy.SnapshotMaxAgeSeconds,
                     out portfolioRiskLocked,
                     out portfolioEvalTargetLocked,
-                    out portfolioRealizedToday,
+                    out _,
                     out portfolioAccountJson,
                     out portfolioFailure))
                 {
                     return Reject(trail, 6, "portfolio_snapshot_invalid", portfolioFailure);
                 }
+
+                if (!GlitchAiJsonFields.TryExtractNumber(portfolioAccountJson, "max_contracts", out double maxContracts)
+                    || maxContracts < 1)
+                    return Reject(trail, 6, "portfolio_contract_ceiling_missing", account);
+                portfolioMaxContracts = (int)Math.Floor(maxContracts);
+
+                string tradingStart = GlitchAiJsonFields.ExtractString(portfolioAccountJson, "trading_start_time_et");
+                string tradingEnd = GlitchAiJsonFields.ExtractString(portfolioAccountJson, "trading_end_time_et");
+                tradingWindow = GlitchAiTradingWindow.Evaluate(nowUtc, tradingStart, tradingEnd);
+                if (!tradingWindow.IsValid)
+                    return Reject(trail, 6, "trading_window_unavailable", tradingWindow.Failure);
 
                 trail.Add("06_portfolio_snapshot_fresh_complete:pass");
             }
@@ -112,7 +125,7 @@ namespace Glitch.Services
                 trail.Add("11_daily_loss_budget:not_required_for_non_entry");
                 trail.Add("12_bracket_sane:not_required_for_non_entry");
                 trail.Add("13_position_conflict:not_required_for_non_entry");
-                trail.Add("14_session_news_lockout:not_required_for_non_entry");
+                trail.Add("14_session_time_policy:not_required_for_non_entry");
                 trail.Add("15_compliance:pass_risk_reducing_or_noop");
                 return GlitchAiRiskDecision.Approve(trail);
             }
@@ -122,39 +135,12 @@ namespace Glitch.Services
                 double tradeRiskUsd;
                 if (!TryComputeTradeRiskUsd(rawJson, instrument, action, snapshotMarketPrice, out tradeRiskUsd))
                     return Reject(trail, 10, "risk_not_computable", instrument);
-
-                if (tradeRiskUsd > policy.MaxLossPerTradeUsd)
-                {
-                    return Reject(
-                        trail,
-                        10,
-                        "max_loss_per_trade_exceeded",
-                        tradeRiskUsd.ToString("F2", CultureInfo.InvariantCulture));
-                }
-                double requestedQuantity;
-                GlitchAiJsonFields.TryExtractNumber(rawJson, "quantity", out requestedQuantity);
-                if (requestedQuantity <= 0 || tradeRiskUsd / requestedQuantity > policy.MaxRiskPerContractUsd)
-                {
-                    return Reject(
-                        trail,
-                        10,
-                        "max_risk_per_contract_exceeded",
-                        (requestedQuantity <= 0 ? tradeRiskUsd : tradeRiskUsd / requestedQuantity).ToString("F2", CultureInfo.InvariantCulture));
-                }
-
-                double lossToday = portfolioRealizedToday < 0 ? -portfolioRealizedToday : 0;
-                if (policy.MaxDailyLossUsd > 0 && lossToday + tradeRiskUsd > policy.MaxDailyLossUsd)
-                {
-                    return Reject(
-                        trail,
-                        11,
-                        "max_daily_loss_exceeded",
-                        (lossToday + tradeRiskUsd).ToString("F2", CultureInfo.InvariantCulture));
-                }
+                trail.Add("10_trade_risk_computable:pass_usd="
+                    + tradeRiskUsd.ToString("F2", CultureInfo.InvariantCulture));
             }
 
             trail.Add("10_risk_per_trade:pass");
-            trail.Add("11_daily_loss_budget:pass");
+            trail.Add("11_prop_risk_state:deferred_to_authoritative_account_lock");
 
             if (isEnter)
             {
@@ -162,10 +148,6 @@ namespace Glitch.Services
                 if (!IsBracketSane(rawJson, instrument, action, snapshotMarketPrice, out bracketFailure))
                     return Reject(trail, 12, "bracket_invalid", bracketFailure);
 
-                double quantity;
-                GlitchAiJsonFields.TryExtractNumber(rawJson, "quantity", out quantity);
-                if (quantity > policy.MaxContracts)
-                    return Reject(trail, 12, "max_contracts_exceeded", quantity.ToString(CultureInfo.InvariantCulture));
             }
 
             trail.Add("12_bracket_sane:pass");
@@ -178,20 +160,25 @@ namespace Glitch.Services
                     instrument,
                     out openQty))
                     return Reject(trail, 13, "portfolio_positions_invalid", account);
+                int totalOpenContracts;
+                if (!GlitchAiPortfolioSnapshotReader.TryGetTotalOpenContractsFromAccountBlock(
+                    portfolioAccountJson,
+                    out totalOpenContracts))
+                    return Reject(trail, 13, "portfolio_positions_invalid", account);
                 double requestedQuantity;
                 GlitchAiJsonFields.TryExtractNumber(rawJson, "quantity", out requestedQuantity);
                 bool opposite = (string.Equals(action, "ENTER_LONG", StringComparison.Ordinal) && openQty < 0)
                     || (string.Equals(action, "ENTER_SHORT", StringComparison.Ordinal) && openQty > 0);
                 if (opposite)
                     return Reject(trail, 13, "position_conflict", "opposite_position_exists");
-                if (Math.Abs(openQty) + requestedQuantity > policy.MaxContracts)
-                    return Reject(trail, 13, "max_contracts_exceeded", (Math.Abs(openQty) + requestedQuantity).ToString(CultureInfo.InvariantCulture));
+                if (totalOpenContracts + requestedQuantity > portfolioMaxContracts)
+                    return Reject(trail, 13, "max_contracts_exceeded", (totalOpenContracts + requestedQuantity).ToString(CultureInfo.InvariantCulture));
             }
 
             trail.Add("13_position_conflict:pass");
 
-            if (policy.NewsLockout)
-                return Reject(trail, 14, "news_lockout", "news_lockout");
+            if (tradingWindow == null || !tradingWindow.IsEntryAllowed)
+                return Reject(trail, 14, "trading_window_closed", "positions must be flat before 16:59 ET");
 
             string sessionName;
             if (GlitchAiSnapshotRegistry.TryGetInstrumentSession(instrument, out sessionName)
@@ -200,7 +187,7 @@ namespace Glitch.Services
                 return Reject(trail, 14, "session_lockout", sessionName);
             }
 
-            trail.Add("14_session_news_lockout:pass");
+            trail.Add("14_session_time_policy:pass");
 
             if (portfolioRiskLocked)
                 return Reject(trail, 15, "account_risk_locked", account);
@@ -300,6 +287,20 @@ namespace Glitch.Services
             if (GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss_2", out stopLoss2) && !IsTickRounded(stopLoss2, tick))
             {
                 failure = "stop_loss_2";
+                return false;
+            }
+
+            double takeProfit3;
+            if (GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_3", out takeProfit3) && !IsTickRounded(takeProfit3, tick))
+            {
+                failure = "take_profit_3";
+                return false;
+            }
+
+            double stopLoss3;
+            if (GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss_3", out stopLoss3) && !IsTickRounded(stopLoss3, tick))
+            {
+                failure = "stop_loss_3";
                 return false;
             }
 
@@ -444,6 +445,52 @@ namespace Glitch.Services
                 else if (stopLoss2 >= stopLoss || stopLoss2 <= entry)
                 {
                     failure = "stop_loss_2_not_tighter_loss_side";
+                    return false;
+                }
+            }
+
+            double takeProfit3;
+            if (GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_3", out takeProfit3))
+            {
+                double quantity;
+                double quantityTp1;
+                double quantityTp2;
+                if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_2", out takeProfit2))
+                {
+                    failure = "tp3_requires_tp2";
+                    return false;
+                }
+                if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "quantity", out quantity) || quantity < 3
+                    || !GlitchAiJsonFields.TryExtractNumber(rawJson, "quantity_tp1", out quantityTp1) || quantityTp1 < 1
+                    || !GlitchAiJsonFields.TryExtractNumber(rawJson, "quantity_tp2", out quantityTp2) || quantityTp2 < 1
+                    || quantityTp1 + quantityTp2 >= quantity)
+                {
+                    failure = "tp3_quantity_split_invalid";
+                    return false;
+                }
+                if (isLong ? takeProfit3 <= takeProfit2 : takeProfit3 >= takeProfit2)
+                {
+                    failure = "tp3_not_beyond_tp2";
+                    return false;
+                }
+            }
+
+            double stopLoss3;
+            if (GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss_3", out stopLoss3))
+            {
+                if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_3", out takeProfit3))
+                {
+                    failure = "stop_loss_3_requires_tp3";
+                    return false;
+                }
+                double precedingStop = GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss_2", out stopLoss2)
+                    ? stopLoss2
+                    : stopLoss;
+                if (isLong
+                    ? stopLoss3 <= precedingStop || stopLoss3 >= entry
+                    : stopLoss3 >= precedingStop || stopLoss3 <= entry)
+                {
+                    failure = "stop_loss_3_not_tighter_loss_side";
                     return false;
                 }
             }

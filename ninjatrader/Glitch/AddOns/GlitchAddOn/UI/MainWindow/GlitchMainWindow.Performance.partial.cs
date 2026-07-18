@@ -272,9 +272,25 @@ namespace Glitch.UI
             for (int i = batch.Count - 1; i >= 0; i--)
                 _journalEntries.Insert(0, batch[i]);
 
+            bool containsExecution = batch.Any(entry =>
+                entry != null &&
+                string.Equals(entry.Category, "Execution", StringComparison.OrdinalIgnoreCase));
+
             const int maxJournalEntries = 800;
             while (_journalEntries.Count > maxJournalEntries)
                 _journalEntries.RemoveAt(_journalEntries.Count - 1);
+
+            if (containsExecution)
+            {
+                try
+                {
+                    RefreshTradeLedgerFromJournal(nowUtc);
+                }
+                catch (Exception error)
+                {
+                    RecordSubsystemFault("trade_ledger", error);
+                }
+            }
         }
 
         internal void RequestAnalyticsRefresh()

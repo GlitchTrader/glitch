@@ -62,31 +62,28 @@ if ($boundAge -lt -5 -or $boundAge -gt [double]$policyBefore.snapshot_max_age_se
     throw 'Validated entry snapshot is outside the policy freshness window; executor remains unarmed.'
 }
 
-$originalPolicyJson = Get-Content -LiteralPath $policyPath -Raw
-$policy = $originalPolicyJson | ConvertFrom-Json
-if ($policy.mode -ne 'paper' -or [bool]$policy.executor_enabled) { throw 'Expected paper/unarmed policy before Sim arm.' }
+$policy = Get-Content -LiteralPath $policyPath -Raw | ConvertFrom-Json
+if ($policy.mode -ne 'paper') { throw 'Bounded Sim submission requires Glitch paper mode.' }
 $submitLockPath = Join-Path $gd 'ai\sim-submit.lock'
 $submitLock = $null
+if (Test-Path -LiteralPath $submitLockPath) {
+    try {
+        $staleLock = [IO.File]::Open($submitLockPath, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+        $staleLock.Dispose()
+        Remove-Item -LiteralPath $submitLockPath -Force
+    } catch {
+        throw 'Another profile is already inside the one-shot Sim submission gate.'
+    }
+}
 try {
     $submitLock = [IO.File]::Open($submitLockPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
 } catch {
     throw 'Another profile is already inside the one-shot Sim submission gate.'
 }
-$policy.mode = 'sim'
-$policy.executor_enabled = $true
-$tempPolicy = "$policyPath.$([guid]::NewGuid().ToString('N')).tmp"
-$armed = $false
 try {
-    $policy | ConvertTo-Json -Depth 10 -Compress | Set-Content -LiteralPath $tempPolicy -Encoding UTF8
-    Move-Item -LiteralPath $tempPolicy -Destination $policyPath -Force
-    $armed = $true
-
-    $simPreflightOutput = & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'preflight-open.ps1') -Target sim -Profile $profile -MasterAccount $masterAccount 2>&1
-    if ($LASTEXITCODE -ne 0) { throw "Sim preflight failed after arm: $($simPreflightOutput -join ' ')" }
-
     $boundAgePrePost = ([datetime]::UtcNow - [datetime]::Parse($boundSnapshot.created_utc).ToUniversalTime()).TotalSeconds
     if ($boundAgePrePost -lt -5 -or $boundAgePrePost -gt [double]$policy.snapshot_max_age_seconds) {
-        throw 'Validated entry snapshot expired during arm; no POST performed.'
+        throw 'Validated entry snapshot expired before POST.'
     }
 
     $body = $intent | ConvertTo-Json -Depth 10 -Compress
@@ -100,13 +97,6 @@ try {
         throw
     }
     if ($response.StatusCode -ne 202) { throw "Sim intent expected 202, got $($response.StatusCode)." }
-    # One-shot arm: the server has synchronously accepted and submitted this
-    # intent. Return to paper/unarmed immediately; native account-held brackets
-    # continue managing the open trade without permitting another entry.
-    $disarmTemp = "$policyPath.$([guid]::NewGuid().ToString('N')).disarm"
-    $originalPolicyJson | Set-Content -LiteralPath $disarmTemp -Encoding UTF8
-    Move-Item -LiteralPath $disarmTemp -Destination $policyPath -Force
-    $armed = $false
     $executionJournal = Join-Path $gd 'intents\executions.jsonl'
     $executionRecord = $null
     $executionFailure = $null
@@ -144,16 +134,10 @@ try {
         response = $response.Content
         execution = $executionRecord
         executor_left_armed = $false
+        temporary_executor_arm_used = $false
+        trading_state_unchanged = $true
         preflight_before = $before
     } | ConvertTo-Json -Depth 10
-} catch {
-    if ($armed) {
-        $restoreTemp = "$policyPath.$([guid]::NewGuid().ToString('N')).restore"
-        $originalPolicyJson | Set-Content -LiteralPath $restoreTemp -Encoding UTF8
-        Move-Item -LiteralPath $restoreTemp -Destination $policyPath -Force
-    }
-    Remove-Item -LiteralPath $tempPolicy -Force -ErrorAction SilentlyContinue
-    throw
 } finally {
     if ($submitLock) { $submitLock.Dispose() }
     Remove-Item -LiteralPath $submitLockPath -Force -ErrorAction SilentlyContinue

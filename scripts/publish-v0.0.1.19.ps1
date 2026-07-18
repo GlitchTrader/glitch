@@ -1,4 +1,4 @@
-# ponytail: one-shot v0.0.1.19 publish — run from repo root after NT export to ninjatrader/Glitch/Glitch.zip
+# ponytail: one-shot v0.0.1.19 publish - run from repo root after NT export to ninjatrader/Glitch/Glitch.zip
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot\..
@@ -7,7 +7,7 @@ $zipSrc = 'ninjatrader\Glitch\Glitch.zip'
 $zipDest = 'apps\download\public\files\Glitch_v0.0.1.19.zip'
 
 if (-not (Test-Path -LiteralPath $zipSrc)) {
-    throw "Missing $zipSrc — export compiled AddOn from NinjaTrader first."
+    throw "Missing $zipSrc - export compiled AddOn from NinjaTrader first."
 }
 
 New-Item -ItemType Directory -Force -Path (Split-Path $zipDest) | Out-Null
@@ -24,7 +24,7 @@ git add apps/download/src/lib/release-dates.json
 git add docs/ledger/log.md
 
 git commit -m @"
-release: publish Glitch v0.0.1.19 — event copy + account.Flatten money path
+release: publish Glitch v0.0.1.19 - event copy + account.Flatten money path
 
 Strip unauthorized money paths: pure fill mirror, NT flatten primitive only.
 "@

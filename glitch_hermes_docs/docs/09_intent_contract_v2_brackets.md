@@ -8,14 +8,14 @@ v1 allowed `stop_loss` and `take_profit_1` to be null. The operator has closed t
 
 ```text
 Every order MUST HAVE SL and TP. NT handles execution.
-AI is not responsible for stopping a loss mid-flight — NT/Glitch are.
+AI is not required for protection to work — NT/Glitch hold the native brackets.
 ```
 
-Rationale: if the connection to Hermes dies, if Hermes hangs, if Glitch's UI thread stalls — the protective orders must already exist inside NinjaTrader (and at the broker where supported). The AI's job ends the moment the intent is accepted.
+Rationale: if the connection to Hermes dies, if Hermes hangs, or if Glitch's UI thread stalls, protective orders must already exist inside NinjaTrader (and at the broker where supported). Later AI cycles may hold, tighten, add a protected same-direction tranche, or exit; protection never depends on those later calls.
 
 ## Cadence
 
-Hermes analyzes the tape every **5 minutes** (candle close) and emits **at most one intent per instrument per cycle**. Glitch acts on it or rejects it. There is no streaming decision channel.
+Hermes reviews every five-minute boundary while flat and each minute while a scoped master is positioned. Each invoked cycle emits one intent per configured route-bound group. Timeframe rows are live in-progress observations unless explicitly marked closed.
 
 ## Action set
 
@@ -24,10 +24,11 @@ Hermes analyzes the tape every **5 minutes** (candle close) and emits **at most 
 | `ENTER_LONG` | BUY | open long | **required** |
 | `ENTER_SHORT` | SELL | open short | **required** |
 | `HOLD` | HOLD | keep existing position unchanged | ignored |
+| `MOVE_STOP` | — | tighten every active Glitch-owned master stop | `stop_loss` only |
 | `EXIT` | — | close existing position now (risk-reducing, always allowed) | ignored |
 | `NOTHING` | DO-NOTHING | flat and stay flat | ignored |
 
-`ADJUST_STOP` / `PARTIAL_EXIT` remain reserved for M1 and are rejected in M0. When enabled, `ADJUST_STOP` may only *tighten* (reduce risk) — a widening adjustment is rejected at the firewall.
+`ADJUST_STOP` remains an unsupported legacy alias; use `MOVE_STOP`. Partial exits happen through independently protected target legs rather than an unprotected free-form command.
 
 ## Bracket fields (ENTER_* intents)
 
@@ -38,6 +39,9 @@ Hermes analyzes the tape every **5 minutes** (candle close) and emits **at most 
 | `take_profit_2` | no | second target for the runner. Must be beyond TP1. Requires `quantity ≥ 2` and `quantity_tp1` split. |
 | `stop_loss_2` | no | optional initial stop for the TP2 runner quantity. It must remain on the loss side of entry and be tighter than `stop_loss`. When omitted, the runner starts with `stop_loss`. Requires `take_profit_2`. |
 | `quantity_tp1` | when TP2 present | contracts closed at TP1; remainder (`quantity − quantity_tp1 ≥ 1`) runs to TP2. |
+| `take_profit_3` | no | third target beyond TP2. Requires TP2, `quantity ≥ 3`, and `quantity_tp2`. |
+| `stop_loss_3` | no | optional initial stop for the TP3 leg; loss-side and no looser than the preceding stop. |
+| `quantity_tp2` | when TP3 present | contracts closed at TP2; the positive remainder runs to TP3. |
 
 All prices must be tick-rounded for the instrument (Glitch validates against the instrument metadata registry; a non-aligned price is a reject, not a silent round).
 
@@ -45,14 +49,12 @@ All prices must be tick-rounded for the instrument (Glitch validates against the
 
 1. Firewall passes (see `03_risk_firewall.md` + roadmap check chain) → executor submits the market entry using signal `GLT-AI-E-*`.
 2. On full entry fill, Glitch immediately submits one account-local OCO stop/target pair per leg using `GLT-AI-S-*` / `GLT-AI-T-*`. A partial entry fill fails closed into cancel/flatten recovery; protection construction or submission failure does the same.
-3. TP2 present → position is bracketed as two independent OCO pairs: TP1/SL for `quantity_tp1`, and TP2/SL2 (or TP2/SL when SL2 is omitted) for the remainder. A TP1 fill cancels only its paired stop; the runner remains protected.
+3. TP2/TP3 present → position is bracketed as two or three independent OCO pairs. A target fill cancels only its paired stop; every remaining leg stays protected.
 4. A later `MOVE_STOP` intent may tighten all remaining Glitch-owned stops. It cannot widen risk.
 5. `EXIT` → flatten the AI position via market order and cancel the bracket. Always allowed (risk-reducing), still journaled.
-6. Sizing: Hermes proposes `quantity`; the firewall caps it. Risk per trade = `|entry − stop_loss| × pointValue × quantity` — computable **before** any order exists because SL is mandatory.
+6. Sizing: Hermes chooses only from Glitch's supplied valid master quantities. Glitch recomputes structural risk and account-wide contract capacity before submission.
 
-## M0 note
-
-M0 caps quantity at 1 contract, so TP2/SL2 cannot activate (firewall rejects TP2 with quantity < 2). The contract still carries the fields from day one so schema and journal shape never change when M1 raises the cap.
+There is no AI-only one-contract cap. Current account/group state and prop-firm ceilings determine valid quantities dynamically.
 
 ## Versioning
 

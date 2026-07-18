@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Glitch.Services;
 
 namespace Glitch.UI
@@ -28,10 +29,14 @@ namespace Glitch.UI
                     RaiseCriticalWarning(account, message, key, unlocksTrading: false);
                 GlitchAiOrderExecutor.GetReplicationEntryDenialReason =
                     GetAiEntryDenialReason;
+                GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
+                string mode = policy != null && policy.IsValid ? policy.Mode : "invalid";
                 AppendJournal(
                     "System",
                     "Intent",
-                    "intent_server_started|bind=127.0.0.1:8788|mode=paper|executor=none|token_file=GlitchData/telemetry.token");
+                    "intent_server_started|bind=127.0.0.1:8788|mode=" + mode
+                        + "|executor=" + (GlitchAiOrderExecutor.IsExecutionEnabled(policy) ? "enabled" : "disabled")
+                        + "|token_file=GlitchData/telemetry.token");
             }
 
             GlitchHermesControlServer.SetReplication = enabled =>
@@ -64,29 +69,23 @@ namespace Glitch.UI
             NinjaTrader.Cbi.OrderAction action,
             int quantity)
         {
-            AccountGridRow row = FindAccountRowByName(account?.Name);
-            if (row != null
-                && !string.IsNullOrWhiteSpace(row.PropFirmId)
-                && _firmRules.TryGetValue(row.PropFirmId, out FirmRuleMetadata firmRule)
-                && firmRule?.DirectionalTradingOnly == true)
+            AccountGroupDefinition group = _accountGroups.FirstOrDefault(candidate => candidate != null
+                && string.Equals(candidate.MasterAccount, account?.Name, StringComparison.OrdinalIgnoreCase));
+            int expectedFollowerCount = group?.Members?
+                .Where(member => member != null
+                    && !member.IsMasterRow
+                    && member.IsEnabled
+                    && !string.IsNullOrWhiteSpace(member.FollowerAccount)
+                    && !string.Equals(member.FollowerAccount, group.MasterAccount, StringComparison.OrdinalIgnoreCase))
+                .Select(member => member.FollowerAccount.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count() ?? 0;
+            if (expectedFollowerCount > 0)
             {
-                int requestedDirection = action == NinjaTrader.Cbi.OrderAction.Buy ? 1 : -1;
-                string root = GlitchReplicationEngine.GetInstrumentRoot(instrument);
-                foreach (AccountGridRow candidateRow in _accountRows)
-                {
-                    if (candidateRow == null
-                        || !string.Equals(candidateRow.PropFirmId, row.PropFirmId, StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    NinjaTrader.Cbi.Account candidate = TryFindConnectedAccountByName(candidateRow.DisplayName);
-                    int openQuantity = GlitchReplicationEngine.GetNetQuantityForInstrumentRoot(candidate, root);
-                    if (openQuantity != 0 && Math.Sign(openQuantity) != requestedDirection)
-                    {
-                        return "firm_direction_conflict|firm=" + row.PropFirmId
-                            + "|account=" + candidateRow.DisplayName
-                            + "|instrument=" + root;
-                    }
-                }
+                int activeRouteCount = _copyEngine?.GetActiveRouteCount(account?.Name) ?? 0;
+                if (!_isReplicatingUi || _copyEngine?.IsEnabled != true || activeRouteCount != expectedFollowerCount)
+                    return "replication_routes_incomplete|expected=" + expectedFollowerCount
+                        + "|active=" + activeRouteCount;
             }
 
             return _copyEngine?.GetEntryDenialReason(account, instrument, action, quantity);
@@ -124,30 +123,34 @@ namespace Glitch.UI
 
         private void OnRailIntentAccepted(string intentId, string instrument, string action)
         {
+            GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
             AppendJournal(
                 "System",
                 "Intent",
                 string.Format(
                     System.Globalization.CultureInfo.InvariantCulture,
-                    "intent_accepted|id={0}|instrument={1}|action={2}|mode=paper|executor=none",
+                    "intent_approved|id={0}|instrument={1}|action={2}|mode={3}",
                     intentId,
                     instrument,
-                    action));
+                    action,
+                    policy != null && policy.IsValid ? policy.Mode : "invalid"));
         }
 
         private void OnRailIntentRejected(string intentId, string instrument, string action, int failedCheck, string failedCode)
         {
+            GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
             AppendJournal(
                 "System",
                 "Intent",
                 string.Format(
                     System.Globalization.CultureInfo.InvariantCulture,
-                    "intent_rejected|id={0}|instrument={1}|action={2}|check={3}|code={4}|mode=paper",
+                    "intent_rejected|id={0}|instrument={1}|action={2}|check={3}|code={4}|mode={5}",
                     intentId,
                     instrument,
                     action,
                     failedCheck,
-                    failedCode));
+                    failedCode,
+                    policy != null && policy.IsValid ? policy.Mode : "invalid"));
         }
 
         private GlitchAiExecutionResult InvokeOnUiThread(Func<GlitchAiExecutionResult> action)

@@ -122,8 +122,10 @@ namespace Glitch.Services
             sb.Append("},");
             sb.Append("\"executor\":{");
             GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
+            sb.Append("\"policy_valid\":").Append(GlitchSnapshotJson.Bool(policy.IsValid)).Append(',');
+            sb.Append("\"policy_error\":").Append(GlitchSnapshotJson.String(policy.ValidationError ?? string.Empty)).Append(',');
             sb.Append("\"enabled\":").Append(GlitchSnapshotJson.Bool(GlitchAiOrderExecutor.IsExecutionEnabled(policy))).Append(',');
-            sb.Append("\"mode\":").Append(GlitchSnapshotJson.String(policy.Mode ?? "paper")).Append(',');
+            sb.Append("\"mode\":").Append(GlitchSnapshotJson.String(policy.IsValid ? policy.Mode : "invalid")).Append(',');
             sb.Append("\"account\":").Append(GlitchSnapshotJson.String(policy.ExecutorAccount ?? "Sim101"));
             sb.Append("},");
             string sanityPath = GlitchSnapshotSanityWriter.GetLatestPath();

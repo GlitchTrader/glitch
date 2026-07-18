@@ -1,20 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import { getDownloadsUrl } from "@/lib/releases";
 import { SiteFooter, SiteHeader } from "@/components/site-chrome";
 import "./globals.css";
 
 const socialImagePath = "/images/Glitch Banner.png";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 function resolveMetadataBase(fallback: string) {
   const value =
@@ -77,7 +66,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}>
+      <body className="min-h-screen antialiased">
         <SiteHeader />
         {children}
         <SiteFooter />

@@ -163,8 +163,12 @@ namespace Glitch.Services
                 }
 
                 GlitchAiRiskDecision decision = GlitchAiRiskFirewall.Validate(body, DateTime.UtcNow);
+                GlitchAiRailPolicy decisionPolicy = GlitchAiRailPolicyStore.Load();
+                string decisionMode = decisionPolicy != null && decisionPolicy.IsValid
+                    ? decisionPolicy.Mode
+                    : "invalid";
                 bool isDuplicate;
-                if (!GlitchAiJournalBridge.TryRecord(validation.IntentId, body, decision, DateTime.UtcNow, out isDuplicate))
+                if (!GlitchAiJournalBridge.TryRecord(validation.IntentId, body, decisionMode, decision, DateTime.UtcNow, out isDuplicate))
                 {
                     if (isDuplicate)
                     {
@@ -251,27 +255,32 @@ namespace Glitch.Services
 
         private static string BuildHealthJson()
         {
-            string mode = GlitchAiRailPolicyStore.Load().Mode ?? "paper";
+            GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
+            bool policyValid = policy != null && policy.IsValid;
+            string mode = policyValid ? policy.Mode : "invalid";
             return "{"
                 + "\"schema_version\":" + GlitchSnapshotJson.String(SchemaVersion) + ","
-                + "\"status\":" + GlitchSnapshotJson.String("ok") + ","
+                + "\"status\":" + GlitchSnapshotJson.String(policyValid ? "ok" : "degraded") + ","
                 + "\"mode\":" + GlitchSnapshotJson.String(mode) + ","
+                + "\"policy_valid\":" + GlitchSnapshotJson.Bool(policyValid) + ","
+                + "\"policy_error\":" + GlitchSnapshotJson.String(policy?.ValidationError ?? string.Empty) + ","
                 + "\"created_utc\":" + GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(DateTime.UtcNow)) + ","
                 + "\"bind_address\":" + GlitchSnapshotJson.String(BindAddress) + ","
                 + "\"is_running\":" + GlitchSnapshotJson.Bool(IsRunning) + ","
                 + "\"received_count\":" + GlitchAiIntentJournalWriter.CountReceived().ToString(CultureInfo.InvariantCulture) + ","
-                + "\"executor_enabled\":" + GlitchSnapshotJson.Bool(GlitchAiOrderExecutor.IsExecutionEnabled(GlitchAiRailPolicyStore.Load()))
+                + "\"executor_enabled\":" + GlitchSnapshotJson.Bool(GlitchAiOrderExecutor.IsExecutionEnabled(policy))
                 + "}";
         }
 
         private static string BuildAcceptedJson(string intentId, GlitchAiExecutionResult execution)
         {
+            GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
             string executorStatus = execution == null ? "none" : (execution.Status ?? "none");
             string executorCode = execution == null ? string.Empty : (execution.Code ?? string.Empty);
             return "{"
                 + "\"schema_version\":" + GlitchSnapshotJson.String("glitch.intent.response.v1") + ","
                 + "\"status\":" + GlitchSnapshotJson.String("accepted") + ","
-                + "\"mode\":" + GlitchSnapshotJson.String(GlitchAiRailPolicyStore.Load().Mode ?? "paper") + ","
+                + "\"mode\":" + GlitchSnapshotJson.String(policy.IsValid ? policy.Mode : "invalid") + ","
                 + "\"intent_id\":" + GlitchSnapshotJson.String(intentId) + ","
                 + "\"executor\":" + GlitchSnapshotJson.String(executorStatus) + ","
                 + "\"executor_code\":" + GlitchSnapshotJson.String(executorCode) + ","
@@ -281,7 +290,8 @@ namespace Glitch.Services
 
         private static string BuildFirewallRejectedJson(string intentId, GlitchAiRiskDecision decision)
         {
-            string mode = GlitchAiRailPolicyStore.Load().Mode ?? "paper";
+            GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
+            string mode = policy.IsValid ? policy.Mode : "invalid";
             return "{"
                 + "\"schema_version\":" + GlitchSnapshotJson.String("glitch.intent.response.v1") + ","
                 + "\"status\":" + GlitchSnapshotJson.String("rejected") + ","

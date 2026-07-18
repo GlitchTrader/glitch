@@ -79,8 +79,9 @@ Glitch resolves the enabled account group from `AccountGroups.tsv` and owns all 
 - after each fill, Glitch creates a native GTC OCO stop/target on the master and independently on every follower at its scaled quantity;
 - a master AI exit is copied through the same replication path, and follower protection is cancelled after the copied close so no orphan order can reverse an account;
 - per-account and aggregate group risk use the actual scaled quantities;
-- unknown routes, mismatched masters, malformed groups, duplicate accounts, unallowlisted members, and non-integral quantity mappings fail closed;
-- startup catch-up clones the master's active AI bracket or refuses to create an unprotected follower position;
+- unknown routes, mismatched masters, malformed groups, duplicate accounts, and unallowlisted members fail closed;
+- ratio quantities use the same NinjaTrader rounding semantics as the copy engine; Glitch publishes only master quantities that keep every enabled account within its current contract ceiling;
+- startup is observe-only. Explicit Replicate ON, follower enable, or ratio change may request alignment; ordinary reload never submits, cancels, or replaces an order;
 - completed-outcome learning waits for master plus every enabled follower to close.
 
 Group composition and ratios are dynamic Glitch state. Results must therefore be compared using master-account and per-contract expectancy, MAE/MFE, drawdown, and risk-normalized returns—not raw aggregate group PnL.
@@ -90,7 +91,7 @@ Group composition and ratios are dynamic Glitch state. Results must therefore be
 Cadence:
 
 ```text
-Glitch seals the x0/x5 closed decision window; Hermes consumes it at x1/x6 so the packet exists before inference starts.
+Glitch publishes a rolling five-frame packet each minute. The lightweight worker wakes each minute but invokes Hermes only on five-minute boundaries while flat, each minute while a scoped master is positioned, or once for an explicit operator directive.
 ```
 
 Nominal loop:
@@ -99,7 +100,7 @@ Nominal loop:
 1. Glitch snapshots deterministic state.
 2. Hermes cron loads the operator brief and current snapshot.
 3. Hermes reads recent outcomes, lessons, hypotheses, relevant evidence, and risk posture.
-4. Hermes emits exactly one machine-readable intent per instrument per cycle.
+4. Hermes emits exactly one machine-readable intent per route-bound group per invoked cycle.
 5. Glitch validates the intent through deterministic checks.
 6. Glitch either rejects with reason codes or executes with NT-held protective brackets.
 7. Glitch journals the result.
@@ -182,6 +183,7 @@ Allowed M0-style actions:
 ENTER_LONG   // Buy
 ENTER_SHORT  // Sell
 HOLD         // keep existing position, no change
+MOVE_STOP    // tighten native master protection
 EXIT         // request flat/reduce risk now
 NOTHING      // stay flat / no action
 ```
@@ -195,11 +197,9 @@ created_utc
 snapshot_hash
 instrument
 account
-operator_version
+operator_profile
 model_version
 prompt_version
-policy_version
-archetype_id or null
 action
 quantity
 order_type
@@ -212,17 +212,18 @@ optional take_profit_3
 optional stop_loss_3
 optional quantity_tp2
 confidence
-bounded_reason_codes
+reason
+decision_audit
 ```
 
 Bracket mandate:
 
 - `ENTER_LONG` / `ENTER_SHORT` require `stop_loss` and `take_profit_1`.
 - TP2/SL2 and TP3/SL3 are optional and only valid when quantity supports positive leg splits.
-- Quantity must be one of Glitch's supplied valid master quantities. Glitch derives that list dynamically from every enabled account's current prop-rule ceiling, open MNQ exposure, and configured follower ratio; the maximum-exposure account limits the group.
+- Quantity must be one of Glitch's supplied valid master quantities. Glitch derives that list dynamically from every enabled account's current account-wide open contracts, prop-rule ceiling, MNQ exposure, and configured follower ratio; the maximum-exposure account limits the group.
 - A naked entry must be impossible.
 - NT/Glitch hold the protective bracket.
-- Hermes may not manage a loss mid-flight and may never widen a stop.
+- Native protection must work without Hermes. Hermes may tighten a stop or exit on later cycles, but may never widen protection.
 
 `HOLD`, `EXIT`, and `NOTHING` must still include the snapshot hash and reason codes so Glitch can journal why the cycle did or did not trade.
 
@@ -241,10 +242,10 @@ Glitch must reject before order creation if any check fails. Minimum check chain
 8. prop-firm rules loaded and fresh?
 9. current account/position state unambiguous?
 10. no forbidden position conflict?
-11. risk per trade computable from entry/SL?
-12. risk within per-trade and daily budget?
-13. bracket sane and tick-rounded?
-14. session/news/lockout clear?
+11. structural risk computable from entry/SL and instrument metadata?
+12. requested quantity plus account-wide open exposure within the authoritative account ceiling?
+13. bracket sane, absolute, correctly sided, and tick-rounded?
+14. authoritative session open, entry cutoff clear, and must-flat boundary not reached?
 15. existing compliance engine passes?
 16. trading is ON at the final submit boundary?
 ```
@@ -313,13 +314,13 @@ GlitchData/hermes/exchange/glitch/*  Glitch writes, Hermes reads
 GlitchData/hermes/exchange/hermes/* Hermes writes, Glitch/bridge reads
 ```
 
-In the harness, Glitch writes one immutable minute frame after matching market and portfolio snapshots exist. At `xx:x0` and `xx:x5`, five consecutive frames become one immutable decision packet. Hermes native cron checks for a new packet without an LLM call, resumes only the named `trading` session, and delivers strict intents through Glitch's authenticated localhost receiver. Delivery retries reuse the same intent IDs; completed receipts prevent replay. The gateway must use Hermes native supervision, not an orphan child process.
+In the harness, Glitch writes one immutable minute frame after matching market and portfolio snapshots exist and publishes the latest rolling five-frame packet. Hermes native cron wakes a lightweight worker each minute. The worker spends no model call unless the model cadence is due, resumes only the named `trading` session, and delivers strict intents through Glitch's authenticated localhost receiver. Delivery retries reuse the same intent IDs; completed receipts prevent replay. The gateway must use Hermes native supervision, not an orphan child process.
 
 Full cognitive runtime map (only the core loop is enabled during initial validation):
 
 ```text
 snapshot_sanity        script-only check, no LLM
-suggest_trade          5m, Luna/medium, one strict batch for packet-defined groups
+suggest_trade          5m flat / 1m positioned, Luna/medium, one strict batch for packet-defined groups
 portfolio_supervision  hourly, Sol/high, risk/performance review + bounded self-heal
 portfolio_planning     6-hour, Sol/high, targets and risk allocation plan
 daily_learning         post-session, Sol/high, lessons + tomorrow targets + memory upkeep
@@ -330,7 +331,7 @@ lesson_store           Glitch-journaled outcomes and reviewed lessons
 `suggest_trade` cron job shape:
 
 ```text
-schedule: every 5m
+schedule: lightweight worker every minute; model gate is 5m flat / 1m positioned
 mode: LLM-driven Hermes cron
 input: one Glitch-owned five-frame packet + bounded authoritative journal + native Hermes memory
 output: one strict JSON decision per configured route-bound group
@@ -380,7 +381,7 @@ Build in this order:
 ```text
 1. Validate the direct snapshot/packet and receipt contracts in source.
 2. Install and orient one persistent Hermes profile while preserving native skills, memory, and sessions.
-3. Enable only the 5-minute paper core and validate packet-to-journal continuity.
+3. Enable only the core paper worker and validate 5m-flat/1m-positioned packet-to-journal continuity.
 4. Add hourly supervision only after core evidence is trustworthy.
 5. Add six-hour planning, then daily learning, as separate observable stages.
 6. Consider eval/live authority only after paper gates and explicit operator approval.
@@ -395,7 +396,7 @@ Never:
 - make free-form LLM text actionable;
 - execute from stale snapshots;
 - accept an entry without SL + TP1;
-- let AI widen stops or manage losses mid-flight;
+- let AI widen stops; it may tighten protection or exit when the thesis changes;
 - bypass the existing replication engine by having Hermes or the AI executor trade followers directly;
 - treat Hermes memory as trade truth when Glitch journal/source artifacts disagree.
 
@@ -416,7 +417,7 @@ One `glitch` profile is one agent identity and one native memory system. It has 
 
 ```text
 chat      internal maintainer/supervision session; never exposed in the Glitch client UI
-trading   persistent JSON-only decision history; resumed only by the 5-minute job
+trading   persistent JSON-only decision history; resumed only when the worker's model cadence is due
 ```
 
 The core worker uses `--resume trading`, never `--continue`. This removes the ambiguous “latest session” dependency while preserving one profile, shared native skills, memory, and filesystem. The chat session may inspect status and accept human slash commands while trading continues independently.

@@ -1,11 +1,40 @@
 using System;
+using System.Collections;
 using System.Globalization;
+using System.Reflection;
 using System.Text.RegularExpressions;
 
 namespace Glitch.Services
 {
     internal static class GlitchAiJsonFields
     {
+        public static bool TryParseObject(string json, out IDictionary value)
+        {
+            value = null;
+            if (string.IsNullOrWhiteSpace(json))
+                return false;
+
+            try
+            {
+                Type serializerType = ResolveSerializerType();
+                if (serializerType == null)
+                    return false;
+
+                object serializer = Activator.CreateInstance(serializerType);
+                MethodInfo deserialize = serializerType.GetMethod("DeserializeObject", new[] { typeof(string) });
+                if (deserialize == null)
+                    return false;
+
+                value = deserialize.Invoke(serializer, new object[] { json }) as IDictionary;
+                return value != null;
+            }
+            catch
+            {
+                value = null;
+                return false;
+            }
+        }
+
         public static string ExtractString(string json, string key)
         {
             if (string.IsNullOrWhiteSpace(json) || string.IsNullOrWhiteSpace(key))
@@ -69,6 +98,31 @@ namespace Glitch.Services
                 return null;
 
             return parsed.ToUniversalTime();
+        }
+
+        private static Type ResolveSerializerType()
+        {
+            Type serializerType = Type.GetType(
+                "System.Web.Script.Serialization.JavaScriptSerializer, System.Web.Extensions, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35",
+                false);
+            if (serializerType != null)
+                return serializerType;
+
+            serializerType = Type.GetType(
+                "System.Web.Script.Serialization.JavaScriptSerializer, System.Web.Extensions",
+                false);
+            if (serializerType != null)
+                return serializerType;
+
+            try
+            {
+                Assembly assembly = Assembly.Load("System.Web.Extensions");
+                return assembly?.GetType("System.Web.Script.Serialization.JavaScriptSerializer", false, false);
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 }

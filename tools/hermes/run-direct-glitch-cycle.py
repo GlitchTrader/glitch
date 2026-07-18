@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -19,20 +20,30 @@ import time
 import urllib.error
 import urllib.request
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 
 ACTIONS = {"ENTER_LONG", "ENTER_SHORT", "HOLD", "MOVE_STOP", "EXIT", "NOTHING"}
 ACTION_ALIASES = {"NO_ACTION": "NOTHING"}
+CORE_MODEL = "gpt-5.6-luna"
+CORE_PROVIDER = "openai-codex"
 REQUIRED_ENTRY_FIELDS = {"quantity", "order_type", "stop_loss", "take_profit_1"}
-ENTRY_FIELDS = REQUIRED_ENTRY_FIELDS | {"take_profit_2", "stop_loss_2", "quantity_tp1"}
+ENTRY_FIELDS = REQUIRED_ENTRY_FIELDS | {
+    "take_profit_2", "stop_loss_2", "quantity_tp1",
+    "take_profit_3", "stop_loss_3", "quantity_tp2",
+}
 MANAGEMENT_FIELDS = {"stop_loss"}
 DECISION_FIELDS = {
     "schema_version", "intent_id", "created_utc", "instrument", "account",
     "operator_profile", "action", "confidence", "snapshot_hash", "model_version",
     "prompt_version", "reason", "decision_audit",
+}
+ALLOWED_DECISION_FIELDS = DECISION_FIELDS | ENTRY_FIELDS
+DECISION_AUDIT_FIELDS = {
+    "bull_case", "bear_case", "flat_case", "aggressive_case", "conservative_case",
+    "decisive_evidence", "disconfirming_evidence", "change_condition", "final_choice",
 }
 DEFAULT_GLITCH_DATA = Path.home() / "Documents" / "NinjaTrader 8" / "GlitchData"
 
@@ -62,7 +73,23 @@ def trading_runtime_enabled(glitch_data: Path) -> bool:
         return False
     state = read_json(state_path)
     policy = read_json(policy_path)
-    return state.get("trading_paused") is False and str(policy.get("mode", "")).lower() in {"paper", "live"}
+    return state.get("trading_paused") is False and runtime_policy_is_valid(policy)
+
+
+def runtime_policy_is_valid(policy: dict[str, Any]) -> bool:
+    if policy.get("schema_version") != "glitch.ai.policy.v1":
+        return False
+    if str(policy.get("mode", "")).lower() not in {"paper", "live"}:
+        return False
+    snapshot_age = policy.get("snapshot_max_age_seconds")
+    if not isinstance(snapshot_age, int) or isinstance(snapshot_age, bool) or not 1 <= snapshot_age <= 900:
+        return False
+    for key in (
+        "profile_account_bindings", "instrument_allowlist", "account_allowlist", "blocked_sessions",
+    ):
+        if not isinstance(policy.get(key), list):
+            return False
+    return True
 
 
 def write_json_atomic(path: Path, value: Any) -> None:
@@ -103,6 +130,7 @@ def parse_groups(tsv: str, policy: dict[str, Any]) -> list[dict[str, Any]]:
         elif fields[0] == "M" and len(fields) >= 7 and fields[1] in groups:
             groups[fields[1]]["followers"].append({
                 "account": fields[2],
+                "account_size": float(fields[3]),
                 "ratio": float(fields[4]),
                 "enabled": fields[6].strip() == "1",
             })
@@ -129,6 +157,108 @@ def parse_groups(tsv: str, policy: dict[str, Any]) -> list[dict[str, Any]]:
             "followers": group["followers"],
         })
     return books
+
+
+def _account_mnq_quantity(account: dict[str, Any]) -> int:
+    total = 0
+    positions = account.get("positions", [])
+    if not isinstance(positions, list):
+        return 0
+    for position in positions:
+        if not isinstance(position, dict):
+            continue
+        root = str(position.get("instrument_root") or position.get("instrument") or "").upper()
+        if root != "MNQ":
+            continue
+        quantity = int(round(abs(float(position.get("quantity", 0) or 0))))
+        side = str(position.get("market_position", "")).lower()
+        total += -quantity if side == "short" else quantity if side == "long" else 0
+    return total
+
+
+def _account_total_contracts(account: dict[str, Any]) -> int:
+    positions = account.get("positions", [])
+    if not isinstance(positions, list):
+        return 0
+    return sum(
+        int(round(abs(float(position.get("quantity", 0) or 0))))
+        for position in positions
+        if isinstance(position, dict)
+    )
+
+
+def _round_ratio_quantity(value: float) -> int:
+    return int(math.floor(value + 0.5))
+
+
+def add_group_exposure_context(packet: dict[str, Any], books: list[dict[str, Any]]) -> None:
+    """Derive valid master quantities from Glitch's account ceilings and ratios."""
+    frames = packet.get("frames")
+    latest = frames[-1] if isinstance(frames, list) and frames else {}
+    portfolio = latest.get("portfolio_snapshot") if isinstance(latest, dict) else {}
+    accounts = portfolio.get("accounts") if isinstance(portfolio, dict) else []
+    by_name = {
+        str(account.get("account")): account
+        for account in accounts
+        if isinstance(account, dict) and account.get("account")
+    }
+
+    for book in books:
+        members = [{
+            "account": book["master_account"],
+            "account_size": book["master_size"],
+            "ratio": 1.0,
+            "role": "master",
+        }]
+        members.extend({
+            "account": follower["account"],
+            "account_size": follower.get("account_size", book["master_size"]),
+            "ratio": float(follower["ratio"]),
+            "role": "follower",
+        } for follower in book["followers"] if follower["enabled"])
+
+        exposure: list[dict[str, Any]] = []
+        for member in members:
+            observed = by_name.get(member["account"], {})
+            ceiling = int(round(float(observed.get("max_contracts", 0) or 0)))
+            current = _account_mnq_quantity(observed)
+            total_contracts = _account_total_contracts(observed)
+            remaining = max(0, ceiling - total_contracts)
+            exposure.append({
+                **member,
+                "current_mnq_quantity": current,
+                "current_total_contracts": total_contracts,
+                "prop_firm_id": observed.get("prop_firm_id"),
+                "rule_status": observed.get("rule_status") or observed.get("account_status"),
+                "prop_contract_ceiling": ceiling,
+                "remaining_account_capacity": remaining,
+                "working_orders": observed.get("working_orders"),
+                "native_state_available": observed.get("native_state_available"),
+                "is_risk_locked": observed.get("is_risk_locked"),
+                "is_eval_target_locked": observed.get("is_eval_target_locked"),
+                "entry_window_open": observed.get("entry_window_open"),
+            })
+
+        master = exposure[0]
+        master_current = abs(int(master["current_mnq_quantity"]))
+        upper_bound = max(0, int(master["prop_contract_ceiling"]) - int(master["current_total_contracts"]))
+        valid_quantities = [
+            candidate for candidate in range(1, upper_bound + 1)
+            if all(
+                int(member["prop_contract_ceiling"]) > 0
+                and int(member["current_total_contracts"])
+                + max(
+                    0,
+                    _round_ratio_quantity((master_current + candidate) * float(member["ratio"]))
+                    - abs(int(member["current_mnq_quantity"])),
+                )
+                <= int(member["prop_contract_ceiling"])
+                for member in exposure
+            )
+        ]
+        book["exposure"] = exposure
+        book["valid_entry_quantities"] = valid_quantities
+        book["effective_master_remaining_capacity"] = max(valid_quantities, default=0)
 
 
 def latest_market(packet: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -231,13 +361,65 @@ def read_operator_directive(exchange: Path) -> dict[str, Any] | None:
     return directive
 
 
-def consume_operator_directive(exchange: Path, directive: dict[str, Any], packet_id: str) -> None:
+def consume_operator_directive(exchange: Path, directive: dict[str, Any], packet_id: str) -> bool:
     path = exchange / "hermes" / "operator-directive.json"
-    consumed = dict(directive)
+    if not path.is_file():
+        return False
+    current = read_json(path)
+    if (
+        current.get("schema_version") != "glitch.operator.directive.v1"
+        or current.get("status") != "pending"
+        or current.get("directive_id") != directive.get("directive_id")
+    ):
+        return False
+    consumed = dict(current)
     consumed["status"] = "consumed"
     consumed["consumed_utc"] = utc_now()
     consumed["consumed_packet_id"] = packet_id
     write_json_atomic(path, consumed)
+    return True
+
+
+def outbox_context_path(exchange: Path, packet_id: str) -> Path:
+    return exchange / "hermes" / "outbox-context" / f"{packet_id}.json"
+
+
+def model_attempt_path(exchange: Path, packet_id: str) -> Path:
+    return exchange / "hermes" / "model-attempts" / f"{packet_id}.json"
+
+
+def persist_outbox(
+    exchange: Path,
+    outbox_path: Path,
+    packet_id: str,
+    batch: dict[str, Any],
+    directive: dict[str, Any] | None,
+) -> None:
+    if directive is not None:
+        write_json_atomic(outbox_context_path(exchange, packet_id), {
+            "schema_version": "glitch.hermes.outbox_context.v1",
+            "cycle_id": packet_id,
+            "directive_id": directive.get("directive_id"),
+        })
+    write_json_atomic(outbox_path, batch)
+
+
+def consume_outbox_directive(exchange: Path, packet_id: str) -> bool:
+    context_path = outbox_context_path(exchange, packet_id)
+    if not context_path.is_file():
+        return False
+    context = read_json(context_path)
+    if (
+        context.get("schema_version") != "glitch.hermes.outbox_context.v1"
+        or context.get("cycle_id") != packet_id
+        or not context.get("directive_id")
+    ):
+        raise ValueError("outbox_context_invalid")
+    return consume_operator_directive(
+        exchange,
+        {"directive_id": context["directive_id"]},
+        packet_id,
+    )
 
 
 def build_scenario(packet: dict[str, Any]) -> dict[str, Any]:
@@ -247,6 +429,7 @@ def build_scenario(packet: dict[str, Any]) -> dict[str, Any]:
     books = parse_groups(str(packet.get("account_groups_tsv", "")), policy)
     if not books:
         raise ValueError("no_route_bound_groups")
+    add_group_exposure_context(packet, books)
     market, mnq = latest_market(packet)
     return {
         "cycle_id": packet["packet_id"],
@@ -265,6 +448,11 @@ def validate_batch(
     scenario: dict[str, Any],
     directive: dict[str, Any] | None = None,
 ) -> None:
+    unknown_batch_fields = set(batch).difference(
+        {"schema_version", "cycle_id", "next_review_seconds", "decisions"}
+    )
+    if unknown_batch_fields:
+        raise ValueError("batch_unknown_fields:" + ",".join(sorted(unknown_batch_fields)))
     if batch.get("schema_version") != "glitch.intent.batch.v1":
         raise ValueError("batch_schema_version_invalid")
     if batch.get("cycle_id") != scenario["cycle_id"]:
@@ -283,8 +471,31 @@ def validate_batch(
         missing = sorted(DECISION_FIELDS.difference(intent))
         if missing:
             raise ValueError(f"intent_contract_incomplete:{index}:{','.join(missing)}")
+        unknown = sorted(set(intent).difference(ALLOWED_DECISION_FIELDS))
+        if unknown:
+            raise ValueError(f"intent_unknown_fields:{index}:{','.join(unknown)}")
         if intent.get("schema_version") != "glitch.intent.v2":
             raise ValueError(f"intent_schema_version_invalid:{index}")
+        for field in (
+            "intent_id", "created_utc", "instrument", "account", "operator_profile",
+            "snapshot_hash", "model_version", "prompt_version", "reason",
+        ):
+            if not isinstance(intent.get(field), str) or not intent[field].strip():
+                raise ValueError(f"intent_string_invalid:{index}:{field}")
+        try:
+            datetime.fromisoformat(intent["created_utc"].replace("Z", "+00:00"))
+        except ValueError as error:
+            raise ValueError(f"intent_created_utc_invalid:{index}") from error
+        confidence = intent.get("confidence")
+        if (not isinstance(confidence, (int, float)) or isinstance(confidence, bool)
+                or not math.isfinite(float(confidence)) or not 0 <= confidence <= 1):
+            raise ValueError(f"intent_confidence_invalid:{index}")
+        audit = intent.get("decision_audit")
+        if not isinstance(audit, dict) or set(audit) != DECISION_AUDIT_FIELDS:
+            raise ValueError(f"decision_audit_contract_invalid:{index}")
+        if any(not isinstance(audit[field], str) or not audit[field].strip()
+               for field in DECISION_AUDIT_FIELDS):
+            raise ValueError(f"decision_audit_value_invalid:{index}")
         route = intent.get("operator_profile")
         if route in seen_routes:
             raise ValueError("duplicate_route")
@@ -296,19 +507,33 @@ def validate_batch(
         action = intent.get("action")
         if action not in ACTIONS:
             raise ValueError(f"action_invalid:{index}")
+        if audit["final_choice"] != action:
+            raise ValueError(f"decision_audit_choice_mismatch:{index}")
         if action in {"ENTER_LONG", "ENTER_SHORT"}:
             if not REQUIRED_ENTRY_FIELDS.issubset(intent) or intent.get("order_type") != "MARKET":
                 raise ValueError(f"protected_market_entry_required:{index}")
             quantity = intent.get("quantity")
             if not isinstance(quantity, int) or isinstance(quantity, bool) or quantity < 1:
                 raise ValueError(f"entry_quantity_invalid:{index}")
+            if quantity not in book.get("valid_entry_quantities", []):
+                raise ValueError(f"entry_quantity_exceeds_group_capacity:{index}")
             if "take_profit_2" in intent:
                 quantity_tp1 = intent.get("quantity_tp1")
                 if (quantity < 2 or not isinstance(quantity_tp1, int)
                         or isinstance(quantity_tp1, bool) or quantity_tp1 < 1 or quantity_tp1 >= quantity):
                     raise ValueError(f"entry_quantity_split_invalid:{index}")
+                if "take_profit_3" in intent:
+                    quantity_tp2 = intent.get("quantity_tp2")
+                    if (quantity < 3 or not isinstance(quantity_tp2, int)
+                            or isinstance(quantity_tp2, bool) or quantity_tp2 < 1
+                            or quantity_tp1 + quantity_tp2 >= quantity):
+                        raise ValueError(f"entry_three_leg_quantity_split_invalid:{index}")
+                elif "quantity_tp2" in intent or "stop_loss_3" in intent:
+                    raise ValueError(f"entry_third_leg_incomplete:{index}")
             elif "quantity_tp1" in intent or "stop_loss_2" in intent:
                 raise ValueError(f"entry_second_leg_incomplete:{index}")
+            if "take_profit_3" in intent and "take_profit_2" not in intent:
+                raise ValueError(f"entry_third_leg_requires_second:{index}")
         elif action == "MOVE_STOP":
             if not isinstance(intent.get("stop_loss"), (int, float)) or isinstance(intent.get("stop_loss"), bool):
                 raise ValueError(f"move_stop_price_required:{index}")
@@ -370,7 +595,7 @@ def normalize_batch(batch: dict[str, Any], scenario: dict[str, Any] | None = Non
 
 
 def packet_for_model(packet: dict[str, Any], scenario: dict[str, Any]) -> dict[str, Any]:
-    """Expose only current packet routes and cognitive paper objectives to Hermes."""
+    """Expose only current routes, truthful observation semantics, and Glitch limits."""
     model_packet = json.loads(json.dumps(packet))
     policy = model_packet.get("policy")
     if not isinstance(policy, dict):
@@ -378,11 +603,18 @@ def packet_for_model(packet: dict[str, Any], scenario: dict[str, Any]) -> dict[s
     if policy.get("mode") == "paper":
         policy.pop("max_trades_per_day", None)
         policy.pop("cooldown_after_loss_minutes", None)
-        policy["paper_daily_profit_objective_usd"] = {"minimum": 1000, "stretch": 2500}
-    # Sim rows have no prop-firm contract tier, so the UI naturally reports
-    # zero/unspecified. Hermes must see Glitch's actual AI execution cap rather
-    # than interpreting that display placeholder as zero executable capacity.
-    ai_contract_cap = max(1, int(policy.get("max_contracts", 1)))
+        policy.pop("paper_daily_profit_objective_usd", None)
+    # AI Auto is the operational authority. Do not expose the retired file
+    # flag because it can contradict the live control state.
+    policy.pop("ai_enabled", None)
+    for legacy_key in (
+        "max_contracts",
+        "max_risk_per_contract_usd",
+        "max_loss_per_trade_usd",
+        "max_group_loss_per_trade_usd",
+        "max_daily_loss_usd",
+    ):
+        policy.pop(legacy_key, None)
     scoped_accounts: list[str] = []
     for book in scenario["books"]:
         scoped_accounts.append(book["master_account"])
@@ -411,12 +643,20 @@ def packet_for_model(packet: dict[str, Any], scenario: dict[str, Any]) -> dict[s
             if isinstance(account, dict) and account.get("account") in scoped_account_set
         ]
         portfolio["account_count"] = len(portfolio["accounts"])
-        for account in portfolio["accounts"]:
-            if not isinstance(account, dict) or str(account.get("account_status", "")).lower() != "sim":
-                continue
-            if not account.get("max_contracts"):
-                account["max_contracts"] = ai_contract_cap
-                account["max_contracts_source"] = "glitch_ai_policy"
+    model_packet["observation_contract"] = {
+        "timeframe_rows": "live_in_progress_observations",
+        "utc_time": "observation_time_not_bar_close_time",
+        "timeframe_roles": {
+            "1m": "entry_timing_and_noise",
+            "5m": "local_setup_and_timing",
+            "15m": "regime_context",
+            "60m": "regime_context",
+        },
+        "decision_horizon": "next_5m_when_flat; next_1m_when_positioned",
+        "confirmation": "probabilistic_from_the_five_frame_path; closed_candle_not_required",
+        "missing_order_flow": "neutral_not_bearish_or_bullish",
+        "warning": "Do not treat 5m, 15m, or 60m rows as completed-candle confirmation.",
+    }
     policy["profile_account_bindings"] = [
         f'{book["route_id"]}={book["master_account"]}' for book in scenario["books"]
     ]
@@ -470,8 +710,32 @@ def extract_json(stdout: str) -> dict[str, Any]:
                 candidate = candidate[5:]
     try:
         value = json.loads(candidate)
-    except json.JSONDecodeError:
-        value = json.loads(close_unbalanced_json_containers(candidate))
+    except json.JSONDecodeError as original_error:
+        # Hermes quiet chat can occasionally echo the same final response
+        # twice (two complete JSON values separated by whitespace). Accept
+        # only byte-for-byte equivalent decoded values. Distinct JSON values
+        # or arbitrary trailing prose remain a hard failure so the executor
+        # can never guess which decision the model intended.
+        decoder = json.JSONDecoder()
+        repeated_values: list[Any] = []
+        offset = 0
+        try:
+            while offset < len(candidate):
+                while offset < len(candidate) and candidate[offset].isspace():
+                    offset += 1
+                if offset >= len(candidate):
+                    break
+                repeated_value, offset = decoder.raw_decode(candidate, offset)
+                repeated_values.append(repeated_value)
+        except json.JSONDecodeError:
+            repeated_values = []
+        if len(repeated_values) > 1 and all(value == repeated_values[0] for value in repeated_values[1:]):
+            value = repeated_values[0]
+        else:
+            try:
+                value = json.loads(close_unbalanced_json_containers(candidate))
+            except json.JSONDecodeError:
+                raise original_error
     if not isinstance(value, dict):
         raise ValueError("hermes_output_not_object")
     return value
@@ -506,8 +770,11 @@ def invoke_hermes(profile: str, prompt: str, timeout_seconds: int) -> tuple[dict
     cli_args = [
         "chat", "-Q",
         "--resume", "trading",
+        "--model", CORE_MODEL,
+        "--provider", CORE_PROVIDER,
+        "--max-turns", "4",
         "--skills", "glitch-observe-market,glitch-assess-risk,glitch-form-thesis,glitch-build-intent,glitch-self-learning",
-        "--toolsets", "clarify,memory",
+        "--toolsets", "memory",
     ]
     wrapper = (
         "import os,sys;"
@@ -570,6 +837,9 @@ def submit_batch(batch: dict[str, Any], glitch_data: Path, exchange: Path) -> di
         except Exception as error:  # network failure is retriable with the same intent IDs
             complete = False
             result = {"transport_error": str(error)}
+        status = result.get("http_status") if isinstance(result, dict) else None
+        if isinstance(status, int) and (status in {408, 425, 429} or status >= 500):
+            complete = False
         results.append({"intent_id": intent["intent_id"], "result": result})
     receipt = {
         "schema_version": "glitch.hermes.delivery_receipt.v1",
@@ -595,27 +865,27 @@ def build_prompt(
         "operator_advisory": directive,
     }
     return (
-        "You are the persistent Glitch trading operator. Review the five one-minute frames, current "
-        "portfolio/risk state, configured groups, your native memory, and the authoritative Glitch ledger. "
-        "Use probabilistic judgment; do not wait for a named archetype and do not manufacture an arbitrary trade. Paper learning "
-        "has no daily trade-count quota and no deterministic cooldown. Treat $1,000-$2,500 for the current 250k "
-        "paper book as an aspirational daily range, never as a reason to chase, force, or widen risk. "
-        "Each cycle be proactive and opinionated: look for calculated-risk opportunities and prefer the best actionable side when "
-        "evidence leans long or short and a structure-aware invalidation can bound the loss. Do not require high certainty, full "
-        "timeframe alignment, a perfect entry, or a confirmed break-and-retest sequence. Mixed timeframes, proximity to support "
-        "or resistance, and ordinary uncertainty are normal trading conditions and are not sufficient by themselves for NOTHING. "
-        "Express uncertainty through confidence, contextual quantity, and protected stop/target geometry rather than habitual "
-        "inactivity. NOTHING remains valid when neither side has positive expected value after costs or risk cannot be bounded, "
-        "but it must identify the concrete reason both actionable sides fail now. Avoid staying idle merely to await ideal confirmation. "
-        "In paper mode, use bounded experimentation to sample multiple valid setup types over time without imposing a trade quota. "
-        "State the most likely next-five-minute path in decisive_evidence and its concrete invalidation in change_condition. "
-        "At every five-minute cycle make an active posture decision: if positioned, stay with the thesis or exit when it is invalidated; "
-        "if flat, enter long, enter short, or remain flat on current evidence. Independently decide each supplied group. "
-        "Set batch-level next_review_seconds to 60 only when a position is open or a concrete flat-book trigger is close enough "
-        "that one-minute evidence could change the action; otherwise set it to 300. A flat one-minute follow-up must renew 60 "
-        "explicitly or cadence returns to five minutes. Return exactly one glitch.intent.batch.v1 JSON object with "
-        "next_review_seconds and one ordered "
-        "glitch.intent.v2 decision per supplied book. Every decision must include exactly these core keys: "
+        "Apply the Glitch SOUL and the five loaded trading skills to CURRENT_CYCLE. Glitch and NinjaTrader facts in the supplied "
+        "packet and ledger outrank memory and interpretation. The timeframe rows are live in-progress observations: use 1m/5m "
+        "for timing and noise, 15m/60m for regime context, and never treat a higher-timeframe row as a completed-candle confirmation. "
+        "Confirmation is probabilistic: infer it from the five-frame price path and available structure; a closed candle is not required. "
+        "Missing order flow is neutral, not evidence against a trade. When flat, predict and trade the most likely next five minutes, not "
+        "the next fifteen. When positioned and reviewing each minute, predict the most likely next one-minute candle and manage the trade "
+        "from that forecast, current structure, and risk. Avoid staying idle for too long: take a calculated-risk trade when current evidence "
+        "offers positive expectancy, and do not let ordinary uncertainty become a permanent veto. Do not manufacture edge or force a trade. "
+        "Mixed timeframes are normal. In paper mode, bounded "
+        "experimentation may sample multiple valid setups without a trade quota or deterministic cooldown. After a stop, re-enter only "
+        "when price or evidence has materially changed; a repeated thesis at nearly the same level is churn. State the most likely "
+        "next-five-minute path in decisive_evidence and its concrete invalidation in change_condition. "
+        "For entries, define structural invalidation before reward. Anchor every stop beyond a relevant recent pivot or swing, the actual "
+        "invalidation, and observable noise rather than merely offsetting it from the immediate price; "
+        "never compress a stop to create attractive R:R. Use realistic targets supported by the same horizon and regime. stop_loss and "
+        "take_profit fields are absolute MNQ prices, not distances, and Glitch preserves them unless the live market has already crossed them. "
+        "Choose quantity only from execution_scope.books[].valid_entry_quantities. A quantity of two or more may use TP2 plus quantity_tp1; "
+        "a quantity of three or more may also use TP3 plus quantity_tp2. Each leg may have its own tighter initial stop, and every leg receives "
+        "an independent native OCO pair. Same-direction protected tranches may add; never reverse through an entry. "
+        "Return exactly one glitch.intent.batch.v1 JSON object with one ordered glitch.intent.v2 decision per supplied book. "
+        "Every decision must include exactly these core keys: "
         "schema_version, intent_id, created_utc, instrument, account, operator_profile, action, confidence, "
         "snapshot_hash, model_version, prompt_version, reason, decision_audit. Use only actions "
         "ENTER_LONG, ENTER_SHORT, HOLD, MOVE_STOP, EXIT, or NOTHING; NO_ACTION is accepted as NOTHING. "
@@ -623,24 +893,17 @@ def build_prompt(
         "conservative_case, decisive_evidence, disconfirming_evidence, change_condition, and final_choice; "
         "final_choice must equal action. For NOTHING, HOLD, and EXIT omit quantity, order_type, stop_loss, "
         "and take_profit_1. Keep reason to at most 24 words and each decision_audit value to at most 18 words. "
-        "For ENTER_LONG/ENTER_SHORT choose an integer quantity from 1 through the remaining "
-        "Glitch max_contracts capacity, use order_type=MARKET, and include native stop_loss/take_profit_1. When quantity is at least 2, "
-        "you may scale out by adding take_profit_2 and quantity_tp1; optionally add an initial tighter stop_loss_2 for the runner. "
-        "Glitch immediately protects each leg with its own native OCO stop/target pair. Each entry "
-        "is an independently protected tranche; same-direction entries may add to a position and their native targets "
-        "can scale it out. Never exceed current capacity or add in the opposite direction. For MOVE_STOP include only "
+        "For ENTER_LONG/ENTER_SHORT use order_type=MARKET and include stop_loss/take_profit_1. Optional scale-out fields are "
+        "take_profit_2, quantity_tp1, stop_loss_2, take_profit_3, quantity_tp2, and stop_loss_3. For MOVE_STOP include only "
         "stop_loss and tighten the active Glitch-owned native stops; never loosen risk. Echo cycle_id, account/operator_profile, "
         "and MNQ snapshot_hash exactly. "
         "Use the top-level key decisions, never intents. Close every intent object before closing the decisions "
         "array. Before returning, silently verify that the entire response is one syntactically valid JSON object "
         "that a strict JSON parser can load. Return no markdown fences, commentary, or trailing text. "
-        "For an open position, HOLD, MOVE_STOP, additional protected same-direction entry, and EXIT are active management "
-        "decisions; do not delegate all management "
-        "to the native stop. Compare unrealized PnL across the supplied frames as a bounded MFE/rollback proxy. "
-        "Judge favorable excursion relative to planned risk, current volatility, noise, and remaining opportunity. "
-        "A material rollback without a strengthening thesis should favor EXIT; native brackets are catastrophe "
-        "protection, not an excuse for passive management. Prior trades and outcomes are learning context, not a "
-        "trade-count gate. You may persist only durable lessons supported by repeated completed outcomes; never "
+        "For an open position, HOLD, MOVE_STOP, a same-direction entry, and EXIT are active management decisions. Compare excursion and "
+        "rollback in initial-risk units, structure, volatility, and remaining opportunity rather than fixed dollar landmarks. Native "
+        "brackets are catastrophe protection, not a substitute for active thesis review. You may persist only durable lessons supported "
+        "by repeated completed outcomes; never "
         "store current positions, stale attempts, account eligibility, trade quotas, or temporary directives as memory. If "
         "operator_advisory has directive_type=forced_entry, this is an operator-directed paper experiment: when "
         "the supplied group is flat, you MUST emit ENTER_LONG for bias=long or ENTER_SHORT for bias=short and "
@@ -648,7 +911,7 @@ def build_prompt(
         "confidence, and rationale but cannot change the requested direction to NOTHING. For an ordinary advisory, "
         "treat it as a soft one-cycle preference: consider it, explain agreement or disagreement in the audit, and "
         "never let it override market evidence, risk, bracket geometry, or Glitch policy. Do not emit prose outside "
-        "the required JSON or call clarify, execution, or control tools. Native memory tools remain available: retrieve "
+        "the required JSON or call execution or control tools. Native memory tools remain available: retrieve "
         "durable lessons when useful and persist only compact, evidence-backed lessons supported by repeated completed outcomes. "
         "If operator_advisory has directive_type=native_tool_canary, invoke native memory retrieval exactly once for Glitch "
         "trading lessons before producing the normal decision JSON. This diagnostic must not bias the trade decision and must "
@@ -701,22 +964,38 @@ def scoped_master_is_positioned(packet: dict[str, Any], scenario: dict[str, Any]
     for account in accounts:
         if not isinstance(account, dict) or account.get("account") not in masters:
             continue
-        positions = account.get("positions")
-        if isinstance(positions, list) and any(
-            isinstance(position, dict) and abs(float(position.get("quantity", 0) or 0)) > 0
-            for position in positions
-        ):
+        if _account_mnq_quantity(account) != 0:
             return True
     return False
 
 
-def previous_batch_requests_minute_review(exchange: Path, packet: dict[str, Any]) -> bool:
-    window = packet_window_utc(packet)
-    for minutes_ago in (1, 2):
-        previous_id = (window - timedelta(minutes=minutes_ago)).strftime("%Y%m%dT%H%MZ")
-        path = exchange / "hermes" / "outbox" / f"{previous_id}.json"
-        if path.is_file():
-            return read_json(path).get("next_review_seconds") == 60
+def any_flat_book_is_entry_eligible(packet: dict[str, Any], scenario: dict[str, Any]) -> bool:
+    frames = packet.get("frames")
+    latest = frames[-1] if isinstance(frames, list) and frames and isinstance(frames[-1], dict) else {}
+    portfolio = latest.get("portfolio_snapshot")
+    if not isinstance(portfolio, dict) or portfolio.get("is_replicating") is not True:
+        return False
+    for book in scenario["books"]:
+        exposure = book.get("exposure")
+        if not isinstance(exposure, list) or not exposure or not book.get("valid_entry_quantities"):
+            continue
+        master = exposure[0]
+        if int(master.get("current_mnq_quantity", 0)) != 0:
+            continue
+        if (master.get("entry_window_open") is not True
+                or master.get("native_state_available") is not True
+                or master.get("is_risk_locked") is not False
+                or master.get("is_eval_target_locked") is not False
+                or int(master.get("working_orders", 0) or 0) != 0):
+            continue
+        if any(
+            member.get("native_state_available") is not True
+            or int(member.get("current_mnq_quantity", 0)) != 0
+            or int(member.get("working_orders", 0) or 0) != 0
+            for member in exposure[1:]
+        ):
+            continue
+        return True
     return False
 
 
@@ -727,11 +1006,13 @@ def should_invoke_luna(
     directive: dict[str, Any] | None,
 ) -> bool:
     window = packet_window_utc(packet)
+    positioned = scoped_master_is_positioned(packet, scenario)
+    if not positioned and not any_flat_book_is_entry_eligible(packet, scenario):
+        return False
     return (
         window.minute % 5 == 0
         or directive is not None
-        or scoped_master_is_positioned(packet, scenario)
-        or previous_batch_requests_minute_review(exchange, packet)
+        or positioned
     )
 
 
@@ -756,23 +1037,74 @@ def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int
         receipt = read_json(receipt_path)
         if receipt.get("complete"):
             return 0
-        if outbox_path.is_file() and not args.dry_run:
-            batch = read_json(outbox_path)
-            receipt = submit_batch(batch, glitch_data, exchange)
-            print(json.dumps(receipt, separators=(",", ":")))
-            return 0 if receipt["complete"] else 1
 
     scenario = build_scenario(packet)
+    if outbox_path.is_file():
+        batch = normalize_batch(read_json(outbox_path), scenario)
+        validate_batch(batch, scenario)
+        if args.dry_run:
+            print(json.dumps({
+                "cycle_id": packet_id,
+                "decision_count": len(batch["decisions"]),
+                "submitted": False,
+                "reused_outbox": True,
+            }))
+            return 0
+        consume_outbox_directive(exchange, packet_id)
+        receipt = submit_batch(batch, glitch_data, exchange)
+        print(json.dumps(receipt, separators=(",", ":")))
+        return 0 if receipt["complete"] else 1
+    if receipt_path.is_file():
+        raise ValueError("receipt_without_outbox")
+
     directive = read_operator_directive(exchange)
     if not should_invoke_luna(packet, scenario, exchange, directive):
+        return 0
+    attempt_path = model_attempt_path(exchange, packet_id)
+    if attempt_path.is_file():
         return 0
     reconcile_completed_outcomes(glitch_data, exchange)
     journals = journal_tail(glitch_data)
     prompt = build_prompt(packet, scenario, journals, directive)
-    batch, stderr, hermes_session_id = invoke_hermes(args.profile, prompt, args.timeout_seconds)
-    batch = normalize_batch(batch, scenario)
-    validate_batch(batch, scenario, directive)
-    write_json_atomic(outbox_path, batch)
+    write_json_atomic(attempt_path, {
+        "schema_version": "glitch.hermes.model_attempt.v1",
+        "cycle_id": packet_id,
+        "started_utc": utc_now(),
+        "status": "started",
+        "model": CORE_MODEL,
+        "provider": CORE_PROVIDER,
+    })
+    try:
+        batch, stderr, hermes_session_id = invoke_hermes(args.profile, prompt, args.timeout_seconds)
+        batch = normalize_batch(batch, scenario)
+        validate_batch(batch, scenario, directive)
+        persist_outbox(exchange, outbox_path, packet_id, batch, directive)
+        write_json_atomic(attempt_path, {
+            "schema_version": "glitch.hermes.model_attempt.v1",
+            "cycle_id": packet_id,
+            "started_utc": read_json(attempt_path)["started_utc"],
+            "completed_utc": utc_now(),
+            "status": "decision_ready",
+            "model": CORE_MODEL,
+            "provider": CORE_PROVIDER,
+            "hermes_session_id": hermes_session_id,
+        })
+    except Exception as error:
+        attempt = read_json(attempt_path)
+        attempt["completed_utc"] = utc_now()
+        attempt["status"] = "failed"
+        attempt["error"] = f"{type(error).__name__}:{str(error)[:400]}"
+        write_json_atomic(attempt_path, attempt)
+        append_event(events_path, {
+            "schema_version": "glitch.hermes.cycle_event.v1",
+            "event": "decision_failed",
+            "recorded_utc": utc_now(),
+            "cycle_id": packet_id,
+            "model": CORE_MODEL,
+            "provider": CORE_PROVIDER,
+            "error": attempt["error"],
+        })
+        raise
     if directive and not args.dry_run:
         consume_operator_directive(exchange, directive, packet_id)
     append_event(events_path, {

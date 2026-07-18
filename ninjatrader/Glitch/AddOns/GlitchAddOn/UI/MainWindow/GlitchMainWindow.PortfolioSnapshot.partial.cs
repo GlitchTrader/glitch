@@ -51,7 +51,7 @@ namespace Glitch.UI
 
             return new GlitchPortfolioSnapshotCapture
             {
-                IsReplicating = _isReplicatingUi,
+                IsReplicating = IsReplicationEnabledFromExternalSurface(),
                 PropFirmRulesSchemaVersion = rulesSchema,
                 PropFirmRulesUpdatedAtUtc = rulesUpdatedAt,
                 Accounts = records
@@ -60,10 +60,27 @@ namespace Glitch.UI
 
         private GlitchPortfolioSnapshotAccountRecord BuildPortfolioSnapshotAccountRecord(AccountGridRow row, Account account)
         {
-            double headroomRatio = row.MaxDrawdownRaw > 0 && !double.IsNaN(row.BufferMarginRaw)
-                ? row.BufferMarginRaw / row.MaxDrawdownRaw
+            bool simulateApexLegacyEval = string.Equals(row.AccountStatus, "Sim", StringComparison.OrdinalIgnoreCase);
+            string ruleFirmId = simulateApexLegacyEval ? "ApexTraderFunding" : row.PropFirmId;
+            string ruleStatus = simulateApexLegacyEval ? "Eval" : row.AccountStatus;
+            FirmTierRule rule = GetRuleForFirmAndSize(
+                ruleFirmId,
+                ruleStatus,
+                GetExecutionProviderHint(account),
+                row.AccountSizeRaw,
+                0);
+            _firmRules.TryGetValue(ruleFirmId ?? string.Empty, out FirmRuleMetadata ruleFirm);
+            double ruleMaxContracts = ResolveMaxContractsLimit(rule, ResolveMicroContractMultiplier(ruleFirm));
+            double profitTarget = rule?.ProfitTarget ?? row.ProfitTargetRaw;
+            double maxDrawdown = rule?.MaxDrawdown ?? row.MaxDrawdownRaw;
+            double dailyLossLimit = rule?.DailyLossLimit ?? row.DailyLossLimitRaw;
+            double headroomRatio = maxDrawdown > 0 && !double.IsNaN(row.BufferMarginRaw)
+                ? row.BufferMarginRaw / maxDrawdown
                 : double.NaN;
-            List<GlitchPortfolioSnapshotPositionRecord> positions = BuildPortfolioSnapshotPositions(account);
+            bool positionsAvailable = TryBuildPortfolioSnapshotPositions(
+                account,
+                out List<GlitchPortfolioSnapshotPositionRecord> positions);
+            bool ordersAvailable = TryGetPortfolioWorkingOrderCount(account, out int workingOrderCount);
             double liveUnrealizedPnl = positions.Sum(position => position.UnrealizedPnl);
             string livePositionDisplay = BuildPortfolioPositionDisplay(positions);
 
@@ -71,11 +88,13 @@ namespace Glitch.UI
             {
                 AccountName = row.DisplayName,
                 AccountStatus = row.AccountStatus,
-                PropFirmId = row.PropFirmId,
+                PropFirmId = ruleFirmId,
+                RuleStatus = ruleStatus,
+                RulesAreSimulated = simulateApexLegacyEval,
                 AccountSize = row.AccountSizeRaw,
-                ProfitTarget = row.ProfitTargetRaw,
-                MaxDrawdown = row.MaxDrawdownRaw,
-                DailyLossLimit = row.DailyLossLimitRaw,
+                ProfitTarget = profitTarget,
+                MaxDrawdown = maxDrawdown,
+                DailyLossLimit = dailyLossLimit,
                 Equity = row.EquityRaw,
                 LiquidationThreshold = row.NetLiqRaw,
                 BufferMargin = row.BufferMarginRaw,
@@ -84,12 +103,13 @@ namespace Glitch.UI
                 UnrealizedPnl = liveUnrealizedPnl,
                 TotalPnl = row.RealizedPnlRaw + liveUnrealizedPnl,
                 PositionDisplay = livePositionDisplay,
-                WorkingOrderCount = account?.Orders == null
-                    ? 0
-                    : account.Orders.Count(order => order != null && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState)),
-                MaxContracts = row.MaxContractsRaw,
+                NativeStateAvailable = positionsAvailable && ordersAvailable,
+                WorkingOrderCount = workingOrderCount,
+                MaxContracts = ruleMaxContracts > 0 ? ruleMaxContracts : row.MaxContractsRaw,
                 IsRiskLocked = _riskLockedAccounts.Contains(row.DisplayName),
                 IsEvalTargetLocked = _evalTargetLockedAccounts.Contains(row.DisplayName),
+                TradingStartTime = ruleFirm?.TradingStartTime,
+                TradingEndTime = ruleFirm?.TradingEndTime,
                 Positions = positions
             };
         }
@@ -109,43 +129,74 @@ namespace Glitch.UI
             return FormatSignedContracts(signedContracts);
         }
 
-        private static List<GlitchPortfolioSnapshotPositionRecord> BuildPortfolioSnapshotPositions(Account account)
+        private static bool TryBuildPortfolioSnapshotPositions(
+            Account account,
+            out List<GlitchPortfolioSnapshotPositionRecord> records)
         {
-            var records = new List<GlitchPortfolioSnapshotPositionRecord>();
+            records = new List<GlitchPortfolioSnapshotPositionRecord>();
             if (account?.Positions == null)
-                return records;
+                return false;
 
-            foreach (Position position in account.Positions)
+            try
             {
-                if (position == null || position.MarketPosition == MarketPosition.Flat)
-                    continue;
-
-                double unrealized = 0;
-                try
+                lock (account.Positions)
                 {
-                    unrealized = position.GetUnrealizedProfitLoss(PerformanceUnit.Currency);
+                    foreach (Position position in account.Positions)
+                    {
+                        if (position == null || position.MarketPosition == MarketPosition.Flat)
+                            continue;
+
+                        double unrealized = 0;
+                        try
+                        {
+                            unrealized = position.GetUnrealizedProfitLoss(PerformanceUnit.Currency);
+                        }
+                        catch
+                        {
+                        }
+
+                        string instrumentFullName = position.Instrument?.FullName;
+                        string instrumentRoot = position.Instrument?.MasterInstrument?.Name;
+                        if (string.IsNullOrWhiteSpace(instrumentRoot))
+                            instrumentRoot = instrumentFullName;
+
+                        records.Add(new GlitchPortfolioSnapshotPositionRecord
+                        {
+                            InstrumentFullName = instrumentFullName,
+                            InstrumentRoot = instrumentRoot,
+                            MarketPosition = position.MarketPosition.ToString(),
+                            Quantity = Math.Abs(position.Quantity),
+                            AveragePrice = position.AveragePrice,
+                            UnrealizedPnl = unrealized
+                        });
+                    }
                 }
-                catch
-                {
-                }
-
-                string instrumentFullName = position.Instrument?.FullName;
-                string instrumentRoot = position.Instrument?.MasterInstrument?.Name;
-                if (string.IsNullOrWhiteSpace(instrumentRoot))
-                    instrumentRoot = instrumentFullName;
-
-                records.Add(new GlitchPortfolioSnapshotPositionRecord
-                {
-                    InstrumentFullName = instrumentFullName,
-                    InstrumentRoot = instrumentRoot,
-                    MarketPosition = position.MarketPosition.ToString(),
-                    Quantity = Math.Abs(position.Quantity),
-                    AveragePrice = position.AveragePrice,
-                    UnrealizedPnl = unrealized
-                });
+                return true;
             }
+            catch
+            {
+                records.Clear();
+                return false;
+            }
+        }
 
-            return records;
+        private static bool TryGetPortfolioWorkingOrderCount(Account account, out int count)
+        {
+            count = 0;
+            if (account?.Orders == null)
+                return false;
+            try
+            {
+                lock (account.Orders)
+                    count = account.Orders.Count(order => order != null
+                        && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState));
+                return true;
+            }
+            catch
+            {
+                count = 0;
+                return false;
+            }
         }
     }
 }

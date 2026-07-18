@@ -36,6 +36,17 @@ class OperatorMapTests(unittest.TestCase):
             self.assertEqual(loops[loop_id]["initial_activation"], "disabled")
         self.assertEqual(self.operator["activation"]["enable_now"], [])
 
+    def test_core_model_is_pinned_without_silent_fallback(self):
+        installer = (ROOT / "tools/hermes/install-direct-hermes-bridge.ps1").read_text(encoding="utf-8")
+        runner = (ROOT / "tools/hermes/run-direct-glitch-cycle.py").read_text(encoding="utf-8")
+        self.assertIn("config set model.default gpt-5.6-luna", installer)
+        self.assertIn("config set model.provider openai-codex", installer)
+        self.assertIn("config set agent.reasoning_effort medium", installer)
+        self.assertIn("_write_chain; c=load_config(); _write_chain(c, [])", installer)
+        self.assertIn('CORE_MODEL = "gpt-5.6-luna"', runner)
+        self.assertIn('CORE_PROVIDER = "openai-codex"', runner)
+        self.assertIn('"--max-turns", "4"', runner)
+
     def test_patterns_are_evidence_not_deterministic_gates(self):
         lowered = self.cognitive_map.lower()
         self.assertIn("archetypes, mined patterns", lowered)

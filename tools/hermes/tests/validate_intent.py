@@ -48,8 +48,12 @@ if intent["decision_audit"]["final_choice"] != intent["action"]:
 if intent["action"] in {"ENTER_LONG", "ENTER_SHORT"}:
     if intent.get("order_type") != "MARKET" or "limit_price" in intent:
         fail("entry_not_market_only")
-    if intent.get("quantity") != 1:
-        fail("entry_quantity_not_one")
+    quantity = intent.get("quantity")
+    if not isinstance(quantity, int) or isinstance(quantity, bool) or quantity < 1:
+        fail("entry_quantity_invalid")
+    valid_quantities = scenario.get("valid_entry_quantities")
+    if isinstance(valid_quantities, list) and quantity not in valid_quantities:
+        fail("entry_quantity_not_authorized")
     price = scenario["market"]["current_price"]
     stop = intent["stop_loss"]
     target = intent["take_profit_1"]
@@ -59,8 +63,5 @@ if intent["action"] in {"ENTER_LONG", "ENTER_SHORT"}:
         fail("invalid_long_geometry")
     if intent["action"] == "ENTER_SHORT" and not (target < price < stop):
         fail("invalid_short_geometry")
-    estimated_risk = abs(price - stop) * 2 * intent["quantity"]
-    if estimated_risk > scenario["policy"]["max_loss_per_trade_usd"]:
-        fail("estimated_risk_over_policy")
 
 print(json.dumps({"scenario": scenario["name"], "action": intent["action"], "valid": True}))

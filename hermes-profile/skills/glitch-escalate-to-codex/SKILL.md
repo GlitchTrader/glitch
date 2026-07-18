@@ -13,7 +13,7 @@ needed.
 3. State the exact files/scope, acceptance criteria, evidence, and rollback.
 4. Wait for explicit user approval before changing status to `approved`.
 
-Codex's two-hour builder pass reads approved requests, works in the registered
-workspace, validates, and records its result. It does not run trading cycles,
-poll market data, or infer approval from a recommendation. Hermes trading keeps
-operating independently while a request is pending or being built.
+An approved request is available to a separately invoked builder. It does not
+schedule Codex, run trading cycles, poll market data, or imply approval from a
+recommendation. Hermes trading remains independent while a request is pending
+or being built.

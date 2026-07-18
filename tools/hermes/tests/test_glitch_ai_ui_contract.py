@@ -5,6 +5,8 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 UI = ROOT / "ninjatrader" / "Glitch" / "AddOns" / "GlitchAddOn" / "UI" / "MainWindow"
 POLICY = ROOT / "ninjatrader" / "Glitch" / "AddOns" / "GlitchAddOn" / "Services" / "Ai" / "GlitchAiRailPolicyStore.cs"
+AI_AUTO = ROOT / "ninjatrader" / "Glitch" / "AddOns" / "GlitchAddOn" / "Services" / "Ai" / "GlitchAiAutoRuntimeController.cs"
+CONTROL_PLUGIN = ROOT / "hermes-profile" / "plugins" / "glitch-control" / "__init__.py"
 
 
 class GlitchAiUiContractTests(unittest.TestCase):
@@ -30,7 +32,8 @@ class GlitchAiUiContractTests(unittest.TestCase):
         refresh = (UI / "GlitchMainWindow.RefreshPipeline.partial.cs").read_text(encoding="utf-8")
         self.assertIn('Value = "Stale"', main)
         self.assertIn('"AI Auto Stale"', main)
-        self.assertIn("IsAiDecisionLoopHealthy() ? \"Running\" : \"Stale\"", main)
+        self.assertIn("!paused && tradingJobEnabled && IsAiDecisionLoopHealthy()", main)
+        self.assertIn('GlitchAiAutoRuntimeController.IsTradingJobEnabled()', main)
         self.assertIn('Path.Combine("hermes", "exchange", "hermes", "events", "cycles.jsonl")', main)
         self.assertIn("TimeSpan.FromMinutes(12)", main)
         self.assertIn("UpdateHermesModeUi", refresh)
@@ -41,6 +44,23 @@ class GlitchAiUiContractTests(unittest.TestCase):
         self.assertIn('ReplaceStringArray(json, "profile_account_bindings"', source)
         self.assertIn('ReplaceStringArray(json, "account_allowlist"', source)
         self.assertNotIn("AiAccountGroup", source)
+
+    def test_ai_switch_owns_the_native_job_without_running_a_model(self):
+        main = (UI / "GlitchMainWindow.cs").read_text(encoding="utf-8")
+        bridge = AI_AUTO.read_text(encoding="utf-8")
+        plugin = CONTROL_PLUGIN.read_text(encoding="utf-8")
+
+        self.assertIn("GlitchAiAutoRuntimeController.SetEnabledAsync(targetEnabled)", main)
+        self.assertIn("state.TradingPaused = true;", main)
+        self.assertLess(
+            main.index("state.TradingPaused = true;", main.index("private async void OnAiTradingButtonClick")),
+            main.index("SetEnabledAsync(targetEnabled)", main.index("private async void OnAiTradingButtonClick")),
+        )
+        self.assertIn('Arguments = QuoteArgument(controlPluginPath) + " ai-auto "', bridge)
+        self.assertIn("CreateNoWindow = true", bridge)
+        self.assertIn("It never runs a model itself", bridge)
+        self.assertIn('arguments[0] != "ai-auto"', plugin)
+        self.assertIn('_trade_mode("") if arguments[1] == "on" else _pause_trading("")', plugin)
 
 
 if __name__ == "__main__":

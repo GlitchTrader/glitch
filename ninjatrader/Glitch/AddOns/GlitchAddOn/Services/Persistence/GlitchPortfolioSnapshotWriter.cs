@@ -22,6 +22,8 @@ namespace Glitch.Services
         public string AccountName { get; set; }
         public string AccountStatus { get; set; }
         public string PropFirmId { get; set; }
+        public string RuleStatus { get; set; }
+        public bool RulesAreSimulated { get; set; }
         public double AccountSize { get; set; }
         public double ProfitTarget { get; set; }
         public double MaxDrawdown { get; set; }
@@ -34,10 +36,13 @@ namespace Glitch.Services
         public double UnrealizedPnl { get; set; }
         public double TotalPnl { get; set; }
         public string PositionDisplay { get; set; }
+        public bool NativeStateAvailable { get; set; }
         public int WorkingOrderCount { get; set; }
         public double MaxContracts { get; set; }
         public bool IsRiskLocked { get; set; }
         public bool IsEvalTargetLocked { get; set; }
+        public string TradingStartTime { get; set; }
+        public string TradingEndTime { get; set; }
         public List<GlitchPortfolioSnapshotPositionRecord> Positions { get; set; }
     }
 
@@ -173,7 +178,7 @@ namespace Glitch.Services
                 totalRealized += account.RealizedPnl;
                 totalUnrealized += account.UnrealizedPnl;
                 totalPnl += account.TotalPnl;
-                accountJson.Add(BuildAccountJson(account));
+                accountJson.Add(BuildAccountJson(account, nowUtc));
             }
 
             if (accountJson.Count == 0)
@@ -205,7 +210,7 @@ namespace Glitch.Services
             return sb.ToString();
         }
 
-        private static string BuildAccountJson(GlitchPortfolioSnapshotAccountRecord account)
+        private static string BuildAccountJson(GlitchPortfolioSnapshotAccountRecord account, DateTime nowUtc)
         {
             var positions = new List<string>();
             if (account.Positions != null)
@@ -219,10 +224,17 @@ namespace Glitch.Services
                 }
             }
 
+            GlitchAiTradingWindowStatus tradingWindow = GlitchAiTradingWindow.Evaluate(
+                nowUtc,
+                account.TradingStartTime,
+                account.TradingEndTime);
+
             return "{"
                 + "\"account\":" + GlitchSnapshotJson.String(account.AccountName) + ","
                 + "\"account_status\":" + GlitchSnapshotJson.String(account.AccountStatus) + ","
                 + "\"prop_firm_id\":" + GlitchSnapshotJson.String(account.PropFirmId) + ","
+                + "\"rule_status\":" + GlitchSnapshotJson.String(account.RuleStatus) + ","
+                + "\"rules_are_simulated\":" + GlitchSnapshotJson.Bool(account.RulesAreSimulated) + ","
                 + "\"account_size\":" + GlitchSnapshotJson.Number(account.AccountSize) + ","
                 + "\"profit_target\":" + GlitchSnapshotJson.Number(account.ProfitTarget) + ","
                 + "\"max_drawdown\":" + GlitchSnapshotJson.Number(account.MaxDrawdown) + ","
@@ -235,10 +247,19 @@ namespace Glitch.Services
                 + "\"unrealized_pnl\":" + GlitchSnapshotJson.Number(account.UnrealizedPnl) + ","
                 + "\"total_pnl\":" + GlitchSnapshotJson.Number(account.TotalPnl) + ","
                 + "\"position_display\":" + GlitchSnapshotJson.String(account.PositionDisplay) + ","
+                + "\"native_state_available\":" + GlitchSnapshotJson.Bool(account.NativeStateAvailable) + ","
                 + "\"working_orders\":" + account.WorkingOrderCount.ToString(CultureInfo.InvariantCulture) + ","
                 + "\"max_contracts\":" + GlitchSnapshotJson.Number(account.MaxContracts) + ","
                 + "\"is_risk_locked\":" + GlitchSnapshotJson.Bool(account.IsRiskLocked) + ","
                 + "\"is_eval_target_locked\":" + GlitchSnapshotJson.Bool(account.IsEvalTargetLocked) + ","
+                + "\"trading_start_time_et\":" + GlitchSnapshotJson.String(account.TradingStartTime) + ","
+                + "\"trading_end_time_et\":" + GlitchSnapshotJson.String(account.TradingEndTime) + ","
+                + "\"trading_window_valid\":" + GlitchSnapshotJson.Bool(tradingWindow.IsValid) + ","
+                + "\"trading_session_open\":" + GlitchSnapshotJson.Bool(tradingWindow.IsSessionOpen) + ","
+                + "\"entry_window_open\":" + GlitchSnapshotJson.Bool(tradingWindow.IsEntryAllowed) + ","
+                + "\"must_flat_utc\":" + GlitchSnapshotJson.String(
+                    tradingWindow.MustFlatUtc.HasValue ? GlitchSnapshotJson.FormatUtc(tradingWindow.MustFlatUtc.Value) : string.Empty) + ","
+                + "\"seconds_until_must_flat\":" + GlitchSnapshotJson.Number(tradingWindow.SecondsUntilMustFlat) + ","
                 + "\"positions\":[" + string.Join(",", positions) + "]"
                 + "}";
         }

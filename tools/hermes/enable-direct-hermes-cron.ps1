@@ -1,7 +1,8 @@
 param(
     [string]$Profile = 'glitch',
-    # Glitch publishes a rolling five-frame packet each minute. The exact-minute
-    # tick naturally consumes the previous completed packet.
+    # Wake the lightweight worker each minute so it can manage open positions.
+    # The worker itself spends no model call while flat except on 5m boundaries
+    # or for an explicit one-cycle operator directive.
     [string]$Schedule = '* * * * *',
     [string]$GlitchData = (Join-Path $env:USERPROFILE 'Documents\NinjaTrader 8\GlitchData')
 )

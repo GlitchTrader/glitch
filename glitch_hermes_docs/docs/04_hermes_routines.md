@@ -37,7 +37,7 @@ This is deterministic plumbing. It should not ask the model for judgment.
 
 Mode: LLM-driven Hermes cron.
 
-Cadence: every 5 minutes, aligned to the closed decision window.
+Cadence: every five-minute boundary while flat and each minute while a scoped master is positioned. The lightweight worker may wake each minute without spending a model call.
 
 Responsibilities:
 
@@ -55,11 +55,12 @@ Allowed output actions for the current contract:
 ENTER_LONG
 ENTER_SHORT
 HOLD
+MOVE_STOP
 EXIT
 NOTHING
 ```
 
-Every entry intent requires SL + TP1. Optional TP2/SL2 are contract-supported only where quantity and risk rules allow. Hermes never widens stops and never manages a loss mid-flight.
+Every entry intent requires absolute SL + TP1 prices. Optional second and third protected legs are contract-supported where quantity allows. Hermes never widens stops; it may tighten protection, add a protected same-direction tranche, or exit when the thesis changes.
 
 ## Routine 3 — portfolio_risk_review
 

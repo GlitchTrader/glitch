@@ -43,9 +43,13 @@ No stop widening
 No naked entry
 No entry without attached stop
 Reject if existing working orders are ambiguous
-Reject during news lockout
+Reject outside the authoritative trading session or at the must-flat cutoff
 Reject if account is locked
 ```
+
+Scheduled news remains decision context unless a current, program-specific rule explicitly
+requires a lockout. The firewall must not manufacture a news prohibition from a calendar
+banner or an inferred event time.
 
 ## MNQ Risk Math
 

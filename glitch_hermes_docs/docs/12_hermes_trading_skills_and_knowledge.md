@@ -22,7 +22,7 @@ All loops belong to the same `glitch` profile and share native Hermes memory, se
 
 | Loop | Cadence | Model baseline | Primary question | Output authority |
 |---|---:|---|---|---|
-| Core decision | every closed 5-minute packet | `gpt-5.6-luna`, medium | What should each configured group do now? | Strict intent batch; Glitch may reject or execute |
+| Core decision | 5m while flat; 1m while a scoped master is positioned; one-cycle directives | `gpt-5.6-luna`, medium | What should each configured group do now? | Strict intent batch; Glitch may reject or execute |
 | Portfolio supervision | hourly | `gpt-5.6-sol`, high | Is exposure, performance, risk posture, or system health drifting? | Review, bounded self-heal, and plan recommendations; no order |
 | Portfolio planning | every 6 hours | `gpt-5.6-sol`, high | Given today’s progress and prop rules, what targets and risk allocation should govern the next block? | Active Hermes plan inside Glitch’s hard limits; no Glitch-policy mutation |
 | Daily learning | after session | `gpt-5.6-sol`, high | What was learned, what should change tomorrow, and which hypotheses deserve testing? | Journal, memory updates, hypotheses, and tomorrow plan; no live-policy promotion |
@@ -40,7 +40,7 @@ Input:
 - one immutable five-frame Glitch packet;
 - latest portfolio, positions, working orders, group ratios, and hard risk state;
 - current prop-firm rules and account phase;
-- the active Hermes portfolio plan;
+- the active Hermes portfolio plan when that deferred loop exists;
 - only recent relevant Glitch outcomes and lessons;
 - native session and episodic memory.
 
@@ -113,10 +113,12 @@ Existing Glitch overlay:
 | `glitch-assess-risk` | Understand portfolio and trade risk inside Glitch limits |
 | `glitch-form-thesis` | Form falsifiable discretionary or pattern-supported hypotheses |
 | `glitch-build-intent` | Convert a chosen decision into the strict protected intent contract |
-| `glitch-submit-intent` | Deliver only through the authenticated Glitch receiver |
+| `glitch-submit-intent` | Keep interactive chat on directives; only the worker may validate and deliver intents |
 | `glitch-review-outcomes` | Attribute Glitch-recorded outcomes and generate lessons |
 | `glitch-self-learning` | Promote attributable outcomes into append-only episodic and durable lessons without turning memory into truth |
 | `glitch-self-heal` | Reconcile Hermes-owned state to Glitch truth, append the correction, and resume safe operation |
+| `glitch-supervisor-ledger` | Maintain append-only observations, guidance, lessons, and build requests |
+| `glitch-escalate-to-codex` | Propose bounded source work without scheduling or operating Codex |
 
 Required overlay before supervisory loops activate:
 
@@ -158,6 +160,8 @@ Hermes owns interpretation and learning:
 ```text
 GlitchData/hermes/exchange/hermes/
   outbox/                 strict decisions awaiting delivery
+  outbox-context/         packet-bound operator-directive identity for crash-safe consumption
+  model-attempts/          one durable inference attempt per packet, including terminal failure evidence
   receipts/               delivery evidence
   events/cycles.jsonl     core-loop events
   reviews/hourly/         hourly supervision outputs (planned)
@@ -251,9 +255,9 @@ Only Stage A and then Stage B are in immediate scope.
 ### Stage B — core paper loop only
 
 1. Deploy and compile the Glitch packet writer.
-2. Confirm five consecutive minute frames and one x0/x5 packet.
+2. Confirm five consecutive minute frames and one rolling packet with truthful in-progress timeframe semantics.
 3. Enable only the Hermes core decision job.
-4. Validate: zero model calls without a new packet; one call per packet; one batch per configured group set; no duplicate delivery; receipts and Glitch decisions join by ID.
+4. Validate: zero flat-book model calls between five-minute boundaries, minute calls only while positioned or explicitly directed, one batch per invoked group set, no duplicate delivery, and receipts/Glitch decisions joined by ID.
 5. Observe paper cycles and journal quality. Validate a complete protected open-to-close trade when Hermes chooses one; do not force an entry merely to satisfy infrastructure testing.
 
 ### Deferred stages
@@ -287,8 +291,8 @@ may analyze trading activity, maintain Hermes-owned lessons and health records,
 offer advisory guidance to the trading session, and escalate a source change to
 Codex. It does not become a second executor.
 
-Codex is a bounded builder above Hermes. It consumes only explicitly approved
-requests from the supervisor ledger on a two-hour cadence, works in the
-registered workspace, validates, performs one clean deployment when required,
-and records the handoff. It never polls snapshots, runs a trading cycle, or
-changes Glitch state merely because it woke up. See `13_three_layer_handoff.md`.
+Codex is a bounded builder above Hermes. It runs only when explicitly invoked
+for approved work from the supervisor ledger, works in the registered
+workspace, validates, performs one clean deployment when required, and records
+the handoff. It never polls snapshots, runs a trading cycle, or changes Glitch
+state merely because a request exists. See `13_three_layer_handoff.md`.

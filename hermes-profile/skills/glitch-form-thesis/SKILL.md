@@ -1,27 +1,18 @@
 ---
 name: glitch-form-thesis
-description: Form an independent MNQ long, short, hold, exit, or no-trade thesis from supplied observations, patterns, historical examples, and current risk state.
+description: Form a falsifiable probabilistic MNQ thesis, structural invalidation, and realistic target from supplied evidence.
 ---
 
 # Form Thesis
 
-Choose independently; mined archetypes are priors, not mandatory templates.
+Judge bull, bear, and flat cases from current observable evidence. Aggressive and conservative cases are perspectives, not separate strategies.
 
-1. Run one adversarial decision court before choosing:
-   - `bull_case`: strongest observable argument for long and its invalidation;
-   - `bear_case`: strongest observable argument for short and its invalidation;
-   - `flat_case`: why neither side may currently earn its execution cost;
-   - `aggressive_case`: earliest positive-expectancy action and the risk of acting too soon;
-   - `conservative_case`: confirmation demanded and the opportunity cost of waiting.
-   Steelman every case; do not create weak opponents merely to justify a preferred answer.
-2. Prefer agreement across regime, location, momentum, and risk geometry. Penalize contradictory timeframes, high-noise conditions, stale data, churn, and weak reward relative to stop distance.
-   Regime is context, not a gate: in range/chop consider quick mean-reversion or scalp geometry; in directional conditions consider pullback, continuation, breakout, or a longer hold; in transition use smaller protected exposure or remain flat. No setup family is mandatory.
-3. A known pattern may support the thesis only when the local archetype evaluation marks it `exact_match: true`. A novel thesis is allowed when the snapshot provides a clear, falsifiable setup, but it must identify why it is not a known-pattern match.
-4. Define invalidation before target. For entries, propose stop/target geometry around current observable structure; the exact market entry may drift.
-5. Act as judge. Treat every five-minute cycle as a stay-or-revert posture review. Select one action: `ENTER_LONG`, `ENTER_SHORT`, `HOLD`, `EXIT`, or `NOTHING`. An open thesis should be held only while its evidence remains valid; a flat book should actively reconsider both directions without being forced into a trade. Name the decisive evidence, strongest disconfirming evidence, and what would change the decision.
-   In SIM, use bounded experimentation to learn from multiple valid setup types over time. This permits several trades when evidence supports them; it is not a quota and does not justify churn or revenge trading. State the most likely next-five-minute path as decisive evidence and its concrete invalidation as the change condition.
-6. For an open one-contract MNQ position, treat current and supplied-frame peak unrealized PnL as first-class evidence. Roughly $30-$40 is bankable discovery profit and $80+ is material. A 35%-50% rollback without strengthening evidence should favor `EXIT`; the native stop is catastrophe protection, not the default profit-management plan.
+1. When flat, describe the most likely next-five-minute path - not the next fifteen minutes - and the evidence that would disconfirm it. When positioned and reviewing each minute, forecast the most likely next one-minute candle and manage from that forecast, structure, and risk. Use 15m/60m as regime context and 1m/5m as timing and noise.
+2. Consider multiple setup families—continuation, pullback, breakout, mean reversion, scalp, or transition—without requiring or forcing any archetype.
+3. Avoid staying idle for too long when one side has positive expectancy with bounded structural risk. Choose `NOTHING` when neither side does, but ordinary uncertainty, missing order flow, or lack of a closed candle alone is not a veto. Paper experimentation is not permission to churn or force an edge.
+4. Define invalidation before target. Anchor the stop beyond a relevant recent pivot or swing, the actual invalidation, and a volatility/noise buffer - not merely at an offset from immediate price. Never use `compact`, `tight`, `defined risk`, or an attractive R multiple to place it inside ordinary one-minute movement.
+5. Choose a target that the stated horizon, structure, and regime can plausibly reach. Do not select a distant target merely to make reward/risk look good. If valid risk is too large, use a smaller supplied quantity or remain flat.
+6. After a stop, require materially changed price, structure, momentum, or regime before re-entry. Repeating the same thesis near the same level is churn.
+7. For open positions, judge favorable excursion, rollback, and remaining opportunity in initial-risk units and structure. Native stops are catastrophe protection, not passive management.
 
-Do not reveal private chain-of-thought or produce a long debate transcript. Pass a compact factual `decision_audit` containing the five cases, decisive evidence, disconfirming evidence, change condition, and final choice to the intent builder.
-
-Tag known setups `archetype:<id>` and new setups `discretionary_candidate:<short_name>`. Pass one chosen action, confidence, rationale, invalidation, geometry, and decision audit to the intent builder.
+Choose `ENTER_LONG`, `ENTER_SHORT`, `HOLD`, `MOVE_STOP`, `EXIT`, or `NOTHING`. Pass only a compact factual `decision_audit`; never reveal private chain-of-thought.

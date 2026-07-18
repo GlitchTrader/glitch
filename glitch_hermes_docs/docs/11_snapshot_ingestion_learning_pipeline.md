@@ -93,7 +93,7 @@ Do not let Hermes infer missing critical fields. Missing critical state forces `
 
 Mode: one centralized Hermes LLM cycle. The local cron is the temporary validation harness.
 
-Cadence: every 5 minutes, aligned to the closed decision window.
+Cadence: every five-minute boundary while flat and each minute while a scoped master is positioned. Timeframe rows are live in-progress observations unless explicitly marked closed.
 
 Purpose:
 
@@ -101,7 +101,7 @@ Purpose:
 read latest valid snapshot
 read recent Glitch-journaled outcomes
 read active rules plus relevant hypotheses, evidence, and lessons
-emit one strict JSON intent per instrument or NOTHING
+emit one strict JSON intent per configured route-bound group
 ```
 
 Allowed current actions:
@@ -110,6 +110,7 @@ Allowed current actions:
 ENTER_LONG
 ENTER_SHORT
 HOLD
+MOVE_STOP
 EXIT
 NOTHING
 ```
@@ -118,7 +119,7 @@ Output stays small. The cost risk is input/context bloat, not the intent JSON.
 
 ### Current stabilization transport
 
-Glitch writes a minute frame only after market and portfolio snapshots with the same `snapshot_id` are both present. Five consecutive frames ending on `xx:x0` or `xx:x5` are atomically published as one decision packet under `GlitchData/hermes/exchange/glitch`.
+Glitch writes a minute frame only after market and portfolio snapshots with the same `snapshot_id` are both present. Once five consecutive frames exist, it atomically publishes one immutable rolling five-frame packet per minute under `GlitchData/hermes/exchange/glitch`. The lightweight worker wakes each minute but invokes Luna only on five-minute boundaries while flat, every minute while a scoped master is positioned, or once for an explicit directive.
 
 Hermes native cron owns the wake-up under a supervised gateway. Its worker performs a zero-model check for a new packet, resumes only the named `trading` session in the isolated `glitch` profile, reads bounded Glitch journal tails, and submits strict intents to Glitch's authenticated receiver. It does not classify opportunities or impose trading archetypes before inference. Contract/scope validation cannot replace Hermes's probabilistic decision; Glitch's firewall remains the execution authority.
 

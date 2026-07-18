@@ -1,16 +1,18 @@
 ---
 name: glitch-assess-risk
-description: Evaluate the supplied profile-bound Sim group, locks, positions, working orders, and available trade risk before a Glitch intent is considered.
+description: Assess the supplied Glitch group, prop-firm state, positions, protection, ratios, and valid entry quantities.
 ---
 
 # Assess Risk
 
-Treat `current/portfolio.latest.json` and `current/policy.json` as authoritative for this cycle.
+Use `CURRENT_CYCLE.execution_scope` and the latest supplied portfolio frame as current authority.
 
-1. Confirm the account and operator profile exactly match the supplied execution contract, the instrument is MNQ, trading is ON in the supplied paper/live mode, and current Glitch or prop-firm risk state does not forbid increasing exposure.
-2. Read the whole configured group: master and follower positions, ratios, native protection, realized/unrealized PnL, objective, drawdown buffer, prop-firm limits, daily loss allowance, and aggregate master contract cap. Paper trade count and elapsed time since the last loss are learning context, not deterministic gates. Never invent a missing value.
-3. If portfolio or prop-rule state is missing, stale, inconsistent, or unsafe, allow only `NOTHING`; allow `EXIT` only when the supplied state clearly shows an open position.
-4. An existing Glitch-owned, fully protected, ratio-aligned position may permit `HOLD`, `MOVE_STOP`, `EXIT`, or another same-direction protected tranche. Decide additions from context; never exceed remaining aggregate capacity, reverse through an entry, loosen risk, or target a follower account.
-5. For a proposed tranche, calculate estimated MNQ loss at the stop using `$2.00` per point per contract plus supplied friction. Treat the whole open position and all follower ratios as portfolio exposure. Glitch recalculates from the actual market fill.
+1. Confirm the route and master match, the instrument is MNQ, and Glitch reports no current risk, session-time, direction, or prop-firm restriction on increasing exposure. Treat news as volatility/context unless the current packet states an explicit account rule.
+2. Read the whole group. Followers and ratios determine portfolio exposure, but only the master is an intent target and replication owns followers.
+3. Choose an entry quantity only from that book's `valid_entry_quantities`. Glitch derives this list from every enabled account's authoritative contract ceiling, current exposure, and configured ratio. Never invent a fallback capacity.
+4. An existing same-direction, fully protected position may permit `HOLD`, `MOVE_STOP`, `EXIT`, or another protected tranche. Never reverse through an entry, loosen risk, or exceed supplied capacity.
+5. Estimate MNQ loss from the proposed absolute stop using the supplied point value when available. Judge that risk against structure, current portfolio state, drawdown, and prop restrictions; do not impose a separate fixed-dollar cap.
+6. If current facts are missing, stale, inconsistent, or unsafe, allow no new exposure. Risk-reducing management remains available when the position is unambiguous.
+7. `entry_window_open=false` forbids new exposure. If positioned, plan `EXIT` before `must_flat_utc`; the deterministic harness is only the final fail-safe.
 
-Return a compact assessment: `allowed_actions`, `remaining_quantity`, `open_protected_quantity`, `max_risk_usd`, `position_state`, applicable prop constraints, and stable blocking reasons.
+Return a compact assessment: allowed actions, valid quantities, current signed exposure, protection state, structural risk, applicable constraints, and factual blocking reasons.

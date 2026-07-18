@@ -10,17 +10,11 @@ namespace Glitch.Services
 {
     internal sealed class GlitchAiRailPolicy
     {
-        public bool AiEnabled { get; set; } = true;
-        public bool AiKillSwitch { get; set; } = false;
+        public bool IsValid { get; set; }
+        public string ValidationError { get; set; }
         public bool RequireValidLicense { get; set; } = false;
         public string Mode { get; set; } = "paper";
-        public int SnapshotMaxAgeSeconds { get; set; } = 180;
-        public int MaxContracts { get; set; } = 5;
-        public double MaxRiskPerContractUsd { get; set; } = 80;
-        public double MaxLossPerTradeUsd { get; set; } = 400;
-        public double MaxGroupLossPerTradeUsd { get; set; } = 0;
-        public double MaxDailyLossUsd { get; set; } = 0;
-        public bool NewsLockout { get; set; } = false;
+        public int SnapshotMaxAgeSeconds { get; set; } = 300;
         public string ExecutorAccount { get; set; } = "Sim101";
         public Dictionary<string, string> ProfileAccountBindings { get; set; } =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -51,15 +45,15 @@ namespace Glitch.Services
 
         public static GlitchAiRailPolicy Load()
         {
-            EnsureDefaultExists();
             try
             {
+                EnsureDefaultExists();
                 string json = File.ReadAllText(GetPolicyPath());
                 return Parse(json);
             }
-            catch
+            catch (Exception ex)
             {
-                return new GlitchAiRailPolicy();
+                return Invalid("policy_load_failed_" + ex.GetType().Name);
             }
         }
 
@@ -87,7 +81,12 @@ namespace Glitch.Services
             error = string.Empty;
             try
             {
-                EnsureDefaultExists();
+                GlitchAiRailPolicy policy = Load();
+                if (!policy.IsValid)
+                {
+                    error = policy.ValidationError ?? "policy_invalid";
+                    return false;
+                }
                 string path = GetPolicyPath();
                 string json = File.ReadAllText(path);
                 var masters = (enabledMasterAccounts ?? new string[0])
@@ -156,6 +155,19 @@ namespace Glitch.Services
                     return;
 
                 bool changed = false;
+                foreach (string retiredBoolKey in new[] { "ai_enabled", "ai_kill_switch" })
+                {
+                    string upgraded = Regex.Replace(
+                        json,
+                        "\"" + Regex.Escape(retiredBoolKey) + "\"\\s*:\\s*(?:true|false)\\s*,?",
+                        string.Empty,
+                        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+                    if (!string.Equals(upgraded, json, StringComparison.Ordinal))
+                    {
+                        json = upgraded;
+                        changed = true;
+                    }
+                }
                 string withoutRetiredExecutorGate = Regex.Replace(
                     json,
                     "\"executor_enabled\"\\s*:\\s*(?:true|false)\\s*,?",
@@ -168,7 +180,7 @@ namespace Glitch.Services
                 }
                 if (json.IndexOf("executor_account", StringComparison.OrdinalIgnoreCase) < 0)
                 {
-                    json = InsertAfterBool(json, "news_lockout", ",\"executor_account\":\"Sim101\"");
+                    json = InsertAfterString(json, "mode", ",\"executor_account\":\"Sim101\"");
                     changed = true;
                 }
 
@@ -181,31 +193,20 @@ namespace Glitch.Services
                     changed = true;
                 }
 
-                if (json.IndexOf("max_group_loss_per_trade_usd", StringComparison.OrdinalIgnoreCase) < 0)
+                string[] retiredRiskKeys =
                 {
-                    json = InsertAfterNumber(json, "max_loss_per_trade_usd", ",\"max_group_loss_per_trade_usd\":300");
-                    changed = true;
-                }
-                if (json.IndexOf("max_risk_per_contract_usd", StringComparison.OrdinalIgnoreCase) < 0)
-                {
-                    json = InsertAfterNumber(json, "max_contracts", ",\"max_risk_per_contract_usd\":80");
-                    changed = true;
-                }
-
-                string[] legacyReplacements =
-                {
-                    "\"max_contracts\"\\s*:\\s*1(?=\\s*[,}])|\"max_contracts\":5",
-                    "\"max_loss_per_trade_usd\"\\s*:\\s*100(?=\\s*[,}])|\"max_loss_per_trade_usd\":400",
-                    "\"max_group_loss_per_trade_usd\"\\s*:\\s*300(?=\\s*[,}])|\"max_group_loss_per_trade_usd\":0",
-                    "\"max_daily_loss_usd\"\\s*:\\s*300(?=\\s*[,}])|\"max_daily_loss_usd\":0"
+                    "max_contracts",
+                    "max_risk_per_contract_usd",
+                    "max_loss_per_trade_usd",
+                    "max_group_loss_per_trade_usd",
+                    "max_daily_loss_usd"
                 };
-                foreach (string replacement in legacyReplacements)
+                foreach (string key in retiredRiskKeys)
                 {
-                    string[] parts = replacement.Split('|');
                     string upgraded = Regex.Replace(
                         json,
-                        parts[0],
-                        parts[1],
+                        "\"" + Regex.Escape(key) + "\"\\s*:\\s*-?[0-9]+(?:\\.[0-9]+)?\\s*,?",
+                        string.Empty,
                         RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
                     if (!string.Equals(upgraded, json, StringComparison.Ordinal))
                     {
@@ -214,13 +215,14 @@ namespace Glitch.Services
                     }
                 }
 
-                // 120 seconds was the original default, but the native five-minute
-                // packet -> cron -> model path routinely needs about 130 seconds.
-                // Migrate only that legacy default; preserve explicit custom values.
+                // Retired defaults expired a valid five-minute decision before
+                // its own window ended. Align legacy values to the canonical
+                // five-minute packet horizon; live price and crossed-structure
+                // checks still run immediately before entry.
                 string upgradedSnapshotAge = Regex.Replace(
                     json,
-                    "\"snapshot_max_age_seconds\"\\s*:\\s*120(?=\\s*[,}])",
-                    "\"snapshot_max_age_seconds\":180",
+                    "\"snapshot_max_age_seconds\"\\s*:\\s*(?:120|180)(?=\\s*[,}])",
+                    "\"snapshot_max_age_seconds\":300",
                     RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
                 if (!string.Equals(upgradedSnapshotAge, json, StringComparison.Ordinal))
                 {
@@ -234,28 +236,6 @@ namespace Glitch.Services
             catch
             {
             }
-        }
-
-        private static string InsertAfterBool(string json, string key, string insert)
-        {
-            string pattern = "\"" + Regex.Escape(key) + "\"\\s*:\\s*(true|false)";
-            Match match = Regex.Match(json, pattern, RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
-            if (!match.Success)
-                return json;
-
-            int insertAt = match.Index + match.Length;
-            return json.Substring(0, insertAt) + insert + json.Substring(insertAt);
-        }
-
-        private static string InsertAfterNumber(string json, string key, string insert)
-        {
-            string pattern = "\"" + Regex.Escape(key) + "\"\\s*:\\s*-?[0-9]+(?:\\.[0-9]+)?";
-            Match match = Regex.Match(json, pattern, RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
-            if (!match.Success)
-                return json;
-
-            int insertAt = match.Index + match.Length;
-            return json.Substring(0, insertAt) + insert + json.Substring(insertAt);
         }
 
         private static string InsertAfterString(string json, string key, string insert)
@@ -273,17 +253,9 @@ namespace Glitch.Services
         {
             return "{"
                 + "\"schema_version\":\"glitch.ai.policy.v1\","
-                + "\"ai_enabled\":true,"
-                + "\"ai_kill_switch\":false,"
                 + "\"require_valid_license\":false,"
                 + "\"mode\":\"paper\","
-                + "\"snapshot_max_age_seconds\":180,"
-                + "\"max_contracts\":5,"
-                + "\"max_risk_per_contract_usd\":80,"
-                + "\"max_loss_per_trade_usd\":400,"
-                + "\"max_group_loss_per_trade_usd\":0,"
-                + "\"max_daily_loss_usd\":0,"
-                + "\"news_lockout\":false,"
+                + "\"snapshot_max_age_seconds\":300,"
                 + "\"executor_account\":\"Sim101\","
                 + "\"profile_account_bindings\":[\"glitch=Sim101\"],"
                 + "\"instrument_allowlist\":[\"MNQ\",\"MES\",\"M2K\"],"
@@ -296,16 +268,50 @@ namespace Glitch.Services
         {
             var policy = new GlitchAiRailPolicy();
             if (string.IsNullOrWhiteSpace(json))
-                return policy;
+                return Invalid("policy_empty");
+            if (!GlitchAiJsonFields.TryParseObject(json, out _))
+                return Invalid("policy_json_invalid");
 
-            if (GlitchAiJsonFields.TryExtractBool(json, "ai_enabled", out bool aiEnabled))
-                policy.AiEnabled = aiEnabled;
-            if (GlitchAiJsonFields.TryExtractBool(json, "ai_kill_switch", out bool killSwitch))
-                policy.AiKillSwitch = killSwitch;
+            string schemaVersion = GlitchAiJsonFields.ExtractString(json, "schema_version");
+            if (!string.Equals(schemaVersion, "glitch.ai.policy.v1", StringComparison.Ordinal))
+                return Invalid("policy_schema_invalid");
+            if (CountJsonKey(json, "schema_version") != 1)
+                return Invalid("policy_schema_duplicated");
+
+            string[] requiredKeys =
+            {
+                "mode",
+                "snapshot_max_age_seconds",
+                "profile_account_bindings",
+                "instrument_allowlist",
+                "account_allowlist",
+                "blocked_sessions"
+            };
+            foreach (string key in requiredKeys)
+            {
+                int count = CountJsonKey(json, key);
+                if (count == 0)
+                    return Invalid("policy_key_missing_" + key);
+                if (count != 1)
+                    return Invalid("policy_key_duplicated_" + key);
+            }
+            foreach (string key in new[]
+            {
+                "profile_account_bindings",
+                "instrument_allowlist",
+                "account_allowlist",
+                "blocked_sessions"
+            })
+            {
+                if (!Regex.IsMatch(
+                    json,
+                    "\"" + Regex.Escape(key) + "\"\\s*:\\s*\\[",
+                    RegexOptions.CultureInvariant | RegexOptions.IgnoreCase))
+                    return Invalid("policy_array_invalid_" + key);
+            }
+
             if (GlitchAiJsonFields.TryExtractBool(json, "require_valid_license", out bool requireLicense))
                 policy.RequireValidLicense = requireLicense;
-            if (GlitchAiJsonFields.TryExtractBool(json, "news_lockout", out bool newsLockout))
-                policy.NewsLockout = newsLockout;
             string executorAccount = GlitchAiJsonFields.ExtractString(json, "executor_account");
             if (!string.IsNullOrWhiteSpace(executorAccount))
                 policy.ExecutorAccount = executorAccount.Trim();
@@ -313,25 +319,42 @@ namespace Glitch.Services
             string mode = GlitchAiJsonFields.ExtractString(json, "mode");
             if (!string.IsNullOrWhiteSpace(mode))
                 policy.Mode = mode.Trim();
+            if (!string.Equals(policy.Mode, "paper", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(policy.Mode, "live", StringComparison.OrdinalIgnoreCase))
+                return Invalid("policy_mode_invalid");
 
-            if (GlitchAiJsonFields.TryExtractNumber(json, "snapshot_max_age_seconds", out double snapshotAge))
-                policy.SnapshotMaxAgeSeconds = Math.Max(1, (int)snapshotAge);
-            if (GlitchAiJsonFields.TryExtractNumber(json, "max_contracts", out double maxContracts))
-                policy.MaxContracts = Math.Max(1, (int)maxContracts);
-            if (GlitchAiJsonFields.TryExtractNumber(json, "max_risk_per_contract_usd", out double maxRiskPerContract))
-                policy.MaxRiskPerContractUsd = maxRiskPerContract;
-            if (GlitchAiJsonFields.TryExtractNumber(json, "max_loss_per_trade_usd", out double maxLossTrade))
-                policy.MaxLossPerTradeUsd = maxLossTrade;
-            if (GlitchAiJsonFields.TryExtractNumber(json, "max_group_loss_per_trade_usd", out double maxGroupLossTrade))
-                policy.MaxGroupLossPerTradeUsd = maxGroupLossTrade;
-            if (GlitchAiJsonFields.TryExtractNumber(json, "max_daily_loss_usd", out double maxDailyLoss))
-                policy.MaxDailyLossUsd = maxDailyLoss;
+            if (!GlitchAiJsonFields.TryExtractNumber(json, "snapshot_max_age_seconds", out double snapshotAge)
+                || snapshotAge < 1 || snapshotAge > 900
+                || Math.Abs(snapshotAge - Math.Round(snapshotAge)) > 0.0000001d)
+                return Invalid("policy_snapshot_age_invalid");
+            policy.SnapshotMaxAgeSeconds = (int)snapshotAge;
             policy.InstrumentAllowlist = ParseStringArray(json, "instrument_allowlist", policy.InstrumentAllowlist);
             policy.AccountAllowlist = ParseStringArray(json, "account_allowlist", policy.AccountAllowlist);
             policy.ProfileAccountBindings = ParseProfileAccountBindings(json, policy.ProfileAccountBindings);
             policy.AccountAllowlist.UnionWith(policy.ProfileAccountBindings.Values);
             policy.BlockedSessions = ParseStringArray(json, "blocked_sessions", policy.BlockedSessions);
+            if (policy.InstrumentAllowlist.Count == 0)
+                return Invalid("policy_instrument_allowlist_empty");
+            policy.IsValid = true;
+            policy.ValidationError = null;
             return policy;
+        }
+
+        private static int CountJsonKey(string json, string key)
+        {
+            return Regex.Matches(
+                json ?? string.Empty,
+                "\"" + Regex.Escape(key) + "\"\\s*:",
+                RegexOptions.CultureInvariant | RegexOptions.IgnoreCase).Count;
+        }
+
+        private static GlitchAiRailPolicy Invalid(string error)
+        {
+            return new GlitchAiRailPolicy
+            {
+                IsValid = false,
+                ValidationError = string.IsNullOrWhiteSpace(error) ? "policy_invalid" : error
+            };
         }
 
         private static Dictionary<string, string> ParseProfileAccountBindings(

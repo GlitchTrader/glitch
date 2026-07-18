@@ -19,27 +19,31 @@ namespace Glitch.Services
 
         public static int GetNetQuantityForInstrumentRoot(Account account, string instrumentRoot)
         {
-            if (account == null || string.IsNullOrWhiteSpace(instrumentRoot))
-                return 0;
+            return TryGetNetQuantityForInstrumentRoot(account, instrumentRoot, out int netQuantity)
+                ? netQuantity
+                : 0;
+        }
 
-            int netQuantity = 0;
-            try
+        public static bool TryGetNetQuantityForInstrumentRoot(
+            Account account,
+            string instrumentRoot,
+            out int netQuantity)
+        {
+            netQuantity = 0;
+            if (account == null || string.IsNullOrWhiteSpace(instrumentRoot)
+                || !TrySnapshotPositions(account, out Position[] positions))
+                return false;
+
+            foreach (Position position in positions)
             {
-                foreach (Position position in SnapshotPositions(account))
-                {
-                    if (position == null || position.Instrument == null)
-                        continue;
-                    if (!string.Equals(GetInstrumentRoot(position.Instrument), instrumentRoot, StringComparison.OrdinalIgnoreCase))
-                        continue;
+                if (position == null || position.Instrument == null)
+                    continue;
+                if (!string.Equals(GetInstrumentRoot(position.Instrument), instrumentRoot, StringComparison.OrdinalIgnoreCase))
+                    continue;
 
-                    netQuantity += GetSignedQuantity(position);
-                }
+                netQuantity += GetSignedQuantity(position);
             }
-            catch
-            {
-            }
-
-            return netQuantity;
+            return true;
         }
 
         public static Instrument FindInstrumentForInstrumentRoot(Account account, string instrumentRoot)
@@ -47,58 +51,50 @@ namespace Glitch.Services
             if (account == null || string.IsNullOrWhiteSpace(instrumentRoot))
                 return null;
 
-            try
-            {
-                Position position = SnapshotPositions(account).FirstOrDefault(p =>
-                    p != null &&
-                    p.Instrument != null &&
-                    string.Equals(GetInstrumentRoot(p.Instrument), instrumentRoot, StringComparison.OrdinalIgnoreCase));
-                if (position?.Instrument != null)
-                    return position.Instrument;
-
-                Order order = SnapshotOrders(account).FirstOrDefault(o =>
-                    o != null &&
-                    o.Instrument != null &&
-                    IsWorkingOrderState(o.OrderState) &&
-                    string.Equals(GetInstrumentRoot(o.Instrument), instrumentRoot, StringComparison.OrdinalIgnoreCase));
-                return order?.Instrument;
-            }
-            catch
-            {
+            if (!TrySnapshotPositions(account, out Position[] positions)
+                || !TrySnapshotOrders(account, out Order[] orders))
                 return null;
-            }
+
+            Position position = positions.FirstOrDefault(p =>
+                p != null &&
+                p.Instrument != null &&
+                string.Equals(GetInstrumentRoot(p.Instrument), instrumentRoot, StringComparison.OrdinalIgnoreCase));
+            if (position?.Instrument != null)
+                return position.Instrument;
+
+            Order order = orders.FirstOrDefault(o =>
+                o != null &&
+                o.Instrument != null &&
+                IsWorkingOrderState(o.OrderState) &&
+                string.Equals(GetInstrumentRoot(o.Instrument), instrumentRoot, StringComparison.OrdinalIgnoreCase));
+            return order?.Instrument;
         }
 
         public static List<Instrument> GetOpenPositionInstruments(Account account)
         {
-            var instruments = new List<Instrument>();
-            if (account == null)
-                return instruments;
+            return TryGetOpenPositionInstruments(account, out List<Instrument> instruments)
+                ? instruments
+                : new List<Instrument>();
+        }
 
-            try
-            {
-                var positionInstruments = SnapshotPositions(account)
-                    .Where(position => position != null && position.Instrument != null && position.MarketPosition != MarketPosition.Flat)
-                    .Select(position => position.Instrument)
-                    .ToList();
+        public static bool TryGetOpenPositionInstruments(Account account, out List<Instrument> instruments)
+        {
+            instruments = new List<Instrument>();
+            if (account == null
+                || !TrySnapshotPositions(account, out Position[] positions)
+                || !TrySnapshotOrders(account, out Order[] orders))
+                return false;
 
-                var workingOrderInstruments = SnapshotOrders(account)
+            instruments = positions
+                .Where(position => position != null && position.Instrument != null && position.MarketPosition != MarketPosition.Flat)
+                .Select(position => position.Instrument)
+                .Concat(orders
                     .Where(order => order != null && order.Instrument != null && IsWorkingOrderState(order.OrderState))
-                    .Select(order => order.Instrument)
-                    .ToList();
-
-                instruments = positionInstruments
-                    .Concat(workingOrderInstruments)
-                    .GroupBy(instrument => instrument.FullName, StringComparer.OrdinalIgnoreCase)
-                    .Select(group => group.First())
-                    .ToList();
-            }
-            catch (Exception)
-            {
-                // ponytail: caller treats empty as no exposure; faults surface via flatten journal
-            }
-
-            return instruments;
+                    .Select(order => order.Instrument))
+                .GroupBy(instrument => instrument.FullName, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .ToList();
+            return true;
         }
 
         public static bool TryFlattenAccount(Account account, out int instrumentCount)
@@ -107,7 +103,8 @@ namespace Glitch.Services
             if (account == null)
                 return false;
 
-            List<Instrument> instruments = GetOpenPositionInstruments(account);
+            if (!TryGetOpenPositionInstruments(account, out List<Instrument> instruments))
+                return false;
             if (instruments.Count == 0)
                 return false;
 
@@ -118,32 +115,18 @@ namespace Glitch.Services
 
         public static bool IsAccountFlat(Account account)
         {
-            if (account == null)
-                return true;
-
-            try
-            {
-                return !SnapshotPositions(account).Any(position => position != null && position.MarketPosition != MarketPosition.Flat);
-            }
-            catch
-            {
+            if (account == null || !TrySnapshotPositions(account, out Position[] positions))
                 return false;
-            }
+
+            return !positions.Any(position => position != null && position.MarketPosition != MarketPosition.Flat);
         }
 
         public static bool HasAnyWorkingOrders(Account account)
         {
-            if (account == null)
-                return false;
-
-            try
-            {
-                return SnapshotOrders(account).Any(order => order != null && IsWorkingOrderState(order.OrderState));
-            }
-            catch
-            {
+            if (account == null || !TrySnapshotOrders(account, out Order[] orders))
                 return true;
-            }
+
+            return orders.Any(order => order != null && IsWorkingOrderState(order.OrderState));
         }
 
         public static async Task<bool> WaitForAllAccountsFlatAsync(IReadOnlyList<Account> accounts, TimeSpan timeout)
@@ -204,36 +187,54 @@ namespace Glitch.Services
             if (account == null || roots == null)
                 return;
 
+            if (!TrySnapshotPositions(account, out Position[] positions))
+                return;
+
+            foreach (Position position in positions)
+            {
+                if (position == null || position.Instrument == null || position.MarketPosition == MarketPosition.Flat)
+                    continue;
+
+                string root = GetInstrumentRoot(position.Instrument);
+                if (!string.IsNullOrWhiteSpace(root))
+                    roots.Add(root);
+            }
+        }
+
+        public static bool TrySnapshotOrders(Account account, out Order[] orders)
+        {
+            orders = Array.Empty<Order>();
+            if (account?.Orders == null)
+                return false;
             try
             {
-                foreach (Position position in SnapshotPositions(account))
-                {
-                    if (position == null || position.Instrument == null || position.MarketPosition == MarketPosition.Flat)
-                        continue;
-
-                    string root = GetInstrumentRoot(position.Instrument);
-                    if (!string.IsNullOrWhiteSpace(root))
-                        roots.Add(root);
-                }
+                lock (account.Orders)
+                    orders = account.Orders.ToArray();
+                return true;
             }
             catch
             {
+                orders = Array.Empty<Order>();
+                return false;
             }
         }
-        private static Position[] SnapshotPositions(Account account)
-        {
-            if (account?.Positions == null)
-                return Array.Empty<Position>();
-            lock (account.Positions)
-                return account.Positions.ToArray();
-        }
 
-        private static Order[] SnapshotOrders(Account account)
+        private static bool TrySnapshotPositions(Account account, out Position[] positions)
         {
-            if (account?.Orders == null)
-                return Array.Empty<Order>();
-            lock (account.Orders)
-                return account.Orders.ToArray();
+            positions = Array.Empty<Position>();
+            if (account?.Positions == null)
+                return false;
+            try
+            {
+                lock (account.Positions)
+                    positions = account.Positions.ToArray();
+                return true;
+            }
+            catch
+            {
+                positions = Array.Empty<Position>();
+                return false;
+            }
         }
 
         private static int GetSignedQuantity(Position position)

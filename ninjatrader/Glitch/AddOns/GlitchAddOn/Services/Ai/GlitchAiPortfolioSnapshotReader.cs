@@ -78,14 +78,21 @@ namespace Glitch.Services
                 }
 
                 double workingOrders;
+                bool nativeStateAvailable;
                 string positionsArray;
                 if (!GlitchAiJsonFields.TryExtractBool(accountJson, "is_risk_locked", out riskLocked)
                     || !GlitchAiJsonFields.TryExtractBool(accountJson, "is_eval_target_locked", out evalTargetLocked)
+                    || !GlitchAiJsonFields.TryExtractBool(accountJson, "native_state_available", out nativeStateAvailable)
                     || !GlitchAiJsonFields.TryExtractNumber(accountJson, "realized_pnl", out realizedPnl)
                     || !GlitchAiJsonFields.TryExtractNumber(accountJson, "working_orders", out workingOrders)
                     || !TryExtractArray(accountJson, "positions", out positionsArray))
                 {
                     failure = "portfolio_account_fields_incomplete_" + accountName;
+                    return false;
+                }
+                if (!nativeStateAvailable)
+                {
+                    failure = "portfolio_native_state_unavailable_" + accountName;
                     return false;
                 }
 
@@ -98,64 +105,6 @@ namespace Glitch.Services
             }
         }
 
-        public static bool TryGetAccountBlock(string accountName, out string accountJson)
-        {
-            accountJson = null;
-            if (string.IsNullOrWhiteSpace(accountName))
-                return false;
-
-            string path = GlitchPortfolioSnapshotWriter.GetLatestSnapshotPath();
-            if (!File.Exists(path))
-                return false;
-
-            try
-            {
-                string json = File.ReadAllText(path);
-                return TryGetAccountBlockFromJson(json, accountName, out accountJson);
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        public static bool IsAccountRiskLocked(string accountName)
-        {
-            string accountJson;
-            if (!TryGetAccountBlock(accountName, out accountJson))
-                return false;
-
-            bool locked;
-            return GlitchAiJsonFields.TryExtractBool(accountJson, "is_risk_locked", out locked) && locked;
-        }
-
-        public static bool IsEvalTargetLocked(string accountName)
-        {
-            string accountJson;
-            if (!TryGetAccountBlock(accountName, out accountJson))
-                return false;
-
-            bool locked;
-            return GlitchAiJsonFields.TryExtractBool(accountJson, "is_eval_target_locked", out locked) && locked;
-        }
-
-        public static int GetOpenPositionQuantity(string accountName, string instrumentRoot)
-        {
-            string accountJson;
-            if (!TryGetAccountBlock(accountName, out accountJson) || string.IsNullOrWhiteSpace(instrumentRoot))
-                return 0;
-
-            return GetOpenPositionQuantityFromAccountBlock(accountJson, instrumentRoot);
-        }
-
-        public static int GetOpenPositionQuantityFromAccountBlock(string accountJson, string instrumentRoot)
-        {
-            int quantity;
-            return TryGetOpenPositionQuantityFromAccountBlock(accountJson, instrumentRoot, out quantity)
-                ? quantity
-                : 0;
-        }
-
         public static bool TryGetOpenPositionQuantityFromAccountBlock(
             string accountJson,
             string instrumentRoot,
@@ -165,64 +114,61 @@ namespace Glitch.Services
             if (string.IsNullOrWhiteSpace(accountJson) || string.IsNullOrWhiteSpace(instrumentRoot))
                 return false;
 
-            string positionsArray;
-            if (!TryExtractArray(accountJson, "positions", out positionsArray))
+            List<string> positions;
+            if (!TryGetPositionBlocks(accountJson, out positions))
                 return false;
-            if (positionsArray == "[]")
-                return true;
 
             string root = instrumentRoot.Trim().ToUpperInvariant();
             int total = 0;
-            int index = 1;
-            int limit = positionsArray.Length - 1;
-            while (index < limit)
+            foreach (string positionJson in positions)
             {
-                while (index < limit && char.IsWhiteSpace(positionsArray[index]))
-                    index++;
-                if (index >= limit)
-                    break;
-                if (positionsArray[index] != '{')
-                    return false;
-
-                int objectEnd = FindMatchingBrace(positionsArray, index);
-                if (objectEnd < 0)
-                    return false;
-
-                string positionJson = positionsArray.Substring(index, objectEnd - index + 1);
                 string positionInstrument = GlitchAiJsonFields.ExtractString(positionJson, "instrument_root");
+                string marketPosition = GlitchAiJsonFields.ExtractString(positionJson, "market_position");
                 double qty;
                 if (string.IsNullOrWhiteSpace(positionInstrument)
+                    || string.IsNullOrWhiteSpace(marketPosition)
                     || !GlitchAiJsonFields.TryExtractNumber(positionJson, "quantity", out qty))
                     return false;
                 if (string.Equals(positionInstrument, root, StringComparison.OrdinalIgnoreCase))
-                    total += (int)Math.Round(qty, MidpointRounding.AwayFromZero);
-
-                index = objectEnd + 1;
-                while (index < limit && char.IsWhiteSpace(positionsArray[index]))
-                    index++;
-                if (index >= limit)
-                    break;
-                if (positionsArray[index] != ',')
-                    return false;
-                index++;
-                while (index < limit && char.IsWhiteSpace(positionsArray[index]))
-                    index++;
-                if (index >= limit)
-                    return false;
+                {
+                    int roundedQuantity = (int)Math.Round(Math.Abs(qty), MidpointRounding.AwayFromZero);
+                    if (string.Equals(marketPosition, "Long", StringComparison.OrdinalIgnoreCase))
+                        total += roundedQuantity;
+                    else if (string.Equals(marketPosition, "Short", StringComparison.OrdinalIgnoreCase))
+                        total -= roundedQuantity;
+                    else if (!string.Equals(marketPosition, "Flat", StringComparison.OrdinalIgnoreCase))
+                        return false;
+                }
             }
 
             quantity = total;
             return true;
         }
 
-        public static double GetRealizedPnlToday(string accountName)
+        public static bool TryGetTotalOpenContractsFromAccountBlock(string accountJson, out int totalContracts)
         {
-            string accountJson;
-            if (!TryGetAccountBlock(accountName, out accountJson))
-                return 0;
+            totalContracts = 0;
+            List<string> positions;
+            if (!TryGetPositionBlocks(accountJson, out positions))
+                return false;
 
-            double pnl;
-            return GlitchAiJsonFields.TryExtractNumber(accountJson, "realized_pnl", out pnl) ? pnl : 0;
+            foreach (string positionJson in positions)
+            {
+                string marketPosition = GlitchAiJsonFields.ExtractString(positionJson, "market_position");
+                double quantity;
+                if (string.IsNullOrWhiteSpace(marketPosition)
+                    || !GlitchAiJsonFields.TryExtractNumber(positionJson, "quantity", out quantity))
+                    return false;
+                if (string.Equals(marketPosition, "Flat", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (!string.Equals(marketPosition, "Long", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(marketPosition, "Short", StringComparison.OrdinalIgnoreCase))
+                    return false;
+
+                totalContracts += (int)Math.Round(Math.Abs(quantity), MidpointRounding.AwayFromZero);
+            }
+
+            return true;
         }
 
         private static bool TryGetAccountBlockFromJson(string json, string accountName, out string accountJson)
@@ -259,6 +205,42 @@ namespace Glitch.Services
                 return false;
 
             value = json.Substring(start, end - start + 1);
+            return true;
+        }
+
+        private static bool TryGetPositionBlocks(string accountJson, out List<string> positions)
+        {
+            positions = new List<string>();
+            string positionsArray;
+            if (!TryExtractArray(accountJson, "positions", out positionsArray))
+                return false;
+
+            int index = 1;
+            int limit = positionsArray.Length - 1;
+            while (index < limit)
+            {
+                while (index < limit && char.IsWhiteSpace(positionsArray[index]))
+                    index++;
+                if (index >= limit)
+                    break;
+                if (positionsArray[index] != '{')
+                    return false;
+
+                int objectEnd = FindMatchingBrace(positionsArray, index);
+                if (objectEnd < 0)
+                    return false;
+                positions.Add(positionsArray.Substring(index, objectEnd - index + 1));
+
+                index = objectEnd + 1;
+                while (index < limit && char.IsWhiteSpace(positionsArray[index]))
+                    index++;
+                if (index >= limit)
+                    break;
+                if (positionsArray[index] != ',')
+                    return false;
+                index++;
+            }
+
             return true;
         }
 

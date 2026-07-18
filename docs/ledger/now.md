@@ -1,89 +1,102 @@
-# Now — AI-rail continuation handoff
+# Now — clean AI candidate
 
-**Updated:** 2026-07-17
+**Updated:** 2026-07-18
 
-**Branch:** `glitch/ai-rail`
+**Branch:** `cleanup/ai-core`
 
-**Source baseline:** `f82e1f5` plus the uncommitted `cleanup/ai-core` consolidation; the historical dirty checkout remains untouched
+**Role:** internal Sim/paper candidate. It is not PA/live-authorized.
 
-**Main baseline:** `main` / `origin/main` at `d216015`
+**Authority:** `docs/ledger/backlog.md`; this file is the compact handoff.
 
-**Authority:** `docs/ledger/backlog.md`; this file is a compact handoff, not a second queue.
-
-## Product and role boundary
-
-Glitch AI is an agentic trading product, not a Codex-operated automation strategy:
+## Boundary
 
 ```text
-Glitch/NinjaTrader -> snapshots, portfolio/rules, execution, replication,
-                      native brackets, compliance, journal, Feed
-Hermes trading     -> persistent probabilistic five-minute decisions
-Hermes supervision -> evidence-linked learning, self-heal, and build proposals
-Codex              -> explicitly requested source changes, tests, bounded deploy, handoff
+Hermes            decides for configured masters from current evidence
+Glitch AddOn      validates, executes, protects, replicates, reconciles, journals
+NinjaTrader       owns native account, order, OCO, fill, and position truth
+Codex             builds/tests/deploys only when explicitly requested
 ```
 
-Hermes trades only a configured group master. Glitch owns followers, ratios,
-catch-up, account-local protection, and reconciliation. Codex is not a bridge,
-poller, supervisor, or market operator.
+Hermes never submits follower orders. The producer-neutral CopyEngine shared with
+non-AI Glitch owns enabled followers and ratios. Human NinjaTrader controls and
+Glitch Flatten All remain authoritative.
 
-The product target remains one centralized supervised Hermes brain on a VPS,
-one canonical recommendation per five-minute window, authenticated client
-polling, and local Glitch enforcement. The current local profile/exchange is a
-contract-validation harness.
+## Candidate state
 
-## What landed in this session
+- AI execution is strict and fail-closed: validated JSON only, selected master
+  only, current native portfolio state required, current account/group capacity
+  required, market entry only, and native stop/target protection required.
+- One named Hermes `trading` session uses `gpt-5.6-luna`, medium reasoning, no
+  fallback provider, and a four-turn ceiling. Flat books are considered at one
+  five-minute decision boundary; positioned books may be reconsidered each minute.
+- Delivery is idempotent and crash-safe through a durable outbox/receipt pair.
+  Retry reuses the same intent id and never spends a second model call for the
+  same packet.
+- AI Auto has one effective state. The UI reports Running only when Glitch state,
+  the named Hermes job, and recent evidence agree; otherwise it reports Stale or
+  Stopped.
+- Account/group capacity is dynamic. Hermes receives valid master quantities
+  constrained by every enabled account's current rule ceiling, open exposure,
+  and follower ratio. One-to-three native OCO legs support protected scale-out;
+  repeated same-direction entries remain independently protected tranches.
+- The portfolio packet carries `native_state_available`. Any failed native
+  Positions/Orders read makes the packet ineligible and costs zero model calls.
+- Eastern-time session policy is applied in the packet, firewall, final submit
+  boundary, and the selected-group daily-close monitor. Selected followers are
+  expanded from the selected master and flattened directly when required.
+- FRED release-calendar rows remain analytics context and cannot create a live
+  news lockout banner. News is not an invented execution veto.
+- Startup/recompile is observe-only. Replicate OFF preserves existing native
+  protection. Manual follower divergence suppresses automatic re-entry until an
+  explicit Replicate/follower/ratio resync. Complete closes and Flatten All use
+  NinjaTrader's native flatten path.
+- Journal reconstruction ignores orphan exits and allocates reversal commission
+  once. Master/Group/Fleet scope is explicit.
 
-- Clean shared-core consolidation: `cleanup/main-core` and `cleanup/ai-core` use the same producer-neutral CopyEngine and native follower-protection implementation. AI submits/manages only the group master; no AI type or policy is present in the replication core.
-- Replication is event-driven and single-submit: no legacy poll switch, blind retry, startup catch-up, broad `GLT-*` ownership, hidden quarantine, or Replicate-OFF protection cancellation. Replicate state reflects the effective engine, and Flatten All has one native submission path with unresolved accounts reported as incomplete.
-- Follower protection handles synchronous and asynchronous rejection with one native flatten and no retry. Multi-leg stop identity is per native master OCO, so one source-leg move cannot rewrite every follower leg.
-- Shared Journal, point-value, Analytics, and scope corrections are now present on the clean main branch rather than remaining an AI-only handoff.
-- The active AI test suite no longer includes retired one-shot/four-book/opportunity-gate tests or their one-contract assumptions.
+## Verification frozen for this candidate
 
-- Direct Glitch <-> Hermes exchange with five one-minute frames, sealed five-minute packets, stable IDs, named `chat`/`trading` sessions, hidden supervised gateway tooling, and no Codex runtime dependency.
-- One native Hermes `glitch` profile with native memory/session capabilities preserved; Glitch-specific observe, risk, thesis, intent, outcome, self-learning, self-heal, ledger, and escalation overlays added.
-- Minimal proactive prompt correction: probabilistic bull/bear/flat/adversarial review; no archetype whitelist, daily trade quota, deterministic cooldown, or forced abstention from ordinary uncertainty. Runtime packet strips stale `max_trades_per_day` state.
-- Master-only AI execution and dynamic AI scope. Replication remains independently controlled and owns followers/ratios.
-- Read-only `Glitch AI` Feed with snapshots, packet, decision, execution check, and outcome stages; one `AI Auto` on/off control reflects effective state.
-- Richer 1m/5m/15m/60m snapshots, normalized contract/freshness/price data, and optional Luna one-minute management calls only while positioned or near a trigger.
-- Entry snapshot freshness simplified to an analytical window plus a fresh live execution-price check, avoiding rejection solely because MNQ moved after analysis.
-- Native mandatory protection and recovery: master brackets, follower account-local OCO protection, master-exit group synchronization, no naked AI follower entry, native `Account.Flatten` for complete follower exits, and truthful incomplete fleet flatten when configured accounts are disconnected.
-- Journal repair: orphan exits no longer fabricate positions/trades; reversal commissions split once across closing/opening lifecycles; reset/rebuild path preserves profile soul/skills/chat while clearing trade epoch state.
-- Optional two-leg scale-out: `take_profit_2`, `quantity_tp1`, optional second stop, independent OCO pairs, ratio-scaled follower legs, protected repeated same-direction tranches, and fail-closed partial-fill recovery.
-- Central-VPS/Feed architecture and mainline backport scope recorded in the one backlog.
+- Shared source contracts: **32/32**.
+- AI/Hermes contracts: **79/79**.
+- Five production web builds: pass.
+- Five web lint runs: pass.
+- Python compilation, tracked PowerShell parsing, tracked JSON parsing, secret
+  scan, and `git diff --check`: pass.
+- Complete 87-file AI AddOn folder deployed with **0 hash mismatches**.
+- NinjaTrader F5 compile: green; no populated compile-error row.
+- Bounded prior Sim evidence on this clean architecture includes protected
+  1:2:3 replication, three independent legs, partial fills, same-direction
+  protected tranches, duplicate-intent rejection, and fleet flatten.
 
-## Evidence and current limits
+## Red-team corrections in the final pass
 
-- The previously deployed AI baseline compiled and produced bounded Sim evidence, but the clean consolidation described above is not deployed yet. Its current evidence is source/tests only; NinjaTrader F5 and bounded Sim lifecycle acceptance are mandatory before either clean branch is merged.
-- The current paper harness is configured with Sim101 as master and Sim102/Sim103 as configured followers. The portfolio packet derives valid master quantities from each enabled account's current rule ceiling, open exposure, and ratio; it does not impose a separate AI-only contract cap. The latest verified flat Sim snapshots report simulated Apex Legacy Eval context and a 27-contract account ceiling.
-- The post-audit acceptance covered three independent protected master legs with matching follower protection and a separate 1:2:3 ratio run in which one Sim101 contract produced two Sim102 and three Sim103 contracts; native exits returned all three accounts flat and order-free. This validates the local group/bracket path, not profitability or live promotion.
-- The first usable paper sample was promising but not proof: NinjaTrader's full-day screenshot showed `+$401.50` across 71 trades (42.25% wins, profit factor 1.30, $350 max drawdown), while a later 08:00-scoped report showed `+$291.50` across 66 trades. Directional shorts worked better; chop gave back gains. The contemporaneous Glitch Journal showed 44 trades and `-$1,374.50`, which led to GL-055. Treat the different scopes and corrupted Journal as a diagnostic sample only.
-- Fresh post-reset Journal-to-NT reconciliation, learning retrieval, gateway continuity, durable Feed rebuild, and one open/flat portfolio snapshot remain runtime evidence to keep rechecking. The protected three-leg and 1:2:3 group proofs are now recorded as completed local acceptance evidence.
-- Current compliance gap is explicit: the analytics news banner and AI firewall do not share one effective lockout decision; the FRED-derived event schedule can fabricate times. Maintenance/weekend/holiday and must-flat semantics are not yet proved end to end. See GL-063.
-- Untracked `__pycache__` folders and `tmp/session-0655.jsonl` are local runtime artifacts and are intentionally excluded from Git.
+1. The daily-close monitor previously suppressed replication callbacks while
+   flattening only selected masters. It now expands selected groups and directly
+   flattens every required connected member.
+2. Failed native account reads could previously serialize as flat/order-free.
+   Native state is now explicit and fail-closed from writer through worker.
+3. Dead restart-recovery and fail-open convenience APIs were removed instead of
+   being retained as misleading alternate paths.
+4. FRED dataset-release metadata was separated from real event-alert state,
+   removing the false weekend FOMC banner.
 
-## Lessons to preserve
+## Honest release gates
 
-1. One source of truth per truth. Glitch/NT owns trading facts; Hermes learns from reconciled facts; the backlog owns work.
-2. Equip cognition; do not replace it. Prompts, memories, skills, and journals support Hermes. Deterministic code is reserved for schema, scope, risk, compliance, idempotency, and broker safety.
-3. A safety gate must correspond to a real invariant, be visible, and have one owner. Hidden layered arm rituals, trade-count limits, archetype gates, or stale-attempt limits are defects.
-4. `ON` means effectively capable of acting. UI status must be derived from the same state execution uses.
-5. Replication is a single authority. Hermes never submits follower orders; master and follower exits cannot be independently copied and natively managed without explicit ownership rules.
-6. Protection is local and immediate. Every opened tranche needs broker-held/native protection even if Hermes, Docker, Codex, or the network disappears.
-7. Journal and performance data must reconcile before learning or tuning. A persuasive summary built from corrupt round trips is worse than no summary.
-8. Prompt tuning is high leverage and high risk. Change minimally, freeze versions during evaluation, and measure by regime; trend success does not justify choppy overtrading.
-9. Paper mode relaxes discovery posture, not accounting, replication, protection, truth, or prop-rule semantics.
-10. Codex completes bounded builder work and lets go. No minute/five-minute Codex loops, no visible PowerShell polling, and no model-heavy idle checks.
-11. Do not invent policy. Automation eligibility is not a Glitch execution gate; only explicit product requirements and intentionally enforced account rules belong in the compliance path.
+- The weekend cannot prove exchange fills. Before PA/live consideration, run one
+  bounded market-open Sim lifecycle: master entry → ratio followers → native
+  brackets → native close → all selected accounts flat and order-free → Journal
+  and outcome reconciliation.
+- Exchange holidays and special closes still need an authoritative session source.
+  Regular weekly and daily maintenance windows are implemented; this residual is
+  tracked under GL-063 and blocks unattended PA/live promotion.
+- `npm audit --omit=dev` reports two moderate vulnerabilities in Next's bundled
+  PostCSS. All apps are already on stable Next 16.2.10; npm's proposed downgrade
+  to Next 9 is invalid. Track upstream; do not force a breaking downgrade.
+- Profitability is not a software acceptance claim. Freeze this commit for the
+  next paper sample and reconcile against authoritative NinjaTrader exports before
+  changing prompts or risk posture.
 
-## Next bounded work
+## Next action
 
-Use the ordered backlog, not this list as a queue:
-
-1. Review and F5-compile `cleanup/main-core`; then run the shared protected 1:1 and 1:2:3 Sim fixtures, reload proof, manual-control proof, and disconnected Flatten All proof.
-2. Reconcile `cleanup/ai-core` onto the proven shared core, F5-compile it, and run only the AI-specific master-entry/management fixtures.
-3. Close fresh runtime evidence for GL-047 through GL-050 and GL-055/GL-065, especially learning retrieval and Journal/NT reconciliation.
-4. Implement and prove GL-063 time-policy truth without adding unrelated eligibility gates; exits always remain available.
-5. Run GL-064 versioned one-instrument paper calibration before declaring profitability or centralizing, then continue GL-051/052 and GL-054.
-
-`R14` remains a separate named-commit, current-rule, and explicit operator gate
-for any non-simulation AI promotion.
+At market open, perform the single bounded Sim acceptance above. If it passes,
+reset the paper epoch once and let the frozen candidate collect a versioned paper
+sample. Any PA/live AI promotion remains a separate explicit operator decision.

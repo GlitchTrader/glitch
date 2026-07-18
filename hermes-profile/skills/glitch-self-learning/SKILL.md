@@ -22,13 +22,20 @@ Learn only from evidence Glitch can identify and reproduce.
    protection, exit, and route using stable IDs. If attribution is incomplete,
    append an unresolved observation and do not learn a causal rule from it.
 2. Record one append-only episodic lesson with evidence links, observed result,
-   decision quality, uncertainty, and plausible alternatives.
-3. Promote a compact durable lesson to native memory only when repeated
+   decision quality, uncertainty, and plausible alternatives. For entries,
+   record stop and target distances in points and volatility/noise units,
+   structural invalidation, execution delay/drift, MAE/MFE, regime, quantity,
+   and whether the intended absolute levels were preserved.
+3. Audit repeated decision language and behavior. Flag stops placed inside
+   ordinary noise, distant targets chosen mainly for cosmetic reward/risk, and
+   nearby re-entry after a stop without materially changed evidence. These are
+   hypotheses until repeated attributable outcomes support them.
+4. Promote a compact durable lesson to native memory only when repeated
    completed evidence supports it. Keep a single outcome as an episode or
    hypothesis unless it proves a deterministic process defect.
-4. When evidence conflicts with a lesson, append the contradiction and lower,
+5. When evidence conflicts with a lesson, append the contradiction and lower,
    revise, or retire its confidence. Never erase the earlier lesson.
-5. Keep current positions, balances, eligibility, temporary directives, trade
+6. Keep current positions, balances, eligibility, temporary directives, trade
    quotas, and transient market state out of durable memory.
 
 Write structured learning only to Hermes-owned append-only knowledge, journal,

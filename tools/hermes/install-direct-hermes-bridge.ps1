@@ -11,13 +11,28 @@ $destination = Join-Path $ProfilesRoot $Profile
 if (-not (Test-Path -LiteralPath $destination -PathType Container)) {
     throw "Hermes profile is missing: $destination"
 }
+$hermesCommand = Get-Command hermes -ErrorAction Stop
+$python = Join-Path (Split-Path $hermesCommand.Source -Parent) 'python.exe'
+if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+    throw "Could not locate the Hermes Python runtime: $python"
+}
 
 Copy-Item -LiteralPath (Join-Path $repo 'hermes-profile\profiles\glitch\SOUL.md') `
     -Destination (Join-Path $destination 'SOUL.md') -Force
 
 $skillsDestination = Join-Path $destination 'skills'
-foreach ($skillSource in @(Get-ChildItem -LiteralPath (Join-Path $repo 'hermes-profile\skills') -Directory)) {
+$skillSources = @(Get-ChildItem -LiteralPath (Join-Path $repo 'hermes-profile\skills') -Directory)
+$sourceSkillNames = @($skillSources | ForEach-Object Name)
+foreach ($installedSkill in @(Get-ChildItem -LiteralPath $skillsDestination -Directory -ErrorAction SilentlyContinue | Where-Object Name -Like 'glitch-*')) {
+    if ($sourceSkillNames -notcontains $installedSkill.Name) {
+        Remove-Item -LiteralPath $installedSkill.FullName -Recurse -Force
+    }
+}
+foreach ($skillSource in $skillSources) {
     $target = Join-Path $skillsDestination $skillSource.Name
+    if (Test-Path -LiteralPath $target -PathType Container) {
+        Remove-Item -LiteralPath $target -Recurse -Force
+    }
     New-Item -ItemType Directory -Force -Path $target | Out-Null
     Copy-Item -Path (Join-Path $skillSource.FullName '*') -Destination $target -Recurse -Force
 }
@@ -32,6 +47,9 @@ Copy-Item -LiteralPath (Join-Path $repo 'tools\hermes\ensure-named-sessions.py')
     -Destination (Join-Path $scriptsDestination 'ensure-named-sessions.py') -Force
 
 $pluginDestination = Join-Path $destination 'plugins\glitch-control'
+if (Test-Path -LiteralPath $pluginDestination -PathType Container) {
+    Remove-Item -LiteralPath $pluginDestination -Recurse -Force
+}
 New-Item -ItemType Directory -Force -Path $pluginDestination | Out-Null
 Copy-Item -Path (Join-Path $repo 'hermes-profile\plugins\glitch-control\*') `
     -Destination $pluginDestination -Recurse -Force
@@ -40,6 +58,24 @@ Copy-Item -Path (Join-Path $repo 'hermes-profile\plugins\glitch-control\*') `
 # separate Docker stack and is not read, restarted, or reconfigured here.
 & hermes -p $Profile config set terminal.backend local | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Could not set the Glitch profile terminal backend to local.' }
+& hermes -p $Profile config set model.default gpt-5.6-luna | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Could not pin the Glitch core model to gpt-5.6-luna.' }
+& hermes -p $Profile config set model.provider openai-codex | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Could not pin the Glitch model provider to OpenAI Codex.' }
+& hermes -p $Profile config set agent.reasoning_effort medium | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Could not pin the Glitch core reasoning effort to medium.' }
+# `hermes fallback clear` requires an interactive TTY and returns success when
+# stdin is absent and the operation is cancelled. Use Hermes' config API so a
+# non-interactive installation cannot falsely report an empty fallback chain.
+$previousHermesHome = $env:HERMES_HOME
+try {
+    $env:HERMES_HOME = $destination
+    & $python -c "from hermes_cli.config import load_config, save_config; from hermes_cli.fallback_cmd import _write_chain; c=load_config(); _write_chain(c, []); save_config(c)"
+    if ($LASTEXITCODE -ne 0) { throw 'Could not clear silent model fallbacks for Glitch.' }
+}
+finally {
+    $env:HERMES_HOME = $previousHermesHome
+}
 & hermes -p $Profile config set memory.memory_enabled true | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Could not enable native Hermes memory for Glitch.' }
 & hermes -p $Profile config set memory.user_profile_enabled true | Out-Null
@@ -57,11 +93,6 @@ if (-not $SkipGatewayInstall) {
     if ($LASTEXITCODE -ne 0) { throw 'Could not install the supervised Glitch Hermes gateway.' }
 }
 
-$hermesCommand = Get-Command hermes -ErrorAction Stop
-$python = Join-Path (Split-Path $hermesCommand.Source -Parent) 'python.exe'
-if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
-    throw 'Could not locate the Hermes Python runtime used to seed named sessions.'
-}
 $previousHermesHome = $env:HERMES_HOME
 try {
     $env:HERMES_HOME = $destination
@@ -76,6 +107,10 @@ finally {
     schema_version = 'glitch.hermes.direct_bridge_install.v1'
     installed_utc = [datetime]::UtcNow.ToString('o')
     profile = $Profile
+    core_model = 'gpt-5.6-luna'
+    core_provider = 'openai-codex'
+    core_reasoning_effort = 'medium'
+    fallback_providers = @()
     terminal_backend = 'local'
     memory_enabled = $true
     sessions_preserved = $true

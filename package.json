@@ -8,6 +8,6 @@
   "scripts": {
     "build": "npm run build --workspaces",
     "lint": "npm run lint --workspaces",
-    "test": "echo \"No tests yet\""
+    "test": "python -m unittest discover -s tools/tests -p \"test_*.py\" && python -m unittest discover -s tools/hermes/tests -p \"test_*.py\""
   }
 }

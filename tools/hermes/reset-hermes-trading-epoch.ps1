@@ -70,7 +70,7 @@ foreach ($name in @(
 
 foreach ($relative in @(
     'glitch\decision-packets', 'glitch\minute-frames', 'glitch\events',
-    'hermes\outbox', 'hermes\receipts', 'hermes\events'
+    'hermes\model-attempts', 'hermes\outbox', 'hermes\outbox-context', 'hermes\receipts', 'hermes\events'
 )) {
     Add-FilesUnder $files (Join-Path $exchangeRoot $relative) $exchangeRoot
 }
@@ -78,6 +78,13 @@ foreach ($relative in @(
     'glitch\latest-decision-packet.json', 'glitch\operator-directive.json',
     'hermes\latest-decision-packet.json', 'hermes\operator-directive.json',
     'hermes\operator-directives.jsonl', 'hermes\direct-cycle.lock'
+)) {
+    Add-ExistingFile $files (Join-Path $exchangeRoot $relative) $exchangeRoot
+}
+foreach ($relative in @(
+    'hermes\supervisor\observations.jsonl',
+    'hermes\supervisor\lessons.jsonl',
+    'hermes\supervisor\trading-guidance.jsonl'
 )) {
     Add-ExistingFile $files (Join-Path $exchangeRoot $relative) $exchangeRoot
 }
@@ -114,7 +121,8 @@ $preview = [ordered]@{
     preserved = @(
         'SOUL.md', 'skills', 'plugins', 'config', 'chat named session',
         'native memory infrastructure', 'Glitch runtime policy', 'account groups',
-        'supervisor/build ledger', 'NinjaTrader accounts', 'Journal.tsv', 'TradeLedger.tsv'
+        'supervisor build requests and Codex events', 'NinjaTrader accounts',
+        'Journal.tsv', 'TradeLedger.tsv'
     )
     nt_reset = 'Use Glitch UI Reset Data, then NinjaTrader Reset for each Sim account.'
 }

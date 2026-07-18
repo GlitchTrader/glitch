@@ -9,6 +9,12 @@ $gd = Join-Path $env:USERPROFILE 'Documents\NinjaTrader 8\GlitchData'
 $market = Get-Content -LiteralPath (Join-Path $gd 'snapshots\market\latest.json') -Raw | ConvertFrom-Json
 $portfolio = Get-Content -LiteralPath (Join-Path $gd 'snapshots\portfolio\latest.json') -Raw | ConvertFrom-Json
 $policy = Get-Content -LiteralPath (Join-Path $gd 'ai\policy.json') -Raw | ConvertFrom-Json
+$controlPath = Join-Path $gd 'hermes\control-state.json'
+$control = if (Test-Path -LiteralPath $controlPath) {
+    Get-Content -LiteralPath $controlPath -Raw | ConvertFrom-Json
+} else {
+    [pscustomobject]@{ trading_paused = $true }
+}
 $rail = Get-Content -LiteralPath (Join-Path $gd 'selfcheck\rail.json') -Raw | ConvertFrom-Json
 $groupPath = Join-Path $gd 'AccountGroups.tsv'
 $mnq = @($market.instruments | Where-Object instrument -eq 'MNQ') | Select-Object -First 1
@@ -106,8 +112,7 @@ $groupPortfolioFieldsComplete = $groupRowsFromPortfolio.Count -eq $groupAccounts
 $checks = [ordered]@{
     telemetry_running = [bool]$rail.telemetry.is_running
     intent_running = [bool]$rail.intent.is_running
-    policy_ai_enabled = [bool]$policy.ai_enabled
-    kill_switch_off = -not [bool]$policy.ai_kill_switch
+    trading_enabled = -not [bool]$control.trading_paused
     operator_profile_bound = -not [string]::IsNullOrWhiteSpace($boundAccount)
     requested_master_matches_profile = -not [string]::IsNullOrWhiteSpace($requestedAccount) -and $requestedAccount -eq $boundAccount
     mnq_present = $null -ne $mnq
@@ -129,9 +134,9 @@ $checks = [ordered]@{
     executor_group_no_working_orders = $groupRowsFromPortfolio.Count -eq $groupAccounts.Count -and @($groupRowsFromPortfolio | Where-Object { $null -eq $_.working_orders -or [int]$_.working_orders -ne 0 }).Count -eq 0
 }
 if ($Target -eq 'paper') {
-    $checks.paper_safe = $policy.mode -eq 'paper' -and -not [bool]$policy.executor_enabled
+    $checks.paper_safe = $policy.mode -eq 'paper'
 } else {
-    $checks.sim_armed = $policy.mode -eq 'sim' -and [bool]$policy.executor_enabled
+    $checks.sim_armed = $false
 }
 
 $failed = @($checks.GetEnumerator() | Where-Object { -not $_.Value } | ForEach-Object Key)

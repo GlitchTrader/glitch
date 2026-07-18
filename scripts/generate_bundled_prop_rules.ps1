@@ -1,9 +1,16 @@
 param(
-    [string]$JsonPath = "D:\ab\projects\glitch\Glitch-Platform\ninjatrader\Glitch\AddOns\GlitchAddOn\Resources\PropFirmRules.json",
-    [string]$OutputPath = "D:\ab\projects\glitch\Glitch-Platform\ninjatrader\Glitch\AddOns\GlitchAddOn\UI\MainWindow\GlitchMainWindow.PropFirmRulesBundle.generated.cs"
+    [string]$JsonPath,
+    [string]$OutputPath
 )
 
 $ErrorActionPreference = "Stop"
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+if ([string]::IsNullOrWhiteSpace($JsonPath)) {
+    $JsonPath = Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Resources\PropFirmRules.json'
+}
+if ([string]::IsNullOrWhiteSpace($OutputPath)) {
+    $OutputPath = Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\UI\MainWindow\GlitchMainWindow.PropFirmRulesBundle.generated.cs'
+}
 
 if (-not (Test-Path -LiteralPath $JsonPath)) {
     throw "Prop firm rules JSON not found: $JsonPath"

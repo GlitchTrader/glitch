@@ -54,6 +54,7 @@ namespace Glitch.UI
                 return;
             }
 
+            MaybeEnforceAiDailyClose(activeAccounts);
             PublishGlitchShellState();
         }
 
@@ -183,6 +184,14 @@ namespace Glitch.UI
             }
 
             List<Account> activeAccounts = GetActiveAccountsSnapshot();
+
+            MaybeEnforceAiDailyClose(activeAccounts);
+
+            // Existing refresh cadence is the deterministic fallback when NT
+            // coalesces or replaces an OrderUpdate object. A filled AI master
+            // must become natively protected or enter fail-closed recovery.
+            foreach (Account activeAccount in activeAccounts)
+                GlitchAiOrderExecutor.ProcessAccountStateUpdate(activeAccount);
 
             ApplyAccountRows(rows);
             ApplyRiskMitigations(rows, activeAccounts);

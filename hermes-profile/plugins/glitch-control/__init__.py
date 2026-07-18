@@ -96,6 +96,10 @@ def _start_gateway() -> None:
                 "The supervised Glitch gateway is not installed. Run install-direct-hermes-bridge.ps1 once."
             )
     executable = shutil.which("hermes")
+    if not executable and sys.platform == "win32":
+        sibling = Path(sys.executable).with_name("hermes.exe")
+        if sibling.is_file():
+            executable = str(sibling)
     if not executable:
         raise RuntimeError("Hermes executable was not found; trading remains OFF.")
     completed = subprocess.run(
@@ -221,11 +225,12 @@ def _chat_mode(_raw_args: str) -> str:
 
 
 def _trade_mode(raw_args: str) -> str:
-    requested_mode = raw_args.strip().lower() or "paper"
-    if requested_mode not in {"paper", "live"}:
+    requested_mode = raw_args.strip().lower()
+    current_mode = str(_request("/control/status").get("mode", "paper")).lower()
+    if requested_mode and requested_mode not in {"paper", "live"}:
         return "Usage: /trade_mode [paper|live]."
-    if requested_mode == "live":
-        return "Live mode is not installed or authorized; no state changed. Use /trade_mode paper."
+    if requested_mode and requested_mode != current_mode:
+        return f"Glitch is configured for {current_mode.upper()}; change execution scope/mode in Glitch before turning trading on."
     from cron.jobs import resume_job
     job = _job()
     if not job:
@@ -276,7 +281,7 @@ def _status(_raw_args: str) -> str:
 def register(ctx) -> None:
     commands = {
         "chat-mode": (_chat_mode, "Chat normally without changing scheduled trading."),
-        "trade-mode": (_trade_mode, "Turn trading ON in paper mode: /trade_mode paper."),
+        "trade-mode": (_trade_mode, "Turn trading ON in Glitch's currently configured execution mode."),
         "pause-trading": (_pause_trading, "Turn trading OFF."),
         "flatten-all": (_flatten_all, "Pause trading and ask Glitch to flatten all configured accounts."),
         "bias-long": (_bias_long, "Suggest a long bias for the next Glitch cycle; Hermes decides."),
@@ -291,3 +296,22 @@ def register(ctx) -> None:
     for name, (handler, description) in commands.items():
         ctx.register_command(name, handler=handler, description=description)
         ctx.register_command(name.replace("-", "_"), handler=handler, description=description)
+
+
+def _main(argv: Optional[list[str]] = None) -> int:
+    """No-model entry point used by Glitch's AI Auto UI switch."""
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if len(arguments) != 2 or arguments[0] != "ai-auto" or arguments[1] not in {"on", "off"}:
+        print("usage: glitch-control ai-auto on|off", file=sys.stderr)
+        return 2
+    try:
+        message = _trade_mode("") if arguments[1] == "on" else _pause_trading("")
+        print(json.dumps({"ok": True, "message": message}, separators=(",", ":")))
+        return 0
+    except Exception as error:
+        print(json.dumps({"ok": False, "error": str(error)}, separators=(",", ":")), file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(_main())

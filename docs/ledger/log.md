@@ -2,6 +2,61 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-18 - weekend clean AI candidate freeze
+
+- Finalized `cleanup/ai-core` as a bounded Sim/paper candidate. The full 87-file
+  AddOn folder matches the deployed target byte-for-byte and NinjaTrader F5 compiles
+  without a populated error row; AI remained unarmed and no order was placed.
+- Final red-team fixes: selected-master daily close now expands and directly flattens
+  enabled followers; native Positions/Orders capture failure is explicit and
+  fail-closed through the zero-call worker; dead fail-open convenience/recovery APIs
+  were removed; FRED dataset releases no longer become false live event alerts.
+- Verification: 32/32 shared contracts, 79/79 AI/Hermes contracts, five production
+  builds, five lint runs, Python/PowerShell/JSON/diff/secret checks.
+- Candidate is accepted for one bounded market-open Sim lifecycle, not PA/live.
+  Holiday/special-close authority and a fresh versioned paper sample remain open.
+  See `audits/2026-07-18-weekend-clean-candidate-audit.md`.
+
+## 2026-07-17 - partial-fill replication edge fixed and runtime-proved
+
+- A bounded three-contract Sim fixture exposed a real defect that the one-contract acceptance could not reveal. Sim101 filled the entry in two executions (`2 + 1`), but CopyEngine capped follower sizing from the transient `-2` master position and opened only Sim102 `-4` and Sim103 `-6` instead of the configured `-6/-9`. Product Flatten All returned the fleet flat and order-free; Apex/live accounts were untouched.
+- Root cause was callback timing plus execution identity. The execution callback could arrive before NinjaTrader's authoritative position reflected the cumulative order fill, while the generic `Id` fallback could identify the parent order rather than the individual execution. The copy context now carries cumulative `order.Filled`, waits until live master position covers that cumulative quantity, sizes followers from the greater cumulative truth, and deduplicates by `ExecutionId` or the existing execution-shaped fallback only.
+- Added a shared source contract for cumulative partial-fill handling and removal of order-id dedup. The same producer-neutral correction is present in `cleanup/ai-core` and the undeployed `cleanup/main-core` candidate.
+- Deployed the complete 85-file AI AddOn once from the clean worktree. NinjaTrader rebuilt `NinjaTrader.Custom.dll` successfully with no compile-error surface. Exact replay intent `c72bd011-b448-4f4f-b2f7-dfc89b01c3c1` produced Sim101 `-3` with 6 working bracket orders, Sim102 `-6` with 12, and Sim103 `-9` with 18—even though the follower entries also partially filled. Duplicate delivery returned HTTP 409.
+- A second bounded fixture proved protected same-direction averaging: two independent one-contract master entries produced positions `-2/-4/-6` and independent working protection `4/8/12`. Product Flatten All then returned every Sim account flat and order-free. Final truth is paper, trading OFF, replication OFF; Hermes schedules remained paused and this pass used zero model calls.
+- Still unproved by deliberate runtime fault injection: asynchronous follower-bracket rejection, disconnected/unresolved Flatten All, manual follower close plus explicit resync, and AddOn reload while a protected group is open. Those remain acceptance boundaries rather than inferred passes.
+
+## 2026-07-17 - TradeLedger decoupled from Journal-tab visibility
+
+- Found the remaining learning-path defect in runtime evidence rather than the UI: `Journal.tsv` contained the complete bounded master/follower lifecycle, but live `TradeLedger.tsv` was still header-only because reconstruction ran only from `RefreshSummaryInsightsIfNeeded`, which returned unless the Journal tab had been constructed and selected.
+- Moved ledger upkeep onto existing lifecycle events without adding a timer or poller. Every flushed `Execution` journal batch now rebuilds/merges completed round trips, and AddOn startup rebuilds from the authoritative persisted Journal. Journal rendering remains a consumer, not the owner, of learning state.
+- Added a shared architecture contract proving the execution-journal trigger and startup rebuild have no `_summaryAsOfText`/tab dependency. Verification is 62/62 AI/Hermes contracts plus 23/23 shared contracts; diff check is clean apart from existing line-ending warnings.
+- Deployed the complete 85-file clean AddOn, verified 85/85 live hashes, and observed an automatic green compile at `2026-07-17T13:48:02Z`. A reflection harness loaded that exact compiled DLL and replayed the real `Journal.tsv`: it reconstructed 50 closed account trades and wrote 50 temporary ledger rows. The bounded fixture resolved exactly three rows: Sim101 x1 (`-83.5` MNQ points), Sim102 x2 (`-159.5`), and Sim103 x3 (`-238.25`). No order or model call was used for this proof.
+- The canonical runtime then invoked the new rebuild and populated `TradeLedger.tsv` with 51 rows while all accounts remained flat/order-free and AI/replication remained OFF. The exact bounded fixture is present as Sim101 x1 `-83.5` points, Sim102 x2 `-159.5`, and Sim103 x3 `-238.25`.
+- A second ownership mismatch surfaced in the file proof: the outcome reconciler required AI execution receipts for follower brackets, but producer-neutral CopyEngine correctly emits follower protection to `Journal.tsv`. The reconciler now joins master bracket receipt + exact CopyEngine `follower_protection|entry=...|result=submitted` rows + account-local TradeLedger rows + a later flat/order-free portfolio snapshot. No replication-to-AI coupling was added.
+- Isolated reconciliation against the canonical files emitted one exact outcome for intent `e643d401-4d23-49fb-b8f7-658cd3507447`: quantities `1/2/3`, protection evidence `execution_receipt/copy_engine_journal/copy_engine_journal`, per-account PnL `-$167/-$319/-$476.50`, and group PnL `-$962.50`. Managed EXIT metadata now yields `managed_exit`; the old nearest-bracket-price heuristic no longer falsely labels a discretionary exit as a stop or target.
+- Installed the clean profile overlay with `-SkipGatewayInstall`: source/installed reconciler hashes match, SOUL/skills/plugin/scripts are current, named sessions and native memory are preserved, and no gateway/scheduler/trading state was enabled. `hermes -p glitch cron list` reports no scheduled jobs. Canonical `hermes-trade-outcomes.jsonl` was intentionally not polluted with the Codex fixture; the outcome proof used an isolated output file and was deleted afterward.
+
+## 2026-07-17 - clean AI candidate compiled and bounded 1:2:3 lifecycle proved
+
+- Deployed the complete 85-file `cleanup/ai-core` AddOn candidate from the clean worktree and verified zero workspace/live hash mismatches. NinjaTrader F5 produced `NinjaTrader.Custom.dll` at `2026-07-17T13:21:46.8902968Z` with no compile-error surface.
+- Restored the explicit Sim rule projection lost during consolidation: Sim identity remains `account_status=Sim`, while `prop_firm_id=ApexTraderFunding`, `rule_status=Eval`, `rules_are_simulated=true`, and the current 250K Legacy ceiling is `max_contracts=27`. Snapshot `is_replicating` now comes from the effective CopyEngine state rather than the UI flag alone.
+- Restored a producer-neutral Apex same-direction guard before Glitch-generated AI/master and follower entry submissions. It bypasses Sim, never changes human positions/orders, and does not make automation eligibility an execution gate.
+- Verification is 62/62 unique AI/Hermes contracts plus 22/22 shared architecture contracts. The full AddOn compile and live portfolio projection are runtime-proved; `cleanup/main-core` remains undeployed and unproved.
+- Ran one bounded Sim-only fixture with AI inference and schedules inactive. Entry intent `e643d401-4d23-49fb-b8f7-658cd3507447` passed every firewall check, submitted one MNQ short on Sim101, and preserved absolute `SL=28760` / `TP=28460`. CopyEngine opened Sim102 x2 and Sim103 x3 and created one independent native OCO pair per follower unit. Portfolio truth was `-1/-2/-3` positions with `2/4/6` working orders.
+- Managed EXIT intent `c81b04f8-d672-4ae8-a59a-d24a16301cff` closed the master, replicated follower flattening, canceled all twelve protective follower orders plus the master pair, and ended with Sim101/102/103 flat and order-free. Final control truth is paper mode, trading OFF, replication OFF; Apex/live accounts were never in scope.
+- NinjaTrader labels follower `Account.Flatten` executions as `[SRC:Manual] [TAG:EXIT]` and CopyEngine currently journals `reason=master_manual_close`, even when the causal master execution is the accepted AI EXIT and `[SRC:Strategy]`. This is an observability-label caveat, not an ownership or execution failure; causality is reconstructible from intent, execution receipt, master fill, and follower copy lines.
+
+## 2026-07-17 - Hermes epoch cognition and execution-contract correction (builder-only, later deployed in the bounded acceptance above)
+
+- Preserved and audited the complete pre-refactor epoch before any reset. The evidence shows 117 decisions requesting one-minute review while flat, 135 API calls, no native tool calls or durable outcome learning, 32 entry decisions with structurally tight stops, and 18 completed master trades dominated by sub-two-minute stopouts. This epoch is diagnostic evidence, not profitability evidence.
+- Corrected the cognition contract without turning Glitch into a deterministic strategy. Flat books are considered once per complete five-minute packet; positioned books may be reconsidered each minute. The model still owns direction, HOLD/EXIT/MOVE_STOP, structural absolute stop/target prices, valid dynamic quantity, and one-to-three protected legs. Frequency is no longer an objective and higher-timeframe live rows are regime context rather than closed-candle entry triggers.
+- Removed legacy AI-only quantity and fixed-dollar risk gates. Capacity now derives from current Glitch portfolio facts, account-wide exposure, prop-firm maximum contracts, and live follower ratios. The executor preserves Hermes's absolute protection prices instead of silently re-anchoring them as distances.
+- Made inference and delivery crash-safe: the runner pins `gpt-5.6-luna` through `openai-codex`, clears silent fallbacks during installation, bounds the named `trading` session to four turns, records one durable model attempt per packet, reuses the same outbox and intent id after transient delivery failure, and treats duplicate HTTP 409 as terminal delivery evidence.
+- Fixed signed short exposure, account-wide capacity checks, three-leg validation/execution/recovery, directive identity, and outcome learning. `TradeLedger.pnl_points` was already quantity-weighted; reconciliation no longer multiplies it by quantity a second time.
+- Reconciled profile SOUL, Glitch skills, installer/reset scripts, schemas, operator docs, authoritative rail, and the epoch audit. Historical archetypes and M0 dollar limits remain available only as non-authoritative research and cannot become runtime gates.
+- Removed duplicate test discovery that inflated the reported suite. Verification is intentionally separated into 62 unique AI/Hermes contracts and 20 shared non-AI architecture contracts, plus PowerShell/JSON parse and diff cleanliness. NinjaTrader F5 compilation and bounded Sim lifecycle fixtures remain mandatory runtime proof; no deployment, reset, scheduler change, model call, account mutation, intent, or order occurred in this pass.
+
 ## 2026-07-17 - main/AI shared-core consolidation (builder-only, not deployed)
 
 - Built from clean worktrees at `main=d216015` and `glitch/ai-rail=f82e1f5`; the historical dirty AI checkout was not edited or treated as a merge source.

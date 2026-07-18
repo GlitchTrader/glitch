@@ -2,7 +2,7 @@
 
 The canonical runtime is direct: Glitch publishes five immutable one-minute frames, Hermes native cron wakes the persistent `glitch` profile for one decision, and Hermes posts the validated result to Glitch's existing localhost intent firewall. Codex is a builder and is not part of the trading runtime.
 
-The role split and the slow builder handoff are defined in `glitch_hermes_docs/docs/13_three_layer_handoff.md`. Hermes chat supervises Hermes trading through append-only supervisor records and may escalate approved source work to Codex. A bounded Codex automation reviews approved requests every two hours, then validates and hands control back to Hermes; it never polls market data or submits intents.
+The role split and builder handoff are defined in `glitch_hermes_docs/docs/13_three_layer_handoff.md`. Hermes chat supervises Hermes trading through append-only supervisor records and may propose source work. Codex runs only when explicitly invoked for approved builder work; it never polls market data or submits intents.
 
 The cognitive, model, skill, memory, ledger, self-heal, and staged-activation canon is `glitch_hermes_docs/docs/12_hermes_trading_skills_and_knowledge.md`. Current source work does not authorize installation or cron activation. The first runtime stage is one persistent native Hermes profile plus the 5-minute paper core only; supervisory loops are added later from evidence.
 
@@ -15,9 +15,9 @@ Installation and activation are separate:
 .\tools\hermes\enable-direct-hermes-cron.ps1
 ```
 
-The installer changes only the host `glitch` profile to a local backend, enables native memory/session persistence, installs the worker, skills, and deterministic `glitch-control` plugin, and seeds two named sessions: `chat` and `trading`. It does not create a cron job. The enable script creates one headless Hermes-native job at minutes `01,06,11...`, after Glitch publishes the `x0/x5` closed-window packet. Neither touches the Workframe dogfood Docker stack.
+The installer changes only the host `glitch` profile to a local backend, pins `gpt-5.6-luna` through `openai-codex` at medium reasoning, clears silent fallback providers, enables native memory/session persistence, reconciles the source-controlled Glitch skill/plugin overlay exactly, installs the worker, and seeds two named sessions: `chat` and `trading`. It does not create a cron job. The enable script creates one headless Hermes-native worker that wakes each minute; the worker spends no model call while flat except on five-minute boundaries or for an explicit one-cycle directive, and uses minute calls while a scoped master is positioned. Neither touches the Workframe dogfood Docker stack.
 
-`run-direct-glitch-cycle.py` spends zero model calls until a new complete packet exists. It resumes only the named `trading` session and fails closed if that session is unavailable; it never resumes the interactive chat by accident. It validates output contract and scope and posts to `127.0.0.1:8788`. Glitch owns policy, groups, risk, native brackets, execution, and outcomes.
+`run-direct-glitch-cycle.py` spends zero model calls until a new complete packet exists. It explicitly invokes Luna/OpenAI Codex with a four-turn ceiling, resumes only the named `trading` session, and fails closed if that session is unavailable; it never resumes the interactive chat by accident. A durable attempt record limits each packet to one model call even after timeout or malformed output. It validates output contract and scope, durably writes one batch per packet, and posts to `127.0.0.1:8788`. Delivery retries reuse that batch and its intent IDs without another model call. Glitch owns policy, groups, risk, native brackets, execution, and outcomes.
 
 Start the human-facing session with:
 
@@ -44,11 +44,11 @@ Deterministic slash commands are handled directly by the plugin, without an LLM 
 
 Commands use the existing bearer token and the localhost Glitch control endpoint on `127.0.0.1:8789`. Command IDs are idempotent. The Glitch header shows the product-facing `AI Auto` state; replication and flatten continue to use the existing Glitch UI/state paths. ON/OFF is the only activation switch. Paper and live are execution-policy modes, not extra arm rituals; live still requires explicit human authorization.
 
-Bias commands write one expiring advisory to the Hermes-owned exchange. The direct trading worker consumes it on the next valid packet, records it in the prompt, and marks it consumed after producing a validated batch. Biases never bypass Glitch risk, bracket, account, or execution validation; they are not persistent memory and older directives cannot affect later cycles.
+Bias commands write one expiring advisory to the Hermes-owned exchange. The direct trading worker consumes it on the next valid packet, records its identity beside the durable outbox batch, and marks it consumed only after producing that validated batch. Delivery retries reuse that exact batch and its intent IDs without another model call. Biases never bypass Glitch risk, bracket, account, or execution validation; they are not persistent memory and older directives cannot consume or affect later cycles.
 
 `/long` and `/short` are stronger operator-directed paper experiments. They are accepted only when the configured Sim allowlist is flat and order-free, paper trading and replication are on, and no live account is in scope. When Glitch is already ON, they reconcile a stale paused Hermes scheduler so the Glitch ON/OFF control remains authoritative. Hermes must honor the requested direction and select structure-aware bracket geometry; Glitch still owns final risk validation, replication, execution, and native protection.
 
-Entry decisions have a 180-second analytical-snapshot window and still require a separate live execution price no older than five seconds. `EXIT`, `HOLD`, and `NOTHING` do not use entry-grade snapshot freshness: exits reduce an existing position, while hold/nothing are non-executing journal decisions.
+Entry decisions have a 300-second analytical window matching the canonical five-minute flat-book cycle and still require a separate live execution price no older than five seconds. Absolute structural levels must remain executable at that live price. `EXIT`, `HOLD`, and `NOTHING` do not use entry-grade snapshot freshness: exits reduce an existing position, while hold/nothing are non-executing journal decisions.
 
 ## Clean paper epoch reset
 
@@ -68,10 +68,10 @@ Hermes cron job is enabled.
 The reset archives redacted session transcripts and file evidence, replaces only
 the named `trading` session, deletes accidental one-shot trading/review sessions,
 clears native `USER.md` memory content while preserving the memory subsystem, and
-clears decisions, receipts, outcomes, directives, cron output, and the stale
-synced capsule journal. It preserves `SOUL.md`, skills, plugins, configuration,
-the named `chat` session, supervisor/build records, Glitch policy, and account
-groups.
+clears decisions, receipts, outcomes, directives, cron output, trading lessons,
+observations/guidance, and the stale synced capsule journal. It preserves
+`SOUL.md`, skills, plugins, configuration, the named `chat` session, approved
+build-request/Codex evidence, Glitch policy, and account groups.
 
 Glitch `Journal.tsv` and `TradeLedger.tsv` are intentionally not deleted by the
 script. Use the existing Glitch **Reset Data** button so NinjaTrader's in-memory

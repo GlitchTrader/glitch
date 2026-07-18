@@ -388,7 +388,10 @@ namespace Glitch.UI
             if (executionObject == null)
                 return false;
 
-            string executionId = TryGetNestedPropertyValueAsString(executionObject, "ExecutionId", "Id");
+            // `Id` can identify the parent order on some provider/event shapes.
+            // Only the execution-specific identifier is safe for fill deduplication;
+            // the copy engine has a timestamp fallback when it is unavailable.
+            string executionId = TryGetNestedPropertyValueAsString(executionObject, "ExecutionId");
             string quantityText = TryGetNestedPropertyValueAsString(executionObject, "Quantity");
             if (!int.TryParse(quantityText, NumberStyles.Integer, CultureInfo.InvariantCulture, out int quantity) || quantity <= 0)
                 return false;
@@ -423,6 +426,9 @@ namespace Glitch.UI
                 Action = action,
                 OrderType = order?.OrderType ?? OrderType.Market,
                 Quantity = quantity,
+                EntryOrderFilledQuantity = order == null
+                    ? quantity
+                    : Math.Max(quantity, Math.Max(0, order.Filled)),
                 OrderSignalName = signalName,
                 Oco = order?.Oco,
                 ExecutionTimeUtc = TryReadExecutionTimeUtc(executionObject)

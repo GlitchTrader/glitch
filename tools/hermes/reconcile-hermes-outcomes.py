@@ -1,9 +1,10 @@
 """Reconcile completed master/follower trades into Hermes learning outcomes.
 
 The direct exchange outbox is the decision authority. NinjaTrader execution
-events prove the Glitch-owned group lifecycle; TradeLedger.tsv proves each
-account round trip. An outcome is emitted only after the master and every
-enabled follower in the Glitch group have closed.
+events prove the AI-owned master lifecycle; CopyEngine Journal events prove
+follower-native protection; TradeLedger.tsv proves each account round trip.
+An outcome is emitted only after the master and every enabled follower in the
+Glitch group have closed.
 """
 
 import argparse
@@ -75,6 +76,32 @@ def read_trade_ledger(path):
         except (ValueError, OverflowError, OSError):
             continue
         rows.append(row)
+    return rows
+
+
+def read_journal(path):
+    rows = []
+    if not path.exists():
+        return rows
+    for raw in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
+        if not raw.strip() or raw.startswith("#"):
+            continue
+        parts = raw.split("\t", 3)
+        if len(parts) < 4:
+            continue
+        try:
+            recorded_utc = datetime.fromtimestamp(
+                (int(parts[0]) - DOTNET_EPOCH_TICKS) / 10_000_000,
+                tz=timezone.utc,
+            )
+        except (ValueError, OverflowError, OSError):
+            continue
+        rows.append({
+            "recorded_utc": recorded_utc,
+            "account": parts[1],
+            "category": parts[2],
+            "message": parts[3],
+        })
     return rows
 
 
@@ -210,15 +237,19 @@ def excursion(snapshots, account, entry_utc, exit_utc, instrument_root):
     }
 
 
-def infer_close_kind(exit_price, stop_price, target_price):
-    if exit_price is None:
-        return "unknown"
-    distances = []
-    if stop_price is not None:
-        distances.append((abs(exit_price - stop_price), "stop"))
-    if target_price is not None:
-        distances.append((abs(exit_price - target_price), "target"))
-    return min(distances)[1] if distances else "unknown"
+def infer_close_kind(trade):
+    exit_type = str(trade.get("exit_type") or "").strip().lower()
+    exit_signal = str(trade.get("exit_signal") or "").strip()
+    close_reason = str(trade.get("close_reason") or "").strip().lower()
+    signal_parts = exit_signal.upper().split("-")
+    signal_role = signal_parts[2] if len(signal_parts) > 2 else ""
+    if "stop" in exit_type or "stop" in close_reason or signal_role == "S":
+        return "stop"
+    if "target" in exit_type or "target" in close_reason or signal_role == "T":
+        return "target"
+    if exit_type in {"exit", "manual", "close"} or exit_signal.lower() == "close" or "manual" in close_reason:
+        return "managed_exit"
+    return "unknown"
 
 
 def _float(fields, key, fallback=None):
@@ -232,19 +263,36 @@ def _instrument_root(value):
     return str(value or "").split()[0].upper()
 
 
-def _match_ledger_trades(ledger, expected_accounts, bracket_by_account, intent, correlation):
+def _match_ledger_trades(ledger, expected_accounts, bracket_by_account, intent, correlation, journal):
     instrument = _instrument_root(intent.get("instrument", "MNQ"))
     side = "long" if intent.get("action") == "ENTER_LONG" else "short"
     matched = {}
     master = str(intent.get("account") or "")
+    master_bracket = bracket_by_account.get(master.lower())
+    if master_bracket is None:
+        return None
+
+    follower_protection = {}
+    for row in journal:
+        if str(row.get("category", "")).lower() != "replication":
+            continue
+        fields = message_fields(row.get("message"))
+        if fields.get("result") not in {"submitted", "accepted"}:
+            continue
+        entry_signal = str(fields.get("entry") or "").strip()
+        account = str(row.get("account") or "").strip()
+        if entry_signal and account:
+            follower_protection[(account.lower(), entry_signal.lower())] = row
 
     for account in expected_accounts:
-        bracket_event, bracket_fields = bracket_by_account[account.lower()]
+        account_key = account.lower()
+        has_account_bracket = account_key in bracket_by_account
+        bracket_event, bracket_fields = bracket_by_account.get(account_key, master_bracket)
         bracket_time = parse_utc(bracket_event["recorded_utc"])
-        bracket_fill = _float(bracket_fields, "fill")
+        bracket_fill = _float(bracket_fields, "fill") if has_account_bracket else None
         candidates = []
         for trade in ledger:
-            if str(trade.get("account", "")).lower() != account.lower():
+            if str(trade.get("account", "")).lower() != account_key:
                 continue
             if _instrument_root(trade.get("instrument")) != instrument:
                 continue
@@ -255,11 +303,18 @@ def _match_ledger_trades(ledger, expected_accounts, bracket_by_account, intent, 
                 continue
             if bracket_fill is not None and abs(trade["entry_price"] - bracket_fill) > 2:
                 continue
-            if account.lower() == master.lower() and correlation:
+            if account_key == master.lower() and correlation:
                 identity = "|".join(str(trade.get(key) or "") for key in (
                     "trade_id", "open_reason", "entry_signal", "exit_signal"
                 )).lower()
                 if correlation.lower() not in identity:
+                    continue
+            if account_key != master.lower() and not has_account_bracket:
+                entry_signal = str(trade.get("entry_signal") or "").lower()
+                protection = follower_protection.get((account_key, entry_signal))
+                if protection is None:
+                    continue
+                if abs((protection["recorded_utc"] - trade["entry_utc"]).total_seconds()) > 5:
                     continue
             price_distance = abs(trade["entry_price"] - bracket_fill) if bracket_fill is not None else 0
             candidates.append((delta_seconds, price_distance, trade["trade_id"], trade))
@@ -275,6 +330,7 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None):
     intents = find_intents(evidence_root, decision_root)
     snapshots = portfolio_snapshots(glitch_data)
     trade_ledger = read_trade_ledger(glitch_data / "TradeLedger.tsv")
+    journal = read_journal(glitch_data / "Journal.tsv")
     existing = {str(row.get("intent_id")): row for row in read_jsonl(output_path) if row.get("intent_id")}
     by_intent = {}
     for row in executions:
@@ -304,12 +360,12 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None):
             account = fields.get("account") or (master if row.get("code") != "follower_structural_brackets_submitted" else None)
             if account:
                 bracket_by_account[account.lower()] = (row, fields)
-        if any(account.lower() not in bracket_by_account for account in expected_accounts):
+        if master.lower() not in bracket_by_account:
             continue
 
         correlation = submit_fields.get("correlation", "")
         ledger_by_account = _match_ledger_trades(
-            trade_ledger, expected_accounts, bracket_by_account, intent, correlation
+            trade_ledger, expected_accounts, bracket_by_account, intent, correlation, journal
         )
         if ledger_by_account is None:
             continue
@@ -323,7 +379,8 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None):
         account_outcomes = []
         incomplete_outcome = False
         for account in expected_accounts:
-            _, fields = bracket_by_account[account.lower()]
+            has_account_bracket = account.lower() in bracket_by_account
+            _, fields = bracket_by_account.get(account.lower(), bracket_by_account[master.lower()])
             trade = ledger_by_account[account.lower()]
             entry_price = trade["entry_price"]
             exit_price = trade["exit_price"]
@@ -334,7 +391,9 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None):
             if point_value is None:
                 incomplete_outcome = True
                 continue
-            pnl_usd = trade["pnl_points"] * point_value * max(quantity, 1) - trade["commission_total"]
+            # TradeLedger pnl_points is already quantity-weighted by
+            # GlitchTradeInsightsService as each closing fill is accumulated.
+            pnl_usd = trade["pnl_points"] * point_value - trade["commission_total"]
             account_outcomes.append({
                 "account": account,
                 "quantity": quantity,
@@ -342,7 +401,8 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None):
                 "exit_price": exit_price,
                 "realized_pnl_usd": pnl_usd,
                 "trade_id": trade["trade_id"],
-                "close_kind": infer_close_kind(exit_price, stop_price, target_price),
+                "protection_evidence": "execution_receipt" if has_account_bracket else "copy_engine_journal",
+                "close_kind": infer_close_kind(trade),
                 **excursion(snapshots, account, entry_utc, exit_utc, instrument_root),
             })
         if incomplete_outcome or len(account_outcomes) != len(expected_accounts):

@@ -1,16 +1,21 @@
-# MNQ Playbook v2 — How Hermes Reads the Tape and Decides
+# MNQ Playbook v2 — Retired Deterministic Research Artifact
+
+**Status:** historical mining evidence only. This file is not active Glitch
+policy, is not loaded by the direct trading worker, and must not gate a decision.
+Current authority is the Glitch SOUL, loaded skills, current packet, and intent
+contract. Archetypes below are advisory evidence that Hermes may use or reject.
 
 **Source:** R06/R06f mining over 1,410,695 minute snapshots (2022-01 → 2026-03-12; hole
 2023-10..12), triple-barrier labeled net of friction. Train spans bear (2022), recovery
 (2023), bull (2024–2025-H1); validated on 2025-H2; **locked forward holdout 2026-01→03-12
 touched once.** Supersedes playbook v1 (2026-07-11).
-**Machine twin:** `archetypes.v2.json` — executable truth; statuses there are law.
+**Machine twin:** `archetypes.v2.json` — historical research output, not executable truth.
 `archetypes.v1.json` is retained for provenance: **its entire set is retired/candidate**
 after the multi-era re-test (see §2 lesson 1).
 **Contract:** `docs/10_hermes_operator_contract.md` · Intent v2 (`docs/09_intent_contract_v2_brackets.md`).
 
 ```text
-Default action is NOTHING. An intent requires a matching, non-retired archetype.
+No archetype match is required. Current probabilistic judgment decides whether either side has positive expectancy.
 ```
 
 ## 1. Regime recognition (every cycle, before anything else)
@@ -47,7 +52,7 @@ State the cell explicitly in your reasoning before matching archetypes.
    geometries (4×ATR) frequently exceed $100/contract risk — the answer is NOTHING or more
    cap, never a thinner stop than the mined geometry.
 
-## 3. Decision procedure (per 5-minute cycle, per instrument)
+## 3. Historical decision procedure (retired; do not execute)
 
 ```text
 1. Sanity: snapshot fresh + schema valid?          no → NOTHING (reason: stale)
