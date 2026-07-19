@@ -41,10 +41,12 @@ Glitch Flatten All remain authoritative.
   the latest completed AI decision. It shows both ages, timestamps the decision,
   and retains the latest 20 decisions as expandable entries with their matching
   packet, execution result, and supporting MNQ snapshot metrics. Decision rows
-  reuse the shared Glitch string-header accordion template so NinjaTrader cannot
-  stringify WPF header visuals.
-- AI Trading Scope uses the same shared accordion and starts collapsed, keeping
-  one-time account configuration available without displacing the live feed.
+  use the compact shared disclosure-row template so NinjaTrader cannot stringify
+  WPF header visuals.
+- Major Dashboard, Journal, Settings, and AI Scope sections now share one boxed,
+  NinjaTrader-skin-aware hierarchy: distinct section header, attached body, and
+  inset content. AI Trading Scope starts collapsed; decision history and Settings
+  rules use the lighter compact disclosure row rather than a full section header.
 - Account/group capacity is dynamic. Hermes receives valid master quantities
   constrained by every enabled account's current rule ceiling, open exposure,
   and follower ratio. One-to-three native OCO legs support protected scale-out;
@@ -66,14 +68,14 @@ Glitch Flatten All remain authoritative.
 ## Verification frozen for this candidate
 
 - Shared source contracts: **33/33**.
-- AI/Hermes contracts: **80/80**; complete AI suite **113/113**.
+- AI/Hermes contracts: **81/81**; complete AI suite **114/114**.
 - Five production web builds: pass.
 - Five web lint runs: pass.
 - Python compilation, tracked PowerShell parsing, tracked JSON parsing, secret
   scan, and `git diff --check`: pass.
 - Complete 87-file AI AddOn folder deployed from this candidate with **87/87
-  files matching and 0 hash mismatches** after stale-target cleanup.
-- NinjaTrader F5 compile: green; the custom assembly rebuilt at 15:11 local with
+  files matching, 0 hash mismatches, and 0 extra target files**.
+- NinjaTrader F5 compile: green; the custom assembly rebuilt at 15:47 local with
   no populated compile-error row.
 - Bounded prior Sim evidence on this clean architecture includes protected
   1:2:3 replication, three independent legs, partial fills, same-direction

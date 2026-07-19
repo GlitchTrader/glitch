@@ -45,10 +45,23 @@ class GlitchAiUiContractTests(unittest.TestCase):
         self.assertIn('"Latest snapshot " + snapshotAge + "  |  Latest decision "', source)
         self.assertNotIn('"Last cycle "', source)
         self.assertIn("AiDecisionHistoryLimit = 20", source)
-        self.assertIn("CreateAccordionExpander(_aiFeedHost, headerText)", source)
+        self.assertIn("CreateDisclosureRowExpander(_aiFeedHost, headerText)", source)
         self.assertNotIn("var header = new Grid", source)
         self.assertIn('"SUPPORTING SNAPSHOTS"', source)
         self.assertIn('GetAiJsonString(value, "instrument"), "MNQ"', source)
+
+    def test_shared_ui_hierarchy_uses_boxed_sections_and_compact_disclosure_rows(self):
+        accordion = (UI / "GlitchMainWindow.AccordionLayout.partial.cs").read_text(encoding="utf-8")
+        settings = (UI / "GlitchMainWindow.SettingsTab.partial.cs").read_text(encoding="utf-8")
+
+        self.assertIn('"BackgroundTableHeader", "BackgroundTextInput", "BackgroundMainWindow"', accordion)
+        self.assertIn("Control.BorderThicknessProperty, new Thickness(1)", accordion)
+        self.assertIn("CreateDisclosureRowExpander", accordion)
+        self.assertIn("WrapDisclosureRowContent", accordion)
+        self.assertIn('CreateAccordionExpander(root, "settings.risk.title", "Risk Management Rules")', settings)
+        self.assertIn('CreateAccordionExpander(root, "settings.license.title", "License & Updates")', settings)
+        self.assertIn("CreateDisclosureRowExpander(GetSettingsStyleContext(), titleKey, descriptionFallback)", settings)
+        self.assertNotIn("var expander = new Expander", settings)
 
     def test_scope_is_policy_binding_not_a_second_group_model(self):
         source = POLICY.read_text(encoding="utf-8")

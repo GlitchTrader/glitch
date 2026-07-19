@@ -420,9 +420,9 @@ namespace Glitch.UI
                 account,
                 executionCode);
 
-            var content = new ContentControl { Margin = new Thickness(18, 0, 4, 10) };
-            Expander expander = CreateAccordionExpander(_aiFeedHost, headerText);
-            expander.Content = content;
+            var content = new ContentControl();
+            Expander expander = CreateDisclosureRowExpander(_aiFeedHost, headerText);
+            expander.Content = WrapDisclosureRowContent(content);
             expander.IsExpanded = !string.IsNullOrWhiteSpace(item.IntentId)
                 && _expandedAiDecisionIds.Contains(item.IntentId);
             expander.Expanded += (sender, args) =>
