@@ -413,24 +413,18 @@ namespace Glitch.UI
                 ?? GlitchAiJsonFields.ExtractString(item.ExecutionJson, "status")
                 ?? "waiting";
 
-            var header = new Grid { Margin = new Thickness(4, 6, 4, 6) };
-            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(145) });
-            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
-            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
-            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            AddAiHistoryHeaderCell(header, 0, FormatDecisionTimestamp(item.DecisionUtc), null);
-            AddAiHistoryHeaderCell(header, 1, action, TealAccentBrush);
-            AddAiHistoryHeaderCell(header, 2, account, null);
-            AddAiHistoryHeaderCell(header, 3, executionCode, null);
+            string headerText = string.Join(
+                "   |   ",
+                FormatDecisionTimestamp(item.DecisionUtc),
+                action,
+                account,
+                executionCode);
 
             var content = new ContentControl { Margin = new Thickness(18, 0, 4, 10) };
-            var expander = new Expander
-            {
-                Header = header,
-                Content = content,
-                HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                IsExpanded = !string.IsNullOrWhiteSpace(item.IntentId) && _expandedAiDecisionIds.Contains(item.IntentId)
-            };
+            Expander expander = CreateAccordionExpander(_aiFeedHost, headerText);
+            expander.Content = content;
+            expander.IsExpanded = !string.IsNullOrWhiteSpace(item.IntentId)
+                && _expandedAiDecisionIds.Contains(item.IntentId);
             expander.Expanded += (sender, args) =>
             {
                 if (!string.IsNullOrWhiteSpace(item.IntentId))
@@ -454,19 +448,6 @@ namespace Glitch.UI
             body.Children.Add(CreateAiDecisionPanels(item));
             body.Children.Add(CreateAiSnapshotTable(GetAiSnapshotPreviews(item.PacketFile)));
             return body;
-        }
-
-        private static void AddAiHistoryHeaderCell(Grid grid, int column, string text, Brush foreground)
-        {
-            var cell = new TextBlock
-            {
-                Text = text,
-                FontWeight = column == 1 ? FontWeights.SemiBold : FontWeights.Normal,
-                Foreground = foreground,
-                TextTrimming = TextTrimming.CharacterEllipsis
-            };
-            Grid.SetColumn(cell, column);
-            grid.Children.Add(cell);
         }
 
         private UIElement CreateAiSnapshotTable(IReadOnlyList<AiSnapshotPreview> snapshots)

@@ -132,6 +132,23 @@ namespace Glitch.UI
             return expander;
         }
 
+        private Expander CreateAccordionExpander(FrameworkElement context, string header)
+        {
+            if (_accordionExpanderStyle == null)
+                _accordionExpanderStyle = CreateAccordionExpanderStyle(context);
+
+            return new Expander
+            {
+                Style = _accordionExpanderStyle,
+                Margin = new Thickness(0, 0, 0, AccordionSectionGap),
+                Padding = new Thickness(0),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                VerticalContentAlignment = VerticalAlignment.Top,
+                Header = header ?? string.Empty
+            };
+        }
+
         private Style CreateAccordionExpanderStyle(FrameworkElement context)
         {
             var style = new Style(typeof(Expander));

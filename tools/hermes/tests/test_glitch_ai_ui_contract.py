@@ -43,7 +43,8 @@ class GlitchAiUiContractTests(unittest.TestCase):
         self.assertIn('"Latest snapshot " + snapshotAge + "  |  Latest decision "', source)
         self.assertNotIn('"Last cycle "', source)
         self.assertIn("AiDecisionHistoryLimit = 20", source)
-        self.assertIn("new Expander", source)
+        self.assertIn("CreateAccordionExpander(_aiFeedHost, headerText)", source)
+        self.assertNotIn("var header = new Grid", source)
         self.assertIn('"SUPPORTING SNAPSHOTS"', source)
         self.assertIn('GetAiJsonString(value, "instrument"), "MNQ"', source)
 

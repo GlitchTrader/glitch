@@ -40,7 +40,9 @@ Glitch Flatten All remain authoritative.
 - The Glitch AI feed separates the current five-snapshot collection window from
   the latest completed AI decision. It shows both ages, timestamps the decision,
   and retains the latest 20 decisions as expandable entries with their matching
-  packet, execution result, and supporting MNQ snapshot metrics.
+  packet, execution result, and supporting MNQ snapshot metrics. Decision rows
+  reuse the shared Glitch string-header accordion template so NinjaTrader cannot
+  stringify WPF header visuals.
 - Account/group capacity is dynamic. Hermes receives valid master quantities
   constrained by every enabled account's current rule ceiling, open exposure,
   and follower ratio. One-to-three native OCO legs support protected scale-out;
