@@ -1,6 +1,6 @@
 # Now — clean AI candidate
 
-**Updated:** 2026-07-18
+**Updated:** 2026-07-19
 
 **Branch:** `cleanup/ai-core`
 
@@ -32,9 +32,15 @@ Glitch Flatten All remain authoritative.
 - Delivery is idempotent and crash-safe through a durable outbox/receipt pair.
   Retry reuses the same intent id and never spends a second model call for the
   same packet.
-- AI Auto has one effective state. The UI reports Running only when Glitch state,
-  the named Hermes job, and recent evidence agree; otherwise it reports Stale or
-  Stopped.
+- AI Auto is one truthful switch for the whole core apparatus. ON means the Glitch
+  execution gate is open and the named Hermes core job is enabled; OFF closes the
+  execution gate and pauses that job, so it cannot spend five-minute Luna calls.
+  The UI reports only On or Off; snapshot and decision ages carry observability
+  without inventing a third "Stale" control state.
+- The Glitch AI feed separates the current five-snapshot collection window from
+  the latest completed AI decision. It shows both ages, timestamps the decision,
+  and retains the latest 20 decisions as expandable entries with their matching
+  packet, execution result, and supporting MNQ snapshot metrics.
 - Account/group capacity is dynamic. Hermes receives valid master quantities
   constrained by every enabled account's current rule ceiling, open exposure,
   and follower ratio. One-to-three native OCO legs support protected scale-out;
@@ -55,14 +61,15 @@ Glitch Flatten All remain authoritative.
 
 ## Verification frozen for this candidate
 
-- Shared source contracts: **32/32**.
-- AI/Hermes contracts: **79/79**.
+- Shared source contracts: **33/33**.
+- AI/Hermes contracts: **80/80**; complete AI suite **113/113**.
 - Five production web builds: pass.
 - Five web lint runs: pass.
 - Python compilation, tracked PowerShell parsing, tracked JSON parsing, secret
   scan, and `git diff --check`: pass.
-- Complete 87-file AI AddOn folder deployed with **0 hash mismatches**.
-- NinjaTrader F5 compile: green; no populated compile-error row.
+- Complete 87-file AI AddOn folder deployed from this candidate.
+- NinjaTrader F5 compile: green; the custom assembly rebuilt at 15:06 local with
+  no populated compile-error row.
 - Bounded prior Sim evidence on this clean architecture includes protected
   1:2:3 replication, three independent legs, partial fills, same-direction
   protected tranches, duplicate-intent rejection, and fleet flatten.

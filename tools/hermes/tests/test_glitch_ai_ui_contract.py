@@ -27,16 +27,25 @@ class GlitchAiUiContractTests(unittest.TestCase):
         self.assertNotIn('"Hermes"', header)
         self.assertNotIn("ON / Paper", main)
 
-    def test_ai_on_requires_recent_native_cycle_health(self):
+    def test_ai_switch_reports_the_actual_control_and_job_state_without_a_false_stale_mode(self):
         main = (UI / "GlitchMainWindow.cs").read_text(encoding="utf-8")
         refresh = (UI / "GlitchMainWindow.RefreshPipeline.partial.cs").read_text(encoding="utf-8")
-        self.assertIn('Value = "Stale"', main)
-        self.assertIn('"AI Auto Stale"', main)
-        self.assertIn("!paused && tradingJobEnabled && IsAiDecisionLoopHealthy()", main)
+        self.assertNotIn('Value = "Stale"', main)
+        self.assertNotIn('"AI Auto Stale"', main)
+        self.assertIn("_aiTradingButton.Tag = !paused && tradingJobEnabled", main)
         self.assertIn('GlitchAiAutoRuntimeController.IsTradingJobEnabled()', main)
-        self.assertIn('Path.Combine("hermes", "exchange", "hermes", "events", "cycles.jsonl")', main)
-        self.assertIn("TimeSpan.FromMinutes(12)", main)
         self.assertIn("UpdateHermesModeUi", refresh)
+
+    def test_ai_feed_separates_current_collection_from_completed_decisions(self):
+        source = (UI / "GlitchMainWindow.AiTab.partial.cs").read_text(encoding="utf-8")
+        self.assertIn('"Current Window"', source)
+        self.assertIn('"Latest AI Decision"', source)
+        self.assertIn('"Latest snapshot " + snapshotAge + "  |  Latest decision "', source)
+        self.assertNotIn('"Last cycle "', source)
+        self.assertIn("AiDecisionHistoryLimit = 20", source)
+        self.assertIn("new Expander", source)
+        self.assertIn('"SUPPORTING SNAPSHOTS"', source)
+        self.assertIn('GetAiJsonString(value, "instrument"), "MNQ"', source)
 
     def test_scope_is_policy_binding_not_a_second_group_model(self):
         source = POLICY.read_text(encoding="utf-8")

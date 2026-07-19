@@ -635,12 +635,6 @@ namespace Glitch.UI
             var stoppingTrigger = new Trigger { Property = FrameworkElement.TagProperty, Value = "Stopping" };
             stoppingTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, "AI Auto Stopping..."));
             style.Triggers.Add(stoppingTrigger);
-            var staleTrigger = new Trigger { Property = FrameworkElement.TagProperty, Value = "Stale" };
-            staleTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, "AI Auto Stale"));
-            staleTrigger.Setters.Add(new Setter(Control.BackgroundProperty, OrangeAccentBrush));
-            staleTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, OrangeAccentBrush));
-            staleTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
-            style.Triggers.Add(staleTrigger);
             return style;
         }
 
@@ -854,28 +848,9 @@ namespace Glitch.UI
             }
 
             bool tradingJobEnabled = GlitchAiAutoRuntimeController.IsTradingJobEnabled();
-            if (paused && !tradingJobEnabled)
-                _aiTradingButton.Tag = "Stopped";
-            else if (!paused && tradingJobEnabled && IsAiDecisionLoopHealthy())
-                _aiTradingButton.Tag = "Running";
-            else
-                _aiTradingButton.Tag = "Stale";
-        }
-
-        private static bool IsAiDecisionLoopHealthy()
-        {
-            try
-            {
-                string path = GlitchStateStore.GetDefaultPath(Path.Combine("hermes", "exchange", "hermes", "events", "cycles.jsonl"));
-                if (!File.Exists(path))
-                    return false;
-                TimeSpan age = DateTime.UtcNow - File.GetLastWriteTimeUtc(path);
-                return age >= TimeSpan.Zero && age <= TimeSpan.FromMinutes(12);
-            }
-            catch
-            {
-                return false;
-            }
+            _aiTradingButton.Tag = !paused && tradingJobEnabled
+                ? "Running"
+                : "Stopped";
         }
 
         private async void OnAiTradingButtonClick(object sender, RoutedEventArgs e)
