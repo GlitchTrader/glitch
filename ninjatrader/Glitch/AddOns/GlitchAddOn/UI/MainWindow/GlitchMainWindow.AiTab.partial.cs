@@ -51,20 +51,20 @@ namespace Glitch.UI
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-            var scopeCard = CreateAiCard();
-            var scope = new StackPanel { Margin = new Thickness(14, 12, 14, 12) };
-            scope.Children.Add(new TextBlock { Text = "AI Trading Scope", FontWeight = FontWeights.SemiBold, FontSize = 16 });
+            var scope = new StackPanel { Margin = new Thickness(14, 0, 14, 0) };
             scope.Children.Add(new TextBlock
             {
                 Text = "Enable existing group masters. Glitch AI trades the master; Replication owns its followers and ratios.",
-                Margin = new Thickness(0, 4, 0, 10),
+                Margin = new Thickness(0, 0, 0, 10),
                 Opacity = 0.72
             });
             _aiScopeRowsHost = new StackPanel();
             scope.Children.Add(_aiScopeRowsHost);
-            scopeCard.Child = scope;
-            Grid.SetRow(scopeCard, 0);
-            root.Children.Add(scopeCard);
+            Expander scopeExpander = CreateAccordionExpander(root, "AI Trading Scope");
+            scopeExpander.IsExpanded = false;
+            scopeExpander.Content = WrapAccordionSectionContent(scope);
+            Grid.SetRow(scopeExpander, 0);
+            root.Children.Add(scopeExpander);
 
             var feedCard = CreateAiCard();
             feedCard.Margin = new Thickness(0, 12, 0, 0);

@@ -43,6 +43,8 @@ Glitch Flatten All remain authoritative.
   packet, execution result, and supporting MNQ snapshot metrics. Decision rows
   reuse the shared Glitch string-header accordion template so NinjaTrader cannot
   stringify WPF header visuals.
+- AI Trading Scope uses the same shared accordion and starts collapsed, keeping
+  one-time account configuration available without displacing the live feed.
 - Account/group capacity is dynamic. Hermes receives valid master quantities
   constrained by every enabled account's current rule ceiling, open exposure,
   and follower ratio. One-to-three native OCO legs support protected scale-out;

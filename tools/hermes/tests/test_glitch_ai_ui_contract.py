@@ -13,6 +13,8 @@ class GlitchAiUiContractTests(unittest.TestCase):
     def test_ai_tab_reuses_groups_and_durable_artifacts(self):
         source = (UI / "GlitchMainWindow.AiTab.partial.cs").read_text(encoding="utf-8")
         self.assertIn("AI Trading Scope", source)
+        self.assertIn('CreateAccordionExpander(root, "AI Trading Scope")', source)
+        self.assertIn("scopeExpander.IsExpanded = false", source)
         self.assertIn("_accountGroups", source)
         self.assertIn('Path.Combine("intents", "decisions.jsonl")', source)
         self.assertIn('Path.Combine("intents", "executions.jsonl")', source)
