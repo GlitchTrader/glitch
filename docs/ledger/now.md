@@ -1,6 +1,6 @@
 # Now — clean non-AI candidate
 
-**Updated:** 2026-07-18
+**Updated:** 2026-07-19
 
 **Branch:** `cleanup/main-core`
 **Role:** non-AI beta replacement candidate; no Hermes or AI runtime is included.
@@ -17,8 +17,10 @@
   Copy closes cannot cross zero; ambiguous submissions are never blindly retried.
 - Follower protection is registered before submit. A synchronous or asynchronous
   protection failure issues one native flatten and no retry.
-- Replicate state reflects an effective engine with at least one connected route.
-  Flatten All reports disconnected configured accounts as incomplete.
+- Replicate state reflects the effective copy engine with at least one connected
+  route and is published identically to the AddOn and ChartTrader shell. Both
+  surfaces route Flatten All through the same fleet command; disconnected
+  configured accounts are still reported as incomplete.
 - Journal reconstruction ignores orphan exits, allocates reversal commission once,
   uses canonical instrument values, and labels Master/Group/Fleet scope.
 - Analytics preserves contract identity and timeframe freshness. FRED calendar rows
@@ -29,7 +31,7 @@
 
 ## Verification
 
-- Shared source contracts: **32/32**.
+- Shared source contracts: **33/33**.
 - Five production web builds and five lint runs: pass.
 - Python compilation, tracked PowerShell/JSON parsing, diff and secret checks: pass.
 - The identical shared C# core is included in the deployed AI superset, which

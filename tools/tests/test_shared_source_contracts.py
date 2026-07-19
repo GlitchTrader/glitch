@@ -245,11 +245,22 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
 
     def test_replication_state_is_truthful_and_reload_is_observe_only(self):
         window = source(MAIN_WINDOW)
+        performance = source(ADDON / "UI/MainWindow/GlitchMainWindow.Performance.partial.cs")
+        chart_trader = source(ADDON / "GlitchAddOn.ChartTrader.partial.cs")
         self.assertIn("_isReplicatingUi && _copyEngine?.IsEnabled == true", window)
         self.assertIn("SetReplicationFromExternalSurface(!IsReplicationEnabledFromExternalSurface()", window)
+        self.assertIn("IsReplicating = IsReplicationEnabledFromExternalSurface()", performance)
+        self.assertIn("GlitchShellBridge.ToggleReplication()", chart_trader)
         self.assertNotIn("UseLegacyReplicationEngine", window + source(POLICY_STORE))
         self.assertNotIn('AlignAllEnabledFollowersToMaster("startup")', window)
         self.assertIn("replication_restored|origin=startup|catchup=skipped", window)
+
+    def test_addon_and_chart_trader_flatten_all_share_one_fleet_command(self):
+        chart_trader = source(ADDON / "GlitchAddOn.ChartTrader.partial.cs")
+        shell = source(ADDON / "Services/GlitchShellBridge.cs")
+        self.assertIn("GlitchShellBridge.FlattenAll()", chart_trader)
+        self.assertIn("GlitchAddOn.RequestFlattenAll()", shell)
+        self.assertIn("RunFlattenAllAsync(showHeaderButtonFeedback: true)", source(MAIN_WINDOW))
 
     def test_follower_cleanup_is_narrowly_owned(self):
         text = source(COPY_ENGINE)

@@ -282,7 +282,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 Style = CreateChartTraderFlattenButtonStyle(context)
             };
-            flattenAllButton.Click += (sender, args) => GlitchAddOn.RequestFlattenAll();
+            flattenAllButton.Click += (sender, args) => GlitchShellBridge.FlattenAll();
             Grid.SetColumn(flattenAllButton, 1);
             buttonGrid.Children.Add(flattenAllButton);
 

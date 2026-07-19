@@ -324,7 +324,7 @@ namespace Glitch.UI
         {
             snapshot = new GlitchShellSnapshot
             {
-                IsReplicating = _isReplicatingUi,
+                IsReplicating = IsReplicationEnabledFromExternalSurface(),
                 GroupsByMaster = BuildGlitchShellGroupSummaries(rows)
             };
 
