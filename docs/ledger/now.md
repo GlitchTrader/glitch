@@ -67,8 +67,9 @@ Glitch Flatten All remain authoritative.
 - Five web lint runs: pass.
 - Python compilation, tracked PowerShell parsing, tracked JSON parsing, secret
   scan, and `git diff --check`: pass.
-- Complete 87-file AI AddOn folder deployed from this candidate.
-- NinjaTrader F5 compile: green; the custom assembly rebuilt at 15:06 local with
+- Complete 87-file AI AddOn folder deployed from this candidate with **87/87
+  files matching and 0 hash mismatches** after stale-target cleanup.
+- NinjaTrader F5 compile: green; the custom assembly rebuilt at 15:11 local with
   no populated compile-error row.
 - Bounded prior Sim evidence on this clean architecture includes protected
   1:2:3 replication, three independent legs, partial fills, same-direction
