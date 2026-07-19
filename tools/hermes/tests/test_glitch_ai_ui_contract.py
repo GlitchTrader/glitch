@@ -13,7 +13,7 @@ class GlitchAiUiContractTests(unittest.TestCase):
     def test_ai_tab_reuses_groups_and_durable_artifacts(self):
         source = (UI / "GlitchMainWindow.AiTab.partial.cs").read_text(encoding="utf-8")
         self.assertIn("AI Trading Scope", source)
-        self.assertIn('CreateAccordionExpander(root, "AI Trading Scope")', source)
+        self.assertIn('CreateAccordionExpander(root, "ai.scope.title", "AI Trading Scope")', source)
         self.assertIn("scopeExpander.IsExpanded = false", source)
         self.assertIn("_accountGroups", source)
         self.assertIn('Path.Combine("intents", "decisions.jsonl")', source)
@@ -25,7 +25,8 @@ class GlitchAiUiContractTests(unittest.TestCase):
         header = (UI / "GlitchMainWindow.Header.partial.cs").read_text(encoding="utf-8")
         main = (UI / "GlitchMainWindow.cs").read_text(encoding="utf-8")
         self.assertIn("_aiTradingButton", header)
-        self.assertIn('"Glitch AI", "AI Auto On"', main)
+        self.assertIn('L("header.button.ai_auto_off", "Glitch AI")', main)
+        self.assertIn('L("header.button.ai_auto_on", "AI Auto On")', main)
         self.assertNotIn('"Hermes"', header)
         self.assertNotIn("ON / Paper", main)
 
@@ -42,12 +43,13 @@ class GlitchAiUiContractTests(unittest.TestCase):
         source = (UI / "GlitchMainWindow.AiTab.partial.cs").read_text(encoding="utf-8")
         self.assertIn('"Current Window"', source)
         self.assertIn('"Latest AI Decision"', source)
-        self.assertIn('"Latest snapshot " + snapshotAge + "  |  Latest decision "', source)
+        self.assertIn('"ai.feed.latest_status_format"', source)
+        self.assertIn('"Latest snapshot {0}  |  Latest decision {1}"', source)
         self.assertNotIn('"Last cycle "', source)
         self.assertIn("AiDecisionHistoryLimit = 20", source)
         self.assertIn("CreateDisclosureRowExpander(_aiFeedHost, headerText)", source)
         self.assertNotIn("var header = new Grid", source)
-        self.assertIn('"SUPPORTING SNAPSHOTS"', source)
+        self.assertIn('L("ai.snapshots.supporting", "Supporting Snapshots")', source)
         self.assertIn('GetAiJsonString(value, "instrument"), "MNQ"', source)
 
     def test_shared_ui_hierarchy_uses_boxed_sections_and_compact_disclosure_rows(self):

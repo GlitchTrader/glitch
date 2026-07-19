@@ -52,15 +52,19 @@ namespace Glitch.UI
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
             var scope = new StackPanel { Margin = new Thickness(14, 0, 14, 0) };
-            scope.Children.Add(new TextBlock
+            var scopeDescription = new TextBlock
             {
-                Text = "Enable existing group masters. Glitch AI trades the master; Replication owns its followers and ratios.",
                 Margin = new Thickness(0, 0, 0, 10),
                 Opacity = 0.72
-            });
+            };
+            BindLocalizedText(
+                scopeDescription,
+                "ai.scope.description",
+                "Enable existing group masters. Glitch AI trades the master; Replication owns its followers and ratios.");
+            scope.Children.Add(scopeDescription);
             _aiScopeRowsHost = new StackPanel();
             scope.Children.Add(_aiScopeRowsHost);
-            Expander scopeExpander = CreateAccordionExpander(root, "AI Trading Scope");
+            Expander scopeExpander = CreateAccordionExpander(root, "ai.scope.title", "AI Trading Scope");
             scopeExpander.IsExpanded = false;
             scopeExpander.Content = WrapAccordionSectionContent(scope);
             Grid.SetRow(scopeExpander, 0);
@@ -73,7 +77,9 @@ namespace Glitch.UI
             var feedHeading = new Grid();
             feedHeading.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             feedHeading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            feedHeading.Children.Add(new TextBlock { Text = "Glitch AI Feed", FontWeight = FontWeights.SemiBold, FontSize = 16 });
+            var feedTitle = new TextBlock { FontWeight = FontWeights.SemiBold, FontSize = 16 };
+            BindLocalizedText(feedTitle, "ai.feed.title", "Glitch AI Feed");
+            feedHeading.Children.Add(feedTitle);
             _aiFeedStatusText = new TextBlock { Opacity = 0.72, VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(_aiFeedStatusText, 1);
             feedHeading.Children.Add(_aiFeedStatusText);
@@ -83,7 +89,11 @@ namespace Glitch.UI
             Grid.SetRow(feedCard, 1);
             root.Children.Add(feedCard);
 
-            RefreshAiTab();
+            RegisterLocalizationBinding(() =>
+            {
+                _aiFeedRenderFingerprint = null;
+                RefreshAiTab();
+            });
             return root;
         }
 
@@ -119,12 +129,16 @@ namespace Glitch.UI
             AiDecisionFeedItem latest = history.FirstOrDefault();
 
             string snapshotAge = latestFrame == null
-                ? "none"
-                : FormatAge(nowUtc - latestFrame.LastWriteTimeUtc) + " ago";
+                ? L("ai.value.none", "none")
+                : Lf("ai.age.ago_format", "{0} ago", FormatAge(nowUtc - latestFrame.LastWriteTimeUtc));
             string decisionAge = latest?.DecisionUtc == null
-                ? "none"
-                : FormatAge(nowUtc - latest.DecisionUtc.Value) + " ago";
-            _aiFeedStatusText.Text = "Latest snapshot " + snapshotAge + "  |  Latest decision " + decisionAge;
+                ? L("ai.value.none", "none")
+                : Lf("ai.age.ago_format", "{0} ago", FormatAge(nowUtc - latest.DecisionUtc.Value));
+            _aiFeedStatusText.Text = Lf(
+                "ai.feed.latest_status_format",
+                "Latest snapshot {0}  |  Latest decision {1}",
+                snapshotAge,
+                decisionAge);
 
             bool aiAutoOn = !controlState.TradingPaused && GlitchAiAutoRuntimeController.IsTradingJobEnabled();
             DateTime frameAnchorUtc = latest?.DecisionUtc ?? nowUtc.AddMinutes(-5);
@@ -151,9 +165,14 @@ namespace Glitch.UI
             if (latest == null)
             {
                 Border waiting = CreateAiDetailPanel(
-                    "LATEST AI DECISION",
-                    "Status", aiAutoOn ? "Waiting for the first completed decision" : "AI Auto is off",
-                    "Snapshots", Math.Min(currentFrames, 5).ToString(CultureInfo.InvariantCulture) + "/5 collected");
+                    L("ai.decision.latest", "Latest AI Decision").ToUpperInvariant(),
+                    L("ai.field.status", "Status"), aiAutoOn
+                        ? L("ai.status.waiting_first", "Waiting for the first completed decision")
+                        : L("ai.status.auto_off", "AI Auto is off"),
+                    L("ai.field.snapshots", "Snapshots"), Lf(
+                        "ai.snapshots.collected_short_format",
+                        "{0}/5 collected",
+                        Math.Min(currentFrames, 5)));
                 waiting.Margin = new Thickness(0, 12, 0, 0);
                 _aiFeedHost.Children.Add(waiting);
                 return;
@@ -164,8 +183,8 @@ namespace Glitch.UI
             var historyHeading = new Grid { Margin = new Thickness(0, 18, 0, 8) };
             historyHeading.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             historyHeading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            historyHeading.Children.Add(new TextBlock { Text = "Decision History", FontWeight = FontWeights.SemiBold, FontSize = 15 });
-            var historyCount = new TextBlock { Text = "Last " + history.Count.ToString(CultureInfo.InvariantCulture), Opacity = 0.65 };
+            historyHeading.Children.Add(new TextBlock { Text = L("ai.history.title", "Decision History"), FontWeight = FontWeights.SemiBold, FontSize = 15 });
+            var historyCount = new TextBlock { Text = Lf("ai.history.last_format", "Last {0}", history.Count), Opacity = 0.65 };
             Grid.SetColumn(historyCount, 1);
             historyHeading.Children.Add(historyCount);
             _aiFeedHost.Children.Add(historyHeading);
@@ -185,10 +204,10 @@ namespace Glitch.UI
             headings.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
             headings.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
             headings.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            AddAiScopeHeading(headings, 0, "TRADE");
-            AddAiScopeHeading(headings, 1, "MASTER");
-            AddAiScopeHeading(headings, 2, "TYPE");
-            AddAiScopeHeading(headings, 3, "REPLICATION ROUTE");
+            AddAiScopeHeading(headings, 0, L("ai.scope.column.trade", "Trade").ToUpperInvariant());
+            AddAiScopeHeading(headings, 1, L("ai.scope.column.master", "Master").ToUpperInvariant());
+            AddAiScopeHeading(headings, 2, L("ai.scope.column.type", "Type").ToUpperInvariant());
+            AddAiScopeHeading(headings, 3, L("ai.scope.column.route", "Replication Route").ToUpperInvariant());
             _aiScopeRowsHost.Children.Add(headings);
 
             foreach (AccountGroupDefinition group in _accountGroups.Where(value => value != null && !string.IsNullOrWhiteSpace(value.MasterAccount)))
@@ -211,15 +230,15 @@ namespace Glitch.UI
                 row.Children.Add(type);
                 string followers = string.Join(", ", group.Members.Where(value => value != null && value.IsEnabled && !value.IsMasterRow && !string.Equals(value.FollowerAccount, group.MasterAccount, StringComparison.OrdinalIgnoreCase)).Select(value => value.FollowerAccount + " x" + value.Ratio.ToString("0.##", CultureInfo.InvariantCulture)));
                 string routeText = string.IsNullOrWhiteSpace(followers)
-                    ? "Standalone master"
-                    : "Master trades; Replication -> " + followers;
+                    ? L("ai.scope.route.standalone", "Standalone master")
+                    : Lf("ai.scope.route.replicated_format", "Master trades; Replication -> {0}", followers);
                 var detail = new TextBlock { Text = routeText, Opacity = 0.72, VerticalAlignment = VerticalAlignment.Center };
                 Grid.SetColumn(detail, 3);
                 row.Children.Add(detail);
                 _aiScopeRowsHost.Children.Add(row);
             }
             if (_aiScopeRowsHost.Children.Count == 1)
-                _aiScopeRowsHost.Children.Add(new TextBlock { Text = "Create a replication group to make an account available to Glitch AI.", Opacity = 0.72 });
+                _aiScopeRowsHost.Children.Add(new TextBlock { Text = L("ai.scope.empty", "Create a replication group to make an account available to Glitch AI."), Opacity = 0.72 });
         }
 
         private static void AddAiScopeHeading(Grid grid, int column, string text)
@@ -284,11 +303,13 @@ namespace Glitch.UI
             layout.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var left = new StackPanel();
-            left.Children.Add(new TextBlock { Text = "Current Window", FontWeight = FontWeights.SemiBold });
+            left.Children.Add(new TextBlock { Text = L("ai.window.title", "Current Window"), FontWeight = FontWeights.SemiBold });
             left.Children.Add(new TextBlock
             {
-                Text = Math.Min(frameCount, 5).ToString(CultureInfo.InvariantCulture)
-                    + "/5 snapshots collected for the next decision",
+                Text = Lf(
+                    "ai.window.snapshots_format",
+                    "{0}/5 snapshots collected for the next decision",
+                    Math.Min(frameCount, 5)),
                 Margin = new Thickness(0, 4, 0, 0),
                 Opacity = 0.72
             });
@@ -298,7 +319,9 @@ namespace Glitch.UI
             var right = new StackPanel { HorizontalAlignment = HorizontalAlignment.Right };
             right.Children.Add(new TextBlock
             {
-                Text = aiAutoOn ? "AI Auto On" : "AI Auto Off",
+                Text = aiAutoOn
+                    ? L("ai.auto.on", "AI Auto On")
+                    : L("ai.auto.off", "AI Auto Off"),
                 Foreground = aiAutoOn ? TealAccentBrush : Brushes.Gray,
                 FontWeight = FontWeights.SemiBold,
                 HorizontalAlignment = HorizontalAlignment.Right
@@ -307,7 +330,9 @@ namespace Glitch.UI
             {
                 Text = cadence,
                 Margin = new Thickness(0, 4, 0, 0),
-                Foreground = cadence.StartsWith("Decision overdue", StringComparison.Ordinal) ? OrangeAccentBrush : null,
+                Foreground = aiAutoOn && latestDecisionUtc.HasValue && nowUtc - latestDecisionUtc.Value > TimeSpan.FromMinutes(12)
+                    ? OrangeAccentBrush
+                    : null,
                 Opacity = 0.78,
                 HorizontalAlignment = HorizontalAlignment.Right
             });
@@ -317,12 +342,12 @@ namespace Glitch.UI
             return card;
         }
 
-        private static string DescribeAiDecisionCadence(bool aiAutoOn, DateTime? latestDecisionUtc, DateTime nowUtc)
+        private string DescribeAiDecisionCadence(bool aiAutoOn, DateTime? latestDecisionUtc, DateTime nowUtc)
         {
             if (!aiAutoOn)
-                return "Scheduled calls are paused";
+                return L("ai.cadence.paused", "Scheduled calls are paused");
             if (!latestDecisionUtc.HasValue)
-                return "Waiting for the first completed decision";
+                return L("ai.status.waiting_first", "Waiting for the first completed decision");
 
             TimeSpan age = nowUtc - latestDecisionUtc.Value;
             if (age < TimeSpan.Zero)
@@ -330,18 +355,21 @@ namespace Glitch.UI
             if (age <= TimeSpan.FromMinutes(4))
             {
                 TimeSpan remaining = TimeSpan.FromMinutes(5) - age;
-                return "Next decision in about " + Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes)).ToString(CultureInfo.InvariantCulture) + "m";
+                return Lf(
+                    "ai.cadence.next_format",
+                    "Next decision in about {0}m",
+                    Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes)));
             }
             if (age <= TimeSpan.FromMinutes(12))
-                return "Decision due; waiting for the completed result";
-            return "Decision overdue - inspect the background worker";
+                return L("ai.cadence.due", "Decision due; waiting for the completed result");
+            return L("ai.cadence.overdue", "Decision overdue - inspect the background worker");
         }
 
         private void AddLatestAiDecision(AiDecisionFeedItem item)
         {
             string decision = item.DecisionJson ?? string.Empty;
             string execution = item.ExecutionJson ?? string.Empty;
-            string action = GlitchAiJsonFields.ExtractString(decision, "action") ?? "Waiting";
+            string action = GlitchAiJsonFields.ExtractString(decision, "action") ?? L("ai.value.waiting", "Waiting");
             string decisionStatus = GlitchAiJsonFields.ExtractString(decision, "status") ?? "waiting";
             string executionStatus = GlitchAiJsonFields.ExtractString(execution, "status") ?? "waiting";
             string executionCode = GlitchAiJsonFields.ExtractString(execution, "code") ?? string.Empty;
@@ -351,18 +379,18 @@ namespace Glitch.UI
             var heading = new Grid { Margin = new Thickness(0, 16, 0, 0) };
             heading.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             heading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            heading.Children.Add(new TextBlock { Text = "Latest AI Decision", FontWeight = FontWeights.SemiBold, FontSize = 15 });
+            heading.Children.Add(new TextBlock { Text = L("ai.decision.latest", "Latest AI Decision"), FontWeight = FontWeights.SemiBold, FontSize = 15 });
             var timestamp = new TextBlock { Text = FormatDecisionTimestamp(item.DecisionUtc), Opacity = 0.65 };
             Grid.SetColumn(timestamp, 1);
             heading.Children.Add(timestamp);
             _aiFeedHost.Children.Add(heading);
 
             var stops = new UniformGrid { Columns = 5, Margin = new Thickness(0, 8, 0, 12) };
-            stops.Children.Add(CreateAiStop("1", "Snapshots", snapshots.Count.ToString(CultureInfo.InvariantCulture) + "/5", snapshots.Count >= 5));
-            stops.Children.Add(CreateAiStop("2", "Packet Sealed", packetReady ? Path.GetFileNameWithoutExtension(item.PacketFile.Name) : "Missing", packetReady));
-            stops.Children.Add(CreateAiStop("3", "AI Decision", action, true));
-            stops.Children.Add(CreateAiStop("4", "Execution Check", decisionStatus, true));
-            stops.Children.Add(CreateAiStop("5", "Outcome", string.IsNullOrWhiteSpace(executionCode) ? executionStatus : executionCode, !string.IsNullOrWhiteSpace(execution)));
+            stops.Children.Add(CreateAiStop("1", L("ai.stage.snapshots", "Snapshots"), snapshots.Count.ToString(CultureInfo.InvariantCulture) + "/5", snapshots.Count >= 5));
+            stops.Children.Add(CreateAiStop("2", L("ai.stage.packet", "Packet Sealed"), packetReady ? Path.GetFileNameWithoutExtension(item.PacketFile.Name) : L("ai.value.missing", "Missing"), packetReady));
+            stops.Children.Add(CreateAiStop("3", L("ai.stage.decision", "AI Decision"), action, true));
+            stops.Children.Add(CreateAiStop("4", L("ai.stage.execution", "Execution Check"), decisionStatus, true));
+            stops.Children.Add(CreateAiStop("5", L("ai.stage.outcome", "Outcome"), string.IsNullOrWhiteSpace(executionCode) ? executionStatus : executionCode, !string.IsNullOrWhiteSpace(execution)));
             _aiFeedHost.Children.Add(stops);
 
             _aiFeedHost.Children.Add(CreateAiDecisionPanels(item));
@@ -380,26 +408,26 @@ namespace Glitch.UI
             panels.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
             Border decisionPanel = CreateAiDetailPanel(
-                "AI DECISION",
-                "Time", FormatDecisionTimestamp(item.DecisionUtc),
-                "Action", GlitchAiJsonFields.ExtractString(decision, "action") ?? "Waiting",
-                "Confidence", FormatJsonNumber(decision, "confidence"),
-                "Reason", GlitchAiJsonFields.ExtractString(decision, "reason") ?? "No reason recorded.",
-                "Bull case", GlitchAiJsonFields.ExtractString(decision, "bull_case") ?? "-",
-                "Bear case", GlitchAiJsonFields.ExtractString(decision, "bear_case") ?? "-",
-                "Changes when", GlitchAiJsonFields.ExtractString(decision, "change_condition") ?? "-");
+                L("ai.panel.decision", "AI Decision").ToUpperInvariant(),
+                L("ai.field.time", "Time"), FormatDecisionTimestamp(item.DecisionUtc),
+                L("ai.field.action", "Action"), GlitchAiJsonFields.ExtractString(decision, "action") ?? L("ai.value.waiting", "Waiting"),
+                L("ai.field.confidence", "Confidence"), FormatJsonNumber(decision, "confidence"),
+                L("ai.field.reason", "Reason"), GlitchAiJsonFields.ExtractString(decision, "reason") ?? L("ai.value.no_reason", "No reason recorded."),
+                L("ai.field.bull_case", "Bull case"), GlitchAiJsonFields.ExtractString(decision, "bull_case") ?? "-",
+                L("ai.field.bear_case", "Bear case"), GlitchAiJsonFields.ExtractString(decision, "bear_case") ?? "-",
+                L("ai.field.changes_when", "Changes when"), GlitchAiJsonFields.ExtractString(decision, "change_condition") ?? "-");
             panels.Children.Add(decisionPanel);
 
             Border executionPanel = CreateAiDetailPanel(
-                "EXECUTION CHECK",
-                "Decision", GlitchAiJsonFields.ExtractString(decision, "status") ?? "waiting",
-                "Account", GlitchAiJsonFields.ExtractString(decision, "account") ?? "-",
-                "Quantity", FormatOptionalJsonNumber(decision, "quantity"),
-                "Protection", BuildAiProtectionSummary(decision),
-                "Intent", item.IntentId ?? "-",
-                "Outcome", GlitchAiJsonFields.ExtractString(execution, "status") ?? "waiting",
-                "Code", string.IsNullOrWhiteSpace(executionCode) ? "-" : executionCode,
-                "Message", GlitchAiJsonFields.ExtractString(execution, "message") ?? "-");
+                L("ai.panel.execution", "Execution Check").ToUpperInvariant(),
+                L("ai.field.decision", "Decision"), GlitchAiJsonFields.ExtractString(decision, "status") ?? "waiting",
+                L("ai.field.account", "Account"), GlitchAiJsonFields.ExtractString(decision, "account") ?? "-",
+                L("ai.field.quantity", "Quantity"), FormatOptionalJsonNumber(decision, "quantity"),
+                L("ai.field.protection", "Protection"), BuildAiProtectionSummary(decision),
+                L("ai.field.intent", "Intent"), item.IntentId ?? "-",
+                L("ai.field.outcome", "Outcome"), GlitchAiJsonFields.ExtractString(execution, "status") ?? "waiting",
+                L("ai.field.code", "Code"), string.IsNullOrWhiteSpace(executionCode) ? "-" : executionCode,
+                L("ai.field.message", "Message"), GlitchAiJsonFields.ExtractString(execution, "message") ?? "-");
             Grid.SetColumn(executionPanel, 2);
             panels.Children.Add(executionPanel);
             return panels;
@@ -407,7 +435,7 @@ namespace Glitch.UI
 
         private Expander CreateAiDecisionExpander(AiDecisionFeedItem item)
         {
-            string action = GlitchAiJsonFields.ExtractString(item.DecisionJson, "action") ?? "Waiting";
+            string action = GlitchAiJsonFields.ExtractString(item.DecisionJson, "action") ?? L("ai.value.waiting", "Waiting");
             string account = GlitchAiJsonFields.ExtractString(item.DecisionJson, "account") ?? "-";
             string executionCode = GlitchAiJsonFields.ExtractString(item.ExecutionJson, "code")
                 ?? GlitchAiJsonFields.ExtractString(item.ExecutionJson, "status")
@@ -457,7 +485,7 @@ namespace Glitch.UI
             var stack = new StackPanel { Margin = new Thickness(12, 10, 12, 10) };
             stack.Children.Add(new TextBlock
             {
-                Text = "SUPPORTING SNAPSHOTS",
+                Text = L("ai.snapshots.supporting", "Supporting Snapshots").ToUpperInvariant(),
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 10,
                 Opacity = 0.65,
@@ -466,7 +494,7 @@ namespace Glitch.UI
 
             if (snapshots == null || snapshots.Count == 0)
             {
-                stack.Children.Add(new TextBlock { Text = "No matching decision packet was found.", Opacity = 0.7 });
+                stack.Children.Add(new TextBlock { Text = L("ai.snapshots.none", "No matching decision packet was found."), Opacity = 0.7 });
                 card.Child = stack;
                 return card;
             }
@@ -475,7 +503,17 @@ namespace Glitch.UI
             table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
             for (int column = 1; column < 7; column++)
                 table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            AddAiSnapshotRow(table, 0, true, "Minute", "MNQ", "Direction", "Tradeability", "RSI", "ATR", "Captured");
+            AddAiSnapshotRow(
+                table,
+                0,
+                true,
+                L("ai.snapshot.column.minute", "Minute"),
+                "MNQ",
+                L("ai.snapshot.column.direction", "Direction"),
+                L("ai.snapshot.column.tradeability", "Tradeability"),
+                "RSI",
+                "ATR",
+                L("ai.snapshot.column.captured", "Captured"));
             int rowIndex = 1;
             foreach (AiSnapshotPreview snapshot in snapshots.Take(5))
             {
@@ -767,12 +805,14 @@ namespace Glitch.UI
             return GlitchAiJsonFields.TryExtractNumber(json, key, out double value) ? value.ToString("0.00") : "—";
         }
 
-        private static string FormatAge(TimeSpan age)
+        private string FormatAge(TimeSpan age)
         {
             if (age.TotalSeconds < 0) age = TimeSpan.Zero;
-            if (age.TotalMinutes < 1) return Math.Max(0, (int)age.TotalSeconds) + "s";
-            if (age.TotalHours < 1) return (int)age.TotalMinutes + "m";
-            return (int)age.TotalHours + "h";
+            if (age.TotalMinutes < 1)
+                return Lf("ai.age.seconds_format", "{0}s", Math.Max(0, (int)age.TotalSeconds));
+            if (age.TotalHours < 1)
+                return Lf("ai.age.minutes_format", "{0}m", (int)age.TotalMinutes);
+            return Lf("ai.age.hours_format", "{0}h", (int)age.TotalHours);
         }
 
         private static string ResolveAiAccountType(AccountGridRow row, string accountName)

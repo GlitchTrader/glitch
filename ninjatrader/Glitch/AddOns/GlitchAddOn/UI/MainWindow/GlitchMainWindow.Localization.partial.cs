@@ -114,6 +114,8 @@ namespace Glitch.UI
 
             if (_replicateButton != null)
                 _replicateButton.Style = CreateReplicateButtonStyle(styleContext);
+            if (_aiTradingButton != null)
+                _aiTradingButton.Style = CreateAiTradingButtonStyle(styleContext);
             if (_flattenAllButton != null)
             {
                 _flattenAllButton.Style = CreateFlattenButtonStyle(styleContext);

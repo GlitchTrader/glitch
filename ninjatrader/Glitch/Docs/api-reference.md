@@ -102,7 +102,9 @@ File-backed runtime policy and cached entitlement state store.
 
 ### `GlitchLocalizationService`
 
-Loads and applies localized UI strings from the shared localization catalog and runtime settings.
+Loads the bundled six-language UTF-8 catalog, merges sparse runtime overrides,
+persists the preferred language in `UiSettings.tsv`, and falls back to English
+before using a code-provided fallback.
 
 ## Replication and compliance services
 

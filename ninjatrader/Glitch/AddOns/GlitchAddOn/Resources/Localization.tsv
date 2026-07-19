@@ -244,7 +244,7 @@ settings.risk.scope_pa	PA	PA	PA	PA	PA	PA
 settings.risk.threshold	Threshold (ratio)	Limite (razão)	Umbral (ratio)	阈值（比率）	Seuil (ratio)	Порог (доля)
 settings.risk.threshold_on	On threshold (ratio)	Limite ligar (razão)	Umbral activar (ratio)	开启阈值（比率）	Seuil activation (ratio)	Порог включения (доля)
 settings.risk.threshold_off	Off threshold (ratio)	Limite desligar (razão)	Umbral liberar (ratio)	关闭阈值（比率）	Seuil relâchement (ratio)	Порог отключения (доля)
-settings.license.title	License	Licença	Licencia	许可证	Licence	Лицензия
+settings.license.title	License & Updates	Licença e Atualizações	Licencia y Actualizaciones	许可证和更新	Licence et Mises à Jour	Лицензия и Обновления
 settings.license.key	License Key	Chave de Licença	Clave de Licencia	许可证密钥	Clé de Licence	Ключ Лицензии
 settings.license.key_placeholder	Enter license key	Digite a chave de licença	Introduce la clave de licencia	输入许可证密钥	Saisir la clé de licence	Введите ключ лицензии
 settings.license.paste_placeholder	Paste your license here	Cole sua licença aqui	Pega tu licencia aquí	请在此粘贴许可证	Collez votre licence ici	Вставьте лицензию сюда
@@ -263,3 +263,90 @@ overlay.premium_gate_message	To enable premium features purchase your license be
 overlay.button.get_license	Get License	Obter Licença	Obtener Licencia	获取许可证	Obtenir la Licence	Получить Лицензию
 overlay.button.manage_membership	Manage Membership	Gerenciar Assinatura	Gestionar Membresía	管理会员	Gérer l'Abonnement	Управление Подпиской
 analytics.button.opened_macro	Opened Nasdaq Macro	Nasdaq Macro aberto	Nasdaq Macro abierto	已打开 Nasdaq Macro	Nasdaq Macro ouvert	Nasdaq Macro открыт
+tab.glitch_ai	Glitch AI	IA da Glitch	IA de Glitch	Glitch AI	IA Glitch	Glitch ИИ
+header.button.ai_auto_off	Glitch AI	IA da Glitch	IA de Glitch	Glitch AI	IA Glitch	Glitch ИИ
+header.button.ai_auto_on	AI Auto On	IA Automática Ligada	IA Automática Activada	AI 自动已开启	IA Auto Activée	Авто-ИИ Включён
+header.button.ai_auto_starting	AI Auto Starting...	Iniciando IA Automática...	Iniciando IA Automática...	正在启动 AI 自动交易…	Démarrage de l'IA Auto…	Запуск Авто-ИИ…
+header.button.ai_auto_stopping	AI Auto Stopping...	Parando IA Automática...	Deteniendo IA Automática...	正在停止 AI 自动交易…	Arrêt de l'IA Auto…	Остановка Авто-ИИ…
+ai.scope.title	AI Trading Scope	Escopo de Negociação por IA	Ámbito de Trading con IA	AI 交易范围	Périmètre de Trading IA	Область Торговли ИИ
+ai.scope.description	Enable existing group masters. Glitch AI trades the master; Replication owns its followers and ratios.	Habilite mestres de grupos existentes. A IA da Glitch negocia no mestre; a Replicação controla seguidores e proporções.	Habilite maestros de grupos existentes. La IA de Glitch opera el maestro; la Replicación controla seguidores y proporciones.	启用现有组的主账户。Glitch AI 在主账户交易；复制功能管理跟随账户及比例。	Activez les maîtres des groupes existants. L'IA Glitch négocie sur le maître ; la Réplication gère ses suiveurs et ratios.	Включите мастеров существующих групп. ИИ Glitch торгует на мастере; Репликация управляет последователями и коэффициентами.
+ai.feed.title	Glitch AI Feed	Feed da IA Glitch	Feed de IA Glitch	Glitch AI 动态	Flux IA Glitch	Лента ИИ Glitch
+ai.feed.latest_status_format	Latest snapshot {0}  |  Latest decision {1}	Snapshot mais recente {0}  |  Decisão mais recente {1}	Snapshot más reciente {0}  |  Decisión más reciente {1}	最新快照 {0}  |  最新决策 {1}	Dernier snapshot {0}  |  Dernière décision {1}	Последний снимок {0}  |  Последнее решение {1}
+ai.value.none	none	nenhum	ninguno	无	aucun	нет
+ai.value.waiting	Waiting	Aguardando	Esperando	等待中	En attente	Ожидание
+ai.value.missing	Missing	Ausente	Falta	缺失	Manquant	Отсутствует
+ai.value.no_reason	No reason recorded.	Nenhum motivo registrado.	No se registró ningún motivo.	未记录原因。	Aucun motif enregistré.	Причина не указана.
+ai.age.ago_format	{0} ago	há {0}	hace {0}	{0}前	il y a {0}	{0} назад
+ai.age.seconds_format	{0}s	{0}s	{0}s	{0}秒	{0}s	{0}с
+ai.age.minutes_format	{0}m	{0}min	{0}min	{0}分	{0}min	{0}м
+ai.age.hours_format	{0}h	{0}h	{0}h	{0}小时	{0}h	{0}ч
+ai.history.title	Decision History	Histórico de Decisões	Historial de Decisiones	决策历史	Historique des Décisions	История Решений
+ai.history.last_format	Last {0}	Últimas {0}	Últimas {0}	最近 {0} 条	{0} dernières	Последние {0}
+ai.scope.column.trade	Trade	Negociar	Operar	交易	Trader	Торговать
+ai.scope.column.master	Master	Mestre	Maestro	主账户	Maître	Мастер
+ai.scope.column.type	Type	Tipo	Tipo	类型	Type	Тип
+ai.scope.column.route	Replication Route	Rota de Replicação	Ruta de Replicación	复制路径	Route de Réplication	Маршрут Репликации
+ai.scope.route.standalone	Standalone master	Mestre independente	Maestro independiente	独立主账户	Maître autonome	Автономный мастер
+ai.scope.route.replicated_format	Master trades; Replication -> {0}	O mestre negocia; Replicação -> {0}	El maestro opera; Replicación -> {0}	主账户交易；复制 -> {0}	Le maître négocie ; Réplication -> {0}	Мастер торгует; Репликация -> {0}
+ai.scope.empty	Create a replication group to make an account available to Glitch AI.	Crie um grupo de replicação para disponibilizar uma conta à IA da Glitch.	Cree un grupo de replicación para poner una cuenta a disposición de la IA de Glitch.	创建复制组，使账户可供 Glitch AI 使用。	Créez un groupe de réplication pour rendre un compte disponible à l'IA Glitch.	Создайте группу репликации, чтобы сделать счёт доступным ИИ Glitch.
+ai.window.title	Current Window	Janela Atual	Ventana Actual	当前窗口	Fenêtre Actuelle	Текущее Окно
+ai.window.snapshots_format	{0}/5 snapshots collected for the next decision	{0}/5 snapshots coletados para a próxima decisão	{0}/5 snapshots recopilados para la próxima decisión	已为下一次决策收集 {0}/5 个快照	{0}/5 snapshots collectés pour la prochaine décision	Собрано снимков для следующего решения: {0}/5
+ai.snapshots.collected_short_format	{0}/5 collected	{0}/5 coletados	{0}/5 recopilados	已收集 {0}/5	{0}/5 collectés	Собрано {0}/5
+ai.auto.on	AI Auto On	IA Automática Ligada	IA Automática Activada	AI 自动已开启	IA Auto Activée	Авто-ИИ Включён
+ai.auto.off	AI Auto Off	IA Automática Desligada	IA Automática Desactivada	AI 自动已关闭	IA Auto Désactivée	Авто-ИИ Выключен
+ai.cadence.paused	Scheduled calls are paused	As chamadas agendadas estão pausadas	Las llamadas programadas están pausadas	定时调用已暂停	Les appels planifiés sont en pause	Запланированные вызовы приостановлены
+ai.status.waiting_first	Waiting for the first completed decision	Aguardando a primeira decisão concluída	Esperando la primera decisión completada	等待首次完成的决策	En attente de la première décision terminée	Ожидание первого завершённого решения
+ai.status.auto_off	AI Auto is off	A IA Automática está desligada	La IA Automática está desactivada	AI 自动交易已关闭	L'IA Auto est désactivée	Авто-ИИ выключен
+ai.cadence.next_format	Next decision in about {0}m	Próxima decisão em cerca de {0}min	Próxima decisión en unos {0}min	下一次决策约在 {0} 分钟后	Prochaine décision dans environ {0} min	Следующее решение примерно через {0} мин
+ai.cadence.due	Decision due; waiting for the completed result	Decisão prevista; aguardando o resultado concluído	Decisión pendiente; esperando el resultado completado	决策已到时间；正在等待完成结果	Décision attendue ; en attente du résultat terminé	Срок решения наступил; ожидается завершённый результат
+ai.cadence.overdue	Decision overdue - inspect the background worker	Decisão atrasada — verifique o processo em segundo plano	Decisión atrasada — revise el proceso en segundo plano	决策逾期 — 请检查后台进程	Décision en retard — vérifiez le processus en arrière-plan	Решение просрочено — проверьте фоновый процесс
+ai.decision.latest	Latest AI Decision	Última Decisão da IA	Última Decisión de IA	最新 AI 决策	Dernière Décision IA	Последнее Решение ИИ
+ai.stage.snapshots	Snapshots	Snapshots	Snapshots	快照	Snapshots	Снимки
+ai.stage.packet	Packet Sealed	Pacote Selado	Paquete Sellado	数据包已封存	Paquet Scellé	Пакет Запечатан
+ai.stage.decision	AI Decision	Decisão da IA	Decisión de IA	AI 决策	Décision IA	Решение ИИ
+ai.stage.execution	Execution Check	Verificação de Execução	Verificación de Ejecución	执行检查	Contrôle d'Exécution	Проверка Исполнения
+ai.stage.outcome	Outcome	Resultado	Resultado	结果	Résultat	Результат
+ai.panel.decision	AI Decision	Decisão da IA	Decisión de IA	AI 决策	Décision IA	Решение ИИ
+ai.panel.execution	Execution Check	Verificação de Execução	Verificación de Ejecución	执行检查	Contrôle d'Exécution	Проверка Исполнения
+ai.field.status	Status	Status	Estado	状态	Statut	Статус
+ai.field.snapshots	Snapshots	Snapshots	Snapshots	快照	Snapshots	Снимки
+ai.field.time	Time	Hora	Hora	时间	Heure	Время
+ai.field.action	Action	Ação	Acción	操作	Action	Действие
+ai.field.confidence	Confidence	Confiança	Confianza	置信度	Confiance	Уверенность
+ai.field.reason	Reason	Motivo	Motivo	原因	Motif	Причина
+ai.field.bull_case	Bull case	Cenário altista	Escenario alcista	看涨情景	Scénario haussier	Бычий сценарий
+ai.field.bear_case	Bear case	Cenário baixista	Escenario bajista	看跌情景	Scénario baissier	Медвежий сценарий
+ai.field.changes_when	Changes when	Muda quando	Cambia cuando	变化条件	Change lorsque	Меняется когда
+ai.field.decision	Decision	Decisão	Decisión	决策	Décision	Решение
+ai.field.account	Account	Conta	Cuenta	账户	Compte	Счёт
+ai.field.quantity	Quantity	Quantidade	Cantidad	数量	Quantité	Количество
+ai.field.protection	Protection	Proteção	Protección	保护	Protection	Защита
+ai.field.intent	Intent	Intenção	Intención	意图	Intention	Намерение
+ai.field.outcome	Outcome	Resultado	Resultado	结果	Résultat	Результат
+ai.field.code	Code	Código	Código	代码	Code	Код
+ai.field.message	Message	Mensagem	Mensaje	消息	Message	Сообщение
+ai.snapshots.supporting	Supporting Snapshots	Snapshots de Suporte	Snapshots de Apoyo	辅助快照	Snapshots d'Appui	Подтверждающие Снимки
+ai.snapshots.none	No matching decision packet was found.	Nenhum pacote de decisão correspondente foi encontrado.	No se encontró ningún paquete de decisión coincidente.	未找到匹配的决策数据包。	Aucun paquet de décision correspondant n'a été trouvé.	Соответствующий пакет решения не найден.
+ai.snapshot.column.minute	Minute	Minuto	Minuto	分钟	Minute	Минута
+ai.snapshot.column.direction	Direction	Direção	Dirección	方向	Direction	Направление
+ai.snapshot.column.tradeability	Tradeability	Negociabilidade	Operabilidad	可交易性	Négociabilité	Торгуемость
+ai.snapshot.column.captured	Captured	Capturado	Capturado	捕获时间	Capturé	Получено
+ai.error.job_toggle_format	Glitch AI Auto could not change the background job: {0}	A IA Automática da Glitch não pôde alterar o processo em segundo plano: {0}	La IA Automática de Glitch no pudo cambiar el proceso en segundo plano: {0}	Glitch AI 自动交易无法更改后台任务：{0}	L'IA Auto Glitch n'a pas pu modifier le processus en arrière-plan : {0}	Авто-ИИ Glitch не смог изменить фоновую задачу: {0}
+charttrader.metric.followers_compact	Followers:	Seguidores:	Seguidores:	跟随账户：	Suiveurs :	Последователи:
+charttrader.metric.pnl_compact	PnL:	PnL:	PnL:	盈亏：	PnL :	PnL:
+dashboard.group.select_all_tooltip	Select all followers	Selecionar todos os seguidores	Seleccionar todos los seguidores	选择所有跟随账户	Sélectionner tous les suiveurs	Выбрать всех последователей
+overlay.surface.premium_features	Premium Features	Recursos Premium	Funciones Premium	高级功能	Fonctionnalités Premium	Премиум-Функции
+overlay.go_pro.title_format	Go Pro for {0}	Ative o Pro para {0}	Active Pro para {0}	为 {0} 升级到 Pro	Passez Pro pour {0}	Перейти на Pro для {0}
+overlay.journal.go_pro_title	Go Pro for Journal	Ative o Pro para o Journal	Active Pro para el Diario	为日志升级到 Pro	Passez Pro pour le Journal	Перейти на Pro для Журнала
+overlay.button.go_pro	Go Pro	Ativar Pro	Activar Pro	升级到 Pro	Passer Pro	Перейти на Pro
+overlay.button.member_hub	Open Member Hub	Abrir Central do Membro	Abrir Centro de Miembros	打开会员中心	Ouvrir l'Espace Membre	Открыть Кабинет Участника
+overlay.settings.shortcut_prefix	Already have a key?	Já tem uma chave?	¿Ya tiene una clave?	已有密钥？	Vous avez déjà une clé ?	Уже есть ключ?
+overlay.settings.shortcut_link	Open Settings	Abrir Configurações	Abrir Configuración	打开设置	Ouvrir les Réglages	Открыть Настройки
+settings.license.active_prefix	Active License:	Licença Ativa:	Licencia Activa:	有效许可证：	Licence Active :	Активная Лицензия:
+settings.license.plan_lite	Lite	Lite	Lite	Lite	Lite	Lite
+settings.license.plan_pro	Pro	Pro	Pro	Pro	Pro	Pro
+settings.license.upgrade_to_pro	Upgrade to Pro	Atualizar para Pro	Actualizar a Pro	升级到 Pro	Passer à Pro	Обновить до Pro
+settings.update.available_prefix	Update Available v.	Atualização Disponível v.	Actualización Disponible v.	有可用更新 v.	Mise à Jour Disponible v.	Доступно Обновление v.
+settings.update.download_latest	Download Latest	Baixar Mais Recente	Descargar la Última	下载最新版	Télécharger la Dernière	Скачать Последнюю
+settings.risk.enforce_max_contracts_flatten	Flatten and lock account when open contracts exceed the configured max-contracts limit.	Zerar e bloquear a conta quando os contratos abertos excederem o limite máximo configurado.	Cerrar y bloquear la cuenta cuando los contratos abiertos superen el límite máximo configurado.	当未平仓合约超过配置的最大合约数时，平仓并锁定账户。	Aplatir et verrouiller le compte lorsque les contrats ouverts dépassent la limite maximale configurée.	Закрыть позиции и заблокировать счёт, когда число открытых контрактов превышает заданный максимум.
+settings.risk.enforce_no_protection_flatten	Flatten and lock account when an open position has no working protective stop within the configured timeout.	Zerar e bloquear a conta quando uma posição aberta não tiver stop de proteção ativo dentro do prazo configurado.	Cerrar y bloquear la cuenta cuando una posición abierta no tenga un stop de protección activo dentro del plazo configurado.	当持仓在配置的超时时间内没有有效保护止损时，平仓并锁定账户。	Aplatir et verrouiller le compte lorsqu'une position ouverte ne dispose pas d'un stop de protection actif dans le délai configuré.	Закрыть позиции и заблокировать счёт, если у открытой позиции нет активного защитного стопа в заданный срок.

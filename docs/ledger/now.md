@@ -47,6 +47,10 @@ Glitch Flatten All remain authoritative.
   NinjaTrader-skin-aware hierarchy: distinct section header, attached body, and
   inset content. AI Trading Scope starts collapsed; decision history and Settings
   rules use the lighter compact disclosure row rather than a full section header.
+- Authored Glitch AI copy—scope, feed state, stages, fields, errors, and snapshot
+  table—is catalog-driven in all six supported locales. Changing language forces
+  the dynamic feed to re-render. Model-authored reason/bull/bear/change text,
+  account names, intent codes, and indicator symbols remain verbatim by design.
 - Account/group capacity is dynamic. Hermes receives valid master quantities
   constrained by every enabled account's current rule ceiling, open exposure,
   and follower ratio. One-to-three native OCO legs support protected scale-out;
@@ -73,9 +77,12 @@ Glitch Flatten All remain authoritative.
 - Five web lint runs: pass.
 - Python compilation, tracked PowerShell parsing, tracked JSON parsing, secret
   scan, and `git diff --check`: pass.
+- Localization audit: **329 catalog keys**, **270 referenced code keys**, zero
+  missing keys, zero malformed/empty six-locale rows; UTF-8 CJK/Cyrillic sentinels
+  pass. This includes 18 older fallback-only labels closed during the AI UI pass.
 - Complete 87-file AI AddOn folder deployed from this candidate with **87/87
   files matching, 0 hash mismatches, and 0 extra target files**.
-- NinjaTrader F5 compile: green; the custom assembly rebuilt at 15:47 local with
+- NinjaTrader F5 compile: green; the custom assembly rebuilt at 16:18 local with
   no populated compile-error row.
 - Bounded prior Sim evidence on this clean architecture includes protected
   1:2:3 replication, three independent legs, partial fills, same-direction

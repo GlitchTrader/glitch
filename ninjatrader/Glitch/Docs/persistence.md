@@ -52,7 +52,11 @@ Stores cached market-context records used by the broader analytics layer.
 
 ### `Localization.tsv`
 
-Stores the shared localization catalog used by the UI localization service.
+The full UTF-8 catalog is bundled at
+`AddOns/GlitchAddOn/Resources/Localization.tsv`. The `GlitchData` file is a sparse
+runtime override only. It may replace selected keys without shadowing new bundled
+translations; legacy full runtime snapshots are archived and replaced with a
+sparse template.
 
 ### `UiSettings.tsv`
 

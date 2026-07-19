@@ -35,13 +35,25 @@ ninjatrader/Glitch/Docs/*funnel*
 
 ## Current code-grounded state
 
-- The live product is the NinjaTrader AddOn plus `GlitchAnalyticsBridge` indicator.
+- The public product is the NinjaTrader AddOn plus `GlitchAnalyticsBridge`
+  indicator. Internal Glitch AI/Hermes behavior is documented only in the private
+  set until a release owner promotes it.
 - Analytics move from chart indicator to AddOn feed bus, then into UI snapshots.
-- The AddOn persists runtime state under `GlitchData/`; analytics cache now includes `AnalyticsBridgeCache.json`.
-- Copy/replication is being simplified around an event-driven `GlitchCopyEngine` rather than a polling sync loop.
-- Hermes/AI order authority is not live. The accepted invariant remains: Hermes proposes; Glitch validates, executes, journals, and protects.
-- Hermes runtime starts as native cron jobs: script-only snapshot sanity, 5-minute `suggest_trade`, hourly portfolio/risk review, 6-hour learning pass, and daily trader journal. No always-on daemon until cron fails a measured need.
-- The AI data contract is snapshot-first: live snapshots and historical replay/export must use the same schema so pattern mining can transfer into operator archetypes.
+- The AddOn persists runtime state under `GlitchData/`; the full localization
+  catalog is bundled and the runtime `Localization.tsv` is sparse overrides only.
+- Producer-neutral copy/replication is event-driven through `GlitchCopyEngine`.
+  It owns followers, ratios, follower-native OCO protection, and explicit resync
+  for both manual and AI-produced master activity.
+- The clean AI candidate is an internal Sim/paper validation rail. Hermes decides
+  for configured masters; Glitch validates, executes, protects, replicates, and
+  journals. Codex is not in the runtime loop.
+- The customer product direction is one centralized supervised Glitch AI brain
+  with a read-only client Feed, not per-client Hermes or Chat. The local profile
+  exists to prove the packet/intent/outcome contract before transport changes.
+- The AI data contract is snapshot-first: live snapshots, central ingestion, and
+  historical replay/export use the same versioned feature vocabulary.
+- Current source/compile/deploy evidence and unresolved runtime gates live in the
+  checked-out candidate's `docs/ledger/now.md`, never in this routing page.
 
 ## Ponytail rule for docs
 

@@ -628,12 +628,15 @@ namespace Glitch.UI
 
         private Style CreateAiTradingButtonStyle(FrameworkElement context)
         {
-            Style style = CreateStateToggleButtonStyle(context, "Glitch AI", "AI Auto On");
+            Style style = CreateStateToggleButtonStyle(
+                context,
+                L("header.button.ai_auto_off", "Glitch AI"),
+                L("header.button.ai_auto_on", "AI Auto On"));
             var startingTrigger = new Trigger { Property = FrameworkElement.TagProperty, Value = "Starting" };
-            startingTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, "AI Auto Starting..."));
+            startingTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, L("header.button.ai_auto_starting", "AI Auto Starting...")));
             style.Triggers.Add(startingTrigger);
             var stoppingTrigger = new Trigger { Property = FrameworkElement.TagProperty, Value = "Stopping" };
-            stoppingTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, "AI Auto Stopping..."));
+            stoppingTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, L("header.button.ai_auto_stopping", "AI Auto Stopping...")));
             style.Triggers.Add(stoppingTrigger);
             return style;
         }
@@ -901,7 +904,10 @@ namespace Glitch.UI
                 UpdateHermesModeUi(true);
                 RaiseCriticalWarning(
                     "System",
-                    "Glitch AI Auto could not change the background job: " + result.Message,
+                    Lf(
+                        "ai.error.job_toggle_format",
+                        "Glitch AI Auto could not change the background job: {0}",
+                        result.Message),
                     "AiAutoControl",
                     unlocksTrading: false);
             }

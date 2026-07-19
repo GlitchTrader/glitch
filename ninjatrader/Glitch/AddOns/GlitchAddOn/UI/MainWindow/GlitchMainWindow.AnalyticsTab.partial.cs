@@ -4349,12 +4349,13 @@ namespace Glitch.UI
                         TextWrapping = TextWrapping.Wrap,
                         FontSize = sharedFontSize
                     };
-                    line.Inlines.Add(new Run(L("settings.license.active_prefix", "Active License: "))
+                    line.Inlines.Add(new Run(L("settings.license.active_prefix", "Active License:"))
                     {
                         Foreground = baseTextBrush,
                         FontWeight = FontWeights.SemiBold,
                         FontSize = sharedFontSize
                     });
+                    line.Inlines.Add(new Run(" "));
                     line.Inlines.Add(new Run(L("settings.license.plan_lite", "Lite"))
                     {
                         Foreground = TealAccentBrush,
@@ -4388,10 +4389,11 @@ namespace Glitch.UI
                         Margin = new Thickness(0, 10, 0, 0),
                         TextWrapping = TextWrapping.Wrap
                     };
-                    line.Inlines.Add(new Run(L("overlay.settings.shortcut_prefix", "Already have a key? "))
+                    line.Inlines.Add(new Run(L("overlay.settings.shortcut_prefix", "Already have a key?"))
                     {
                         Foreground = baseTextBrush
                     });
+                    line.Inlines.Add(new Run(" "));
 
                     var settingsLink = new Hyperlink(new Run(L("overlay.settings.shortcut_link", "Open Settings")))
                     {

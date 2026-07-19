@@ -38,7 +38,7 @@ The AddOn also places a compact Glitch control block inside chart windows when C
 That surface is designed for fast operator actions:
 
 - toggle replication
-- flatten followers when needed
+- flatten every configured account in the active Glitch fleet when needed
 - view follower count and group PnL at a glance
 
 The chart-side control is intentionally lightweight. It is a convenience surface, not a replacement for the main operating window.
@@ -86,7 +86,12 @@ The public docs describe the workflow surface and data model, not the private ru
 
 ### Licensing and localization
 
-The AddOn validates entitlements, keeps a local runtime policy, and loads localized UI strings from the shared localization source.
+The AddOn validates entitlements, keeps a local runtime policy, and loads authored
+UI copy from the bundled UTF-8 `Resources/Localization.tsv` catalog. Current
+catalog languages are English, Brazilian Portuguese, Spanish, Simplified Chinese,
+French, and Russian. `GlitchData/Localization.tsv` is a sparse operator override,
+not a second full catalog; missing override values fall back to the bundled row
+and then English.
 
 Public docs intentionally avoid publishing sensitive validation internals or security-specific implementation details.
 
@@ -111,6 +116,7 @@ Key UI partials include:
 - `GlitchMainWindow.FirmRules.partial.cs`
 - `GlitchMainWindow.JournalTab.partial.cs`
 - `GlitchMainWindow.AnalyticsTab.partial.cs`
+- `GlitchMainWindow.AccordionLayout.partial.cs`
 - `GlitchMainWindow.Localization.partial.cs`
 - `GlitchMainWindow.Models.partial.cs`
 
@@ -126,7 +132,11 @@ Glitch separates operator signals by severity:
 
 Dashboard equity coloring uses neutral text unless net-liq or intratrade drawdown warnings are active. Small negative unrealized PnL stays neutral until it reaches the intratrade drawdown warning threshold.
 
-Replication protectives are placed relative to each follower's average entry when possible, using the same tick distance as the master template. Invalid protective prices are skipped with a structured replication journal entry instead of submitting a broker order that would be rejected.
+Replication protectives are account-local native OCO orders. Glitch derives each
+follower's stop/target geometry from the corresponding master leg and follower
+fill, preserves route ratios, and records protection only after submission
+succeeds. Invalid or rejected protection enters the bounded native recovery path;
+it is never treated as a protected position.
 
 ## Summary
 

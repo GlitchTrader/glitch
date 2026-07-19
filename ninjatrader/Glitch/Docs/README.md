@@ -21,8 +21,10 @@ Technical product documentation for the live Glitch NinjaTrader AddOn and the Gl
 
 ## Scope
 
-- In scope: the active AddOn in `AddOns/GlitchAddOn` and the active indicator in `Indicators/glitch/GlitchAnalyticsBridge.cs`
-- Out of scope: strategies, commercial planning docs, sales funnels, and internal operational notes
+- In scope: the distributable AddOn in `AddOns/GlitchAddOn` and the active
+  indicator in `Indicators/glitch/GlitchAnalyticsBridge.cs`
+- Out of scope: internal Glitch AI/Hermes validation rails, strategies,
+  commercial planning docs, sales funnels, and maintainer-only operational notes
 
 ## Publication rules
 

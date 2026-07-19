@@ -26,8 +26,9 @@ function walk(dir) {
     else if (ent.name.endsWith(".cs")) {
       const s = fs.readFileSync(p, "utf8");
       for (const m of s.matchAll(/\bL\(\s*"([^"]+)"/g)) codeKeys.add(m[1]);
-    for (const m of s.matchAll(/Translate\(\s*"([^"]+)"/g)) codeKeys.add(m[1]);
-    for (const m of s.matchAll(/TranslateFormat\(\s*\n?\s*"([^"]+)"/g)) codeKeys.add(m[1]);
+      for (const m of s.matchAll(/\bLf\(\s*"([^"]+)"/g)) codeKeys.add(m[1]);
+      for (const m of s.matchAll(/Translate\(\s*"([^"]+)"/g)) codeKeys.add(m[1]);
+      for (const m of s.matchAll(/TranslateFormat\(\s*\n?\s*"([^"]+)"/g)) codeKeys.add(m[1]);
       for (const m of s.matchAll(/BindLocalized\w*\([^,]+,\s*"([^"]+)"/g))
         codeKeys.add(m[1]);
       for (const m of s.matchAll(/GetLocalized\w*\(\s*"([^"]+)"/g))

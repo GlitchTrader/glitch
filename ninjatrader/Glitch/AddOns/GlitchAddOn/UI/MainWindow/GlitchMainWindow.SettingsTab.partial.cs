@@ -1039,12 +1039,13 @@ namespace Glitch.UI
                 _settingsUpdateBadgeText.Inlines.Clear();
                 _settingsUpdateBadgeText.Visibility = Visibility.Collapsed;
             }
-            _settingsPlanBadgeText.Inlines.Add(new Run(L("settings.license.active_prefix", "Active License: "))
+            _settingsPlanBadgeText.Inlines.Add(new Run(L("settings.license.active_prefix", "Active License:"))
             {
                 Foreground = baseTextBrush,
                 FontWeight = UiHeadingFontWeight,
                 FontSize = sharedFontSize
             });
+            _settingsPlanBadgeText.Inlines.Add(new Run(" "));
 
             if (hasProAccess)
             {
@@ -1088,12 +1089,13 @@ namespace Glitch.UI
 
             _settingsUpdateBadgeText.Inlines.Clear();
             _settingsUpdateBadgeText.Visibility = Visibility.Visible;
-            _settingsUpdateBadgeText.Inlines.Add(new Run(L("settings.update.available_prefix", "Update Available v. "))
+            _settingsUpdateBadgeText.Inlines.Add(new Run(L("settings.update.available_prefix", "Update Available v."))
             {
                 Foreground = baseTextBrush,
                 FontWeight = UiHeadingFontWeight,
                 FontSize = sharedFontSize
             });
+            _settingsUpdateBadgeText.Inlines.Add(new Run(" "));
             _settingsUpdateBadgeText.Inlines.Add(new Run(_latestClientVersion.Trim())
             {
                 Foreground = baseTextBrush,

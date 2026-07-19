@@ -2,6 +2,30 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-19 - six-locale AI UI and documentation reconciliation
+
+- Localized every authored Glitch AI control, status, stage, field, error, scope,
+  feed, history, and supporting-snapshot label across `en-US`, `pt-BR`, `es-ES`,
+  `zh-CN`, `fr-FR`, and `ru-RU`. Model-authored reason/bull/bear/change text,
+  account names, market symbols, and machine codes remain verbatim by design.
+- Closed 18 older fallback-only labels outside the AI tab, including ChartTrader,
+  premium overlay, Settings, and risk-rule copy. Language changes now force the
+  dynamic AI feed to re-render, and the localization audit also discovers `Lf(...)`
+  format keys.
+- Reconciled public NinjaTrader docs, private AI-program/ledger docs, Hermes
+  operator docs, branch routing, and ABKB against current source truth. Retired
+  one-contract, fixed-dollar, trade-count, cooldown, and archetype gates are no
+  longer described as active behavior; the central-brain direction remains a
+  future product target while the local Sim/paper harness is the current rail.
+- Verification: 33/33 shared contracts and 81/81 AI/Hermes contracts (114 total);
+  localization audit reports 329 catalog keys, 270 code-referenced keys, zero
+  missing keys, and zero malformed or incomplete six-locale rows. UTF-8
+  CJK/Cyrillic sentinels and `git diff --check` pass.
+- Deployed the complete 87-file AddOn folder once from `cleanup/ai-core`. Source
+  and live target match 87/87 with zero missing, mismatched, or extra files.
+  NinjaTrader F5 rebuilt `NinjaTrader.Custom.dll` at 16:18 local with no populated
+  compile-error surface. No trading, scheduler, account, or policy state changed.
+
 ## 2026-07-18 - weekend clean AI candidate freeze
 
 - Finalized `cleanup/ai-core` as a bounded Sim/paper candidate. The full 87-file
