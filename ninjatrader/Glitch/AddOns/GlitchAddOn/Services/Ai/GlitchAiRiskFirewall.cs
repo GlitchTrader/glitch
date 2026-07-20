@@ -229,7 +229,8 @@ namespace Glitch.Services
         {
             failure = null;
             if (!IsEnterAction(action)
-                && !string.Equals(action, "MOVE_STOP", StringComparison.Ordinal))
+                && !string.Equals(action, "MOVE_STOP", StringComparison.Ordinal)
+                && !string.Equals(action, "MOVE_TP", StringComparison.Ordinal))
                 return true;
 
             GlitchInstrumentMetadata metadata;
@@ -244,6 +245,23 @@ namespace Glitch.Services
             {
                 double movedStop;
                 if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss", out movedStop) || !IsTickRounded(movedStop, tick))
+                {
+                    failure = "stop_loss";
+                    return false;
+                }
+                return true;
+            }
+
+            if (string.Equals(action, "MOVE_TP", StringComparison.Ordinal))
+            {
+                if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_1", out double movedTarget)
+                    || !IsTickRounded(movedTarget, tick))
+                {
+                    failure = "take_profit_1";
+                    return false;
+                }
+                if (GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss", out double movedStop)
+                    && !IsTickRounded(movedStop, tick))
                 {
                     failure = "stop_loss";
                     return false;

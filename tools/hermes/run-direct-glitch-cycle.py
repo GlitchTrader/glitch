@@ -25,16 +25,18 @@ from pathlib import Path
 from typing import Any
 
 
-ACTIONS = {"ENTER_LONG", "ENTER_SHORT", "HOLD", "MOVE_STOP", "EXIT", "NOTHING"}
+ACTIONS = {"ENTER_LONG", "ENTER_SHORT", "HOLD", "MOVE_STOP", "MOVE_TP", "EXIT", "NOTHING"}
 ACTION_ALIASES = {"NO_ACTION": "NOTHING"}
 CORE_MODEL = "gpt-5.6-luna"
 CORE_PROVIDER = "openai-codex"
+TRADING_SOURCE = "trading"
 REQUIRED_ENTRY_FIELDS = {"quantity", "order_type", "stop_loss", "take_profit_1"}
 ENTRY_FIELDS = REQUIRED_ENTRY_FIELDS | {
     "take_profit_2", "stop_loss_2", "quantity_tp1",
     "take_profit_3", "stop_loss_3", "quantity_tp2",
 }
-MANAGEMENT_FIELDS = {"stop_loss"}
+MOVE_STOP_FIELDS = {"stop_loss"}
+MOVE_TP_FIELDS = {"take_profit_1", "stop_loss"}
 DECISION_FIELDS = {
     "schema_version", "intent_id", "created_utc", "instrument", "account",
     "operator_profile", "action", "confidence", "snapshot_hash", "model_version",
@@ -308,13 +310,19 @@ def _is_learning_eligible_outcome(line: str) -> bool:
     return isinstance(value, dict) and value.get("learning_eligible", True) is not False
 
 
-def journal_tail(glitch_data: Path, max_lines: int = 12) -> dict[str, list[str]]:
+def journal_tail(glitch_data: Path, max_lines: int = 6) -> dict[str, list[str]]:
     today = datetime.now(timezone.utc).date().isoformat()
     result: dict[str, list[str]] = {"received": [], "decisions": []}
     executions = glitch_data / "intents" / "executions.jsonl"
     execution_lines = executions.read_text(encoding="utf-8", errors="replace").splitlines() if executions.is_file() else []
     result["executions"] = [
         line for line in execution_lines if _is_current_utc_record(line, today)
+    ][-max_lines:]
+
+    decisions = glitch_data / "intents" / "decisions.jsonl"
+    decision_lines = decisions.read_text(encoding="utf-8", errors="replace").splitlines() if decisions.is_file() else []
+    result["decisions"] = [
+        line for line in decision_lines if _is_current_utc_record(line, today)
     ][-max_lines:]
 
     outcomes = glitch_data / "intents" / "hermes-trade-outcomes.jsonl"
@@ -545,8 +553,18 @@ def validate_batch(
         elif action == "MOVE_STOP":
             if not isinstance(intent.get("stop_loss"), (int, float)) or isinstance(intent.get("stop_loss"), bool):
                 raise ValueError(f"move_stop_price_required:{index}")
-            if any(field in intent for field in ENTRY_FIELDS.difference(MANAGEMENT_FIELDS)):
+            if any(field in intent for field in ENTRY_FIELDS.difference(MOVE_STOP_FIELDS)):
                 raise ValueError(f"move_stop_contains_entry_fields:{index}")
+        elif action == "MOVE_TP":
+            if (not isinstance(intent.get("take_profit_1"), (int, float))
+                    or isinstance(intent.get("take_profit_1"), bool)):
+                raise ValueError(f"move_tp_price_required:{index}")
+            if ("stop_loss" in intent
+                    and (not isinstance(intent.get("stop_loss"), (int, float))
+                         or isinstance(intent.get("stop_loss"), bool))):
+                raise ValueError(f"move_tp_stop_price_invalid:{index}")
+            if any(field in intent for field in ENTRY_FIELDS.difference(MOVE_TP_FIELDS)):
+                raise ValueError(f"move_tp_contains_entry_fields:{index}")
         elif any(field in intent for field in ENTRY_FIELDS):
             raise ValueError(f"non_entry_contains_entry_fields:{index}")
     if directive and directive.get("directive_type") == "forced_entry":
@@ -580,7 +598,10 @@ def normalize_batch(batch: dict[str, Any], scenario: dict[str, Any] | None = Non
                 action = ACTION_ALIASES[action]
                 intent["action"] = action
             if action == "MOVE_STOP":
-                for field in ENTRY_FIELDS.difference(MANAGEMENT_FIELDS):
+                for field in ENTRY_FIELDS.difference(MOVE_STOP_FIELDS):
+                    intent.pop(field, None)
+            elif action == "MOVE_TP":
+                for field in ENTRY_FIELDS.difference(MOVE_TP_FIELDS):
                     intent.pop(field, None)
             elif action not in {"ENTER_LONG", "ENTER_SHORT"}:
                 for field in ENTRY_FIELDS:
@@ -630,7 +651,8 @@ def packet_for_model(packet: dict[str, Any], scenario: dict[str, Any]) -> dict[s
             follower["account"] for follower in book["followers"] if follower["enabled"]
         )
     scoped_account_set = set(scoped_accounts)
-    for frame in model_packet.get("frames", []):
+    frames = model_packet.get("frames", [])
+    for frame_index, frame in enumerate(frames):
         market = frame.get("market_snapshot") if isinstance(frame, dict) else None
         if isinstance(market, dict):
             market["instruments"] = [
@@ -645,6 +667,14 @@ def packet_for_model(packet: dict[str, Any], scenario: dict[str, Any]) -> dict[s
             market["instrument_count"] = len(market["instruments"])
         portfolio = frame.get("portfolio_snapshot") if isinstance(frame, dict) else None
         if not isinstance(portfolio, dict):
+            continue
+        # Account state is authoritative only in the current frame. Repeating
+        # the same account/risk payload five times bloats the persistent Hermes
+        # session and contributed directly to compaction failures. The five
+        # MNQ market frames still preserve price path; the latest portfolio
+        # preserves current positions, orders, risk, and capacity.
+        if frame_index < len(frames) - 1:
+            frame.pop("portfolio_snapshot", None)
             continue
         portfolio["accounts"] = [
             account for account in portfolio.get("accounts", [])
@@ -672,79 +702,8 @@ def packet_for_model(packet: dict[str, Any], scenario: dict[str, Any]) -> dict[s
     return model_packet
 
 
-def close_unbalanced_json_containers(candidate: str) -> str:
-    """Insert only missing object/array closers; never alter JSON values."""
-    pairs = {"{": "}", "[": "]"}
-    stack: list[str] = []
-    output: list[str] = []
-    in_string = False
-    escaped = False
-    for char in candidate:
-        if in_string:
-            output.append(char)
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == '"':
-                in_string = False
-            continue
-        if char == '"':
-            in_string = True
-            output.append(char)
-        elif char in pairs:
-            stack.append(char)
-            output.append(char)
-        elif char in "}]":
-            while stack and pairs[stack[-1]] != char:
-                output.append(pairs[stack.pop()])
-            if stack:
-                stack.pop()
-            output.append(char)
-        else:
-            output.append(char)
-    while stack:
-        output.append(pairs[stack.pop()])
-    return "".join(output)
-
-
 def extract_json(stdout: str) -> dict[str, Any]:
-    candidate = stdout.strip()
-    if candidate.startswith("```"):
-        lines = candidate.splitlines()
-        if len(lines) >= 3 and lines[-1].strip() == "```":
-            candidate = "\n".join(lines[1:-1]).strip()
-            if candidate.startswith("json\n"):
-                candidate = candidate[5:]
-    try:
-        value = json.loads(candidate)
-    except json.JSONDecodeError as original_error:
-        # Hermes quiet chat can add renderer chatter or echo the final response.
-        # Recover only when stdout contains one unambiguous batch value. Schema
-        # validation still runs after extraction; distinct decisions fail closed.
-        decoder = json.JSONDecoder()
-        batch_values: list[dict[str, Any]] = []
-        for offset, char in enumerate(candidate):
-            if char != "{":
-                continue
-            try:
-                decoded, _ = decoder.raw_decode(candidate, offset)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(decoded, dict) and (
-                decoded.get("schema_version") == "glitch.intent.batch.v1"
-                or "decisions" in decoded
-                or "intents" in decoded
-            ):
-                if not any(decoded == existing for existing in batch_values):
-                    batch_values.append(decoded)
-        if len(batch_values) == 1:
-            value = batch_values[0]
-        else:
-            try:
-                value = json.loads(close_unbalanced_json_containers(candidate))
-            except json.JSONDecodeError:
-                raise original_error
+    value = json.loads(stdout.strip())
     if not isinstance(value, dict):
         raise ValueError("hermes_output_not_object")
     return value
@@ -762,11 +721,12 @@ def invoke_hermes(profile: str, prompt: str, timeout_seconds: int) -> dict[str, 
     python_executable = Path(executable).with_name("python.exe")
     if not python_executable.is_file():
         raise RuntimeError("hermes_python_runtime_not_found")
-    # Each packet is complete decision context. Keep scheduled cycles stateless
-    # so a failed or oversized turn cannot poison later cycles. Native memory is
-    # still available through the explicitly enabled memory toolset.
+    # Each decision gets a fresh session tagged as trading. Continuity is
+    # explicit in the bounded ledger/current packet and native durable memory,
+    # so one oversized or failed turn cannot poison the next decision.
     cli_args = [
         "chat", "-Q",
+        "--source", TRADING_SOURCE,
         "--model", CORE_MODEL,
         "--provider", CORE_PROVIDER,
         "--max-turns", "4",
@@ -796,9 +756,8 @@ def invoke_hermes(profile: str, prompt: str, timeout_seconds: int) -> dict[str, 
     )
     if completed.returncode != 0:
         raise RuntimeError(f"hermes_failed:{completed.returncode}:{completed.stderr.strip()}")
-    # Never recover from the globally-latest assistant message. Chat and
-    # review sessions can run concurrently; cross-session recovery can submit
-    # another session's decision. Fresh-chat stdout is the sole response.
+    # Fresh-session stdout is the sole response; never recover from a globally
+    # latest assistant message shared with other chats.
     return extract_json(completed.stdout)
 
 
@@ -854,11 +813,49 @@ def build_prompt(
     journals: dict[str, list[str]],
     directive: dict[str, Any] | None = None,
 ) -> str:
+    decisions = []
+    for book in scenario["books"]:
+        exposure = book.get("exposure")
+        master = exposure[0] if isinstance(exposure, list) and exposure else {}
+        action = "HOLD" if int(master.get("current_mnq_quantity", 0) or 0) != 0 else "NOTHING"
+        route = str(book["route_id"])
+        decisions.append({
+            "schema_version": "glitch.intent.v2",
+            "intent_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"glitch:{scenario['cycle_id']}:{route}")),
+            "created_utc": utc_now(),
+            "instrument": "MNQ",
+            "account": str(book["master_account"]),
+            "operator_profile": route,
+            "action": action,
+            "confidence": 0.5,
+            "snapshot_hash": str(scenario["market"]["snapshot_hash"]),
+            "model_version": CORE_MODEL,
+            "prompt_version": "direct-v2",
+            "reason": "Replace with the current evidence-based decision.",
+            "decision_audit": {
+                "bull_case": "Replace with compact bullish evidence.",
+                "bear_case": "Replace with compact bearish evidence.",
+                "flat_case": "Replace with compact neutral evidence.",
+                "aggressive_case": "Replace with the aggressive alternative.",
+                "conservative_case": "Replace with the conservative alternative.",
+                "decisive_evidence": "Replace with the most likely near-term path.",
+                "disconfirming_evidence": "Replace with evidence against that path.",
+                "change_condition": "Replace with the concrete reassessment trigger.",
+                "final_choice": action,
+            },
+        })
+    output_template = {
+        "schema_version": "glitch.intent.batch.v1",
+        "cycle_id": scenario["cycle_id"],
+        "next_review_seconds": 60 if scoped_master_is_positioned(packet, scenario) else 300,
+        "decisions": decisions,
+    }
     envelope = {
         "decision_packet": packet_for_model(packet, scenario),
         "execution_scope": scenario,
         "recent_glitch_ledger": journals,
         "operator_advisory": directive,
+        "required_output_template": output_template,
     }
     return (
         "Apply the Glitch SOUL and the five loaded trading skills to CURRENT_CYCLE. Glitch and NinjaTrader facts in the supplied "
@@ -886,19 +883,23 @@ def build_prompt(
         "Every decision must include exactly these core keys: "
         "schema_version, intent_id, created_utc, instrument, account, operator_profile, action, confidence, "
         "snapshot_hash, model_version, prompt_version, reason, decision_audit. Use only actions "
-        "ENTER_LONG, ENTER_SHORT, HOLD, MOVE_STOP, EXIT, or NOTHING; NO_ACTION is accepted as NOTHING. "
+        "ENTER_LONG, ENTER_SHORT, HOLD, MOVE_STOP, MOVE_TP, EXIT, or NOTHING; NO_ACTION is accepted as NOTHING. "
         "decision_audit must be an object with bull_case, bear_case, flat_case, aggressive_case, "
         "conservative_case, decisive_evidence, disconfirming_evidence, change_condition, and final_choice; "
-        "final_choice must equal action. For NOTHING, HOLD, and EXIT omit quantity, order_type, stop_loss, "
+        "final_choice must appear exactly once, inside decision_audit only, and must equal action. final_choice is forbidden as a direct "
+        "field of a decision. Start from required_output_template: preserve its object/array shape and exact scoped identity values, then "
+        "replace its placeholder rationale and choose the evidence-based action and matching nested final_choice. For NOTHING, HOLD, and EXIT omit quantity, order_type, stop_loss, "
         "and take_profit_1. Keep reason to at most 24 words and each decision_audit value to at most 18 words. "
         "For ENTER_LONG/ENTER_SHORT use order_type=MARKET and include stop_loss/take_profit_1. Optional scale-out fields are "
         "take_profit_2, quantity_tp1, stop_loss_2, take_profit_3, quantity_tp2, and stop_loss_3. For MOVE_STOP include only "
-        "stop_loss and tighten the active Glitch-owned native stops; never loosen risk. Echo cycle_id and account/operator_profile exactly. "
+        "stop_loss and tighten the active Glitch-owned native stops; never loosen risk. For MOVE_TP include take_profit_1 and optionally "
+        "stop_loss: move every remaining Glitch-owned target to that absolute price and, when supplied, tighten every remaining stop. "
+        "A MOVE_TP target may extend or reduce remaining opportunity but must stay on the live profit side. Echo cycle_id and account/operator_profile exactly. "
         "snapshot_hash must be a JSON string copied exactly from the MNQ market snapshot, even when it contains only digits. "
         "Use the top-level key decisions, never intents. Close every intent object before closing the decisions "
         "array. Before returning, silently verify that the entire response is one syntactically valid JSON object "
         "that a strict JSON parser can load. Return no markdown fences, commentary, or trailing text. "
-        "For an open position, HOLD, MOVE_STOP, a same-direction entry, and EXIT are active management decisions. Compare excursion and "
+        "For an open position, HOLD, MOVE_STOP, MOVE_TP, a same-direction entry, and EXIT are active management decisions. Compare excursion and "
         "rollback in initial-risk units, structure, volatility, and remaining opportunity rather than fixed dollar landmarks. Native "
         "brackets are catastrophe protection, not a substitute for active thesis review. You may persist only durable lessons supported "
         "by repeated completed outcomes; never "
@@ -1011,7 +1012,28 @@ def should_invoke_luna(
         window.minute % 5 == 0
         or directive is not None
         or positioned
+        or prior_failed_attempt_requires_retry(exchange, packet)
     )
+
+
+def prior_failed_attempt_requires_retry(exchange: Path, packet: dict[str, Any]) -> bool:
+    """Retry the latest failed decision on the next available pre-boundary packet."""
+    attempts = exchange / "hermes" / "model-attempts"
+    if not attempts.is_dir():
+        return False
+    current_window = packet_window_utc(packet)
+    current_id = str(packet.get("packet_id", ""))
+    for path in sorted(attempts.glob("*.json"), reverse=True):
+        if path.stem >= current_id:
+            continue
+        try:
+            prior_window = datetime.strptime(path.stem, "%Y%m%dT%H%MZ").replace(tzinfo=timezone.utc)
+            attempt = read_json(path)
+        except (OSError, ValueError, TypeError):
+            continue
+        age = (current_window - prior_window).total_seconds()
+        return attempt.get("status") == "failed" and 0 < age < 300
+    return False
 
 
 def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int:
@@ -1071,6 +1093,8 @@ def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int
         "status": "started",
         "model": CORE_MODEL,
         "provider": CORE_PROVIDER,
+        "hermes_session_source": TRADING_SOURCE,
+        "hermes_session_mode": "isolated",
     })
     try:
         batch = invoke_hermes(args.profile, prompt, args.timeout_seconds)
@@ -1085,6 +1109,8 @@ def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int
             "status": "decision_ready",
             "model": CORE_MODEL,
             "provider": CORE_PROVIDER,
+            "hermes_session_source": TRADING_SOURCE,
+            "hermes_session_mode": "isolated",
         })
     except Exception as error:
         attempt = read_json(attempt_path)
@@ -1099,6 +1125,8 @@ def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int
             "cycle_id": packet_id,
             "model": CORE_MODEL,
             "provider": CORE_PROVIDER,
+            "hermes_session_source": TRADING_SOURCE,
+            "hermes_session_mode": "isolated",
             "error": attempt["error"],
         })
         raise

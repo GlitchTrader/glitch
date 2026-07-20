@@ -35,7 +35,7 @@ The recommendation is advice, not an order. It carries stable identity, instrume
 
 The current local `glitch` Hermes profile and direct filesystem exchange are an **internal validation harness only**. They prove packet, decision, execution, replication, outcome, cycle-continuity, and learning contracts before the network boundary is introduced. They are not the customer deployment topology.
 
-Stabilization precedes expansion. The gate is: supervised gateway continuity; stateless decision cycles with durable native memory; truthful portfolio snapshots; every completed group trade reconciled into learning outcomes; reproducible paper execution/replication/brackets; and an observable cycle trail. Only after that gate may central ingestion, recommendation APIs, Feed UI, dynamic quantity, multi-group, or multi-instrument work begin.
+Stabilization precedes expansion. The gate is: supervised gateway continuity; isolated `trading`-tagged decision sessions with bounded explicit history, next-packet failure recovery, and durable native memory; truthful portfolio snapshots; every completed group trade reconciled into learning outcomes; reproducible paper execution/replication/brackets; and an observable cycle trail. Only after that gate may central ingestion, recommendation APIs, Feed UI, dynamic quantity, multi-group, or multi-instrument work begin.
 
 ---
 

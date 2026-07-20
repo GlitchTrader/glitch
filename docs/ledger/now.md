@@ -26,9 +26,15 @@ Glitch Flatten All remain authoritative.
 - AI execution is strict and fail-closed: validated JSON only, selected master
   only, current native portfolio state required, current account/group capacity
   required, market entry only, and native stop/target protection required.
-- Each Hermes decision cycle is stateless and uses `gpt-5.6-luna`, medium reasoning,
-  no fallback provider, and a four-turn ceiling. Flat books are considered at one
-  five-minute decision boundary; positioned books may be reconsidered each minute.
+- Every Hermes model call uses an isolated session tagged `trading`,
+  `gpt-5.6-luna`, medium reasoning, no fallback provider, and a four-turn ceiling.
+  Continuity is explicit: five MNQ market frames, the latest portfolio, six recent
+  decisions/executions/outcomes, and native durable memory. Flat books are
+  considered at five-minute boundaries; positioned books each minute. A native
+  one-minute zero-model check wakes the worker, and any failed model/contract
+  attempt retries on the next newer packet.
+- The prompt supplies one literal strict JSON template scoped to the current
+  cycle/books and forbids `final_choice` outside `decision_audit`.
 - Delivery is idempotent and crash-safe through a durable outbox/receipt pair.
   Retry reuses the same intent id and never spends a second model call for the
   same packet.
@@ -61,6 +67,9 @@ Glitch Flatten All remain authoritative.
   constrained by every enabled account's current rule ceiling, open exposure,
   and follower ratio. One-to-three native OCO legs support protected scale-out;
   repeated same-direction entries remain independently protected tranches.
+- `MOVE_TP` moves every remaining Glitch-owned master target and may atomically
+  tighten every remaining master stop. CopyEngine mirrors both changes to the
+  corresponding follower-native protection orders.
 - The portfolio packet carries `native_state_available`. Any failed native
   Positions/Orders read makes the packet ineligible and costs zero model calls.
 - Eastern-time session policy is applied in the packet, firewall, final submit
@@ -78,7 +87,7 @@ Glitch Flatten All remain authoritative.
 ## Verification and market-open acceptance
 
 - Shared source contracts: **37/37**.
-- AI/Hermes contracts: **81/81**; complete AI suite **118/118**.
+- AI/Hermes contracts: **90/90**; complete AI suite **127/127**.
 - Five production web builds: pass.
 - Five web lint runs: pass.
 - Python compilation, tracked PowerShell parsing, tracked JSON parsing, secret
@@ -88,8 +97,11 @@ Glitch Flatten All remain authoritative.
   pass. This includes 18 older fallback-only labels closed during the AI UI pass.
 - Complete 87-file AI AddOn folder deployed from this candidate with **87/87
   files matching, 0 hash mismatches, and 0 extra target files**.
-- NinjaTrader F5 compile: green; the custom assembly rebuilt at 22:28 local with
-  no populated compile-error row.
+- NinjaTrader F5 compile: green by operator confirmation after the complete
+  87-file deployment on 2026-07-20.
+- Installed Hermes worker matches source. Exactly one cron job is enabled:
+  `glitch-direct-operator`, stored as `* * * * *`; the supervised gateway is
+  running and the first post-install zero-model tick completed `ok`.
 - Bounded prior Sim evidence on this clean architecture includes protected
   1:2:3 replication, three independent legs, partial fills, same-direction
   protected tranches, duplicate-intent rejection, and fleet flatten.

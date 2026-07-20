@@ -8,7 +8,7 @@
 Central VPS
   canonical market ingestion (same snapshot schema as Glitch)
     -> five-minute decision packet
-    -> one persistent supervised Hermes profile/session
+    -> one persistent supervised Hermes profile + isolated decision sessions
     -> versioned recommendation + learning store
     -> authenticated recommendation API
 
@@ -162,6 +162,8 @@ LLM-driven Hermes cron every 5 minutes. Outputs one of:
 ENTER_LONG
 ENTER_SHORT
 HOLD
+MOVE_STOP
+MOVE_TP
 EXIT
 NOTHING
 ```
@@ -178,7 +180,7 @@ Centralization does not begin until the local harness proves:
 
 ```text
 supervised hidden gateway survives terminal/Codex exit
-stateless decision cycles survive a failed or oversized prior turn
+isolated `trading`-tagged decisions retry on the next newer packet after a failed turn
 portfolio top-level values equal nested live positions
 every completed group round trip becomes one learning outcome
 master-only intent replicates through Glitch with native brackets per account
@@ -199,7 +201,7 @@ Single Windows machine (not shipped to customers):
 
 ```text
 Central Linux VPS/container:
-  supervised Hermes gateway + persistent profile/session
+  supervised Hermes gateway + persistent profile/memory + isolated decision sessions
   canonical ingestion + packet builder
   recommendation/outcome/learning stores
 

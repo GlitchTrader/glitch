@@ -47,10 +47,11 @@
         "ENTER_SHORT",
         "HOLD",
         "MOVE_STOP",
+        "MOVE_TP",
         "EXIT",
         "NOTHING"
       ],
-      "description": "ENTER actions create independently protected tranches. MOVE_STOP tightens Glitch-owned native stops."
+      "description": "ENTER actions create independently protected tranches. MOVE_STOP tightens native stops. MOVE_TP moves every remaining native target and may also tighten stops."
     },
     "quantity": {
       "type": "integer",
@@ -66,14 +67,14 @@
         "number",
         "null"
       ],
-      "description": "MANDATORY for ENTER_*. Loss side of entry, tick-rounded. Defines trade risk."
+      "description": "MANDATORY for ENTER_*. Optional on MOVE_TP to tighten every remaining stop. Loss side of market, tick-rounded."
     },
     "take_profit_1": {
       "type": [
         "number",
         "null"
       ],
-      "description": "MANDATORY for ENTER_*. Profit side of entry, tick-rounded."
+      "description": "MANDATORY for ENTER_* and MOVE_TP. On MOVE_TP, replaces every remaining target. Profit side of live market, tick-rounded."
     },
     "take_profit_2": {
       "type": [
@@ -161,7 +162,7 @@
         "disconfirming_evidence": { "type": "string", "maxLength": 500 },
         "change_condition": { "type": "string", "maxLength": 500 },
         "final_choice": {
-          "enum": ["ENTER_LONG", "ENTER_SHORT", "HOLD", "MOVE_STOP", "EXIT", "NOTHING"]
+          "enum": ["ENTER_LONG", "ENTER_SHORT", "HOLD", "MOVE_STOP", "MOVE_TP", "EXIT", "NOTHING"]
         }
       },
       "additionalProperties": false,
@@ -250,6 +251,18 @@
           "take_profit_2": {
             "type": "number"
           }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "action": { "const": "MOVE_TP" } }
+      },
+      "then": {
+        "required": ["take_profit_1"],
+        "properties": {
+          "take_profit_1": { "type": "number" },
+          "stop_loss": { "type": "number" }
         }
       }
     },

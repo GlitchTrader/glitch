@@ -267,7 +267,7 @@ namespace Glitch.Services
             if (masterAccount == null || order == null)
                 return;
             TryReleasePendingMasterCopies(masterAccount);
-            MirrorMasterStop(masterAccount, order);
+            MirrorMasterProtection(masterAccount, order);
         }
 
         public void ProcessFollowerOrderUpdate(Account followerAccount, Order order)
@@ -1042,26 +1042,30 @@ namespace Glitch.Services
             }
         }
 
-        private void MirrorMasterStop(Account masterAccount, Order masterOrder)
+        private void MirrorMasterProtection(Account masterAccount, Order masterOrder)
         {
+            bool isStop = GlitchReplicationEngine.IsStopLikeOrder(masterOrder);
+            bool isTarget = masterOrder.OrderType == OrderType.Limit;
             if (masterOrder.Instrument == null
-                || !GlitchReplicationEngine.IsStopLikeOrder(masterOrder)
+                || (!isStop && !isTarget)
                 || !GlitchReplicationEngine.IsWorkingOrderState(masterOrder.OrderState)
-                || masterOrder.StopPrice <= 0)
+                || (isStop ? masterOrder.StopPrice : masterOrder.LimitPrice) <= 0)
                 return;
             if (!TryGetConfiguredRoutes(masterAccount.Name, out List<GlitchCopyFollowerRoute> routes))
                 return;
 
             string sourceToken = GlitchReplicationProtection.BuildSourceToken(masterOrder.Name, masterOrder.Oco);
-            string prefix = CopySignalName + "-S-" + sourceToken + "-";
+            string protectionKind = isStop ? "stop" : "target";
+            string prefix = CopySignalName + (isStop ? "-S-" : "-T-") + sourceToken + "-";
+            double masterPrice = isStop ? masterOrder.StopPrice : masterOrder.LimitPrice;
             string root = GlitchReplicationEngine.GetInstrumentRoot(masterOrder.Instrument);
             foreach (GlitchCopyFollowerRoute route in routes)
             {
                 if (!TrySnapshotOrders(route.FollowerAccount, out Order[] orders))
                 {
                     RaiseCritical?.Invoke(route.FollowerAccount.Name,
-                        "Follower order state is unavailable; the master stop was not mirrored.",
-                        "FollowerStopMirrorStateUnavailable|" + root);
+                        "Follower order state is unavailable; the master " + protectionKind + " was not mirrored.",
+                        "FollowerProtectionMirrorStateUnavailable|" + root + "|" + protectionKind);
                     continue;
                 }
                 List<Order> changes = orders
@@ -1069,21 +1073,26 @@ namespace Glitch.Services
                         && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState)
                         && (order.Name ?? string.Empty).StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
                         && string.Equals(GlitchReplicationEngine.GetInstrumentRoot(order.Instrument), root, StringComparison.OrdinalIgnoreCase)
-                        && Math.Abs(order.StopPrice - masterOrder.StopPrice) > 0.0000001d)
+                        && Math.Abs((isStop ? order.StopPrice : order.LimitPrice) - masterPrice) > 0.0000001d)
                     .ToList();
                 if (changes.Count == 0)
                     continue;
                 try
                 {
-                    foreach (Order followerStop in changes)
-                        followerStop.StopPriceChanged = masterOrder.StopPrice;
+                    foreach (Order followerOrder in changes)
+                    {
+                        if (isStop)
+                            followerOrder.StopPriceChanged = masterPrice;
+                        else
+                            followerOrder.LimitPriceChanged = masterPrice;
+                    }
                     route.FollowerAccount.Change(changes.ToArray());
                 }
                 catch (Exception ex)
                 {
                     RaiseCritical?.Invoke(route.FollowerAccount.Name,
-                        "Follower stop could not mirror the master: " + ex.GetType().Name,
-                        "FollowerStopMirrorFailed|" + root);
+                        "Follower " + protectionKind + " could not mirror the master: " + ex.GetType().Name,
+                        "FollowerProtectionMirrorFailed|" + root + "|" + protectionKind);
                 }
             }
         }

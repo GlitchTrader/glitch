@@ -93,7 +93,7 @@ Do not let Hermes infer missing critical fields. Missing critical state forces `
 
 Mode: one centralized Hermes LLM cycle. The local cron is the temporary validation harness.
 
-Cadence: every five-minute boundary while flat and each minute while a scoped master is positioned. Timeframe rows are live in-progress observations unless explicitly marked closed.
+Cadence: every five-minute boundary while flat and each minute while a scoped master is positioned. Any failed inference or output-contract attempt retries on the next newer minute packet. Timeframe rows are live in-progress observations unless explicitly marked closed.
 
 Purpose:
 
@@ -111,6 +111,7 @@ ENTER_LONG
 ENTER_SHORT
 HOLD
 MOVE_STOP
+MOVE_TP
 EXIT
 NOTHING
 ```
@@ -119,9 +120,9 @@ Output stays small. The cost risk is input/context bloat, not the intent JSON.
 
 ### Current stabilization transport
 
-Glitch writes a minute frame only after market and portfolio snapshots with the same `snapshot_id` are both present. Once five consecutive frames exist, it atomically publishes one immutable rolling five-frame packet per minute under `GlitchData/hermes/exchange/glitch`. The lightweight worker wakes each minute but invokes Luna only on five-minute boundaries while flat, every minute while a scoped master is positioned, or once for an explicit directive.
+Glitch writes a minute frame only after market and portfolio snapshots with the same `snapshot_id` are both present. Once five consecutive frames exist, it atomically publishes one immutable rolling five-frame packet per minute under `GlitchData/hermes/exchange/glitch`. The lightweight worker wakes on Hermes's native one-minute tick, but invokes Luna only on five-minute boundaries while flat, every minute while a scoped master is positioned, once for an explicit directive, or on the next newer packet after any failed model/contract attempt.
 
-Hermes native cron owns the wake-up under a supervised gateway. Its worker performs a zero-model check for a new packet, opens a fresh bounded decision context in the isolated `glitch` profile, reads bounded Glitch journal tails, and submits strict intents to Glitch's authenticated receiver. It does not classify opportunities or impose trading archetypes before inference. Contract/scope validation cannot replace Hermes's probabilistic decision; Glitch's firewall remains the execution authority.
+Hermes native cron owns the wake-up under a supervised gateway. Its worker performs a zero-model check for a new packet, creates an isolated `trading`-tagged session for every eligible model call, resends bounded Glitch decision/execution/outcome tails, supplies a literal valid-output template, and submits strict intents to Glitch's authenticated receiver. A failed packet is not repeated; its next newer packet becomes immediately eligible and cannot inherit the failed transcript. It does not classify opportunities or impose trading archetypes before inference. Contract/scope validation cannot replace Hermes's probabilistic decision; Glitch's firewall remains the execution authority.
 
 Codex is not present in snapshot publication, scheduling, inference, delivery, execution, journaling, or learning.
 
@@ -286,7 +287,7 @@ one live exporter
 one historical exporter using the same schema
 one 5-minute operator job
 one script-only packet check
-one persistent supervised Hermes profile/session with native capabilities intact
+one persistent supervised Hermes profile/memory system with isolated inference sessions and native capabilities intact
 interactive orientation, then only the 5-minute core
 ```
 

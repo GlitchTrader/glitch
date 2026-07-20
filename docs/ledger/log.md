@@ -696,3 +696,11 @@ Append-only operator log. Newest first.
 - Seeded ledger (README, north-star with calm-by-default invariant, backlog GL-001…GL-016 with dependency graph + delegation map) — `e1f0ac7`, pushed.
 - Spawned four lanes: replication-audit (Opus), math-audit (Opus), ui-calm (Sonnet), external-truth (Sonnet).
 - Created recurring 3-hourly lead operator pass (session-scoped cron).
+
+## 2026-07-20 — isolated trading calls, one-minute recovery, and MOVE_TP
+
+- Root-cause correction: scheduled inference now uses a fresh Hermes session tagged `trading` for each eligible packet. Learning continuity is resent explicitly as five MNQ market frames, the latest portfolio, six recent decisions/executions/outcomes, and native durable memory. Raw transcript accumulation can no longer poison later decisions. The live prompt fell from 90,603 to 57,352 characters while retaining current decision truth.
+- Strict JSON output now starts from a literal cycle/book-scoped valid template and accepts no renderer chatter, duplicate object, or repaired malformed JSON. Any model, timeout, compaction, or contract failure records no intent and makes only the next newer minute packet eligible.
+- Hermes cron remains on its native one-minute schedule. The enable script now reads `jobs.json` back and fails if schedule, script, workdir, mode, enabled state, or singleton ownership did not persist; this closes the false-success path that claimed an unsupported `30s` edit.
+- Added `MOVE_TP` end to end. Hermes may move all remaining master targets with an optional simultaneous tighter stop; validator/firewall enforce strict fields, tick prices, profit-side targets, and no stop loosening. One atomic master `Change` is mirrored by CopyEngine to the corresponding follower target/stop orders.
+- Deployment/verification: complete 87-file AddOn installed with 87 source/live hashes matching and zero extras; operator confirmed NinjaTrader F5 compile green. Shared contracts 37/37 and AI/Hermes contracts 90/90 pass (127 total); PowerShell, JSON, and diff checks pass. Corrected Hermes profile installed at `2026-07-20T20:18:32Z`; exactly one job is enabled (`glitch-direct-operator`, `* * * * *`), gateway PID 42852 was live, installed worker hash matched source, and the first post-install scheduler tick completed `ok`.

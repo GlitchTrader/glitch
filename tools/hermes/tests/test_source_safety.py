@@ -106,11 +106,38 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         move_stop = method_body(
             executor,
             "private static GlitchAiExecutionResult TryExecuteGroupMoveStop",
-            "private static Order FindNamedOrder",
+            "private static GlitchAiExecutionResult TryExecuteGroupMoveTarget",
         )
         self.assertIn("Account masterAccount = members[0].Account", move_stop)
         self.assertIn("accountChanges.Key.Change", move_stop)
         self.assertNotIn("Follower", move_stop)
+
+    def test_ai_move_target_changes_master_and_replication_mirrors_target_and_optional_stop(self):
+        executor = source(EXECUTOR)
+        copy_engine = source(ADDON / "Services/Trading/GlitchCopyEngine.cs")
+        validator = source(INTENT_VALIDATOR)
+        firewall = source(FIREWALL)
+        move_target = method_body(
+            executor,
+            "private static GlitchAiExecutionResult TryExecuteGroupMoveTarget",
+            "private static Order FindNamedOrder",
+        )
+        mirror = method_body(
+            copy_engine,
+            "private void MirrorMasterProtection",
+            "private void CleanupFlatFollowerOrders",
+        )
+
+        self.assertIn("take_profit_1", move_target)
+        self.assertIn("LimitPriceChanged = targetPrice", move_target)
+        self.assertIn("StopPriceChanged = stopPrice", move_target)
+        self.assertEqual(move_target.count("masterAccount.Change"), 1)
+        self.assertIn('isStop ? "-S-" : "-T-"', mirror)
+        self.assertIn("followerOrder.LimitPriceChanged = masterPrice", mirror)
+        self.assertIn("followerOrder.StopPriceChanged = masterPrice", mirror)
+        self.assertIn('"MOVE_TP"', validator)
+        self.assertIn("move_tp_requires_take_profit_1", validator)
+        self.assertIn('string.Equals(action, "MOVE_TP"', firewall)
 
     def test_working_partial_master_fill_aggregates_before_protection(self):
         executor = source(EXECUTOR)

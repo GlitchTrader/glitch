@@ -18,7 +18,7 @@ Archetypes, mined patterns, adversarial bull/bear cases, and historical statisti
 
 ## 2. One persistent agent, four cognitive loops
 
-All loops belong to the same `glitch` profile and share native Hermes memory, session history, Glitch evidence, and the Hermes-owned knowledge base. They are different jobs, not different agents or personalities.
+All loops belong to the same `glitch` profile and share native Hermes memory, bounded Glitch evidence, and the Hermes-owned knowledge base. Every LLM-driven scheduled call uses an isolated session tagged for its trading lane and receives explicit bounded continuity. They are different jobs, not different agents or personalities.
 
 | Loop | Cadence | Model baseline | Primary question | Output authority |
 |---|---:|---|---|---|

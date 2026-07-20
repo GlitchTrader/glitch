@@ -1,7 +1,7 @@
 param(
     [string]$Profile = 'glitch',
-    # Wake the lightweight worker each minute so it can manage open positions.
-    # The worker itself spends no model call while flat except on 5m boundaries
+    # Hermes's native ticker wakes once per minute. The worker itself spends no
+    # model call while flat except on 5m boundaries, after a failed decision,
     # or for an explicit one-cycle operator directive.
     [string]$Schedule = '* * * * *',
     [string]$GlitchData = (Join-Path $env:USERPROFILE 'Documents\NinjaTrader 8\GlitchData')
@@ -72,13 +72,39 @@ else {
     $jobId = $null
 }
 
+# The Hermes CLI has historically returned zero for some rejected cron edits.
+# Read the native store back so this installer never claims a schedule that did
+# not persist.
+$document = Get-Content -LiteralPath $jobsPath -Raw | ConvertFrom-Json
+$installedJobs = @($document.jobs | Where-Object name -eq 'glitch-direct-operator')
+if ($installedJobs.Count -ne 1) {
+    throw 'Hermes cron reconciliation did not leave exactly one direct operator job.'
+}
+$installedJob = $installedJobs[0]
+$installedSchedule = if ($installedJob.schedule.display) {
+    [string]$installedJob.schedule.display
+} elseif ($installedJob.schedule.expr) {
+    [string]$installedJob.schedule.expr
+} else {
+    ''
+}
+if ($installedSchedule -ne $Schedule) {
+    throw "Hermes cron schedule did not persist: expected '$Schedule', found '$installedSchedule'."
+}
+if (-not $installedJob.enabled -or -not $installedJob.no_agent -or
+    [string]$installedJob.script -ne 'run-direct-glitch-cycle.py' -or
+    [IO.Path]::GetFullPath([string]$installedJob.workdir) -ne [IO.Path]::GetFullPath($workdir)) {
+    throw 'Hermes cron job persisted with the wrong execution contract.'
+}
+$jobId = [string]$installedJob.id
+
 [ordered]@{
     schema_version = 'glitch.hermes.direct_cron_enable.v1'
     enabled_utc = [datetime]::UtcNow.ToString('o')
     profile = $Profile
     job = 'glitch-direct-operator'
     job_id = $jobId
-    schedule = $Schedule
+    schedule = $installedSchedule
     non_core_jobs_disabled = $disabledJobs
     scheduler_owner = 'Hermes native cron'
     gateway_supervised = $true

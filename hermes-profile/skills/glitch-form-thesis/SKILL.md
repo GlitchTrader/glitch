@@ -15,4 +15,4 @@ Judge bull, bear, and flat cases from current observable evidence. Aggressive an
 6. After a stop, require materially changed price, structure, momentum, or regime before re-entry. Repeating the same thesis near the same level is churn.
 7. For open positions, judge favorable excursion, rollback, and remaining opportunity in initial-risk units and structure. Native stops are catastrophe protection, not passive management.
 
-Choose `ENTER_LONG`, `ENTER_SHORT`, `HOLD`, `MOVE_STOP`, `EXIT`, or `NOTHING`. Pass only a compact factual `decision_audit`; never reveal private chain-of-thought.
+Choose `ENTER_LONG`, `ENTER_SHORT`, `HOLD`, `MOVE_STOP`, `MOVE_TP`, `EXIT`, or `NOTHING`. `MOVE_TP` may extend or reduce remaining opportunity as conditions change and may carry a tighter stop. Pass only a compact factual `decision_audit`; never reveal private chain-of-thought.

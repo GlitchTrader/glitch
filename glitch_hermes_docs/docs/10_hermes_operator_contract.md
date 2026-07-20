@@ -91,7 +91,7 @@ Group composition and ratios are dynamic Glitch state. Results must therefore be
 Cadence:
 
 ```text
-Glitch publishes a rolling five-frame packet each minute. The lightweight worker wakes each minute but invokes Hermes only on five-minute boundaries while flat, each minute while a scoped master is positioned, or once for an explicit operator directive.
+Glitch publishes a rolling five-frame packet each minute. The lightweight worker wakes on Hermes's native one-minute tick, but invokes Hermes only on five-minute boundaries while flat, each minute while a scoped master is positioned, once for an explicit operator directive, or on the next newer packet after any failed model/contract attempt.
 ```
 
 Nominal loop:
@@ -184,6 +184,7 @@ ENTER_LONG   // Buy
 ENTER_SHORT  // Sell
 HOLD         // keep existing position, no change
 MOVE_STOP    // tighten native master protection
+MOVE_TP      // move every remaining native target; optionally tighten stops
 EXIT         // request flat/reduce risk now
 NOTHING      // stay flat / no action
 ```
@@ -223,7 +224,7 @@ Bracket mandate:
 - Quantity must be one of Glitch's supplied valid master quantities. Glitch derives that list dynamically from every enabled account's current account-wide open contracts, prop-rule ceiling, MNQ exposure, and configured follower ratio; the maximum-exposure account limits the group.
 - A naked entry must be impossible.
 - NT/Glitch hold the protective bracket.
-- Native protection must work without Hermes. Hermes may tighten a stop or exit on later cycles, but may never widen protection.
+- Native protection must work without Hermes. Hermes may tighten stops, move every remaining target (optionally with a tighter stop), or exit on later cycles, but may never widen stop protection.
 
 `HOLD`, `EXIT`, and `NOTHING` must still include the snapshot hash and reason codes so Glitch can journal why the cycle did or did not trade.
 
@@ -303,7 +304,7 @@ Do not silently mutate the operator policy from one trade. Policy changes requir
 
 ## Hermes runtime placement
 
-Product decision: one persistent Hermes profile/session runs under a supervised gateway on the central VPS. Glitch clients do not install Hermes. They poll the authenticated recommendation API once per five-minute window, then apply local portfolio, compliance, group, sizing, and execution truth. Codex is never a scheduler, bridge, or operator.
+Product decision: one persistent Hermes profile and durable memory system run under a supervised gateway on the central VPS. Individual inference calls are isolated and receive bounded explicit continuity. Glitch clients do not install Hermes. They poll the authenticated recommendation API once per five-minute window, then apply local portfolio, compliance, group, sizing, and execution truth. Codex is never a scheduler, bridge, or operator.
 
 The direct filesystem exchange below remains the internal stabilization harness. It must stay contract-compatible with the future network transport so centralization changes transport, not cognition or execution semantics.
 
@@ -314,13 +315,13 @@ GlitchData/hermes/exchange/glitch/*  Glitch writes, Hermes reads
 GlitchData/hermes/exchange/hermes/* Hermes writes, Glitch/bridge reads
 ```
 
-In the harness, Glitch writes one immutable minute frame after matching market and portfolio snapshots exist and publishes the latest rolling five-frame packet. Hermes native cron wakes a lightweight worker each minute. The worker spends no model call unless the model cadence is due, uses a fresh bounded decision context for each eligible packet, and delivers strict intents through Glitch's authenticated localhost receiver. Bounded authoritative Glitch evidence and durable Hermes memory provide continuity without an ever-growing inference transcript. Delivery retries reuse the same intent IDs; completed receipts prevent replay. The gateway must use Hermes native supervision, not an orphan child process.
+In the harness, Glitch writes one immutable minute frame after matching market and portfolio snapshots exist and publishes the latest rolling five-frame packet. Hermes native cron wakes a lightweight worker once per minute. The worker spends no model call unless cadence or a failed-attempt retry is due, creates an isolated session tagged `trading` for every eligible packet, supplies bounded recent decisions/executions/outcomes plus a literal valid-output template, and delivers strict intents through Glitch's authenticated localhost receiver. The failed packet is never repeated; its next newer packet retries before the normal five-minute boundary. Delivery retries reuse the same intent IDs; completed receipts prevent replay. The gateway must use Hermes native supervision, not an orphan child process.
 
 Full cognitive runtime map (only the core loop is enabled during initial validation):
 
 ```text
 snapshot_sanity        script-only check, no LLM
-suggest_trade          5m flat / 1m positioned, Luna/medium, one strict batch for packet-defined groups
+suggest_trade          5m flat / 1m positioned / next-packet error retry, Luna/medium, isolated trading-tagged session
 portfolio_supervision  hourly, Sol/high, risk/performance review + bounded self-heal
 portfolio_planning     6-hour, Sol/high, targets and risk allocation plan
 daily_learning         post-session, Sol/high, lessons + tomorrow targets + memory upkeep
@@ -331,9 +332,10 @@ lesson_store           Glitch-journaled outcomes and reviewed lessons
 `suggest_trade` cron job shape:
 
 ```text
-schedule: lightweight worker every minute; model gate is 5m flat / 1m positioned
+schedule: native one-minute zero-model worker check; model gate is 5m flat / 1m positioned / next-newer-packet error retry
 mode: LLM-driven Hermes cron
-input: one Glitch-owned five-frame packet + bounded authoritative journal + native Hermes memory
+session: fresh per model call, tagged trading
+input: five MNQ market frames + latest portfolio + six recent decisions/executions/outcomes + native Hermes memory
 output: one strict JSON decision per configured route-bound group
 transport today: Hermes-owned harness worker -> authenticated Glitch localhost intent receiver
 transport target: central recommendation store/API -> authenticated five-minute client poll -> local Glitch firewall
@@ -413,14 +415,14 @@ Never:
 
 ## Session layout
 
-One `glitch` profile is one agent identity and one native memory system. Its scheduled decisions are stateless; named sessions are maintainer surfaces, not runtime state:
+One `glitch` profile is one agent identity and one native memory system. Scheduled decisions use isolated sessions so a compaction or provider failure cannot poison later cycles:
 
 ```text
-chat      internal maintainer/supervision session; never exposed in the Glitch client UI
-trading   retained only for epoch/reset compatibility; never resumed by the worker
+chat       internal maintainer/supervision session; never exposed in the Glitch client UI
+trading-*  isolated scheduled calls tagged trading; continuity comes from bounded source artifacts and durable memory
 ```
 
-The core worker uses fresh isolated cycles with the complete current packet and bounded outcomes. This prevents a failed or oversized transcript from poisoning later decisions while preserving one profile, shared native skills, memory, and filesystem. The chat session may inspect status and accept human slash commands while trading continues independently.
+The core worker always supplies five current MNQ market frames, the latest portfolio, six recent decisions/executions/outcomes, native durable memory, and a strict output template to a fresh session. A failed call is recorded and retried only against the next newer packet; its transcript cannot contaminate the retry. The four-turn/timeout bounds remain local to each invocation. The chat session may inspect status and accept human slash commands while trading continues independently.
 
 The product UI exposes Feed, not the internal maintainer session. The local chat/slash-command surface remains a harness and maintainer tool, not a customer dependency.
 

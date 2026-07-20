@@ -17,20 +17,21 @@ Checks latest snapshot, schema freshness, and stuck handoffs. Silent unless unhe
 
 ## suggest_trade
 
-Cadence: every 5m while flat and every 1m while a scoped master is positioned.
+Cadence: every 5m while flat and every 1m while a scoped master is positioned. A failed model/contract attempt retries on the next newer minute packet before the next normal boundary.
 Mode: LLM-driven Hermes cron.
 
-Reads the latest Glitch packet, current policy/portfolio truth, recent outcomes, and relevant evidence. Archetypes and memories inform judgment but never gate it. Emits one ordered strict JSON decision per route-bound group.
+Reads the latest Glitch packet, current policy/portfolio truth, and bounded recent decisions/outcomes in an isolated session tagged `trading`. Native durable memories inform judgment but never gate it. Emits one ordered strict JSON decision per route-bound group using the supplied valid JSON template.
 
 Allowed actions:
 - ENTER_LONG
 - ENTER_SHORT
 - HOLD
 - MOVE_STOP
+- MOVE_TP
 - EXIT
 - NOTHING
 
-Every entry requires absolute SL + TP1 prices and may use second/third protected legs. Hermes never widens stops; it may tighten or exit.
+Every entry requires absolute SL + TP1 prices and may use second/third protected legs. Hermes never widens stops; it may tighten, move every remaining target (optionally with a tighter stop), or exit.
 
 ## portfolio_risk_review
 

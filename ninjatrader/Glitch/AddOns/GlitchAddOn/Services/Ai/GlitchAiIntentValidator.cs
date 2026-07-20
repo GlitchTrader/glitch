@@ -49,6 +49,7 @@ namespace Glitch.Services
             "ENTER_SHORT",
             "HOLD",
             "MOVE_STOP",
+            "MOVE_TP",
             "EXIT",
             "NOTHING"
         };
@@ -145,6 +146,14 @@ namespace Glitch.Services
                 && !TryExtractNumber(parsed, "stop_loss", out _))
                 errors.Add("move_stop_requires_stop_loss");
 
+            if (string.Equals(action, "MOVE_TP", StringComparison.Ordinal)
+                && !TryExtractNumber(parsed, "take_profit_1", out _))
+                errors.Add("move_tp_requires_take_profit_1");
+            if (string.Equals(action, "MOVE_TP", StringComparison.Ordinal)
+                && parsed.Contains("stop_loss")
+                && !TryExtractNumber(parsed, "stop_loss", out _))
+                errors.Add("move_tp_stop_loss_invalid");
+
             if (TryExtractNumber(parsed, "take_profit_2", out _))
             {
                 if (!TryExtractNumber(parsed, "quantity", out double quantity) || quantity < 2 || !IsInteger(quantity))
@@ -172,7 +181,9 @@ namespace Glitch.Services
             if (TryExtractNumber(parsed, "stop_loss_3", out _) && !TryExtractNumber(parsed, "take_profit_3", out _))
                 errors.Add("stop_loss_3_requires_take_profit_3");
 
-            if (!isEnter && !string.Equals(action, "MOVE_STOP", StringComparison.Ordinal))
+            if (!isEnter
+                && !string.Equals(action, "MOVE_STOP", StringComparison.Ordinal)
+                && !string.Equals(action, "MOVE_TP", StringComparison.Ordinal))
             {
                 string[] prohibited =
                 {
@@ -198,6 +209,20 @@ namespace Glitch.Services
                 {
                     if (parsed.Contains(prohibited[i]))
                         errors.Add("field_not_allowed_for_MOVE_STOP_" + prohibited[i]);
+                }
+            }
+
+            if (string.Equals(action, "MOVE_TP", StringComparison.Ordinal))
+            {
+                string[] prohibited =
+                {
+                    "quantity", "order_type", "limit_price", "take_profit_2",
+                    "stop_loss_2", "quantity_tp1", "take_profit_3", "stop_loss_3", "quantity_tp2"
+                };
+                for (int i = 0; i < prohibited.Length; i++)
+                {
+                    if (parsed.Contains(prohibited[i]))
+                        errors.Add("field_not_allowed_for_MOVE_TP_" + prohibited[i]);
                 }
             }
 

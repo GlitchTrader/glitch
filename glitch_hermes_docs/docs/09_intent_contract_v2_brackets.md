@@ -15,7 +15,7 @@ Rationale: if the connection to Hermes dies, if Hermes hangs, or if Glitch's UI 
 
 ## Cadence
 
-Hermes reviews every five-minute boundary while flat and each minute while a scoped master is positioned. Each invoked cycle emits one intent per configured route-bound group. Timeframe rows are live in-progress observations unless explicitly marked closed.
+Hermes reviews every five-minute boundary while flat and each minute while a scoped master is positioned. A failed inference or strict-contract attempt makes the next newer minute packet eligible immediately, without repeating the failed packet. Each invoked cycle uses an isolated session tagged `trading`, receives bounded explicit decision/outcome continuity, and emits one intent per configured route-bound group. Timeframe rows are live in-progress observations unless explicitly marked closed.
 
 ## Action set
 
@@ -25,6 +25,7 @@ Hermes reviews every five-minute boundary while flat and each minute while a sco
 | `ENTER_SHORT` | SELL | open short | **required** |
 | `HOLD` | HOLD | keep existing position unchanged | ignored |
 | `MOVE_STOP` | — | tighten every active Glitch-owned master stop | `stop_loss` only |
+| `MOVE_TP` | — | move every remaining Glitch-owned master target; optionally tighten stops in the same change | `take_profit_1`, optional `stop_loss` |
 | `EXIT` | — | close existing position now (risk-reducing, always allowed) | ignored |
 | `NOTHING` | DO-NOTHING | flat and stay flat | ignored |
 
@@ -51,8 +52,9 @@ All prices must be tick-rounded for the instrument (Glitch validates against the
 2. On full entry fill, Glitch immediately submits one account-local OCO stop/target pair per leg using `GLT-AI-S-*` / `GLT-AI-T-*`. A partial entry fill fails closed into cancel/flatten recovery; protection construction or submission failure does the same.
 3. TP2/TP3 present → position is bracketed as two or three independent OCO pairs. A target fill cancels only its paired stop; every remaining leg stays protected.
 4. A later `MOVE_STOP` intent may tighten all remaining Glitch-owned stops. It cannot widen risk.
-5. `EXIT` → flatten the AI position via market order and cancel the bracket. Always allowed (risk-reducing), still journaled.
-6. Sizing: Hermes chooses only from Glitch's supplied valid master quantities. Glitch recomputes structural risk and account-wide contract capacity before submission.
+5. A later `MOVE_TP` intent atomically moves every remaining Glitch-owned target to one absolute profit-side price and may tighten every remaining stop in the same change. CopyEngine mirrors both master changes to matching follower protection orders.
+6. `EXIT` → flatten the AI position via market order and cancel the bracket. Always allowed (risk-reducing), still journaled.
+7. Sizing: Hermes chooses only from Glitch's supplied valid master quantities. Glitch recomputes structural risk and account-wide contract capacity before submission.
 
 There is no AI-only one-contract cap. Current account/group state and prop-firm ceilings determine valid quantities dynamically.
 

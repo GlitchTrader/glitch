@@ -236,6 +236,9 @@ namespace Glitch.Services
             if (string.Equals(action, "MOVE_STOP", StringComparison.Ordinal))
                 return TryExecuteGroupMoveStop(members, instrument, rawJson, groupId, intentId);
 
+            if (string.Equals(action, "MOVE_TP", StringComparison.Ordinal))
+                return TryExecuteGroupMoveTarget(members, instrument, rawJson, groupId, intentId);
+
             if (string.Equals(action, "ENTER_LONG", StringComparison.Ordinal))
                 return TryExecuteGroupEnter(members, instrument, rawJson, true, groupId, intentId);
 
@@ -957,6 +960,76 @@ namespace Glitch.Services
                     + "|followers=replication_engine");
         }
 
+        private static GlitchAiExecutionResult TryExecuteGroupMoveTarget(
+            IReadOnlyList<ExecutionGroupMember> members,
+            Instrument instrument,
+            string rawJson,
+            string groupId,
+            string intentId)
+        {
+            if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_1", out double requestedTarget))
+                return GlitchAiExecutionResult.Failed("move_tp_price_missing");
+            bool hasRequestedStop = GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss", out double requestedStop);
+            if (!GlitchInstrumentMetadataService.TryResolve(instrument, out GlitchInstrumentMetadata metadata)
+                || metadata == null || !metadata.IsResolved || metadata.TickSize <= 0)
+                return GlitchAiExecutionResult.Failed("move_tp_metadata_unavailable");
+            double targetPrice = RoundToTick(requestedTarget, metadata.TickSize);
+            double stopPrice = hasRequestedStop ? RoundToTick(requestedStop, metadata.TickSize) : 0;
+            if (!TryGetFreshExecutionPrice(instrument, DateTime.UtcNow, out double livePrice, out string liveFailure))
+                return GlitchAiExecutionResult.Failed("move_tp_live_price_invalid", liveFailure);
+
+            Account masterAccount = members[0].Account;
+            if (!TryGetNetPosition(masterAccount, instrument, out int masterNet))
+                return GlitchAiExecutionResult.Failed("move_tp_position_state_unavailable", masterAccount.Name);
+            if (masterNet == 0)
+                return GlitchAiExecutionResult.Failed("move_tp_position_flat");
+            bool isLong = masterNet > 0;
+            if ((isLong && targetPrice <= livePrice) || (!isLong && targetPrice >= livePrice))
+                return GlitchAiExecutionResult.Failed("move_tp_market_side_invalid");
+            if (hasRequestedStop && ((isLong && stopPrice >= livePrice) || (!isLong && stopPrice <= livePrice)))
+                return GlitchAiExecutionResult.Failed("move_tp_stop_market_side_invalid");
+            if (!HasCompleteAiProtection(masterAccount, instrument, out List<Order> masterStops, out List<Order> masterTargets))
+                return GlitchAiExecutionResult.Failed("move_tp_protection_incomplete", masterAccount.Name);
+
+            List<Order> targetChanges = masterTargets
+                .Where(target => Math.Abs(target.LimitPrice - targetPrice) > 0.0000001d)
+                .ToList();
+            List<Order> stopChanges = hasRequestedStop
+                ? masterStops.Where(stop => isLong ? stopPrice > stop.StopPrice : stopPrice < stop.StopPrice).ToList()
+                : new List<Order>();
+            List<Order> changes = targetChanges.Concat(stopChanges).ToList();
+            if (changes.Count == 0)
+            {
+                return GlitchAiExecutionResult.Succeeded(
+                    "move_tp_already_set",
+                    "group=" + CleanToken(groupId)
+                        + "|target_price=" + targetPrice.ToString(CultureInfo.InvariantCulture)
+                        + "|followers=replication_engine");
+            }
+
+            try
+            {
+                foreach (Order target in targetChanges)
+                    target.LimitPriceChanged = targetPrice;
+                foreach (Order stop in stopChanges)
+                    stop.StopPriceChanged = stopPrice;
+                masterAccount.Change(changes.ToArray());
+            }
+            catch (Exception ex)
+            {
+                return GlitchAiExecutionResult.Failed("move_tp_change_failed", masterAccount.Name + ":" + ex.GetType().Name);
+            }
+
+            return GlitchAiExecutionResult.Succeeded(
+                stopChanges.Count > 0 ? "move_tp_and_stop_submitted" : "move_tp_submitted",
+                "group=" + CleanToken(groupId)
+                    + "|target_price=" + targetPrice.ToString(CultureInfo.InvariantCulture)
+                    + "|stop_price=" + (stopChanges.Count > 0 ? stopPrice.ToString(CultureInfo.InvariantCulture) : "unchanged")
+                    + "|master_target_orders=" + targetChanges.Count.ToString(CultureInfo.InvariantCulture)
+                    + "|master_stop_orders=" + stopChanges.Count.ToString(CultureInfo.InvariantCulture)
+                    + "|followers=replication_engine");
+        }
+
         private static Order FindNamedOrder(Account account, string name, Instrument instrument)
         {
             if (string.IsNullOrWhiteSpace(name)
@@ -1438,7 +1511,17 @@ namespace Glitch.Services
 
         private static bool HasCompleteAiProtection(Account account, Instrument instrument, out List<Order> stops)
         {
+            return HasCompleteAiProtection(account, instrument, out stops, out _);
+        }
+
+        private static bool HasCompleteAiProtection(
+            Account account,
+            Instrument instrument,
+            out List<Order> stops,
+            out List<Order> targets)
+        {
             stops = new List<Order>();
+            targets = new List<Order>();
             if (account == null || instrument == null
                 || !TryGetNetPosition(account, instrument, out int net)
                 || !TrySnapshotOrders(account, out Order[] orders))
@@ -1458,7 +1541,10 @@ namespace Glitch.Services
                     stopCoverage += order.Quantity;
                 }
                 else if (IsOwnedTargetSignal(order.Name))
+                {
+                    targets.Add(order);
                     targetCoverage += order.Quantity;
+                }
             }
             return stopCoverage == Math.Abs(net) && targetCoverage == Math.Abs(net);
         }

@@ -115,7 +115,7 @@ Summary of the operator's decisions (2026-07-08):
 - **NT holds the bracket.** After each entry leg fills, Glitch submits its native
   OCO stop/target pair. Partial entry fills and any protection failure enter one
   bounded cancel/flatten recovery path. A target fill cancels only its paired stop.
-- **No stop widening.** Hermes may actively `EXIT` or `MOVE_STOP`; Glitch permits only risk-reducing stop changes.
+- **Active native management.** Hermes may `EXIT`, `MOVE_STOP`, or `MOVE_TP`. `MOVE_TP` changes every remaining target and may carry a tighter stop; Glitch never permits stop widening.
 
 ## Deterministic firewall — check chain (executed in order, all journaled)
 
