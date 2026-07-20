@@ -123,6 +123,19 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("MasterAccountInstance = masterAccount", replication)
         self.assertIn("_copyEngine.Configure(_isReplicatingUi, routes)", replication)
 
+    def test_replication_route_uses_current_rule_projection_when_grid_cap_is_absent(self):
+        replication = source(REPLICATION_UI)
+        resolver = method_body(
+            replication,
+            "private int ResolveFollowerRouteContractCap",
+            "private void AlignAllEnabledFollowersToMaster",
+        )
+        self.assertIn("BuildPortfolioSnapshotAccountRecord(row, account).MaxContracts", resolver)
+        self.assertIn("double.IsNaN(contractCap)", resolver)
+        self.assertIn("double.IsInfinity(contractCap)", resolver)
+        self.assertIn("MaxContracts = followerMaxContracts", replication)
+        self.assertNotIn("MaxContracts = followerRow?.MaxContractsRaw > 0", replication)
+
     def test_manual_follower_divergence_suppresses_only_automatic_reentry_until_resync(self):
         copy = source(COPY_ENGINE)
         opening = method_body(copy, "private void FanOutOpening", "private void FanOutCompleteClose")

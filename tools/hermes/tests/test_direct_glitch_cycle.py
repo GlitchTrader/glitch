@@ -249,6 +249,7 @@ class DirectCycleTests(unittest.TestCase):
         self.assertIn("Avoid staying idle for too long", value)
         self.assertIn("recent pivot or swing", value)
         self.assertIn("live in-progress observations", value)
+        self.assertIn("historical infrastructure or capacity rejection is not a continuing veto", value)
 
     def test_prompt_exposes_optional_three_leg_native_scale_out(self):
         value = MODULE.build_prompt(packet(), MODULE.build_scenario(packet()), {})
@@ -464,11 +465,13 @@ class DirectCycleTests(unittest.TestCase):
         with self.assertRaises(json.JSONDecodeError):
             MODULE.extract_json(first + "\n" + second)
 
-    def test_json_with_trailing_prose_fails_closed(self):
+    def test_unique_batch_with_transport_chatter_is_recovered(self):
         batch = json.dumps({"schema_version": "glitch.intent.batch.v1", "decisions": []})
 
-        with self.assertRaises(json.JSONDecodeError):
-            MODULE.extract_json(batch + "\nDone")
+        self.assertEqual(
+            MODULE.extract_json("renderer status\n" + batch + "\nDone"),
+            json.loads(batch),
+        )
 
     def test_missing_outer_batch_fields_are_restored_from_current_scenario(self):
         scenario = MODULE.build_scenario(packet())

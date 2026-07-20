@@ -154,6 +154,26 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("RecoverGroup", protection)
         self.assertIn('ReconcileEntryProtection(group, 0, entryOrder, "submit_return")', executor)
         self.assertIn("group.ProtectionSubmitted[accountIndex] = true", executor)
+        structural = method_body(
+            executor,
+            "private static GlitchAiExecutionResult TrySubmitStructuralProtection",
+            "private static double RoundToTick",
+        )
+        self.assertLess(
+            structural.index("group.ProtectionSubmitted[accountIndex] = true"),
+            structural.index("CreateExitOrder(account"),
+        )
+        self.assertLess(
+            structural.index("group.ProtectionSubmitted[accountIndex] = true"),
+            structural.index("account.Submit(createdOrders.ToArray())"),
+        )
+        self.assertIn("ReleaseProtectionSubmission(group, accountIndex, createdOrders)", structural)
+        release = method_body(
+            executor,
+            "private static void ReleaseProtectionSubmission",
+            "private static double RoundToTick",
+        )
+        self.assertIn("group.ProtectionSubmitted[accountIndex] = false", release)
         self.assertIn("GlitchAiOrderExecutor.ProcessAccountStateUpdate(activeAccount)", refresh)
         self.assertIn("GlitchAiOrderExecutor.GetReplicationEntryDenialReason", telemetry)
 

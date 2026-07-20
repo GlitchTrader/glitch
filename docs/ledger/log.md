@@ -2,6 +2,28 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-19 - master protection callback recursion fixed and runtime-proved
+
+- Reconstructed the failure from native NinjaTrader evidence. After one Sim101
+  fill, `Account.CreateOrder` synchronously re-entered the AI account callback
+  before the old protection flag was set, creating 2,341 duplicate stop orders
+  and no target before NinjaTrader became unusable.
+- Moved the per-account protection claim ahead of the first native order creation,
+  retained pre-claim geometry validation, and added explicit rollback for create,
+  reject, and submit-exception paths. The fix is in the master AI executor only;
+  CopyEngine remains the sole owner of follower replication and protection.
+- Also restored current follower contract-cap projection when the dashboard row
+  has no populated raw cap. This removes the stale
+  `follower_contract_cap_unavailable` rejection without adding an AI-specific cap.
+- Full validation passed: 34 shared contracts plus 81 AI/Hermes contracts, Python
+  compilation, diff check, NinjaTrader F5 compile, and 87/87 deployed file hashes.
+- Bounded Sim intent `7bd326d8-c952-46b8-8604-a913cab6607b` submitted exactly one
+  master entry/stop/target. CopyEngine opened Sim102 x1 and Sim103 x2 and created
+  three follower OCO pairs. The common native target closed all accounts; final
+  state is flat and order-free with +$8.00 / +$12.50 / +$24.50 realized PnL.
+- AI Auto and both Hermes jobs remain off. No model call ran and Apex/live accounts
+  were never in scope.
+
 ## 2026-07-19 - six-locale AI UI and documentation reconciliation
 
 - Localized every authored Glitch AI control, status, stage, field, error, scope,

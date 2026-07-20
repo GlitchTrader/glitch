@@ -65,15 +65,14 @@ namespace Glitch.UI
                         continue;
 
                     AccountGridRow followerRow = FindAccountRowByName(followerAccount.Name);
+                    int followerMaxContracts = ResolveFollowerRouteContractCap(followerRow, followerAccount);
                     routes.Add(new GlitchCopyFollowerRoute
                     {
                         MasterAccount = masterName,
                         MasterAccountInstance = masterAccount,
                         FollowerAccount = followerAccount,
                         Ratio = member.Ratio,
-                        MaxContracts = followerRow?.MaxContractsRaw > 0
-                            ? Math.Max(1, (int)Math.Round(followerRow.MaxContractsRaw, MidpointRounding.AwayFromZero))
-                            : 0,
+                        MaxContracts = followerMaxContracts,
                         MaxMicroContracts = followerRow?.MaxMicrosRaw > 0
                             ? Math.Max(1, (int)Math.Round(followerRow.MaxMicrosRaw, MidpointRounding.AwayFromZero))
                             : 0,
@@ -84,6 +83,20 @@ namespace Glitch.UI
 
             _copyEngine.Configure(_isReplicatingUi, routes);
             UpdateReplicateButtonState();
+        }
+
+        private int ResolveFollowerRouteContractCap(AccountGridRow row, Account account)
+        {
+            if (row == null || account == null)
+                return 0;
+
+            double contractCap = row.MaxContractsRaw;
+            if (!(contractCap > 0))
+                contractCap = BuildPortfolioSnapshotAccountRecord(row, account).MaxContracts;
+
+            return contractCap > 0 && !double.IsNaN(contractCap) && !double.IsInfinity(contractCap)
+                ? Math.Max(1, (int)Math.Round(contractCap, MidpointRounding.AwayFromZero))
+                : 0;
         }
 
         private void AlignAllEnabledFollowersToMaster(string origin)

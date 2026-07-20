@@ -69,10 +69,10 @@ Glitch Flatten All remain authoritative.
 - Journal reconstruction ignores orphan exits and allocates reversal commission
   once. Master/Group/Fleet scope is explicit.
 
-## Verification frozen for this candidate
+## Verification and market-open acceptance
 
-- Shared source contracts: **33/33**.
-- AI/Hermes contracts: **81/81**; complete AI suite **114/114**.
+- Shared source contracts: **34/34**.
+- AI/Hermes contracts: **81/81**; complete AI suite **115/115**.
 - Five production web builds: pass.
 - Five web lint runs: pass.
 - Python compilation, tracked PowerShell parsing, tracked JSON parsing, secret
@@ -82,11 +82,21 @@ Glitch Flatten All remain authoritative.
   pass. This includes 18 older fallback-only labels closed during the AI UI pass.
 - Complete 87-file AI AddOn folder deployed from this candidate with **87/87
   files matching, 0 hash mismatches, and 0 extra target files**.
-- NinjaTrader F5 compile: green; the custom assembly rebuilt at 16:18 local with
+- NinjaTrader F5 compile: green; the custom assembly rebuilt at 22:28 local with
   no populated compile-error row.
 - Bounded prior Sim evidence on this clean architecture includes protected
   1:2:3 replication, three independent legs, partial fills, same-direction
   protected tranches, duplicate-intent rejection, and fleet flatten.
+- The market-open acceptance exposed synchronous callback re-entry while the AI
+  executor was creating the first master bracket. The protection-submission claim
+  is now acquired before the first native `CreateOrder` call and released only on
+  a real create/submit failure. This prevents duplicate bracket construction.
+- Bounded intent `7bd326d8-c952-46b8-8604-a913cab6607b` runtime-proved the fix:
+  one Sim101 entry, one master stop, one master target, follower entries at the
+  configured 1x/2x ratios, one native OCO pair per follower contract, and a native
+  target close across the complete group. Final truth is Sim101/102/103 flat with
+  zero working orders and realized PnL of +$8.00 / +$12.50 / +$24.50. The deployed
+  AddOn matches the candidate 87/87 with zero hash mismatches.
 
 ## Red-team corrections in the final pass
 
@@ -102,10 +112,9 @@ Glitch Flatten All remain authoritative.
 
 ## Honest release gates
 
-- The weekend cannot prove exchange fills. Before PA/live consideration, run one
-  bounded market-open Sim lifecycle: master entry → ratio followers → native
-  brackets → native close → all selected accounts flat and order-free → Journal
-  and outcome reconciliation.
+- The bounded market-open Sim lifecycle now passes for entry, ratio followers,
+  native brackets, native close, and final flat/order-free state. This is software
+  acceptance evidence, not profitability or PA/live authorization.
 - Exchange holidays and special closes still need an authoritative session source.
   Regular weekly and daily maintenance windows are implemented; this residual is
   tracked under GL-063 and blocks unattended PA/live promotion.
@@ -118,6 +127,6 @@ Glitch Flatten All remain authoritative.
 
 ## Next action
 
-At market open, perform the single bounded Sim acceptance above. If it passes,
-reset the paper epoch once and let the frozen candidate collect a versioned paper
-sample. Any PA/live AI promotion remains a separate explicit operator decision.
+Keep AI Auto off until the operator deliberately starts the next paper epoch. Then
+let this candidate collect a versioned paper sample without changing execution
+logic. Any PA/live AI promotion remains a separate explicit operator decision.

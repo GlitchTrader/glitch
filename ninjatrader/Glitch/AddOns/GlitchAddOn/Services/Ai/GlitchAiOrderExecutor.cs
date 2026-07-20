@@ -734,14 +734,6 @@ namespace Glitch.Services
                 || offset + (group.ProtectionLegs.Count * 2) >= group.Orders.Count)
                 return GlitchAiExecutionResult.Failed("group_protection_slots_missing");
 
-            lock (GroupSync)
-            {
-                if (group.ProtectionSubmitted != null
-                    && accountIndex < group.ProtectionSubmitted.Length
-                    && group.ProtectionSubmitted[accountIndex])
-                    return GlitchAiExecutionResult.Succeeded("group_structural_brackets_already_submitted");
-            }
-
             Account account = group.Accounts[accountIndex];
             Order entry = group.Orders[offset];
             if (account == null || entry == null
@@ -755,38 +747,62 @@ namespace Glitch.Services
 
             double fillPrice = entry.AverageFillPrice;
             OrderAction exitAction = group.IsLong ? OrderAction.Sell : OrderAction.BuyToCover;
+            foreach (StructuralProtectionLeg leg in group.ProtectionLegs)
+            {
+                if (!IsExecutableBracketPrice(group.IsLong, fillPrice, leg.StopPrice, leg.TargetPrice))
+                    return GlitchAiExecutionResult.Failed("group_structural_geometry_invalid_at_fill");
+            }
+
+            // Account.CreateOrder can synchronously raise account/order callbacks.
+            // Claim this account's one protection submission before creating the
+            // first native order so callback re-entry cannot build another bracket.
+            lock (GroupSync)
+            {
+                if (group.ProtectionSubmitted == null
+                    || accountIndex >= group.ProtectionSubmitted.Length)
+                    return GlitchAiExecutionResult.Failed("group_protection_state_missing");
+                if (group.ProtectionSubmitted[accountIndex])
+                    return GlitchAiExecutionResult.Succeeded("group_structural_brackets_already_submitted");
+                group.ProtectionSubmitted[accountIndex] = true;
+            }
+
             var createdOrders = new List<Order>();
             var evidence = new List<string>();
             string protectionSubmissionNonce = Guid.NewGuid().ToString("N").Substring(0, 6);
-            for (int legIndex = 0; legIndex < group.ProtectionLegs.Count; legIndex++)
-            {
-                StructuralProtectionLeg leg = group.ProtectionLegs[legIndex];
-                double stopPrice = leg.StopPrice;
-                double targetPrice = leg.TargetPrice;
-                if (!IsExecutableBracketPrice(group.IsLong, fillPrice, stopPrice, targetPrice))
-                    return GlitchAiExecutionResult.Failed("group_structural_geometry_invalid_at_fill", "leg=" + (legIndex + 1));
-
-                string legToken = (legIndex + 1).ToString(CultureInfo.InvariantCulture);
-                string oco = "GLTAI" + group.Correlation
-                    + accountIndex.ToString(CultureInfo.InvariantCulture)
-                    + legToken + protectionSubmissionNonce;
-                string stopSignal = BuildSignalName(SignalStop, group.Correlation, accountIndex, legIndex);
-                string targetSignal = BuildSignalName(SignalTarget, group.Correlation, accountIndex, legIndex);
-                Order stop = CreateExitOrder(account, group.Instrument, exitAction, OrderType.StopMarket, leg.Quantity, 0, stopPrice, oco, stopSignal);
-                Order target = CreateExitOrder(account, group.Instrument, exitAction, OrderType.Limit, leg.Quantity, targetPrice, 0, oco, targetSignal);
-                if (stop == null || target == null)
-                    return GlitchAiExecutionResult.Failed("group_structural_bracket_create_failed", "leg=" + legToken);
-                group.Orders[offset + 1 + (legIndex * 2)] = stop;
-                group.Orders[offset + 2 + (legIndex * 2)] = target;
-                createdOrders.Add(stop);
-                createdOrders.Add(target);
-                evidence.Add("leg" + legToken + "_qty=" + leg.Quantity.ToString(CultureInfo.InvariantCulture));
-                evidence.Add("sl" + legToken + "=" + stopPrice.ToString(CultureInfo.InvariantCulture));
-                evidence.Add("tp" + legToken + "=" + targetPrice.ToString(CultureInfo.InvariantCulture));
-            }
-
             try
             {
+                for (int legIndex = 0; legIndex < group.ProtectionLegs.Count; legIndex++)
+                {
+                    StructuralProtectionLeg leg = group.ProtectionLegs[legIndex];
+                    double stopPrice = leg.StopPrice;
+                    double targetPrice = leg.TargetPrice;
+                    string legToken = (legIndex + 1).ToString(CultureInfo.InvariantCulture);
+                    string oco = "GLTAI" + group.Correlation
+                        + accountIndex.ToString(CultureInfo.InvariantCulture)
+                        + legToken + protectionSubmissionNonce;
+                    string stopSignal = BuildSignalName(SignalStop, group.Correlation, accountIndex, legIndex);
+                    string targetSignal = BuildSignalName(SignalTarget, group.Correlation, accountIndex, legIndex);
+                    Order stop = CreateExitOrder(account, group.Instrument, exitAction, OrderType.StopMarket, leg.Quantity, 0, stopPrice, oco, stopSignal);
+                    Order target = CreateExitOrder(account, group.Instrument, exitAction, OrderType.Limit, leg.Quantity, targetPrice, 0, oco, targetSignal);
+                    if (stop != null)
+                        createdOrders.Add(stop);
+                    if (target != null)
+                        createdOrders.Add(target);
+                    if (stop == null || target == null)
+                    {
+                        ReleaseProtectionSubmission(group, accountIndex, createdOrders);
+                        return GlitchAiExecutionResult.Failed("group_structural_bracket_create_failed", "leg=" + legToken);
+                    }
+                    lock (GroupSync)
+                    {
+                        group.Orders[offset + 1 + (legIndex * 2)] = stop;
+                        group.Orders[offset + 2 + (legIndex * 2)] = target;
+                    }
+                    evidence.Add("leg" + legToken + "_qty=" + leg.Quantity.ToString(CultureInfo.InvariantCulture));
+                    evidence.Add("sl" + legToken + "=" + stopPrice.ToString(CultureInfo.InvariantCulture));
+                    evidence.Add("tp" + legToken + "=" + targetPrice.ToString(CultureInfo.InvariantCulture));
+                }
+
                 lock (GroupSync)
                 {
                     foreach (Order protectionOrder in createdOrders)
@@ -795,26 +811,13 @@ namespace Glitch.Services
                 account.Submit(createdOrders.ToArray());
                 if (createdOrders.Any(IsRejected))
                 {
-                    lock (GroupSync)
-                    {
-                        foreach (Order protectionOrder in createdOrders)
-                            GroupsBySignal.Remove(protectionOrder.Name.Trim());
-                    }
+                    ReleaseProtectionSubmission(group, accountIndex, createdOrders);
                     return GlitchAiExecutionResult.Failed("group_structural_bracket_rejected", account.Name);
-                }
-                lock (GroupSync)
-                {
-                    if (group.ProtectionSubmitted != null && accountIndex < group.ProtectionSubmitted.Length)
-                        group.ProtectionSubmitted[accountIndex] = true;
                 }
             }
             catch (Exception ex)
             {
-                lock (GroupSync)
-                {
-                    foreach (Order protectionOrder in createdOrders)
-                        GroupsBySignal.Remove(protectionOrder.Name.Trim());
-                }
+                ReleaseProtectionSubmission(group, accountIndex, createdOrders);
                 return GlitchAiExecutionResult.Failed("group_structural_bracket_submit_exception", ex.GetType().Name);
             }
 
@@ -824,6 +827,25 @@ namespace Glitch.Services
                     + "|account=" + CleanToken(account.Name)
                     + "|fill=" + fillPrice.ToString(CultureInfo.InvariantCulture)
                     + "|" + string.Join("|", evidence));
+        }
+
+        private static void ReleaseProtectionSubmission(
+            ExecutionGroupContext group,
+            int accountIndex,
+            IEnumerable<Order> createdOrders)
+        {
+            lock (GroupSync)
+            {
+                foreach (Order protectionOrder in createdOrders ?? Enumerable.Empty<Order>())
+                {
+                    if (protectionOrder != null && !string.IsNullOrWhiteSpace(protectionOrder.Name))
+                        GroupsBySignal.Remove(protectionOrder.Name.Trim());
+                }
+                if (group?.ProtectionSubmitted != null
+                    && accountIndex >= 0
+                    && accountIndex < group.ProtectionSubmitted.Length)
+                    group.ProtectionSubmitted[accountIndex] = false;
+            }
         }
 
         private static double RoundToTick(double price, double tickSize)

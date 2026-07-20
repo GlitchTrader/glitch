@@ -711,26 +711,27 @@ def extract_json(stdout: str) -> dict[str, Any]:
     try:
         value = json.loads(candidate)
     except json.JSONDecodeError as original_error:
-        # Hermes quiet chat can occasionally echo the same final response
-        # twice (two complete JSON values separated by whitespace). Accept
-        # only byte-for-byte equivalent decoded values. Distinct JSON values
-        # or arbitrary trailing prose remain a hard failure so the executor
-        # can never guess which decision the model intended.
+        # Hermes quiet chat can add renderer chatter or echo the final response.
+        # Recover only when stdout contains one unambiguous batch value. Schema
+        # validation still runs after extraction; distinct decisions fail closed.
         decoder = json.JSONDecoder()
-        repeated_values: list[Any] = []
-        offset = 0
-        try:
-            while offset < len(candidate):
-                while offset < len(candidate) and candidate[offset].isspace():
-                    offset += 1
-                if offset >= len(candidate):
-                    break
-                repeated_value, offset = decoder.raw_decode(candidate, offset)
-                repeated_values.append(repeated_value)
-        except json.JSONDecodeError:
-            repeated_values = []
-        if len(repeated_values) > 1 and all(value == repeated_values[0] for value in repeated_values[1:]):
-            value = repeated_values[0]
+        batch_values: list[dict[str, Any]] = []
+        for offset, char in enumerate(candidate):
+            if char != "{":
+                continue
+            try:
+                decoded, _ = decoder.raw_decode(candidate, offset)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(decoded, dict) and (
+                decoded.get("schema_version") == "glitch.intent.batch.v1"
+                or "decisions" in decoded
+                or "intents" in decoded
+            ):
+                if not any(decoded == existing for existing in batch_values):
+                    batch_values.append(decoded)
+        if len(batch_values) == 1:
+            value = batch_values[0]
         else:
             try:
                 value = json.loads(close_unbalanced_json_containers(candidate))
@@ -882,6 +883,8 @@ def build_prompt(
         "never compress a stop to create attractive R:R. Use realistic targets supported by the same horizon and regime. stop_loss and "
         "take_profit fields are absolute MNQ prices, not distances, and Glitch preserves them unless the live market has already crossed them. "
         "Choose quantity only from execution_scope.books[].valid_entry_quantities. A quantity of two or more may use TP2 plus quantity_tp1; "
+        "Treat execution_scope as current capacity authority: a historical infrastructure or capacity rejection is not a continuing veto when "
+        "the current book has valid_entry_quantities and current native state is eligible. "
         "a quantity of three or more may also use TP3 plus quantity_tp2. Each leg may have its own tighter initial stop, and every leg receives "
         "an independent native OCO pair. Same-direction protected tranches may add; never reverse through an entry. "
         "Return exactly one glitch.intent.batch.v1 JSON object with one ordered glitch.intent.v2 decision per supplied book. "
