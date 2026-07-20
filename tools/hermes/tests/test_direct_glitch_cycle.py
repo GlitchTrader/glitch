@@ -196,7 +196,7 @@ class DirectCycleTests(unittest.TestCase):
 
         self.assertEqual(actual["directive_type"], "native_tool_canary")
 
-    def test_hermes_invocation_uses_resumed_quiet_chat_not_oneshot(self):
+    def test_hermes_invocation_uses_fresh_quiet_chat(self):
         batch = {
             "schema_version": "glitch.intent.batch.v1",
             "cycle_id": "cycle-1",
@@ -210,24 +210,23 @@ class DirectCycleTests(unittest.TestCase):
             completed = SimpleNamespace(
                 returncode=0,
                 stdout=json.dumps(batch),
-                stderr="session_id: trading-session-id\n",
+                stderr="",
             )
             with mock.patch.object(MODULE.shutil, "which", return_value=str(hermes)), mock.patch.object(
                 MODULE.subprocess, "run", return_value=completed
             ) as run:
-                actual, stderr, session_id = MODULE.invoke_hermes("glitch", "large prompt", 30)
+                actual = MODULE.invoke_hermes("glitch", "large prompt", 30)
 
         self.assertEqual(actual, batch)
-        self.assertEqual(session_id, "trading-session-id")
-        self.assertEqual(stderr, completed.stderr)
         wrapper = run.call_args.args[0][2]
-        self.assertIn("'chat', '-Q', '--resume', 'trading'", wrapper)
+        self.assertIn("'chat', '-Q'", wrapper)
         self.assertIn("'--model', 'gpt-5.6-luna'", wrapper)
         self.assertIn("'--provider', 'openai-codex'", wrapper)
         self.assertIn("'--max-turns', '4'", wrapper)
         self.assertIn("'--toolsets', 'memory'", wrapper)
         self.assertIn("glitch-self-learning", wrapper)
         self.assertIn("['-q',prompt]", wrapper)
+        self.assertNotIn("'--resume'", wrapper)
         self.assertNotIn("'-z'", wrapper)
         self.assertEqual(run.call_args.kwargs["input"], "large prompt")
 
@@ -238,6 +237,25 @@ class DirectCycleTests(unittest.TestCase):
         self.assertIn("hide a loss", value)
         self.assertIn("reset a performance baseline", value)
         self.assertIn("append-only corrections", value)
+        self.assertIn(
+            "snapshot_hash must be a JSON string copied exactly",
+            value,
+        )
+
+    def test_process_error_outcomes_are_not_sent_to_trading_memory(self):
+        with tempfile.TemporaryDirectory() as root:
+            intents = Path(root) / "intents"
+            intents.mkdir()
+            (intents / "hermes-trade-outcomes.jsonl").write_text(
+                json.dumps({"intent_id": "eligible", "learning_eligible": True}) + "\n"
+                + json.dumps({"intent_id": "process-error", "learning_eligible": False}) + "\n"
+                + json.dumps({"intent_id": "legacy"}) + "\n",
+                encoding="utf-8",
+            )
+
+            outcomes = MODULE.journal_tail(Path(root))["outcomes"]
+
+        self.assertEqual([json.loads(row)["intent_id"] for row in outcomes], ["eligible", "legacy"])
 
     def test_prompt_uses_probabilistic_confirmation_and_short_decision_horizons(self):
         value = MODULE.build_prompt(packet(), MODULE.build_scenario(packet()), {})
@@ -320,10 +338,6 @@ class DirectCycleTests(unittest.TestCase):
         self.assertIn("invoke native memory retrieval exactly once", value)
         self.assertIn("must not write memory", value)
         self.assertIn("at least two comparable completed outcomes", value)
-
-    def test_missing_persisted_session_id_fails_closed(self):
-        with self.assertRaisesRegex(ValueError, "hermes_session_id_missing"):
-            MODULE._session_id_from_stderr("model completed without session evidence")
 
     def test_groups_and_ratios_come_from_glitch_packet(self):
         scenario = MODULE.build_scenario(packet())

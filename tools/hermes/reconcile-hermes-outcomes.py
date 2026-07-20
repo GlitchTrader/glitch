@@ -309,20 +309,13 @@ def _match_ledger_trades(ledger, expected_accounts, bracket_by_account, intent, 
                 )).lower()
                 if correlation.lower() not in identity:
                     continue
-            if account_key != master.lower() and not has_account_bracket:
-                entry_signal = str(trade.get("entry_signal") or "").lower()
-                protection = follower_protection.get((account_key, entry_signal))
-                if protection is None:
-                    continue
-                if abs((protection["recorded_utc"] - trade["entry_utc"]).total_seconds()) > 5:
-                    continue
             price_distance = abs(trade["entry_price"] - bracket_fill) if bracket_fill is not None else 0
-            candidates.append((delta_seconds, price_distance, trade["trade_id"], trade))
+            candidates.append((delta_seconds, price_distance, trade["exit_utc"], trade["trade_id"], trade))
         if not candidates:
             return None
-        candidates.sort(key=lambda item: item[:3])
-        matched[account.lower()] = candidates[0][3]
-    return matched
+        candidates.sort(key=lambda item: item[:4])
+        matched[account.lower()] = candidates[0][4]
+    return matched, follower_protection
 
 
 def reconcile(glitch_data, evidence_root, output_path, decision_root=None):
@@ -364,11 +357,12 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None):
             continue
 
         correlation = submit_fields.get("correlation", "")
-        ledger_by_account = _match_ledger_trades(
+        matched = _match_ledger_trades(
             trade_ledger, expected_accounts, bracket_by_account, intent, correlation, journal
         )
-        if ledger_by_account is None:
+        if matched is None:
             continue
+        ledger_by_account, follower_protection = matched
 
         entry_utc = min(ledger_by_account[account.lower()]["entry_utc"] for account in expected_accounts)
         exit_utc = max(ledger_by_account[account.lower()]["exit_utc"] for account in expected_accounts)
@@ -378,6 +372,7 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None):
         instrument_root = str(intent.get("instrument", "MNQ")).upper()
         account_outcomes = []
         incomplete_outcome = False
+        process_error = False
         for account in expected_accounts:
             has_account_bracket = account.lower() in bracket_by_account
             _, fields = bracket_by_account.get(account.lower(), bracket_by_account[master.lower()])
@@ -394,6 +389,19 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None):
             # TradeLedger pnl_points is already quantity-weighted by
             # GlitchTradeInsightsService as each closing fill is accumulated.
             pnl_usd = trade["pnl_points"] * point_value - trade["commission_total"]
+            protection_evidence = "execution_receipt"
+            protection_status = "submitted"
+            if not has_account_bracket:
+                entry_signal = str(trade.get("entry_signal") or "").lower()
+                protection = follower_protection.get((account.lower(), entry_signal))
+                if protection is not None and abs(
+                    (protection["recorded_utc"] - trade["entry_utc"]).total_seconds()
+                ) <= 5:
+                    protection_evidence = "copy_engine_journal"
+                else:
+                    protection_evidence = "terminal_trade_ledger"
+                    protection_status = "failed_or_missing"
+                    process_error = True
             account_outcomes.append({
                 "account": account,
                 "quantity": quantity,
@@ -401,7 +409,8 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None):
                 "exit_price": exit_price,
                 "realized_pnl_usd": pnl_usd,
                 "trade_id": trade["trade_id"],
-                "protection_evidence": "execution_receipt" if has_account_bracket else "copy_engine_journal",
+                "protection_evidence": protection_evidence,
+                "protection_status": protection_status,
                 "close_kind": infer_close_kind(trade),
                 **excursion(snapshots, account, entry_utc, exit_utc, instrument_root),
             })
@@ -428,6 +437,8 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None):
             "decision_audit": intent.get("decision_audit"),
             "account_outcomes": account_outcomes,
             "group_realized_pnl_usd": sum(row["realized_pnl_usd"] for row in account_outcomes),
+            "attribution_status": "process_error" if process_error else "complete",
+            "learning_eligible": not process_error,
             "evidence": intent.get("_evidence_path"),
         }
 

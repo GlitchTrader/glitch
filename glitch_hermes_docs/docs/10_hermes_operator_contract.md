@@ -314,7 +314,7 @@ GlitchData/hermes/exchange/glitch/*  Glitch writes, Hermes reads
 GlitchData/hermes/exchange/hermes/* Hermes writes, Glitch/bridge reads
 ```
 
-In the harness, Glitch writes one immutable minute frame after matching market and portfolio snapshots exist and publishes the latest rolling five-frame packet. Hermes native cron wakes a lightweight worker each minute. The worker spends no model call unless the model cadence is due, resumes only the named `trading` session, and delivers strict intents through Glitch's authenticated localhost receiver. Delivery retries reuse the same intent IDs; completed receipts prevent replay. The gateway must use Hermes native supervision, not an orphan child process.
+In the harness, Glitch writes one immutable minute frame after matching market and portfolio snapshots exist and publishes the latest rolling five-frame packet. Hermes native cron wakes a lightweight worker each minute. The worker spends no model call unless the model cadence is due, uses a fresh bounded decision context for each eligible packet, and delivers strict intents through Glitch's authenticated localhost receiver. Bounded authoritative Glitch evidence and durable Hermes memory provide continuity without an ever-growing inference transcript. Delivery retries reuse the same intent IDs; completed receipts prevent replay. The gateway must use Hermes native supervision, not an orphan child process.
 
 Full cognitive runtime map (only the core loop is enabled during initial validation):
 
@@ -413,14 +413,14 @@ Never:
 
 ## Session layout
 
-One `glitch` profile is one agent identity and one native memory system. It has two named sibling sessions, not two agents:
+One `glitch` profile is one agent identity and one native memory system. Its scheduled decisions are stateless; named sessions are maintainer surfaces, not runtime state:
 
 ```text
 chat      internal maintainer/supervision session; never exposed in the Glitch client UI
-trading   persistent JSON-only decision history; resumed only when the worker's model cadence is due
+trading   retained only for epoch/reset compatibility; never resumed by the worker
 ```
 
-The core worker uses `--resume trading`, never `--continue`. This removes the ambiguous “latest session” dependency while preserving one profile, shared native skills, memory, and filesystem. The chat session may inspect status and accept human slash commands while trading continues independently.
+The core worker uses fresh isolated cycles with the complete current packet and bounded outcomes. This prevents a failed or oversized transcript from poisoning later decisions while preserving one profile, shared native skills, memory, and filesystem. The chat session may inspect status and accept human slash commands while trading continues independently.
 
 The product UI exposes Feed, not the internal maintainer session. The local chat/slash-command surface remains a harness and maintainer tool, not a customer dependency.
 

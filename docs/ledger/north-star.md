@@ -46,7 +46,7 @@ Hermes decides. Glitch validates, executes, protects, replicates, and journals.
 The active local `glitch` profile is an internal Sim/paper contract-validation
 harness. It reasons for configured masters from current five-frame market data,
 native portfolio state, account/group capacity, prop rules, Journal outcomes,
-and its persistent session/skills. Codex is a builder and is not in the runtime
+and its native memory/skills. Scheduled decisions are stateless. Codex is a builder and is not in the runtime
 loop.
 
 Glitch AI is cognitive, not a disguised deterministic strategy. Direction,

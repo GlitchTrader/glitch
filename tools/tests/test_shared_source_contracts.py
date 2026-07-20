@@ -256,6 +256,38 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("ProcessFollowerOrderUpdate", replication)
         self.assertIn("ProcessAccountStateUpdate", replication)
 
+    def test_copy_cleanup_waits_for_native_position_truth(self):
+        body = method_body(
+            source(REPLICATION_UI),
+            "private void TryProcessReplicationOrderStateFromRuntimeEvent",
+            "private List<Account> ResolveFlattenAllAccounts",
+        )
+        self.assertIn(
+            'if (string.Equals(eventName, "PositionUpdate", StringComparison.OrdinalIgnoreCase))\n'
+            "                _copyEngine.ProcessAccountStateUpdate(account);",
+            body,
+        )
+
+    def test_glitch_trade_lifecycle_keeps_earliest_terminal_exit(self):
+        ledger = source(ADDON / "Services/Insights/GlitchTradeLedgerService.cs")
+        body = method_body(
+            ledger,
+            "private void NormalizeDuplicateTradesUnsafe",
+            "private static string BuildExactDuplicateSignature",
+        )
+        self.assertIn("seenGlitchEntries", body)
+        self.assertIn('entrySignal.StartsWith("GLT-"', body)
+        self.assertIn(".OrderBy(pair => pair.Value?.ExitUtc", body)
+
+    def test_follower_failure_evidence_is_trade_scoped_and_unambiguous(self):
+        copy_engine = source(COPY_ENGINE)
+        self.assertIn(
+            '"FollowerProtectionRejected|" + root + "|" + CleanToken(lifecycle?.EntrySignal ?? signal)',
+            copy_engine,
+        )
+        self.assertIn("|result=flatten_requested", copy_engine)
+        self.assertNotIn("submitted_pending_confirmation", copy_engine)
+
     def test_replication_state_is_truthful_and_reload_is_observe_only(self):
         window = source(MAIN_WINDOW)
         performance = source(ADDON / "UI/MainWindow/GlitchMainWindow.Performance.partial.cs")

@@ -178,7 +178,7 @@ Centralization does not begin until the local harness proves:
 
 ```text
 supervised hidden gateway survives terminal/Codex exit
-one named trading session continues across cycles
+stateless decision cycles survive a failed or oversized prior turn
 portfolio top-level values equal nested live positions
 every completed group round trip becomes one learning outcome
 master-only intent replicates through Glitch with native brackets per account

@@ -300,6 +300,14 @@ def _is_current_utc_record(line: str, today: str) -> bool:
     return False
 
 
+def _is_learning_eligible_outcome(line: str) -> bool:
+    try:
+        value = json.loads(line)
+    except json.JSONDecodeError:
+        return False
+    return isinstance(value, dict) and value.get("learning_eligible", True) is not False
+
+
 def journal_tail(glitch_data: Path, max_lines: int = 12) -> dict[str, list[str]]:
     today = datetime.now(timezone.utc).date().isoformat()
     result: dict[str, list[str]] = {"received": [], "decisions": []}
@@ -311,7 +319,7 @@ def journal_tail(glitch_data: Path, max_lines: int = 12) -> dict[str, list[str]]
 
     outcomes = glitch_data / "intents" / "hermes-trade-outcomes.jsonl"
     outcome_lines = outcomes.read_text(encoding="utf-8", errors="replace").splitlines() if outcomes.is_file() else []
-    result["outcomes"] = [line for line in outcome_lines if line.strip()][-max_lines:]
+    result["outcomes"] = [line for line in outcome_lines if _is_learning_eligible_outcome(line)][-max_lines:]
     # Journal.tsv is a long-lived human ledger. It remains on disk and in
     # Hermes memory, but is deliberately excluded from the active entry gate;
     # current-day execution/outcome JSONL is the authoritative capacity input.
@@ -742,16 +750,7 @@ def extract_json(stdout: str) -> dict[str, Any]:
     return value
 
 
-def _session_id_from_stderr(stderr: str) -> str:
-    for line in reversed(stderr.splitlines()):
-        if line.strip().lower().startswith("session_id:"):
-            session_id = line.split(":", 1)[1].strip()
-            if session_id:
-                return session_id
-    raise ValueError("hermes_session_id_missing")
-
-
-def invoke_hermes(profile: str, prompt: str, timeout_seconds: int) -> tuple[dict[str, Any], str, str]:
+def invoke_hermes(profile: str, prompt: str, timeout_seconds: int) -> dict[str, Any]:
     executable = shutil.which("hermes")
     if not executable:
         raise RuntimeError("hermes_executable_not_found")
@@ -763,14 +762,11 @@ def invoke_hermes(profile: str, prompt: str, timeout_seconds: int) -> tuple[dict
     python_executable = Path(executable).with_name("python.exe")
     if not python_executable.is_file():
         raise RuntimeError("hermes_python_runtime_not_found")
-    # Hermes deliberately handles -z/--oneshot before --resume. Combining
-    # those flags silently created an isolated session on every cycle. Use the
-    # quiet single-query chat path instead: it restores the named session,
-    # appends this turn, persists the result, and prints only the final response
-    # to stdout plus the exact session id on stderr.
+    # Each packet is complete decision context. Keep scheduled cycles stateless
+    # so a failed or oversized turn cannot poison later cycles. Native memory is
+    # still available through the explicitly enabled memory toolset.
     cli_args = [
         "chat", "-Q",
-        "--resume", "trading",
         "--model", CORE_MODEL,
         "--provider", CORE_PROVIDER,
         "--max-turns", "4",
@@ -802,9 +798,8 @@ def invoke_hermes(profile: str, prompt: str, timeout_seconds: int) -> tuple[dict
         raise RuntimeError(f"hermes_failed:{completed.returncode}:{completed.stderr.strip()}")
     # Never recover from the globally-latest assistant message. Chat and
     # review sessions can run concurrently; cross-session recovery can submit
-    # another session's decision. Quiet chat stdout is the sole response.
-    batch = extract_json(completed.stdout)
-    return batch, completed.stderr, _session_id_from_stderr(completed.stderr)
+    # another session's decision. Fresh-chat stdout is the sole response.
+    return extract_json(completed.stdout)
 
 
 def post_intent(intent: dict[str, Any], token: str) -> dict[str, Any]:
@@ -898,8 +893,8 @@ def build_prompt(
         "and take_profit_1. Keep reason to at most 24 words and each decision_audit value to at most 18 words. "
         "For ENTER_LONG/ENTER_SHORT use order_type=MARKET and include stop_loss/take_profit_1. Optional scale-out fields are "
         "take_profit_2, quantity_tp1, stop_loss_2, take_profit_3, quantity_tp2, and stop_loss_3. For MOVE_STOP include only "
-        "stop_loss and tighten the active Glitch-owned native stops; never loosen risk. Echo cycle_id, account/operator_profile, "
-        "and MNQ snapshot_hash exactly. "
+        "stop_loss and tighten the active Glitch-owned native stops; never loosen risk. Echo cycle_id and account/operator_profile exactly. "
+        "snapshot_hash must be a JSON string copied exactly from the MNQ market snapshot, even when it contains only digits. "
         "Use the top-level key decisions, never intents. Close every intent object before closing the decisions "
         "array. Before returning, silently verify that the entire response is one syntactically valid JSON object "
         "that a strict JSON parser can load. Return no markdown fences, commentary, or trailing text. "
@@ -918,12 +913,12 @@ def build_prompt(
         "durable lessons when useful and persist only compact, evidence-backed lessons supported by repeated completed outcomes. "
         "If operator_advisory has directive_type=native_tool_canary, invoke native memory retrieval exactly once for Glitch "
         "trading lessons before producing the normal decision JSON. This diagnostic must not bias the trade decision and must "
-        "not write memory. When recent_glitch_ledger.outcomes contains new completed outcomes, retrieve relevant durable lessons "
+        "not write memory. When recent_glitch_ledger.outcomes contains new learning-eligible completed outcomes, retrieve relevant durable lessons "
         "before deciding; persist a new lesson only when at least two comparable completed outcomes support it. "
         "Treat NinjaTrader/Glitch positions, orders, fills, balances, PnL, brackets, receipts, and outcomes as authoritative facts; "
         "memory and Hermes journals are interpretations. Never fabricate missing facts, hide a loss, reset a performance baseline, "
         "rewrite history, or mark a discrepancy resolved without current authoritative evidence. Preserve contradictions with "
-        "append-only corrections and keep single outcomes episodic unless they prove a deterministic process defect; "
+        "append-only corrections and keep single outcomes episodic. Process defects are code evidence and never trading memory; "
         "then return the required strict JSON.\n"
         "CURRENT_CYCLE="
         + json.dumps(envelope, separators=(",", ":"), ensure_ascii=False)
@@ -1078,7 +1073,7 @@ def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int
         "provider": CORE_PROVIDER,
     })
     try:
-        batch, stderr, hermes_session_id = invoke_hermes(args.profile, prompt, args.timeout_seconds)
+        batch = invoke_hermes(args.profile, prompt, args.timeout_seconds)
         batch = normalize_batch(batch, scenario)
         validate_batch(batch, scenario, directive)
         persist_outbox(exchange, outbox_path, packet_id, batch, directive)
@@ -1090,7 +1085,6 @@ def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int
             "status": "decision_ready",
             "model": CORE_MODEL,
             "provider": CORE_PROVIDER,
-            "hermes_session_id": hermes_session_id,
         })
     except Exception as error:
         attempt = read_json(attempt_path)
@@ -1117,7 +1111,6 @@ def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int
         "cycle_id": packet_id,
         "decision_count": len(batch["decisions"]),
         "submitted": not args.dry_run,
-        "hermes_session_id": hermes_session_id,
     })
     if args.dry_run:
         print(json.dumps({"cycle_id": packet_id, "decision_count": len(batch["decisions"]), "submitted": False}))

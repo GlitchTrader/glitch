@@ -1,6 +1,6 @@
 # Now — clean AI candidate
 
-**Updated:** 2026-07-19
+**Updated:** 2026-07-20
 
 **Branch:** `cleanup/ai-core`
 
@@ -26,12 +26,18 @@ Glitch Flatten All remain authoritative.
 - AI execution is strict and fail-closed: validated JSON only, selected master
   only, current native portfolio state required, current account/group capacity
   required, market entry only, and native stop/target protection required.
-- One named Hermes `trading` session uses `gpt-5.6-luna`, medium reasoning, no
-  fallback provider, and a four-turn ceiling. Flat books are considered at one
+- Each Hermes decision cycle is stateless and uses `gpt-5.6-luna`, medium reasoning,
+  no fallback provider, and a four-turn ceiling. Flat books are considered at one
   five-minute decision boundary; positioned books may be reconsidered each minute.
 - Delivery is idempotent and crash-safe through a durable outbox/receipt pair.
   Retry reuses the same intent id and never spends a second model call for the
   same packet.
+- CopyEngine lifecycle cleanup runs only after native position truth changes, so
+  re-entrant protection order callbacks cannot misclassify a just-filled follower
+  as flat and cancel its new stop/target.
+- Glitch entry signals are the ledger lifecycle identity. The earliest terminal
+  exit wins, and failed/missing protection produces an auditable `process_error`
+  outcome that is excluded from trading memory instead of being silently dropped.
 - AI Auto is one truthful switch for the whole core apparatus. ON means the Glitch
   execution gate is open and the named Hermes core job is enabled; OFF closes the
   execution gate and pauses that job, so it cannot spend five-minute Luna calls.
@@ -71,8 +77,8 @@ Glitch Flatten All remain authoritative.
 
 ## Verification and market-open acceptance
 
-- Shared source contracts: **34/34**.
-- AI/Hermes contracts: **81/81**; complete AI suite **115/115**.
+- Shared source contracts: **37/37**.
+- AI/Hermes contracts: **81/81**; complete AI suite **118/118**.
 - Five production web builds: pass.
 - Five web lint runs: pass.
 - Python compilation, tracked PowerShell parsing, tracked JSON parsing, secret
@@ -127,6 +133,6 @@ Glitch Flatten All remain authoritative.
 
 ## Next action
 
-Keep AI Auto off until the operator deliberately starts the next paper epoch. Then
-let this candidate collect a versioned paper sample without changing execution
-logic. Any PA/live AI promotion remains a separate explicit operator decision.
+AI Auto is currently operator-enabled in paper mode. Let this corrected candidate
+collect a versioned paper sample without changing execution logic. Any PA/live AI
+promotion remains a separate explicit operator decision.

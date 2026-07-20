@@ -114,6 +114,33 @@ class DirectOutcomeReconcileTests(unittest.TestCase):
                 [row["protection_evidence"] for row in rows[0]["account_outcomes"]],
                 ["execution_receipt", "copy_engine_journal", "copy_engine_journal"],
             )
+            self.assertEqual(rows[0]["attribution_status"], "complete")
+            self.assertTrue(rows[0]["learning_eligible"])
+            self.assertTrue(all(
+                row["protection_status"] == "submitted" for row in rows[0]["account_outcomes"]
+            ))
+
+            with ledger.open("a", encoding="utf-8") as stream:
+                stream.write(ledger_row(
+                    "Sim102", "2026-07-14T12:00:03Z", "2026-07-14T12:05:03Z",
+                    20001, 20030, quantity=2, entry_signal=sim102_signal,
+                ))
+            (gd / "Journal.tsv").write_text(
+                f"{dotnet_ticks('2026-07-14T12:00:03Z')}\tSim102\tReplication\t"
+                "follower_flatten|instrument=MNQ|reason=protection_order_rejected|result=flatten_requested\n"
+                f"{dotnet_ticks('2026-07-14T12:00:04Z')}\tSim103\tReplication\t"
+                f"follower_protection|entry={sim103_signal}|protected_qty=3|result=submitted\n",
+                encoding="utf-8",
+            )
+
+            rows = MODULE.reconcile(gd, None, output, outbox)
+            sim102 = rows[0]["account_outcomes"][1]
+            self.assertEqual(rows[0]["group_realized_pnl_usd"], 104)
+            self.assertEqual(rows[0]["attribution_status"], "process_error")
+            self.assertFalse(rows[0]["learning_eligible"])
+            self.assertEqual(sim102["exit_price"], 20010)
+            self.assertEqual(sim102["protection_evidence"], "terminal_trade_ledger")
+            self.assertEqual(sim102["protection_status"], "failed_or_missing")
 
 
 if __name__ == "__main__":

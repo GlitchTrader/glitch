@@ -121,7 +121,7 @@ Output stays small. The cost risk is input/context bloat, not the intent JSON.
 
 Glitch writes a minute frame only after market and portfolio snapshots with the same `snapshot_id` are both present. Once five consecutive frames exist, it atomically publishes one immutable rolling five-frame packet per minute under `GlitchData/hermes/exchange/glitch`. The lightweight worker wakes each minute but invokes Luna only on five-minute boundaries while flat, every minute while a scoped master is positioned, or once for an explicit directive.
 
-Hermes native cron owns the wake-up under a supervised gateway. Its worker performs a zero-model check for a new packet, resumes only the named `trading` session in the isolated `glitch` profile, reads bounded Glitch journal tails, and submits strict intents to Glitch's authenticated receiver. It does not classify opportunities or impose trading archetypes before inference. Contract/scope validation cannot replace Hermes's probabilistic decision; Glitch's firewall remains the execution authority.
+Hermes native cron owns the wake-up under a supervised gateway. Its worker performs a zero-model check for a new packet, opens a fresh bounded decision context in the isolated `glitch` profile, reads bounded Glitch journal tails, and submits strict intents to Glitch's authenticated receiver. It does not classify opportunities or impose trading archetypes before inference. Contract/scope validation cannot replace Hermes's probabilistic decision; Glitch's firewall remains the execution authority.
 
 Codex is not present in snapshot publication, scheduling, inference, delivery, execution, journaling, or learning.
 

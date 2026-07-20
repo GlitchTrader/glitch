@@ -87,7 +87,7 @@ namespace Glitch.Services
                     }
                 }
 
-                NormalizeExactDuplicateTradesUnsafe();
+                NormalizeDuplicateTradesUnsafe();
                 bool queueFlush = _dirty;
 
                 var snapshot = _ledgerById.Values
@@ -205,7 +205,7 @@ namespace Glitch.Services
             {
             }
 
-            NormalizeExactDuplicateTradesUnsafe();
+            NormalizeDuplicateTradesUnsafe();
         }
 
         private void FlushUnsafe(DateTime nowUtc, bool force)
@@ -385,13 +385,14 @@ namespace Glitch.Services
             return true;
         }
 
-        private void NormalizeExactDuplicateTradesUnsafe()
+        private void NormalizeDuplicateTradesUnsafe()
         {
             if (_ledgerById.Count <= 1)
                 return;
 
             var seenSignatures = new HashSet<string>(StringComparer.Ordinal);
-            var duplicateTradeIds = new List<string>();
+            var seenGlitchEntries = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var duplicateTradeIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (KeyValuePair<string, GlitchTradeInsightsService.TradeRoundTrip> kvp in _ledgerById
                 .OrderBy(pair => pair.Value?.ExitUtc ?? DateTime.MinValue)
@@ -406,6 +407,17 @@ namespace Glitch.Services
                     continue;
 
                 if (!seenSignatures.Add(signature))
+                {
+                    duplicateTradeIds.Add(kvp.Key);
+                    continue;
+                }
+
+                string entrySignal = CleanToken(trade.EntrySignal);
+                if (entrySignal.StartsWith("GLT-", StringComparison.OrdinalIgnoreCase)
+                    && !seenGlitchEntries.Add(string.Join("|",
+                        CleanToken(trade.AccountName),
+                        CleanToken(trade.Instrument),
+                        entrySignal)))
                     duplicateTradeIds.Add(kvp.Key);
             }
 

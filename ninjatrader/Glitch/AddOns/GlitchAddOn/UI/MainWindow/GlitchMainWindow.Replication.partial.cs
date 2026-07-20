@@ -236,10 +236,11 @@ namespace Glitch.UI
             if (string.Equals(eventName, "PositionUpdate", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(eventName, "ExecutionUpdate", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(eventName, "OrderUpdate", StringComparison.OrdinalIgnoreCase))
-            {
                 GlitchAiOrderExecutor.ProcessAccountStateUpdate(account);
+
+            if (string.Equals(eventName, "PositionUpdate", StringComparison.OrdinalIgnoreCase))
                 _copyEngine.ProcessAccountStateUpdate(account);
-            }
+
             if (!string.Equals(eventName, "OrderUpdate", StringComparison.OrdinalIgnoreCase))
                 return;
 

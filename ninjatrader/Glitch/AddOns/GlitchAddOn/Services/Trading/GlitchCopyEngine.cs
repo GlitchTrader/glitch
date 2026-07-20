@@ -406,7 +406,7 @@ namespace Glitch.Services
             RaiseCritical?.Invoke(
                 followerAccount.Name,
                 "A Glitch-owned follower stop or target was rejected; one native flatten was submitted and no order was retried.",
-                "FollowerProtectionRejected|" + root);
+                "FollowerProtectionRejected|" + root + "|" + CleanToken(lifecycle?.EntrySignal ?? signal));
         }
 
         public void ProcessAccountStateUpdate(Account account)
@@ -1172,7 +1172,7 @@ namespace Glitch.Services
                 Journal?.Invoke(account.Name,
                     "follower_flatten|instrument=" + CleanToken(GlitchReplicationEngine.GetInstrumentRoot(instrument))
                     + "|reason=" + CleanToken(reason)
-                    + "|result=submitted_pending_confirmation");
+                    + "|result=flatten_requested");
             }
             catch (Exception ex)
             {

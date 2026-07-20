@@ -2,6 +2,40 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-20 - decision continuity and follower protection root causes fixed
+
+- Reconstructed the stopped decision rail trade by trade. The gateway and cron
+  kept running, but every scheduled prompt was appended to one unbounded named
+  session. A timeout during Hermes compression left the active transcript over
+  provider context limits, so every later cycle deterministically resumed the
+  same poisoned history and failed.
+- Scheduled decisions now open a fresh four-turn context for each complete packet
+  and never resume a prior transcript. Native Hermes memory and the Glitch outcome
+  ledger remain available; failed turns can no longer contaminate later cycles.
+- The first fresh live cycle exposed one remaining generation-contract ambiguity:
+  validation correctly required a string, but the prompt did not say that a
+  numeric-looking `snapshot_hash` must stay quoted. The prompt now states that
+  exact JSON type instead of weakening or coercing the fail-closed validator.
+- Reconstructed the Sim102 protection rejection as a synchronous event-ordering
+  race. CopyEngine orphan cleanup ran inside the protection `OrderUpdate` callback
+  before NinjaTrader's position collection reflected the fill, cancelled the new
+  protection, and triggered fail-closed flatten. CopyEngine cleanup now runs only
+  on authoritative `PositionUpdate`; AI executor reconciliation keeps its existing
+  broader callbacks.
+- TradeLedger now treats a non-empty Glitch entry signal as the lifecycle identity
+  and keeps its earliest terminal exit. Outcome reconciliation emits completed
+  failed-protection groups as `process_error`, excludes them from trading memory,
+  and no longer silently drops their realized PnL. Warning identity is scoped to
+  the entry lifecycle, and flatten evidence now says `flatten_requested`.
+- Verification passed: 37 shared contracts plus 81 AI/Hermes contracts (118 total),
+  Python compilation, secret scan, and diff check. The complete 87-file AddOn was
+  deployed once with 87/87 matching hashes and F5 rebuilt
+  `NinjaTrader.Custom.dll` at 17:55 UTC with no compile-error surface. The worker,
+  reconciler, and SOUL installed hashes match this candidate exactly. The final
+  installed worker then completed scheduled cycle `20260720T1810Z` in a fresh
+  context: `decision_ready`, quoted hash, strict validation, and Glitch HTTP 202;
+  Hermes chose `NOTHING`, so execution correctly remained a no-op.
+
 ## 2026-07-19 - master protection callback recursion fixed and runtime-proved
 
 - Reconstructed the failure from native NinjaTrader evidence. After one Sim101

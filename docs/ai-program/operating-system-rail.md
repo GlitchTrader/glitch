@@ -33,9 +33,9 @@ central market ingestion -> canonical five-minute packet -> Hermes recommendatio
 
 The recommendation is advice, not an order. It carries stable identity, instrument, desired action/position, confidence, thesis, expiry, structural stop/targets, and risk metadata. Each client remains authoritative for account/group eligibility, quantity, prop rules, replication, orders, brackets, and emergency controls.
 
-The current local `glitch` Hermes profile and direct filesystem exchange are an **internal validation harness only**. They prove packet, decision, execution, replication, outcome, session-continuity, and learning contracts before the network boundary is introduced. They are not the customer deployment topology.
+The current local `glitch` Hermes profile and direct filesystem exchange are an **internal validation harness only**. They prove packet, decision, execution, replication, outcome, cycle-continuity, and learning contracts before the network boundary is introduced. They are not the customer deployment topology.
 
-Stabilization precedes expansion. The gate is: supervised gateway continuity; one persistent trading session; truthful portfolio snapshots; every completed group trade reconciled into learning outcomes; reproducible paper execution/replication/brackets; and an observable cycle trail. Only after that gate may central ingestion, recommendation APIs, Feed UI, dynamic quantity, multi-group, or multi-instrument work begin.
+Stabilization precedes expansion. The gate is: supervised gateway continuity; stateless decision cycles with durable native memory; truthful portfolio snapshots; every completed group trade reconciled into learning outcomes; reproducible paper execution/replication/brackets; and an observable cycle trail. Only after that gate may central ingestion, recommendation APIs, Feed UI, dynamic quantity, multi-group, or multi-instrument work begin.
 
 ---
 
