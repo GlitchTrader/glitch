@@ -3,14 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "npm run sync:release-dates",
-    "prebuild": "npm run sync:release-dates",
+    "predev": "npm run validate:releases",
+    "prebuild": "npm run validate:releases",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "checksums": "node ./scripts/generate-checksums.mjs",
-    "sync:release-dates": "node ./scripts/sync-release-dates.mjs"
+    "validate:releases": "node ./scripts/validate-releases.mjs"
   },
   "dependencies": {
     "next": "16.2.10",

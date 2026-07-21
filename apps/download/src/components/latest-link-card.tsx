@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 
 type LatestLinkCardProps = {
   latestUrl: string;
+  label?: string;
+  note?: string;
 };
 
 function fallbackCopyToClipboard(value: string): boolean {
@@ -26,7 +28,11 @@ function fallbackCopyToClipboard(value: string): boolean {
   return copied;
 }
 
-export function LatestLinkCard({ latestUrl }: LatestLinkCardProps) {
+export function LatestLinkCard({
+  latestUrl,
+  label = "Latest link",
+  note = "Bookmark this URL for the newest release.",
+}: LatestLinkCardProps) {
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<number | null>(null);
 
@@ -65,7 +71,7 @@ export function LatestLinkCard({ latestUrl }: LatestLinkCardProps) {
 
   return (
     <div className="flex flex-col gap-3 rounded-[1.75rem] border border-white/8 bg-black/25 p-5 text-sm text-zinc-300 sm:min-w-[320px]">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-glitch-orange">Latest Link</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-glitch-orange">{label}</p>
       <button
         type="button"
         onClick={handleCopyClick}
@@ -83,7 +89,7 @@ export function LatestLinkCard({ latestUrl }: LatestLinkCardProps) {
           Copied!
         </span>
       </button>
-      <p className="text-xs text-zinc-400">Bookmark this URL for newest release.</p>
+      <p className="text-xs text-zinc-400">{note}</p>
     </div>
   );
 }

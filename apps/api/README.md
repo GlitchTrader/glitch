@@ -75,8 +75,10 @@ Optional / feature-specific:
 - `FINNHUB_API_KEY`, `FRED_API_KEY` — Used by provider proxy and fundamentals.
 - AddOn update hints in license responses:
   - `ADDON_RELEASES_LATEST_URL` - Metadata endpoint that returns the latest release (defaults to `https://download.glitchtrader.com/api/releases/latest`).
-  - `ADDON_LATEST_VERSION` - Optional emergency override version string (for example `addon-0.0.1.2` or `0.0.1.2`). If set, it overrides metadata endpoint version.
+  - `ADDON_LATEST_VERSION` - Optional Standard-channel emergency override version string (for example `addon-0.0.2.0` or `0.0.2.0`). If set, it overrides metadata endpoint version.
   - `ADDON_LATEST_DOWNLOAD_URL` - Optional fallback download URL shown when metadata lookup is unavailable (defaults to `https://download.glitchtrader.com/latest`).
+  - `ADDON_AI_LATEST_VERSION` - Optional AI-channel emergency override version string. It applies only to clients whose identity starts with `addon-ai-`.
+  - `ADDON_AI_LATEST_DOWNLOAD_URL` - Optional AI-channel fallback download URL (defaults to `https://download.glitchtrader.com/latest/ai`).
 - Product/tier mapping: `WHOP_FREE_LITE_PRODUCT_IDS`, `WHOP_PREMIUM_PRODUCT_IDS`.
 - Plan/billing mapping: `WHOP_FREE_LITE_PLAN_CODES`, `WHOP_PREMIUM_MONTHLY_PLAN_CODES`, `WHOP_PREMIUM_ANNUAL_PLAN_CODES`, `WHOP_PREMIUM_LIFETIME_PLAN_CODES`, `WHOP_PREMIUM_PLAN_CODES`.
 - Fallback behavior: `WHOP_STRICT_PLAN_MAPPING`, `WHOP_DEFAULT_ACTIVE_PLAN`.
@@ -100,7 +102,7 @@ npm run dev --workspace apps/api
 - License tier resolution is product-first (`product_id` -> `free_lite` vs `premium`). `plan_id` is used to classify the billing variant (`free`, `monthly`, `annual`, `lifetime`) and as a legacy fallback when older rows do not have `product_id`.
 - Lifetime / one-time Whop memberships with status `completed` are treated as valid premium access.
 - The binding metadata stored on the Whop membership is the authoritative machine binding. The local `license_bindings` table is kept in sync for admin visibility and operational mirrors.
-- License validate/heartbeat responses include an `update` object (`checked`, `latestVersion`, `downloadUrl`, `isOutdated`) when latest release metadata resolves (or when `ADDON_LATEST_VERSION` override is configured).
+- License validate/heartbeat responses include an `update` object (`checked`, `latestVersion`, `downloadUrl`, `isOutdated`) when latest release metadata resolves. `addon-ai-` clients use the AI release channel; all other clients use Standard.
 - SQL scaffold: `db/schema.sql` (webhook_events, entitlements, license_bindings).
 
 ## Example (admin)

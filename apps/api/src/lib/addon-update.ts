@@ -2,6 +2,7 @@ import { readOptionalEnv } from "@/lib/env";
 
 const DEFAULT_LATEST_RELEASE_METADATA_URL = "https://download.glitchtrader.com/api/releases/latest";
 const DEFAULT_ADDON_DOWNLOAD_URL = "https://download.glitchtrader.com/latest";
+const DEFAULT_AI_ADDON_DOWNLOAD_URL = "https://download.glitchtrader.com/latest/ai";
 const VERSION_TOKEN_PATTERN = /\d+/g;
 const LATEST_RELEASE_FETCH_TIMEOUT_MS = 2_000;
 const LATEST_RELEASE_SUCCESS_CACHE_TTL_MS = 120_000;
@@ -19,8 +20,17 @@ interface LatestReleaseMetadata {
   downloadUrl: string;
 }
 
-let latestReleaseMetadataCache: { value: LatestReleaseMetadata | null; expiresAtMs: number } | null = null;
-let latestReleaseMetadataInFlight: Promise<LatestReleaseMetadata | null> | null = null;
+type AddonEdition = "standard" | "ai";
+
+const latestReleaseMetadataCache = new Map<
+  AddonEdition,
+  { value: LatestReleaseMetadata | null; expiresAtMs: number }
+>();
+const latestReleaseMetadataInFlight = new Map<AddonEdition, Promise<LatestReleaseMetadata | null>>();
+
+function resolveAddonEdition(clientVersion: string | null | undefined): AddonEdition {
+  return clientVersion?.trim().toLowerCase().startsWith("addon-ai-") ? "ai" : "standard";
+}
 
 function parseVersionTokens(value: string | null | undefined): number[] | null {
   if (!value) {
@@ -67,10 +77,10 @@ function normalizeLatestVersion(rawValue: string | null): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function normalizeDownloadUrl(rawValue: string | null): string {
+function normalizeDownloadUrl(rawValue: string | null, defaultUrl: string): string {
   const candidate = rawValue?.trim();
   if (!candidate) {
-    return DEFAULT_ADDON_DOWNLOAD_URL;
+    return defaultUrl;
   }
 
   try {
@@ -82,7 +92,7 @@ function normalizeDownloadUrl(rawValue: string | null): string {
     // Fall through to default.
   }
 
-  return DEFAULT_ADDON_DOWNLOAD_URL;
+  return defaultUrl;
 }
 
 function normalizeMetadataUrl(rawValue: string | null): string {
@@ -144,9 +154,9 @@ async function fetchLatestReleaseMetadataFromDownloadApi(
     let downloadUrl = fallbackDownloadUrl;
     if (rawDownloadUrl) {
       try {
-        downloadUrl = normalizeDownloadUrl(new URL(rawDownloadUrl, metadataUrl).toString());
+        downloadUrl = normalizeDownloadUrl(new URL(rawDownloadUrl, metadataUrl).toString(), fallbackDownloadUrl);
       } catch {
-        downloadUrl = normalizeDownloadUrl(rawDownloadUrl);
+        downloadUrl = normalizeDownloadUrl(rawDownloadUrl, fallbackDownloadUrl);
       }
     }
 
@@ -161,30 +171,41 @@ async function fetchLatestReleaseMetadataFromDownloadApi(
   }
 }
 
-async function getLatestReleaseMetadata(fallbackDownloadUrl: string): Promise<LatestReleaseMetadata | null> {
+async function getLatestReleaseMetadata(
+  edition: AddonEdition,
+  fallbackDownloadUrl: string,
+): Promise<LatestReleaseMetadata | null> {
   const now = Date.now();
-  if (latestReleaseMetadataCache && latestReleaseMetadataCache.expiresAtMs > now) {
-    return latestReleaseMetadataCache.value;
+  const cached = latestReleaseMetadataCache.get(edition);
+  if (cached && cached.expiresAtMs > now) {
+    return cached.value;
   }
 
-  if (latestReleaseMetadataInFlight) {
-    return latestReleaseMetadataInFlight;
+  const inFlight = latestReleaseMetadataInFlight.get(edition);
+  if (inFlight) {
+    return inFlight;
   }
 
-  const metadataUrl = normalizeMetadataUrl(readOptionalEnv("ADDON_RELEASES_LATEST_URL"));
-  latestReleaseMetadataInFlight = fetchLatestReleaseMetadataFromDownloadApi(metadataUrl, fallbackDownloadUrl)
+  const baseMetadataUrl = normalizeMetadataUrl(readOptionalEnv("ADDON_RELEASES_LATEST_URL"));
+  const parsedMetadataUrl = new URL(baseMetadataUrl);
+  if (edition === "ai") {
+    parsedMetadataUrl.searchParams.set("edition", "ai");
+  }
+  const metadataUrl = parsedMetadataUrl.toString();
+  const request = fetchLatestReleaseMetadataFromDownloadApi(metadataUrl, fallbackDownloadUrl)
     .then((metadata) => {
-      latestReleaseMetadataCache = {
+      latestReleaseMetadataCache.set(edition, {
         value: metadata,
         expiresAtMs: Date.now() + (metadata ? LATEST_RELEASE_SUCCESS_CACHE_TTL_MS : LATEST_RELEASE_FAILURE_CACHE_TTL_MS),
-      };
+      });
       return metadata;
     })
     .finally(() => {
-      latestReleaseMetadataInFlight = null;
+      latestReleaseMetadataInFlight.delete(edition);
     });
+  latestReleaseMetadataInFlight.set(edition, request);
 
-  return latestReleaseMetadataInFlight;
+  return request;
 }
 
 function buildUpdateInfo(
@@ -223,15 +244,19 @@ function buildUpdateInfo(
 }
 
 export async function resolveAddonUpdateInfo(clientVersion: string | null | undefined): Promise<AddonUpdateInfo> {
-  const fallbackDownloadUrl = normalizeDownloadUrl(readOptionalEnv("ADDON_LATEST_DOWNLOAD_URL"));
+  const edition = resolveAddonEdition(clientVersion);
+  const defaultDownloadUrl = edition === "ai" ? DEFAULT_AI_ADDON_DOWNLOAD_URL : DEFAULT_ADDON_DOWNLOAD_URL;
+  const downloadUrlEnvName = edition === "ai" ? "ADDON_AI_LATEST_DOWNLOAD_URL" : "ADDON_LATEST_DOWNLOAD_URL";
+  const versionEnvName = edition === "ai" ? "ADDON_AI_LATEST_VERSION" : "ADDON_LATEST_VERSION";
+  const fallbackDownloadUrl = normalizeDownloadUrl(readOptionalEnv(downloadUrlEnvName), defaultDownloadUrl);
 
   // Emergency override path for operational incidents.
-  const manualLatestVersion = normalizeLatestVersion(readOptionalEnv("ADDON_LATEST_VERSION"));
+  const manualLatestVersion = normalizeLatestVersion(readOptionalEnv(versionEnvName));
   if (manualLatestVersion) {
     return buildUpdateInfo(manualLatestVersion, fallbackDownloadUrl, clientVersion);
   }
 
-  const latestMetadata = await getLatestReleaseMetadata(fallbackDownloadUrl);
+  const latestMetadata = await getLatestReleaseMetadata(edition, fallbackDownloadUrl);
   if (!latestMetadata) {
     return {
       checked: false,
