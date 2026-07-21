@@ -52,6 +52,15 @@ class GlitchAiUiContractTests(unittest.TestCase):
         self.assertIn('L("ai.snapshots.supporting", "Supporting Snapshots")', source)
         self.assertIn('GetAiJsonString(value, "instrument"), "MNQ"', source)
 
+    def test_ai_feed_joins_decisions_to_their_source_packet_by_snapshot_hash(self):
+        source = (UI / "GlitchMainWindow.AiTab.partial.cs").read_text(encoding="utf-8")
+        self.assertIn('ReadAiPacketFinalSnapshotHash(packetFile.FullName)', source)
+        self.assertIn('GlitchAiJsonFields.ExtractString(decision, "snapshot_hash")', source)
+        self.assertIn('packetsBySnapshotHash.TryGetValue(snapshotHash, out packet)', source)
+        self.assertNotIn('decisionUtc.Value.ToString("yyyyMMdd\'T\'HHmm\'Z\'"', source)
+        self.assertIn('string.Equals(packetFingerprint, _aiDecisionHistoryPacketFingerprint', source)
+        self.assertIn('_aiDecisionHistoryPacketFingerprint ?? "0"', source)
+
     def test_shared_ui_hierarchy_uses_boxed_sections_and_compact_disclosure_rows(self):
         accordion = (UI / "GlitchMainWindow.AccordionLayout.partial.cs").read_text(encoding="utf-8")
         settings = (UI / "GlitchMainWindow.SettingsTab.partial.cs").read_text(encoding="utf-8")

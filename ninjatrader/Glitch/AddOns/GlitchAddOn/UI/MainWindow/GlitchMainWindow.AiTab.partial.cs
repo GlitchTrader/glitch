@@ -40,6 +40,7 @@ namespace Glitch.UI
         private List<AiDecisionFeedItem> _aiDecisionHistoryCache = new List<AiDecisionFeedItem>();
         private DateTime _aiDecisionHistoryDecisionWriteUtc;
         private DateTime _aiDecisionHistoryExecutionWriteUtc;
+        private string _aiDecisionHistoryPacketFingerprint;
         private string _aiSnapshotPreviewCachePath;
         private DateTime _aiSnapshotPreviewCacheWriteUtc;
         private List<AiSnapshotPreview> _aiSnapshotPreviewCache = new List<AiSnapshotPreview>();
@@ -149,6 +150,7 @@ namespace Glitch.UI
                 latestFrame?.LastWriteTimeUtc.Ticks.ToString(CultureInfo.InvariantCulture) ?? "0",
                 File.Exists(decisionsPath) ? File.GetLastWriteTimeUtc(decisionsPath).Ticks.ToString(CultureInfo.InvariantCulture) : "0",
                 File.Exists(executionsPath) ? File.GetLastWriteTimeUtc(executionsPath).Ticks.ToString(CultureInfo.InvariantCulture) : "0",
+                _aiDecisionHistoryPacketFingerprint ?? "0",
                 currentFrames.ToString(CultureInfo.InvariantCulture));
             if (string.Equals(renderFingerprint, _aiFeedRenderFingerprint, StringComparison.Ordinal))
                 return;
@@ -558,9 +560,18 @@ namespace Glitch.UI
         {
             DateTime decisionsWriteUtc = File.Exists(decisionsPath) ? File.GetLastWriteTimeUtc(decisionsPath) : DateTime.MinValue;
             DateTime executionsWriteUtc = File.Exists(executionsPath) ? File.GetLastWriteTimeUtc(executionsPath) : DateTime.MinValue;
+            FileInfo[] packetFiles = Directory.Exists(packetRoot)
+                ? new DirectoryInfo(packetRoot).GetFiles("*.json")
+                    .OrderByDescending(file => file.LastWriteTimeUtc)
+                    .Take(200)
+                    .ToArray()
+                : new FileInfo[0];
+            string packetFingerprint = packetFiles.Length.ToString(CultureInfo.InvariantCulture) + ":"
+                + (packetFiles.FirstOrDefault()?.LastWriteTimeUtc.Ticks.ToString(CultureInfo.InvariantCulture) ?? "0");
             if (_aiDecisionHistoryCache.Count > 0
                 && decisionsWriteUtc == _aiDecisionHistoryDecisionWriteUtc
-                && executionsWriteUtc == _aiDecisionHistoryExecutionWriteUtc)
+                && executionsWriteUtc == _aiDecisionHistoryExecutionWriteUtc
+                && string.Equals(packetFingerprint, _aiDecisionHistoryPacketFingerprint, StringComparison.Ordinal))
                 return _aiDecisionHistoryCache;
 
             List<string> decisions = ReadLastNonEmptyLines(decisionsPath, AiDecisionHistoryLimit);
@@ -579,21 +590,23 @@ namespace Glitch.UI
                 }
             }
 
-            Dictionary<string, FileInfo> packets = Directory.Exists(packetRoot)
-                ? new DirectoryInfo(packetRoot).GetFiles("*.json")
-                    .OrderByDescending(file => file.LastWriteTimeUtc)
-                    .Take(200)
-                    .ToDictionary(file => Path.GetFileNameWithoutExtension(file.Name), StringComparer.OrdinalIgnoreCase)
-                : new Dictionary<string, FileInfo>(StringComparer.OrdinalIgnoreCase);
+            var packetsBySnapshotHash = new Dictionary<string, FileInfo>(StringComparer.Ordinal);
+            foreach (FileInfo packetFile in packetFiles)
+            {
+                string snapshotHash = ReadAiPacketFinalSnapshotHash(packetFile.FullName);
+                if (!string.IsNullOrWhiteSpace(snapshotHash) && !packetsBySnapshotHash.ContainsKey(snapshotHash))
+                    packetsBySnapshotHash.Add(snapshotHash, packetFile);
+            }
 
             var items = new List<AiDecisionFeedItem>();
             foreach (string decision in decisions.AsEnumerable().Reverse())
             {
                 string intentId = GlitchAiJsonFields.ExtractString(decision, "intent_id") ?? string.Empty;
                 DateTime? decisionUtc = GlitchAiJsonFields.TryExtractUtc(decision, "created_utc");
+                string snapshotHash = GlitchAiJsonFields.ExtractString(decision, "snapshot_hash") ?? string.Empty;
                 FileInfo packet = null;
-                if (decisionUtc.HasValue)
-                    packets.TryGetValue(decisionUtc.Value.ToString("yyyyMMdd'T'HHmm'Z'", CultureInfo.InvariantCulture), out packet);
+                if (!string.IsNullOrWhiteSpace(snapshotHash))
+                    packetsBySnapshotHash.TryGetValue(snapshotHash, out packet);
                 executionsByIntent.TryGetValue(intentId, out string execution);
                 items.Add(new AiDecisionFeedItem
                 {
@@ -607,8 +620,32 @@ namespace Glitch.UI
 
             _aiDecisionHistoryDecisionWriteUtc = decisionsWriteUtc;
             _aiDecisionHistoryExecutionWriteUtc = executionsWriteUtc;
+            _aiDecisionHistoryPacketFingerprint = packetFingerprint;
             _aiDecisionHistoryCache = items;
             return _aiDecisionHistoryCache;
+        }
+
+        private static string ReadAiPacketFinalSnapshotHash(string path)
+        {
+            try
+            {
+                if (!GlitchAiJsonFields.TryParseObject(File.ReadAllText(path), out IDictionary packet))
+                    return null;
+                IList frames = GetAiJsonList(packet, "frames");
+                if (frames == null)
+                    return null;
+                for (int index = frames.Count - 1; index >= 0; index--)
+                {
+                    IDictionary frame = frames[index] as IDictionary;
+                    string snapshotHash = GetAiJsonString(GetAiJsonObject(frame, "market_snapshot"), "snapshot_hash");
+                    if (!string.IsNullOrWhiteSpace(snapshotHash))
+                        return snapshotHash;
+                }
+            }
+            catch
+            {
+            }
+            return null;
         }
 
         private List<AiSnapshotPreview> GetAiSnapshotPreviews(FileInfo packetFile)

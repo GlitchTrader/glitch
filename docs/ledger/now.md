@@ -83,9 +83,11 @@ Glitch Flatten All remain authoritative.
 - The Glitch AI feed separates the current five-snapshot collection window from
   the latest completed AI decision. It shows both ages, timestamps the decision,
   and retains the latest 20 decisions as expandable entries with their matching
-  packet, execution result, and supporting MNQ snapshot metrics. Decision rows
-  use the compact shared disclosure-row template so NinjaTrader cannot stringify
-  WPF header visuals.
+  packet, execution result, and supporting MNQ snapshot metrics. Decisions bind
+  to source packets by the final market `snapshot_hash`, not by completion
+  minute, and new packet files invalidate the history/render cache. Decision
+  rows use the compact shared disclosure-row template so NinjaTrader cannot
+  stringify WPF header visuals.
 - Major Dashboard, Journal, Settings, and AI Scope sections now share one boxed,
   NinjaTrader-skin-aware hierarchy: distinct section header, attached body, and
   inset content. AI Trading Scope starts collapsed; decision history and Settings
@@ -119,7 +121,7 @@ Glitch Flatten All remain authoritative.
 ## Verification and market-open acceptance
 
 - Shared source contracts: **38/38**.
-- AI/Hermes contracts: **104/104**; complete AI suite **142/142**.
+- AI/Hermes contracts: **113/113**; complete suite **151/151**.
 - Five production web builds: pass.
 - Five web lint runs: pass.
 - Python compilation, tracked PowerShell parsing, tracked JSON parsing, secret
@@ -128,8 +130,11 @@ Glitch Flatten All remain authoritative.
   missing keys, zero malformed/empty six-locale rows; UTF-8 CJK/Cyrillic sentinels
   pass. This includes 18 older fallback-only labels closed during the AI UI pass.
 - The complete 87-file AddOn was deployed once for this correction with **87/87
-  matching hashes, 0 missing, 0 mismatches, and 0 extra target files**. Alan
-  confirmed the NinjaTrader compile green while the book was flat and order-free.
+  matching hashes, 0 missing, 0 mismatches, and 0 extra target files**. F5
+  rebuilt `NinjaTrader.Custom.dll` at `18:40:32Z` without an error surface. The
+  live feed then resolved decision `15:36:01` to packet `20260721T1835Z` with
+  **5/5** snapshots. AI Auto was restored ON; all nine accounts were flat and
+  order-free and the paper executor reported armed.
 - The installed Hermes SOUL, operator map, plugin, five runtime scripts, and 13
   skill files match source. Exactly two no-agent jobs are enabled:
   `glitch-direct-operator` at `* * * * *` and non-executing

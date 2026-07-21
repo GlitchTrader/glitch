@@ -2,6 +2,22 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-21 - AI feed packet attribution corrected
+
+- The latest-decision feed falsely showed `0/5` snapshots and `Packet Missing`
+  because it guessed the source packet from the decision completion minute. A
+  decision completed at `18:26Z` had actually consumed the sealed `18:25Z`
+  packet; the fifth frame's `snapshot_hash` proved the exact relationship.
+- The feed now joins each decision to the final snapshot hash in its source
+  packet and includes packet arrivals in both history and render cache
+  invalidation. No cadence, trading, execution, or Hermes behavior changed.
+- Verification passed 38/38 shared and 113/113 AI/Hermes contracts. The complete
+  87-file AddOn deployed with 87/87 hash parity and no missing, mismatched, or
+  extra files; F5 rebuilt `NinjaTrader.Custom.dll` at `18:40:32Z` without an
+  error surface. The live feed then showed decision `15:36:01` with `5/5` and
+  packet `20260721T1835Z`. AI Auto was restored ON; the executor is armed in
+  paper mode and all nine accounts are flat and order-free.
+
 ## 2026-07-21 - accountable management and execution geometry
 
 - Trade-by-trade evidence isolated the giveback failure: Hermes was often directionally sound, but repeated `HOLD` after its own change condition arrived; an advisory plan had turned caution into a provisional one-contract baseline; malformed output and rejected amendments could remove a positioned review; and a delayed market entry could preserve stale absolute prices while making risk larger and reward smaller than Hermes assessed.
