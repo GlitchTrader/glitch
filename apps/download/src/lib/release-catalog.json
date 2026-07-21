@@ -1,82 +1,99 @@
 [
-  {
-    "fileName": "Glitch_v0.0.1.0.zip",
-    "edition": "standard",
-    "version": "0.0.1.0",
-    "releaseDate": "2026-03-10T00:00:00.000Z",
-    "status": "stable",
-    "sourceCommit": "20f478a094fe83b788caf8d71b2624e3edd52ff8"
-  },
-  {
-    "fileName": "Glitch_v0.0.1.1.zip",
-    "edition": "standard",
-    "version": "0.0.1.1",
-    "releaseDate": "2026-03-12T00:00:00.000Z",
-    "status": "stable",
-    "sourceCommit": "7abb4b4eda44f15746c7f7c2cd93db98dde2a9eb"
-  },
-  {
-    "fileName": "Glitch_v0.0.1.2.zip",
-    "edition": "standard",
-    "version": "0.0.1.2",
-    "releaseDate": "2026-03-15T02:47:50.299Z",
-    "status": "stable",
-    "sourceCommit": "4a36f62ed93836daf3cd9de6a535069dba836b6d"
-  },
-  {
-    "fileName": "Glitch_v0.0.1.3.zip",
-    "edition": "standard",
-    "version": "0.0.1.3",
-    "releaseDate": "2026-07-08T04:23:21.637Z",
-    "status": "stable",
-    "sourceCommit": "d7c90f6f12b8492ecfa2220f72e5a4801c4f14cc"
-  },
-  {
-    "fileName": "Glitch_v0.0.1.4.zip",
-    "edition": "standard",
-    "version": "0.0.1.4",
-    "releaseDate": "2026-07-08T04:23:21.637Z",
-    "status": "stable",
-    "sourceCommit": "fea62c949c7eea9c92b1a90c1cc05c3276de6bdd"
-  },
-  {
-    "fileName": "Glitch_v0.0.1.5.zip",
-    "edition": "standard",
-    "version": "0.0.1.5",
-    "releaseDate": "2026-07-08T04:23:21.637Z",
-    "status": "stable",
-    "sourceCommit": "fea62c949c7eea9c92b1a90c1cc05c3276de6bdd"
-  },
-  {
-    "fileName": "Glitch_v0.0.1.6.zip",
-    "edition": "standard",
-    "version": "0.0.1.6",
-    "releaseDate": "2026-07-08T04:23:21.637Z",
-    "status": "stable",
-    "sourceCommit": "40d341785961a7f59f838b5d5cda2bc78f73451e"
-  },
-  {
-    "fileName": "Glitch_v0.0.1.7.zip",
-    "edition": "standard",
-    "version": "0.0.1.7",
-    "releaseDate": "2026-07-08T04:23:21.637Z",
-    "status": "stable",
-    "sourceCommit": "0ce77c7817cb81e1d74052bf2323376c4488f200"
-  },
-  {
-    "fileName": "Glitch_v0.0.1.8.zip",
-    "edition": "standard",
-    "version": "0.0.1.8",
-    "releaseDate": "2026-07-08T04:23:21.637Z",
-    "status": "stable",
-    "sourceCommit": "5ed10227d1caa614843cfc2105d7aeb22c608584"
-  },
-  {
-    "fileName": "Glitch_v0.0.1.9.zip",
-    "edition": "standard",
-    "version": "0.0.1.9",
-    "releaseDate": "2026-07-09T19:56:45.073Z",
-    "status": "stable",
-    "sourceCommit": "22e68f6124b61e84dbecaf24671a410752fe176a"
-  }
+    {
+        "fileName":  "Glitch_v0.0.1.0.zip",
+        "edition":  "standard",
+        "version":  "0.0.1.0",
+        "releaseDate":  "2026-03-10T00:00:00.000Z",
+        "status":  "stable",
+        "sourceCommit":  "20f478a094fe83b788caf8d71b2624e3edd52ff8"
+    },
+    {
+        "fileName":  "Glitch_v0.0.1.1.zip",
+        "edition":  "standard",
+        "version":  "0.0.1.1",
+        "releaseDate":  "2026-03-12T00:00:00.000Z",
+        "status":  "stable",
+        "sourceCommit":  "7abb4b4eda44f15746c7f7c2cd93db98dde2a9eb"
+    },
+    {
+        "fileName":  "Glitch_v0.0.1.2.zip",
+        "edition":  "standard",
+        "version":  "0.0.1.2",
+        "releaseDate":  "2026-03-15T02:47:50.299Z",
+        "status":  "stable",
+        "sourceCommit":  "4a36f62ed93836daf3cd9de6a535069dba836b6d"
+    },
+    {
+        "fileName":  "Glitch_v0.0.1.3.zip",
+        "edition":  "standard",
+        "version":  "0.0.1.3",
+        "releaseDate":  "2026-07-08T04:23:21.637Z",
+        "status":  "stable",
+        "sourceCommit":  "d7c90f6f12b8492ecfa2220f72e5a4801c4f14cc"
+    },
+    {
+        "fileName":  "Glitch_v0.0.1.4.zip",
+        "edition":  "standard",
+        "version":  "0.0.1.4",
+        "releaseDate":  "2026-07-08T04:23:21.637Z",
+        "status":  "stable",
+        "sourceCommit":  "fea62c949c7eea9c92b1a90c1cc05c3276de6bdd"
+    },
+    {
+        "fileName":  "Glitch_v0.0.1.5.zip",
+        "edition":  "standard",
+        "version":  "0.0.1.5",
+        "releaseDate":  "2026-07-08T04:23:21.637Z",
+        "status":  "stable",
+        "sourceCommit":  "fea62c949c7eea9c92b1a90c1cc05c3276de6bdd"
+    },
+    {
+        "fileName":  "Glitch_v0.0.1.6.zip",
+        "edition":  "standard",
+        "version":  "0.0.1.6",
+        "releaseDate":  "2026-07-08T04:23:21.637Z",
+        "status":  "stable",
+        "sourceCommit":  "40d341785961a7f59f838b5d5cda2bc78f73451e"
+    },
+    {
+        "fileName":  "Glitch_v0.0.1.7.zip",
+        "edition":  "standard",
+        "version":  "0.0.1.7",
+        "releaseDate":  "2026-07-08T04:23:21.637Z",
+        "status":  "stable",
+        "sourceCommit":  "0ce77c7817cb81e1d74052bf2323376c4488f200"
+    },
+    {
+        "fileName":  "Glitch_v0.0.1.8.zip",
+        "edition":  "standard",
+        "version":  "0.0.1.8",
+        "releaseDate":  "2026-07-08T04:23:21.637Z",
+        "status":  "stable",
+        "sourceCommit":  "5ed10227d1caa614843cfc2105d7aeb22c608584"
+    },
+    {
+        "fileName":  "Glitch_v0.0.1.9.zip",
+        "edition":  "standard",
+        "version":  "0.0.1.9",
+        "releaseDate":  "2026-07-09T19:56:45.073Z",
+        "status":  "stable",
+        "sourceCommit":  "22e68f6124b61e84dbecaf24671a410752fe176a"
+    },
+    {
+        "fileName":  "Glitch_v0.0.2.0.zip",
+        "edition":  "standard",
+        "version":  "0.0.2.0",
+        "releaseDate":  "2026-07-21T20:41:16.000Z",
+        "status":  "stable",
+        "sourceCommit":  "58a266ae5fce87f54ef390ef0431b2532f1f82ff"
+    },
+    {
+        "fileName":  "Glitch_AI_v0.0.2.0.zip",
+        "edition":  "ai",
+        "version":  "0.0.2.0",
+        "releaseDate":  "2026-07-21T21:23:55.892Z",
+        "status":  "experimental",
+        "sourceCommit":  "28c967031db1088ca68697592b627b7f3bc2aa28",
+        "hermesProfileVersion":  "0.0.2.0"
+    }
 ]
