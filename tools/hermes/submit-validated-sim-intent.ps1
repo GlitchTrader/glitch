@@ -23,8 +23,8 @@ function Read-WebExceptionBody {
 
 $intent = Get-Content -LiteralPath (Resolve-Path -LiteralPath $IntentPath) -Raw | ConvertFrom-Json
 if ($intent.action -notin @('ENTER_LONG','ENTER_SHORT')) { throw 'Sim submitter accepts only ENTER_LONG or ENTER_SHORT.' }
-if (-not $intent.operator_profile -or $intent.instrument -ne 'MNQ' -or [int]$intent.quantity -ne 1) {
-    throw 'Sim submitter requires one MNQ master contract and an operator_profile.'
+if (-not $intent.operator_profile -or $intent.instrument -ne 'MNQ' -or [int]$intent.quantity -lt 1) {
+    throw 'Sim submitter requires a positive MNQ master quantity and an operator_profile.'
 }
 $profile = [string]$intent.operator_profile
 $masterAccount = [string]$intent.account
@@ -56,37 +56,27 @@ $boundSnapshot = Get-Content -LiteralPath $boundPath -Raw | ConvertFrom-Json
 if ([string]$boundSnapshot.snapshot_hash -ne [string]$intent.snapshot_hash) {
     throw 'Validated entry snapshot is not retained by Glitch; executor remains unarmed.'
 }
-$boundAge = ([datetime]::UtcNow - [datetime]::Parse($boundSnapshot.created_utc).ToUniversalTime()).TotalSeconds
+$boundAge = ([DateTimeOffset]::UtcNow - [DateTimeOffset]::Parse([string]$boundSnapshot.created_utc)).TotalSeconds
 $policyBefore = Get-Content -LiteralPath $policyPath -Raw | ConvertFrom-Json
 if ($boundAge -lt -5 -or $boundAge -gt [double]$policyBefore.snapshot_max_age_seconds) {
     throw 'Validated entry snapshot is outside the policy freshness window; executor remains unarmed.'
 }
 
-$originalPolicyJson = Get-Content -LiteralPath $policyPath -Raw
-$policy = $originalPolicyJson | ConvertFrom-Json
-if ($policy.mode -ne 'paper' -or [bool]$policy.executor_enabled) { throw 'Expected paper/unarmed policy before Sim arm.' }
+$health = Invoke-RestMethod -Uri 'http://127.0.0.1:8788/health' -Method Get -TimeoutSec 5
+if ([string]$health.status -ne 'ok' -or -not [bool]$health.executor_enabled) {
+    throw 'Glitch AI is not ON; no POST performed.'
+}
 $submitLockPath = Join-Path $gd 'ai\sim-submit.lock'
 $submitLock = $null
 try {
     $submitLock = [IO.File]::Open($submitLockPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
 } catch {
-    throw 'Another profile is already inside the one-shot Sim submission gate.'
+    throw 'Another acceptance submission is already in flight.'
 }
-$policy.mode = 'sim'
-$policy.executor_enabled = $true
-$tempPolicy = "$policyPath.$([guid]::NewGuid().ToString('N')).tmp"
-$armed = $false
 try {
-    $policy | ConvertTo-Json -Depth 10 -Compress | Set-Content -LiteralPath $tempPolicy -Encoding UTF8
-    Move-Item -LiteralPath $tempPolicy -Destination $policyPath -Force
-    $armed = $true
-
-    $simPreflightOutput = & powershell.exe -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'preflight-open.ps1') -Target sim -Profile $profile -MasterAccount $masterAccount 2>&1
-    if ($LASTEXITCODE -ne 0) { throw "Sim preflight failed after arm: $($simPreflightOutput -join ' ')" }
-
-    $boundAgePrePost = ([datetime]::UtcNow - [datetime]::Parse($boundSnapshot.created_utc).ToUniversalTime()).TotalSeconds
-    if ($boundAgePrePost -lt -5 -or $boundAgePrePost -gt [double]$policy.snapshot_max_age_seconds) {
-        throw 'Validated entry snapshot expired during arm; no POST performed.'
+    $boundAgePrePost = ([DateTimeOffset]::UtcNow - [DateTimeOffset]::Parse([string]$boundSnapshot.created_utc)).TotalSeconds
+    if ($boundAgePrePost -lt -5 -or $boundAgePrePost -gt [double]$policyBefore.snapshot_max_age_seconds) {
+        throw 'Validated entry snapshot expired before POST; no submission performed.'
     }
 
     $body = $intent | ConvertTo-Json -Depth 10 -Compress
@@ -100,16 +90,12 @@ try {
         throw
     }
     if ($response.StatusCode -ne 202) { throw "Sim intent expected 202, got $($response.StatusCode)." }
-    # One-shot arm: the server has synchronously accepted and submitted this
-    # intent. Return to paper/unarmed immediately; native account-held brackets
-    # continue managing the open trade without permitting another entry.
-    $disarmTemp = "$policyPath.$([guid]::NewGuid().ToString('N')).disarm"
-    $originalPolicyJson | Set-Content -LiteralPath $disarmTemp -Encoding UTF8
-    Move-Item -LiteralPath $disarmTemp -Destination $policyPath -Force
-    $armed = $false
     $executionJournal = Join-Path $gd 'intents\executions.jsonl'
     $executionRecord = $null
     $executionFailure = $null
+    $expectedAccounts = @()
+    $protectedAccounts = @()
+    $legCount = 1 + [int]($null -ne $intent.take_profit_2) + [int]($null -ne $intent.take_profit_3)
     $executionDeadline = [datetime]::UtcNow.AddSeconds(45)
     do {
         if (Test-Path -LiteralPath $executionJournal) {
@@ -117,20 +103,43 @@ try {
             foreach ($executionLine in $executionLines) {
                 try { $candidate = $executionLine | ConvertFrom-Json } catch { continue }
                 if ([string]$candidate.intent_id -ne [string]$intent.intent_id) { continue }
-                if ($candidate.code -eq 'group_entry_open_protected' -and $candidate.status -eq 'submitted') {
+                if ($candidate.code -eq 'master_entry_submitted') {
                     $executionRecord = $candidate
+                    $expectedToken = @(([string]$candidate.message -split '\|') | Where-Object { $_ -like 'expected_accounts=*' }) | Select-Object -First 1
+                    if ($expectedToken) { $expectedAccounts = @(($expectedToken -replace '^expected_accounts=','') -split ',' | Where-Object { $_ }) }
                 }
                 if ($candidate.status -eq 'failed') {
                     $executionFailure = $candidate
                 }
             }
-            if ($executionRecord -or $executionFailure) { break }
         }
+        $masterProtected = @($executionLines | ForEach-Object {
+            try { $candidate = $_ | ConvertFrom-Json } catch { return }
+            if ([string]$candidate.intent_id -eq [string]$intent.intent_id -and
+                [string]$candidate.code -in @('master_structural_brackets_submitted','group_structural_brackets_submitted')) { $candidate }
+        })
+        $followersProtected = @($executionLines | ForEach-Object {
+            try { $candidate = $_ | ConvertFrom-Json } catch { return }
+            if ([string]$candidate.intent_id -eq [string]$intent.intent_id -and [string]$candidate.code -eq 'follower_structural_brackets_submitted') { $candidate }
+        })
+        $protectedAccounts = @($masterAccount)
+        foreach ($record in $followersProtected) {
+            $token = @(([string]$record.message -split '\|') | Where-Object { $_ -like 'account=*' }) | Select-Object -First 1
+            if ($token) { $protectedAccounts += ($token -replace '^account=','') }
+        }
+        $portfolio = Get-Content -LiteralPath (Join-Path $gd 'snapshots\portfolio\latest.json') -Raw | ConvertFrom-Json
+        $groupRows = @($portfolio.accounts | Where-Object { $_.account -in $expectedAccounts })
+        $liveProtected = $expectedAccounts.Count -gt 0 -and $groupRows.Count -eq $expectedAccounts.Count -and @($groupRows | Where-Object {
+            @($_.positions).Count -ne 1 -or [int]$_.working_orders -ne ($legCount * 2)
+        }).Count -eq 0
+        $allEvidence = $masterProtected.Count -gt 0 -and $expectedAccounts.Count -gt 0 -and
+            @($expectedAccounts | Where-Object { $_ -notin $protectedAccounts }).Count -eq 0 -and $liveProtected
+        if ($executionFailure -or $allEvidence) { break }
         Start-Sleep -Milliseconds 200
     } while ([datetime]::UtcNow -lt $executionDeadline)
-    if (-not $executionRecord) {
+    if (-not $allEvidence) {
         $detail = if ($executionFailure) { " Execution evidence: $($executionFailure.code): $($executionFailure.message)" } else { '' }
-        throw "Sim intent was accepted but the group did not prove filled positions with working brackets within 45 seconds; executor is disarmed.$detail"
+        throw "Sim intent was accepted but every expected account did not prove exact native bracket coverage within 45 seconds.$detail"
     }
     [ordered]@{
         schema_version = 'glitch.hermes.sim_submit.v1'
@@ -142,18 +151,13 @@ try {
         snapshot_hash = $intent.snapshot_hash
         status = [int]$response.StatusCode
         response = $response.Content
+        expected_accounts = $expectedAccounts
+        protected_accounts = @($protectedAccounts | Sort-Object -Unique)
+        protection_legs = $legCount
         execution = $executionRecord
-        executor_left_armed = $false
+        ai_auto_left_on = $true
         preflight_before = $before
     } | ConvertTo-Json -Depth 10
-} catch {
-    if ($armed) {
-        $restoreTemp = "$policyPath.$([guid]::NewGuid().ToString('N')).restore"
-        $originalPolicyJson | Set-Content -LiteralPath $restoreTemp -Encoding UTF8
-        Move-Item -LiteralPath $restoreTemp -Destination $policyPath -Force
-    }
-    Remove-Item -LiteralPath $tempPolicy -Force -ErrorAction SilentlyContinue
-    throw
 } finally {
     if ($submitLock) { $submitLock.Dispose() }
     Remove-Item -LiteralPath $submitLockPath -Force -ErrorAction SilentlyContinue

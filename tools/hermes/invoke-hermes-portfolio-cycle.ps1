@@ -327,7 +327,7 @@ function Get-FilledAiEntriesToday {
     foreach ($line in Get-Content -LiteralPath $path) {
         if ([string]::IsNullOrWhiteSpace($line)) { continue }
         try { $row = $line | ConvertFrom-Json } catch { continue }
-        if ([string]$row.code -ne 'group_entry_filled') { continue }
+        if ([string]$row.code -notin @('master_entry_filled','group_entry_filled')) { continue }
         $recorded = [datetime]::Parse([string]$row.recorded_utc).ToUniversalTime()
         if ($recorded -lt $dayStart -or $recorded -gt $NowUtc) { continue }
         $intentId = [string]$row.intent_id

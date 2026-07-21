@@ -30,6 +30,10 @@ Copy-Item -LiteralPath (Join-Path $repo 'tools\hermes\reconcile-hermes-outcomes.
     -Destination (Join-Path $scriptsDestination 'reconcile-hermes-outcomes.py') -Force
 Copy-Item -LiteralPath (Join-Path $repo 'tools\hermes\ensure-named-sessions.py') `
     -Destination (Join-Path $scriptsDestination 'ensure-named-sessions.py') -Force
+Copy-Item -LiteralPath (Join-Path $repo 'tools\hermes\reset-hermes-trading-epoch.ps1') `
+    -Destination (Join-Path $scriptsDestination 'reset-hermes-trading-epoch.ps1') -Force
+Copy-Item -LiteralPath (Join-Path $repo 'tools\hermes\reset-named-hermes-session.py') `
+    -Destination (Join-Path $scriptsDestination 'reset-named-hermes-session.py') -Force
 
 $pluginDestination = Join-Path $destination 'plugins\glitch-control'
 New-Item -ItemType Directory -Force -Path $pluginDestination | Out-Null

@@ -8,6 +8,13 @@ using System.Text.RegularExpressions;
 
 namespace Glitch.Services
 {
+    internal sealed class GlitchPortfolioAccountClassification
+    {
+        public string AccountName { get; set; }
+        public string AccountStatus { get; set; }
+        public string PropFirmId { get; set; }
+    }
+
     internal static class GlitchAiPortfolioSnapshotReader
     {
         public static bool TryGetFreshRiskState(
@@ -190,12 +197,21 @@ namespace Glitch.Services
 
                 string positionJson = positionsArray.Substring(index, objectEnd - index + 1);
                 string positionInstrument = GlitchAiJsonFields.ExtractString(positionJson, "instrument_root");
+                string marketPosition = GlitchAiJsonFields.ExtractString(positionJson, "market_position");
                 double qty;
                 if (string.IsNullOrWhiteSpace(positionInstrument)
+                    || string.IsNullOrWhiteSpace(marketPosition)
                     || !GlitchAiJsonFields.TryExtractNumber(positionJson, "quantity", out qty))
                     return false;
                 if (string.Equals(positionInstrument, root, StringComparison.OrdinalIgnoreCase))
-                    total += (int)Math.Round(qty, MidpointRounding.AwayFromZero);
+                {
+                    int signedQuantity = (int)Math.Round(Math.Abs(qty), MidpointRounding.AwayFromZero);
+                    if (string.Equals(marketPosition, "Short", StringComparison.OrdinalIgnoreCase))
+                        signedQuantity = -signedQuantity;
+                    else if (!string.Equals(marketPosition, "Long", StringComparison.OrdinalIgnoreCase))
+                        return false;
+                    total += signedQuantity;
+                }
 
                 index = objectEnd + 1;
                 while (index < limit && char.IsWhiteSpace(positionsArray[index]))
@@ -215,6 +231,103 @@ namespace Glitch.Services
             return true;
         }
 
+        public static bool TryGetFreshAccountClassifications(
+            DateTime nowUtc,
+            int maxAgeSeconds,
+            out IReadOnlyList<GlitchPortfolioAccountClassification> classifications,
+            out string failure)
+        {
+            classifications = Array.Empty<GlitchPortfolioAccountClassification>();
+            failure = null;
+            string path = GlitchPortfolioSnapshotWriter.GetLatestSnapshotPath();
+            if (!File.Exists(path))
+            {
+                failure = "portfolio_snapshot_missing";
+                return false;
+            }
+
+            try
+            {
+                string json = File.ReadAllText(path);
+                DateTime? createdUtc = GlitchAiJsonFields.TryExtractUtc(json, "created_utc");
+                if (!createdUtc.HasValue)
+                {
+                    failure = "portfolio_snapshot_created_utc_missing";
+                    return false;
+                }
+                double ageSeconds = (nowUtc - createdUtc.Value).TotalSeconds;
+                if (ageSeconds < -5 || ageSeconds > maxAgeSeconds)
+                {
+                    failure = "portfolio_snapshot_stale";
+                    return false;
+                }
+                if (!TryExtractArray(json, "accounts", out string accountsArray))
+                {
+                    failure = "portfolio_accounts_missing";
+                    return false;
+                }
+
+                var result = new List<GlitchPortfolioAccountClassification>();
+                int index = 1;
+                int limit = accountsArray.Length - 1;
+                while (index < limit)
+                {
+                    while (index < limit && char.IsWhiteSpace(accountsArray[index]))
+                        index++;
+                    if (index >= limit)
+                        break;
+                    if (accountsArray[index] != '{')
+                    {
+                        failure = "portfolio_accounts_malformed";
+                        return false;
+                    }
+                    int objectEnd = FindMatchingBrace(accountsArray, index);
+                    if (objectEnd < 0)
+                    {
+                        failure = "portfolio_accounts_malformed";
+                        return false;
+                    }
+                    string accountJson = accountsArray.Substring(index, objectEnd - index + 1);
+                    string accountName = GlitchAiJsonFields.ExtractString(accountJson, "account");
+                    string accountStatus = GlitchAiJsonFields.ExtractString(accountJson, "account_status");
+                    string propFirmId = GlitchAiJsonFields.ExtractString(accountJson, "prop_firm_id");
+                    if (string.IsNullOrWhiteSpace(accountName)
+                        || string.IsNullOrWhiteSpace(accountStatus)
+                        || string.IsNullOrWhiteSpace(propFirmId))
+                    {
+                        failure = "portfolio_account_classification_incomplete";
+                        return false;
+                    }
+                    result.Add(new GlitchPortfolioAccountClassification
+                    {
+                        AccountName = accountName.Trim(),
+                        AccountStatus = accountStatus.Trim(),
+                        PropFirmId = propFirmId.Trim()
+                    });
+
+                    index = objectEnd + 1;
+                    while (index < limit && char.IsWhiteSpace(accountsArray[index]))
+                        index++;
+                    if (index >= limit)
+                        break;
+                    if (accountsArray[index] != ',')
+                    {
+                        failure = "portfolio_accounts_malformed";
+                        return false;
+                    }
+                    index++;
+                }
+
+                classifications = result;
+                return true;
+            }
+            catch
+            {
+                failure = "portfolio_snapshot_unreadable";
+                return false;
+            }
+        }
+
         public static double GetRealizedPnlToday(string accountName)
         {
             string accountJson;
@@ -231,6 +344,8 @@ namespace Glitch.Services
             if (string.IsNullOrWhiteSpace(json) || string.IsNullOrWhiteSpace(accountName))
                 return false;
 
+            // Writer contract: account is serialized as the first field in each
+            // account object, so LastIndexOf('{') resolves the correct boundary.
             string marker = "\"account\":" + GlitchSnapshotJson.String(accountName.Trim());
             int start = json.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
             if (start < 0)

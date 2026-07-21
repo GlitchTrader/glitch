@@ -105,6 +105,28 @@
       "minimum": 1,
       "description": "Contracts closed at TP1 when TP2 present. Remainder (quantity - quantity_tp1 >= 1) runs to TP2."
     },
+    "take_profit_3": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Optional third target beyond TP2. Requires quantity >= 3, quantity_tp1, and quantity_tp2."
+    },
+    "stop_loss_3": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Optional initial stop for the TP3 runner leg. Must remain on the loss side and be tighter than the preceding stop."
+    },
+    "quantity_tp2": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1,
+      "description": "Contracts closed at TP2 when TP3 is present. The remaining contracts run to TP3."
+    },
     "confidence": {
       "type": "number",
       "minimum": 0,
@@ -233,6 +255,52 @@
         ],
         "properties": {
           "take_profit_2": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "take_profit_3"
+        ],
+        "properties": {
+          "take_profit_3": {
+            "type": "number"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "take_profit_2",
+          "quantity_tp1",
+          "quantity_tp2"
+        ],
+        "properties": {
+          "quantity": {
+            "minimum": 3
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "stop_loss_3"
+        ],
+        "properties": {
+          "stop_loss_3": {
+            "type": "number"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "take_profit_3"
+        ],
+        "properties": {
+          "take_profit_3": {
             "type": "number"
           }
         }

@@ -89,50 +89,33 @@ if ([string]$boundSnapshot.snapshot_hash -ne [string]$intent.snapshot_hash) {
     throw 'Validated exit snapshot is not retained by Glitch; executor remains unarmed.'
 }
 $policyBefore = Get-Content -LiteralPath $policyPath -Raw | ConvertFrom-Json
-$boundAge = ([datetime]::UtcNow - [datetime]::Parse($boundSnapshot.created_utc).ToUniversalTime()).TotalSeconds
+$boundAge = ([DateTimeOffset]::UtcNow - [DateTimeOffset]::Parse([string]$boundSnapshot.created_utc)).TotalSeconds
 if ($boundAge -lt -5 -or $boundAge -gt [double]$policyBefore.snapshot_max_age_seconds) {
     throw 'Validated exit snapshot is outside the policy freshness window; executor remains unarmed.'
 }
 
-$originalPolicyJson = Get-Content -LiteralPath $policyPath -Raw
-if ($policyBefore.mode -ne 'paper' -or [bool]$policyBefore.executor_enabled) {
-    throw 'Expected paper/unarmed policy before managed exit.'
+$health = Invoke-RestMethod -Uri 'http://127.0.0.1:8788/health' -Method Get -TimeoutSec 5
+if ([string]$health.status -ne 'ok' -or -not [bool]$health.executor_enabled) {
+    throw 'Glitch AI is not ON; no EXIT POST performed.'
 }
 $submitLockPath = Join-Path $gd 'ai\sim-submit.lock'
 $submitLock = $null
 try {
     $submitLock = [IO.File]::Open($submitLockPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
 } catch {
-    throw 'Another profile is already inside the one-shot Sim submission gate.'
+    throw 'Another acceptance submission is already in flight.'
 }
 
-$armed = $false
-$tempPolicy = $null
 try {
-    $policyBefore.mode = 'sim'
-    $policyBefore.executor_enabled = $true
-    $tempPolicy = "$policyPath.$([guid]::NewGuid().ToString('N')).tmp"
-    $policyBefore | ConvertTo-Json -Depth 10 -Compress | Set-Content -LiteralPath $tempPolicy -Encoding UTF8
-    Move-Item -LiteralPath $tempPolicy -Destination $policyPath -Force
-    $tempPolicy = $null
-    $armed = $true
-
-    $simPreflight = Get-ManagedPreflight 'sim'
-    $managedGroup = Assert-ExactManagedGroup $simPreflight
-    $boundAgePrePost = ([datetime]::UtcNow - [datetime]::Parse($boundSnapshot.created_utc).ToUniversalTime()).TotalSeconds
+    $boundAgePrePost = ([DateTimeOffset]::UtcNow - [DateTimeOffset]::Parse([string]$boundSnapshot.created_utc)).TotalSeconds
     if ($boundAgePrePost -lt -5 -or $boundAgePrePost -gt [double]$policyBefore.snapshot_max_age_seconds) {
-        throw 'Validated exit snapshot expired during arm; no POST performed.'
+        throw 'Validated exit snapshot expired before POST; no submission performed.'
     }
 
     $body = $intent | ConvertTo-Json -Depth 10 -Compress
     $response = Invoke-WebRequest -Uri 'http://127.0.0.1:8788/intent' -Method Post -Headers $headers `
         -ContentType 'application/json' -Body $body -UseBasicParsing -TimeoutSec 15
     if ($response.StatusCode -ne 202) { throw "Sim EXIT expected 202, got $($response.StatusCode)." }
-
-    $disarmTemp = "$policyPath.$([guid]::NewGuid().ToString('N')).disarm"
-    $originalPolicyJson | Set-Content -LiteralPath $disarmTemp -Encoding UTF8
-    Move-Item -LiteralPath $disarmTemp -Destination $policyPath -Force
-    $armed = $false
 
     $executionJournal = Join-Path $gd 'intents\executions.jsonl'
     $executionRecord = $null
@@ -143,7 +126,7 @@ try {
             foreach ($line in @(Get-Content -LiteralPath $executionJournal -Tail 250)) {
                 try { $candidate = $line | ConvertFrom-Json } catch { continue }
                 if ([string]$candidate.intent_id -ne [string]$intent.intent_id) { continue }
-                if ($candidate.code -eq 'group_exit_submitted' -and $candidate.status -eq 'submitted') { $executionRecord = $candidate }
+                if ($candidate.code -in @('master_exit_submitted','group_exit_submitted') -and $candidate.status -eq 'submitted') { $executionRecord = $candidate }
                 if ($candidate.status -eq 'failed') { $executionFailure = $candidate }
             }
         }
@@ -170,16 +153,10 @@ try {
         group_id = $managedGroup.group_id
         accounts = $managedGroup.accounts
         execution = $executionRecord
-        executor_left_armed = $false
+        ai_auto_left_on = $true
         postcondition = 'group_flat_no_working_orders'
     } | ConvertTo-Json -Depth 10
 } finally {
-    if ($armed) {
-        $restoreTemp = "$policyPath.$([guid]::NewGuid().ToString('N')).restore"
-        $originalPolicyJson | Set-Content -LiteralPath $restoreTemp -Encoding UTF8
-        Move-Item -LiteralPath $restoreTemp -Destination $policyPath -Force
-    }
-    if ($tempPolicy -and (Test-Path -LiteralPath $tempPolicy)) { Remove-Item -LiteralPath $tempPolicy -Force }
     if ($submitLock) { $submitLock.Dispose() }
     Remove-Item -LiteralPath $submitLockPath -Force -ErrorAction SilentlyContinue
 }

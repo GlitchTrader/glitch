@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -90,7 +91,20 @@ namespace Glitch.UI
             int frames = CountCurrentCycleFrames(minuteRoot, latestPacket == null ? DateTime.UtcNow : latestPacket.LastWriteTimeUtc);
             string snapshotAge = latestFrame == null ? "no snapshots" : FormatAge(DateTime.UtcNow - latestFrame.LastWriteTimeUtc) + " ago";
             string cycleAge = latestPacket == null ? "no sealed cycle" : Path.GetFileNameWithoutExtension(latestPacket.Name) + " · " + FormatAge(DateTime.UtcNow - latestPacket.LastWriteTimeUtc) + " ago";
-            _aiFeedStatusText.Text = "Latest snapshot " + snapshotAge + "  |  Last cycle " + cycleAge;
+            GlitchAiRailPolicy effectivePolicy = GlitchAiRailPolicyStore.Load();
+            string scopeSummary = effectivePolicy.IsValid
+                ? "AI scope " + effectivePolicy.ProfileAccountBindings.Count.ToString(CultureInfo.InvariantCulture)
+                    + " master(s) / " + effectivePolicy.AccountAllowlist.Count.ToString(CultureInfo.InvariantCulture) + " account(s)"
+                : "AI config invalid";
+            string dailyLossCap = effectivePolicy.MaxDailyLossUsd > 0
+                ? effectivePolicy.MaxDailyLossUsd.ToString("C0", CultureInfo.CurrentCulture)
+                : "OFF";
+            int blockedSessionCount = effectivePolicy.BlockedSessions == null ? 0 : effectivePolicy.BlockedSessions.Count;
+            _aiFeedStatusText.Text = "Latest snapshot " + snapshotAge
+                + "  |  Last cycle " + cycleAge
+                + "  |  " + scopeSummary
+                + " · Daily loss cap " + dailyLossCap
+                + " · Blocked sessions " + blockedSessionCount.ToString(CultureInfo.InvariantCulture);
 
             string action = GlitchAiJsonFields.ExtractString(decision, "action") ?? "Waiting";
             string decisionStatus = GlitchAiJsonFields.ExtractString(decision, "status") ?? "waiting";

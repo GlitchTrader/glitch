@@ -19,12 +19,12 @@ def dotnet_ticks(value):
     return int(stamp.timestamp() * 10_000_000) + MODULE.DOTNET_EPOCH_TICKS
 
 
-def ledger_row(account, entry_utc, exit_utc, entry_price, exit_price, correlation=""):
-    points = exit_price - entry_price
+def ledger_row(account, entry_utc, exit_utc, entry_price, exit_price, correlation="", quantity=1):
+    points = (exit_price - entry_price) * quantity
     signal = f"GLT-AI-E-{correlation.upper()}-0" if correlation else "GLT-COPY"
-    trade_id = f"{account}|MNQ|L|{dotnet_ticks(entry_utc)}|{dotnet_ticks(exit_utc)}|1|{entry_price}|{exit_price}"
+    trade_id = f"{account}|MNQ|L|{dotnet_ticks(entry_utc)}|{dotnet_ticks(exit_utc)}|{quantity}|{entry_price}|{exit_price}"
     return "\t".join(map(str, [
-        trade_id, dotnet_ticks(entry_utc), dotnet_ticks(exit_utc), account, "MNQ", "Long", 1,
+        trade_id, dotnet_ticks(entry_utc), dotnet_ticks(exit_utc), account, "MNQ", "Long", quantity,
         entry_price, exit_price, points, signal, "Manual / Other", "Asia", "Asia",
         "Strategy" if correlation else "Replication", "SYNC", "SYNC", signal, "GLT-EXIT", 0,
     ])) + "\n"
@@ -53,6 +53,7 @@ class DirectOutcomeReconcileTests(unittest.TestCase):
                 "account": "Sim101",
                 "operator_profile": "glitch",
                 "action": "ENTER_LONG",
+                "quantity": 3,
                 "stop_loss": 19980,
                 "take_profit_1": 20040,
             }
@@ -60,10 +61,10 @@ class DirectOutcomeReconcileTests(unittest.TestCase):
             correlation = "abc123def0"
             events = [
                 ("2026-07-14T12:00:01Z", "master_entry_submitted", f"contract=MNQ 09-26|correlation={correlation}|expected_accounts=Sim101,Sim102,Sim103"),
-                ("2026-07-14T12:00:02Z", "group_structural_brackets_submitted", "account=Sim101|fill=20000|sl=19980|tp1=20040|quantity=1"),
-                ("2026-07-14T12:00:03Z", "follower_structural_brackets_submitted", "account=Sim102|fill=20001|sl=19981|tp1=20041|quantity=1"),
-                ("2026-07-14T12:00:04Z", "follower_structural_brackets_submitted", "account=Sim103|fill=20002|sl=19982|tp1=20042|quantity=1"),
-                ("2026-07-14T12:05:01Z", "group_trade_closed", "state=flat_and_orders_terminal"),
+                ("2026-07-14T12:00:02Z", "master_structural_brackets_submitted", "account=Sim101|fill=20000|sl1=19980|tp1=20040|quantity=3"),
+                ("2026-07-14T12:00:03Z", "follower_structural_brackets_submitted", "account=Sim102|fill=20001|sl1=19981|tp1=20041|quantity=3"),
+                ("2026-07-14T12:00:04Z", "follower_structural_brackets_submitted", "account=Sim103|fill=20002|sl1=19982|tp1=20042|quantity=3"),
+                ("2026-07-14T12:05:01Z", "master_trade_closed", "state=master_flat_and_orders_terminal"),
             ]
             execution_path = gd / "intents" / "executions.jsonl"
             execution_path.write_text("".join(json.dumps({
@@ -72,14 +73,14 @@ class DirectOutcomeReconcileTests(unittest.TestCase):
 
             ledger = gd / "TradeLedger.tsv"
             ledger.write_text(
-                ledger_row("Sim101", "2026-07-14T12:00:02Z", "2026-07-14T12:05:01Z", 20000, 20010, correlation)
-                + ledger_row("Sim102", "2026-07-14T12:00:03Z", "2026-07-14T12:05:02Z", 20001, 20010),
+                ledger_row("Sim101", "2026-07-14T12:00:02Z", "2026-07-14T12:05:01Z", 20000, 20010, correlation, 3)
+                + ledger_row("Sim102", "2026-07-14T12:00:03Z", "2026-07-14T12:05:02Z", 20001, 20010, quantity=3),
                 encoding="utf-8",
             )
             self.assertEqual(MODULE.reconcile(gd, None, output, outbox), [])
 
             with ledger.open("a", encoding="utf-8") as stream:
-                stream.write(ledger_row("Sim103", "2026-07-14T12:00:04Z", "2026-07-14T12:05:03Z", 20002, 20010))
+                stream.write(ledger_row("Sim103", "2026-07-14T12:00:04Z", "2026-07-14T12:05:03Z", 20002, 20010, quantity=3))
             snapshots = [
                 ("2026-07-14T12:00:00Z", {"Sim101": 0, "Sim102": 0, "Sim103": 0}),
                 ("2026-07-14T12:05:04Z", {"Sim101": 20, "Sim102": 18, "Sim103": 16}),
@@ -94,8 +95,11 @@ class DirectOutcomeReconcileTests(unittest.TestCase):
             rows = MODULE.reconcile(gd, None, output, outbox)
             self.assertEqual(len(rows), 1)
             self.assertEqual([row["account"] for row in rows[0]["account_outcomes"]], ["Sim101", "Sim102", "Sim103"])
-            self.assertEqual(rows[0]["group_realized_pnl_usd"], 54)
+            self.assertEqual(rows[0]["group_realized_pnl_usd"], 162)
             self.assertTrue(all(row["trade_id"] for row in rows[0]["account_outcomes"]))
+            first_write = output.read_text(encoding="utf-8")
+            self.assertEqual(MODULE.reconcile(gd, None, output, outbox), rows)
+            self.assertEqual(output.read_text(encoding="utf-8"), first_write)
 
 
 if __name__ == "__main__":

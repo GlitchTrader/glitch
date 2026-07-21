@@ -15,6 +15,9 @@ namespace Glitch.UI
 {
     public partial class GlitchMainWindow
     {
+        private readonly HashSet<string> _inactiveReplicationAccounts =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         private static string GetInstrumentRoot(Instrument instrument)
         {
             return GlitchReplicationEngine.GetInstrumentRoot(instrument);
@@ -35,20 +38,26 @@ namespace Glitch.UI
             return await GlitchReplicationEngine.WaitForAllAccountsFlatAsync(accounts, timeout);
         }
 
-        private bool UseLegacyReplicationEngine()
-        {
-            // ponytail: legacy poll engine removed; persisted flag ignored.
-            return false;
-        }
-
         private void RefreshCopyEngineConfiguration(IReadOnlyList<Account> activeAccounts)
         {
             if (_copyEngine == null)
+            {
+                UpdateReplicateButtonState();
                 return;
+            }
 
-            if (!_isReplicatingUi || UseLegacyReplicationEngine())
+            if (!_isReplicatingUi)
             {
                 _copyEngine.Configure(false, null);
+                foreach (AccountGroupDefinition group in _accountGroups ?? new ObservableCollection<AccountGroupDefinition>())
+                {
+                    foreach (AccountGroupMemberRow member in group?.Members ?? new ObservableCollection<AccountGroupMemberRow>())
+                    {
+                        if (member != null)
+                            member.RouteStatus = member.IsMasterRow ? "Master off" : "Off";
+                    }
+                }
+                UpdateReplicateButtonState();
                 return;
             }
 
@@ -58,26 +67,55 @@ namespace Glitch.UI
                 .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
 
             var routes = new List<GlitchCopyFollowerRoute>();
+            var missingAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (AccountGroupDefinition group in _accountGroups ?? new ObservableCollection<AccountGroupDefinition>())
             {
                 if (group == null || string.IsNullOrWhiteSpace(group.MasterAccount) || group.Members == null)
                     continue;
 
                 string masterName = group.MasterAccount.Trim();
+                bool masterConnected = accountsByName.TryGetValue(masterName, out Account masterAccount)
+                    && masterAccount != null;
+                if (!masterConnected)
+                    missingAccounts.Add(masterName);
                 foreach (AccountGroupMemberRow member in group.Members)
                 {
-                    if (member == null || member.IsMasterRow || !member.IsEnabled || string.IsNullOrWhiteSpace(member.FollowerAccount))
+                    if (member == null)
+                        continue;
+                    if (member.IsMasterRow)
+                    {
+                        member.RouteStatus = masterConnected ? "Master active" : "Master offline";
+                        continue;
+                    }
+                    if (!member.IsEnabled)
+                    {
+                        member.RouteStatus = "Off";
+                        continue;
+                    }
+                    if (string.IsNullOrWhiteSpace(member.FollowerAccount))
                         continue;
                     if (string.Equals(member.FollowerAccount.Trim(), masterName, StringComparison.OrdinalIgnoreCase))
                         continue;
                     if (double.IsNaN(member.Ratio) || double.IsInfinity(member.Ratio) || member.Ratio <= 0)
                         continue;
-                    if (!accountsByName.TryGetValue(member.FollowerAccount.Trim(), out Account followerAccount) || followerAccount == null)
+                    string followerName = member.FollowerAccount.Trim();
+                    if (!accountsByName.TryGetValue(followerName, out Account followerAccount) || followerAccount == null)
+                    {
+                        member.RouteStatus = "Disconnected";
+                        missingAccounts.Add(followerName);
                         continue;
+                    }
+                    if (!masterConnected)
+                    {
+                        member.RouteStatus = "Master offline";
+                        continue;
+                    }
+                    member.RouteStatus = "Active";
 
                     routes.Add(new GlitchCopyFollowerRoute
                     {
                         MasterAccount = masterName,
+                        MasterAccountInstance = masterAccount,
                         FollowerAccount = followerAccount,
                         Ratio = member.Ratio
                     });
@@ -85,11 +123,25 @@ namespace Glitch.UI
             }
 
             _copyEngine.Configure(true, routes);
+            UpdateReplicateButtonState();
+
+            foreach (string missing in missingAccounts.Where(name => !_inactiveReplicationAccounts.Contains(name)))
+                RaiseCriticalWarning(missing,
+                    "Enabled replication account is disconnected; its route is inactive until reconnect.",
+                    "ReplicationRouteInactive|" + missing,
+                    unlocksTrading: false);
+
+            bool routeRecovered = _inactiveReplicationAccounts.Any(name => !missingAccounts.Contains(name));
+            _inactiveReplicationAccounts.Clear();
+            foreach (string missing in missingAccounts)
+                _inactiveReplicationAccounts.Add(missing);
+            if (routeRecovered)
+                AlignAllEnabledFollowersToMaster("reconnect");
         }
 
         private void AlignAllEnabledFollowersToMaster(string origin)
         {
-            if (_copyEngine == null || !_isReplicatingUi || _isFlattenAllInProgress || UseLegacyReplicationEngine())
+            if (_copyEngine == null || !_isReplicatingUi || _isFlattenAllInProgress)
                 return;
 
             foreach (AccountGroupDefinition group in _accountGroups ?? new ObservableCollection<AccountGroupDefinition>())
@@ -143,13 +195,6 @@ namespace Glitch.UI
                 return;
             if (group == null || member == null || member.IsMasterRow)
                 return;
-
-            if (!enabled)
-            {
-                Account followerAccount = TryFindConnectedAccountByName(member.FollowerAccount);
-                if (followerAccount != null)
-                    CancelGlitchWorkingOrdersOnFollowers(new[] { followerAccount });
-            }
 
             RefreshCopyEngineConfiguration(GetActiveAccountsSnapshot());
             if (enabled && _isReplicatingUi)
@@ -210,11 +255,14 @@ namespace Glitch.UI
                 return;
             if (_isFlattenAllInProgress)
                 return;
-            if (!_isReplicatingUi || UseLegacyReplicationEngine())
+            if (!_isReplicatingUi)
                 return;
             if (!string.Equals(eventName, "ExecutionUpdate", StringComparison.OrdinalIgnoreCase))
                 return;
             if (!TryBuildCopyExecutionContext(eventArgs, out GlitchCopyExecutionContext context))
+                return;
+
+            if (_copyEngine.ProcessExternalFollowerExecution(account, context))
                 return;
 
             _copyEngine.ProcessMasterExecution(account, context);
@@ -228,6 +276,7 @@ namespace Glitch.UI
                 || string.Equals(eventName, "ExecutionUpdate", StringComparison.OrdinalIgnoreCase))
             {
                 GlitchAiOrderExecutor.ProcessAccountStateUpdate(account);
+                _copyEngine?.ProcessAccountStateUpdate(account);
                 return;
             }
             if (!string.Equals(eventName, "OrderUpdate", StringComparison.OrdinalIgnoreCase))
@@ -238,8 +287,9 @@ namespace Glitch.UI
                 return;
 
             GlitchAiOrderExecutor.ProcessOrderUpdate(account, order);
+            _copyEngine?.ProcessMasterOrderUpdate(account, order);
 
-            if (_copyEngine == null || _isFlattenAllInProgress || !_isReplicatingUi)
+            if (_copyEngine == null || _isFlattenAllInProgress)
                 return;
 
             _copyEngine.ProcessFollowerOrderUpdate(account, order);
@@ -247,6 +297,9 @@ namespace Glitch.UI
 
         private List<Account> ResolveFlattenAllAccounts(out List<string> unresolvedConfiguredAccounts)
         {
+            // Emergency/user risk controls are deliberately independent from
+            // replication ownership. Quarantine can stop automatic copy/sync,
+            // but it can never remove an account from Flatten All.
             var accountsByName = new Dictionary<string, Account>(StringComparer.OrdinalIgnoreCase);
             var configuredNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             unresolvedConfiguredAccounts = new List<string>();
@@ -318,6 +371,8 @@ namespace Glitch.UI
 
         private int IssueFlattenOrdersForAccounts(IReadOnlyList<Account> accounts)
         {
+            // Call NinjaTrader's native account primitive directly. Do not route
+            // through copy-engine lifecycle, AI, or replication gates.
             int totalIssued = 0;
             foreach (Account account in accounts ?? Array.Empty<Account>())
             {
@@ -467,40 +522,25 @@ namespace Glitch.UI
             return Enum.TryParse(normalized, true, out action);
         }
 
-        private void CancelGlitchWorkingOrdersOnFollowers(IReadOnlyList<Account> activeAccounts)
-        {
-            foreach (Account account in activeAccounts ?? Array.Empty<Account>())
-            {
-                if (account == null)
-                    continue;
-
-                try
-                {
-                    foreach (Order order in account.Orders.ToArray())
-                    {
-                        if (order == null || string.IsNullOrWhiteSpace(order.Name))
-                            continue;
-                        if (!IsGlitchOwnedWorkingOrder(order))
-                            continue;
-                        if (!GlitchReplicationEngine.IsWorkingOrderState(order.OrderState))
-                            continue;
-
-                        account.Cancel(new[] { order });
-                    }
-                }
-                catch (Exception ex)
-                {
-                    RecordSubsystemFault("cancel_glitch_orders", ex);
-                }
-            }
-        }
-
         private static bool IsGlitchOwnedWorkingOrder(Order order)
         {
             if (order == null || string.IsNullOrWhiteSpace(order.Name))
                 return false;
 
             return order.Name.Trim().StartsWith("GLT-", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsGlitchOwnedEntryOrder(Order order)
+        {
+            if (order == null || string.IsNullOrWhiteSpace(order.Name))
+                return false;
+
+            string name = order.Name.Trim();
+            return name.StartsWith(GlitchAiOrderExecutor.SignalEntry + "-", StringComparison.OrdinalIgnoreCase)
+                || name.Equals(GlitchCopyEngine.CopySignalName, StringComparison.OrdinalIgnoreCase)
+                || name.StartsWith(GlitchCopyEngine.CopySignalName + "-E-", StringComparison.OrdinalIgnoreCase)
+                || name.Equals(GlitchCopyEngine.CatchUpSignalName, StringComparison.OrdinalIgnoreCase)
+                || name.StartsWith(GlitchCopyEngine.CatchUpSignalName + "-E-", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsWorkingOrderState(OrderState state)
@@ -525,7 +565,7 @@ namespace Glitch.UI
                 {
                     if (order == null || !GlitchReplicationEngine.IsWorkingOrderState(order.OrderState))
                         continue;
-                    if (!IsGlitchOwnedWorkingOrder(order))
+                    if (!IsGlitchOwnedEntryOrder(order))
                         continue;
 
                     int actionSign = GlitchReplicationEngine.GetOrderActionSign(order.OrderAction);

@@ -51,7 +51,7 @@ namespace Glitch.UI
 
             return new GlitchPortfolioSnapshotCapture
             {
-                IsReplicating = _isReplicatingUi,
+                IsReplicating = IsReplicationRuntimeActive(),
                 PropFirmRulesSchemaVersion = rulesSchema,
                 PropFirmRulesUpdatedAtUtc = rulesUpdatedAt,
                 Accounts = records
@@ -60,8 +60,22 @@ namespace Glitch.UI
 
         private GlitchPortfolioSnapshotAccountRecord BuildPortfolioSnapshotAccountRecord(AccountGridRow row, Account account)
         {
-            double headroomRatio = row.MaxDrawdownRaw > 0 && !double.IsNaN(row.BufferMarginRaw)
-                ? row.BufferMarginRaw / row.MaxDrawdownRaw
+            bool simulateApexLegacyEval = string.Equals(row.AccountStatus, "Sim", StringComparison.OrdinalIgnoreCase);
+            string ruleFirmId = simulateApexLegacyEval ? "ApexTraderFunding" : row.PropFirmId;
+            string ruleStatus = simulateApexLegacyEval ? "Eval" : row.AccountStatus;
+            FirmTierRule rule = GetRuleForFirmAndSize(
+                ruleFirmId,
+                ruleStatus,
+                GetExecutionProviderHint(account),
+                row.AccountSizeRaw,
+                0);
+            _firmRules.TryGetValue(ruleFirmId ?? string.Empty, out FirmRuleMetadata ruleFirm);
+            double ruleMaxContracts = ResolveMaxContractsLimit(rule, ResolveMicroContractMultiplier(ruleFirm));
+            double profitTarget = rule?.ProfitTarget ?? row.ProfitTargetRaw;
+            double maxDrawdown = rule?.MaxDrawdown ?? row.MaxDrawdownRaw;
+            double dailyLossLimit = rule?.DailyLossLimit ?? row.DailyLossLimitRaw;
+            double headroomRatio = maxDrawdown > 0 && !double.IsNaN(row.BufferMarginRaw)
+                ? row.BufferMarginRaw / maxDrawdown
                 : double.NaN;
             List<GlitchPortfolioSnapshotPositionRecord> positions = BuildPortfolioSnapshotPositions(account);
             double liveUnrealizedPnl = positions.Sum(position => position.UnrealizedPnl);
@@ -71,11 +85,13 @@ namespace Glitch.UI
             {
                 AccountName = row.DisplayName,
                 AccountStatus = row.AccountStatus,
-                PropFirmId = row.PropFirmId,
+                PropFirmId = ruleFirmId,
+                RuleStatus = ruleStatus,
+                RulesAreSimulated = simulateApexLegacyEval,
                 AccountSize = row.AccountSizeRaw,
-                ProfitTarget = row.ProfitTargetRaw,
-                MaxDrawdown = row.MaxDrawdownRaw,
-                DailyLossLimit = row.DailyLossLimitRaw,
+                ProfitTarget = profitTarget,
+                MaxDrawdown = maxDrawdown,
+                DailyLossLimit = dailyLossLimit,
                 Equity = row.EquityRaw,
                 LiquidationThreshold = row.NetLiqRaw,
                 BufferMargin = row.BufferMarginRaw,
@@ -87,7 +103,7 @@ namespace Glitch.UI
                 WorkingOrderCount = account?.Orders == null
                     ? 0
                     : account.Orders.Count(order => order != null && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState)),
-                MaxContracts = row.MaxContractsRaw,
+                MaxContracts = ruleMaxContracts > 0 ? ruleMaxContracts : row.MaxContractsRaw,
                 IsRiskLocked = _riskLockedAccounts.Contains(row.DisplayName),
                 IsEvalTargetLocked = _evalTargetLockedAccounts.Contains(row.DisplayName),
                 Positions = positions

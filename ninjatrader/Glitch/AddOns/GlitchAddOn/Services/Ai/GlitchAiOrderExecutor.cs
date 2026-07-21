@@ -100,6 +100,21 @@ namespace Glitch.Services
                 return;
             }
 
+            if ((IsOwnedStopSignal(order.Name) || IsOwnedTargetSignal(order.Name))
+                && order.OrderState == OrderState.PartFilled)
+            {
+                GlitchAiExecutionJournalWriter.TryAppend(
+                    group.IntentId,
+                    GlitchAiExecutionResult.Failed(
+                        "partial_protection_fill_recovery",
+                        "account=" + CleanToken(account.Name)
+                            + "|filled=" + order.Filled.ToString(CultureInfo.InvariantCulture)
+                            + "|quantity=" + order.Quantity.ToString(CultureInfo.InvariantCulture)),
+                    DateTime.UtcNow);
+                RecoverGroup(group, "partial_protection_fill_" + account.Name);
+                return;
+            }
+
             if (group.RecoveryStarted)
             {
                 int recoveryAccountIndex;
@@ -113,7 +128,7 @@ namespace Glitch.Services
             int entryAccountIndex;
             if (TryGetEntryAccountIndex(group, order, out entryAccountIndex)
                 && order.Filled > 0
-                && order.OrderState != OrderState.Filled)
+                && order.OrderState == OrderState.Cancelled)
             {
                 GlitchAiExecutionJournalWriter.TryAppend(
                     group.IntentId,
@@ -123,7 +138,7 @@ namespace Glitch.Services
                             + "|filled=" + order.Filled.ToString(CultureInfo.InvariantCulture)
                             + "|quantity=" + order.Quantity.ToString(CultureInfo.InvariantCulture)),
                     DateTime.UtcNow);
-                RecoverGroup(group, "partial_entry_fill_" + account.Name);
+                RecoverGroup(group, "terminal_partial_entry_fill_" + account.Name);
                 return;
             }
 
@@ -138,7 +153,7 @@ namespace Glitch.Services
                     return;
                 }
 
-                if (string.Equals(protection.Code, "group_structural_brackets_submitted", StringComparison.Ordinal))
+                if (string.Equals(protection.Code, "master_structural_brackets_submitted", StringComparison.Ordinal))
                     GlitchAiExecutionJournalWriter.TryAppend(group.IntentId, protection, DateTime.UtcNow);
             }
 
@@ -194,18 +209,38 @@ namespace Glitch.Services
                     || !SameInstrument(group.Instrument, instrument))
                     return false;
 
+                var replicationLegs = new List<GlitchReplicationProtectionLeg>();
+                for (int legIndex = 0; legIndex < group.ProtectionLegs.Count; legIndex++)
+                {
+                    StructuralProtectionLeg leg = group.ProtectionLegs[legIndex];
+                    int stopOffset = 1 + (legIndex * 2);
+                    int targetOffset = 2 + (legIndex * 2);
+                    Order stop = stopOffset < group.Orders.Count ? group.Orders[stopOffset] : null;
+                    Order target = targetOffset < group.Orders.Count ? group.Orders[targetOffset] : null;
+                    bool absoluteWorking = stop != null && target != null
+                        && stop.StopPrice > 0 && target.LimitPrice > 0
+                        && GlitchReplicationEngine.IsWorkingOrderState(stop.OrderState)
+                        && GlitchReplicationEngine.IsWorkingOrderState(target.OrderState);
+                    if (!absoluteWorking)
+                        return false;
+                    replicationLegs.Add(new GlitchReplicationProtectionLeg
+                    {
+                        MasterQuantity = leg.Quantity,
+                        UseAbsolutePrices = true,
+                        AbsoluteStopPrice = stop.StopPrice,
+                        AbsoluteTargetPrice = target.LimitPrice,
+                        StopDistance = leg.StopDistance,
+                        TargetDistance = leg.TargetDistance
+                    });
+                }
+
                 plan = new GlitchReplicationProtectionPlan
                 {
                     IntentId = group.IntentId,
                     GroupId = group.GroupId,
                     Correlation = group.Correlation,
                     IsLong = group.IsLong,
-                    Legs = group.ProtectionLegs.Select(leg => new GlitchReplicationProtectionLeg
-                    {
-                        MasterQuantity = leg.Quantity,
-                        StopDistance = leg.StopDistance,
-                        TargetDistance = leg.TargetDistance
-                    }).ToList(),
+                    Legs = replicationLegs,
                     TickSize = group.TickSize,
                     PointValue = group.PointValue,
                     MaxRiskPerContractUsd = group.MaxLossPerMasterContractUsd
@@ -216,9 +251,12 @@ namespace Glitch.Services
 
         public static bool IsExecutionEnabled(GlitchAiRailPolicy policy)
         {
+            // The visible Glitch AI control is the operational switch. Account
+            // scope, risk, compliance, and current portfolio truth are validated
+            // later against the exact selected master/group; legacy mode and kill
+            // fields are compatibility metadata, not hidden arming rituals.
             return policy != null
-                && (string.Equals(policy.Mode, "paper", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(policy.Mode, "live", StringComparison.OrdinalIgnoreCase))
+                && policy.IsValid
                 && !GlitchHermesControlStateStore.Load().TradingPaused;
         }
 
@@ -372,13 +410,23 @@ namespace Glitch.Services
 
             bool hasSecondTarget = GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_2", out double takeProfit2);
             bool hasSecondStop = GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss_2", out double stopLoss2);
+            bool hasThirdTarget = GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_3", out double takeProfit3);
+            bool hasThirdStop = GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss_3", out double stopLoss3);
             double quantityTp1Value = 0;
+            double quantityTp2Value = 0;
             if (hasSecondTarget
                 && (!GlitchAiJsonFields.TryExtractNumber(rawJson, "quantity_tp1", out quantityTp1Value)
                     || quantityTp1Value < 1))
                 return GlitchAiExecutionResult.Failed("enter_quantity_split_missing");
             if (hasSecondStop && !hasSecondTarget)
                 return GlitchAiExecutionResult.Failed("enter_stop_loss_2_requires_tp2");
+            if (hasThirdTarget
+                && (!hasSecondTarget
+                    || !GlitchAiJsonFields.TryExtractNumber(rawJson, "quantity_tp2", out quantityTp2Value)
+                    || quantityTp2Value < 1))
+                return GlitchAiExecutionResult.Failed("enter_third_leg_split_missing");
+            if (hasThirdStop && !hasThirdTarget)
+                return GlitchAiExecutionResult.Failed("enter_stop_loss_3_requires_tp3");
 
             string instrumentRoot = GlitchAiJsonFields.ExtractString(rawJson, "instrument");
             string action = GlitchAiJsonFields.ExtractString(rawJson, "action");
@@ -420,6 +468,8 @@ namespace Glitch.Services
 
             double secondStopDistance = stopDistance;
             double secondTargetDistance = 0;
+            double thirdStopDistance = stopDistance;
+            double thirdTargetDistance = 0;
             if (hasSecondTarget)
             {
                 secondTargetDistance = isLong
@@ -435,6 +485,24 @@ namespace Glitch.Services
                     if (secondStopDistance < metadata.TickSize)
                         return GlitchAiExecutionResult.Failed("group_second_stop_distance_invalid");
                 }
+            }
+            if (hasThirdTarget)
+            {
+                thirdTargetDistance = isLong
+                    ? takeProfit3 - snapshotMarketPrice
+                    : snapshotMarketPrice - takeProfit3;
+                if (thirdTargetDistance < metadata.TickSize || thirdTargetDistance <= secondTargetDistance)
+                    return GlitchAiExecutionResult.Failed("group_third_target_distance_invalid");
+                if (hasThirdStop)
+                {
+                    thirdStopDistance = isLong
+                        ? snapshotMarketPrice - stopLoss3
+                        : stopLoss3 - snapshotMarketPrice;
+                    if (thirdStopDistance < metadata.TickSize)
+                        return GlitchAiExecutionResult.Failed("group_third_stop_distance_invalid");
+                }
+                else if (hasSecondStop)
+                    thirdStopDistance = secondStopDistance;
             }
 
             double liveExecutionPrice;
@@ -458,12 +526,23 @@ namespace Glitch.Services
             if (Math.Abs(quantityValue - masterQuantity) > 0.0000001d)
                 return GlitchAiExecutionResult.Failed("master_quantity_must_be_integer");
             int quantityTp1 = masterQuantity;
+            int quantityTp2 = 0;
+            int quantityTp3 = 0;
             if (hasSecondTarget)
             {
                 quantityTp1 = (int)Math.Round(quantityTp1Value, MidpointRounding.AwayFromZero);
                 if (Math.Abs(quantityTp1Value - quantityTp1) > 0.0000001d
                     || quantityTp1 < 1 || quantityTp1 >= masterQuantity)
                     return GlitchAiExecutionResult.Failed("master_quantity_split_invalid");
+                quantityTp2 = masterQuantity - quantityTp1;
+            }
+            if (hasThirdTarget)
+            {
+                quantityTp2 = (int)Math.Round(quantityTp2Value, MidpointRounding.AwayFromZero);
+                quantityTp3 = masterQuantity - quantityTp1 - quantityTp2;
+                if (Math.Abs(quantityTp2Value - quantityTp2) > 0.0000001d
+                    || quantityTp2 < 1 || quantityTp3 < 1)
+                    return GlitchAiExecutionResult.Failed("master_three_leg_quantity_split_invalid");
             }
 
             foreach (ExecutionGroupMember member in members)
@@ -474,11 +553,14 @@ namespace Glitch.Services
                     return GlitchAiExecutionResult.Failed("group_ratio_quantity_not_integer", member.Account.Name);
                 if (hasSecondTarget)
                 {
-                    double scaledTp1 = quantityTp1 * member.Ratio;
-                    double scaledTp2 = (masterQuantity - quantityTp1) * member.Ratio;
-                    if (scaledTp1 < 1 || scaledTp2 < 1
-                        || Math.Abs(scaledTp1 - Math.Round(scaledTp1, MidpointRounding.AwayFromZero)) > 0.0000001d
-                        || Math.Abs(scaledTp2 - Math.Round(scaledTp2, MidpointRounding.AwayFromZero)) > 0.0000001d)
+                    var legQuantities = hasThirdTarget
+                        ? new[] { quantityTp1, quantityTp2, quantityTp3 }
+                        : new[] { quantityTp1, quantityTp2 };
+                    if (legQuantities.Any(legQuantity =>
+                    {
+                        double scaled = legQuantity * member.Ratio;
+                        return scaled < 1 || Math.Abs(scaled - Math.Round(scaled, MidpointRounding.AwayFromZero)) > 0.0000001d;
+                    }))
                         return GlitchAiExecutionResult.Failed("group_ratio_leg_quantity_not_integer", member.Account.Name);
                 }
                 member.Quantity = quantity;
@@ -486,12 +568,39 @@ namespace Glitch.Services
 
             int masterCurrentNet = GetNetPosition(members[0].Account, instrument);
             int requestedDirection = isLong ? 1 : -1;
-            if (masterCurrentNet != 0 && Math.Sign(masterCurrentNet) != requestedDirection)
-                return GlitchAiExecutionResult.Failed("opposite_position_exists", members[0].Account.Name);
-            if (Math.Abs(masterCurrentNet) + masterQuantity > policy.MaxContracts)
+            foreach (ExecutionGroupMember member in members)
+            {
+                int memberCurrentNet = GetNetPosition(member.Account, instrument);
+                if (memberCurrentNet != 0 && Math.Sign(memberCurrentNet) != requestedDirection)
+                {
+                    return GlitchAiExecutionResult.Failed(
+                        "group_opposite_position_exists",
+                    member.Account.Name);
+                }
+            }
+            if (!GlitchApexDirectionGuard.TryApproveEntry(
+                members[0].Account,
+                instrument,
+                requestedDirection,
+                policy.SnapshotMaxAgeSeconds,
+                out string apexDirectionFailure))
+            {
                 return GlitchAiExecutionResult.Failed(
-                    "max_contracts_exceeded_at_execution",
-                    (Math.Abs(masterCurrentNet) + masterQuantity).ToString(CultureInfo.InvariantCulture));
+                    "apex_direction_compliance_rejected",
+                    apexDirectionFailure);
+            }
+            foreach (ExecutionGroupMember member in members)
+            {
+                if (!GlitchAiPortfolioSnapshotReader.TryGetAccountBlock(member.Account.Name, out string accountJson)
+                    || !GlitchAiJsonFields.TryExtractNumber(accountJson, "max_contracts", out double maxContracts)
+                    || maxContracts <= 0)
+                    return GlitchAiExecutionResult.Failed("prop_max_contracts_unavailable", member.Account.Name);
+                int projectedQuantity = Math.Abs(GetNetPosition(member.Account, instrument)) + member.Quantity;
+                if (projectedQuantity > maxContracts)
+                    return GlitchAiExecutionResult.Failed(
+                        "prop_max_contracts_exceeded_at_execution",
+                        member.Account.Name + "=" + projectedQuantity.ToString(CultureInfo.InvariantCulture));
+            }
 
             double perContractRisk = stopDistance * metadata.PointValue;
             if (perContractRisk > policy.MaxRiskPerContractUsd)
@@ -567,9 +676,18 @@ namespace Glitch.Services
             {
                 protectionLegs.Add(new StructuralProtectionLeg
                 {
-                    Quantity = masterQuantity - quantityTp1,
+                    Quantity = quantityTp2,
                     StopDistance = secondStopDistance,
                     TargetDistance = secondTargetDistance
+                });
+            }
+            if (hasThirdTarget)
+            {
+                protectionLegs.Add(new StructuralProtectionLeg
+                {
+                    Quantity = quantityTp3,
+                    StopDistance = thirdStopDistance,
+                    TargetDistance = thirdTargetDistance
                 });
             }
             var group = new ExecutionGroupContext
@@ -736,6 +854,7 @@ namespace Glitch.Services
             OrderAction exitAction = group.IsLong ? OrderAction.Sell : OrderAction.BuyToCover;
             var createdOrders = new List<Order>();
             var evidence = new List<string>();
+            string protectionSubmissionNonce = Guid.NewGuid().ToString("N").Substring(0, 6);
             for (int legIndex = 0; legIndex < group.ProtectionLegs.Count; legIndex++)
             {
                 StructuralProtectionLeg leg = group.ProtectionLegs[legIndex];
@@ -756,7 +875,9 @@ namespace Glitch.Services
                     return GlitchAiExecutionResult.Failed("group_structural_risk_exceeded_at_fill", "leg=" + (legIndex + 1));
 
                 string legToken = (legIndex + 1).ToString(CultureInfo.InvariantCulture);
-                string oco = "GLTAI" + group.Correlation + accountIndex.ToString(CultureInfo.InvariantCulture) + legToken;
+                string oco = "GLTAI" + group.Correlation
+                    + accountIndex.ToString(CultureInfo.InvariantCulture)
+                    + legToken + protectionSubmissionNonce;
                 string stopSignal = BuildSignalName(SignalStop, group.Correlation, accountIndex, legIndex);
                 string targetSignal = BuildSignalName(SignalTarget, group.Correlation, accountIndex, legIndex);
                 Order stop = CreateExitOrder(account, group.Instrument, exitAction, OrderType.StopMarket, leg.Quantity, 0, stopPrice, oco, stopSignal);
@@ -772,27 +893,42 @@ namespace Glitch.Services
                 evidence.Add("tp" + legToken + "=" + targetPrice.ToString(CultureInfo.InvariantCulture));
             }
 
-            lock (GroupSync)
-            {
-                if (group.ProtectionSubmitted != null && accountIndex < group.ProtectionSubmitted.Length)
-                    group.ProtectionSubmitted[accountIndex] = true;
-                foreach (Order protectionOrder in createdOrders)
-                    GroupsBySignal[protectionOrder.Name.Trim()] = group;
-            }
-
             try
             {
+                lock (GroupSync)
+                {
+                    foreach (Order protectionOrder in createdOrders)
+                        GroupsBySignal[protectionOrder.Name.Trim()] = group;
+                }
                 account.Submit(createdOrders.ToArray());
                 if (createdOrders.Any(IsRejected))
+                {
+                    lock (GroupSync)
+                    {
+                        foreach (Order protectionOrder in createdOrders)
+                            GroupsBySignal.Remove(protectionOrder.Name.Trim());
+                    }
                     return GlitchAiExecutionResult.Failed("group_structural_bracket_rejected", account.Name);
+                }
+
+                lock (GroupSync)
+                {
+                    if (group.ProtectionSubmitted != null && accountIndex < group.ProtectionSubmitted.Length)
+                        group.ProtectionSubmitted[accountIndex] = true;
+                }
             }
             catch (Exception ex)
             {
+                lock (GroupSync)
+                {
+                    foreach (Order protectionOrder in createdOrders)
+                        GroupsBySignal.Remove(protectionOrder.Name.Trim());
+                }
                 return GlitchAiExecutionResult.Failed("group_structural_bracket_submit_exception", ex.GetType().Name);
             }
 
             return GlitchAiExecutionResult.Succeeded(
-                "group_structural_brackets_submitted",
+                "master_structural_brackets_submitted",
                 BuildGroupEvidenceMessage(group)
                     + "|account=" + CleanToken(account.Name)
                     + "|fill=" + fillPrice.ToString(CultureInfo.InvariantCulture)
@@ -812,17 +948,26 @@ namespace Glitch.Services
             string groupId,
             string intentId)
         {
+            var positionedAccounts = new List<Account>();
             var failures = new List<string>();
             foreach (Account account in accounts)
             {
                 int net = GetNetPosition(account, instrument);
                 if (net == 0)
                     continue;
+                positionedAccounts.Add(account);
                 if (!HasCompleteAiProtection(account, instrument, out _))
                     return GlitchAiExecutionResult.Failed("group_exit_not_fully_ai_owned", account.Name);
             }
 
-            foreach (Account account in accounts)
+            if (positionedAccounts.Count == 0)
+            {
+                return GlitchAiExecutionResult.Skipped(
+                    "exit_already_flat",
+                    "group=" + CleanToken(groupId) + "|master_state=flat_no_action");
+            }
+
+            foreach (Account account in positionedAccounts)
             {
                 try
                 {
@@ -842,9 +987,9 @@ namespace Glitch.Services
                 return GlitchAiExecutionResult.Failed("group_exit_partial_failure", string.Join(",", failures));
 
             return GlitchAiExecutionResult.Succeeded(
-                "group_exit_submitted",
+                "master_exit_submitted",
                 "group=" + CleanToken(groupId)
-                    + "|accounts=" + string.Join(",", accounts.Select(account => account.Name)));
+                    + "|accounts=" + string.Join(",", positionedAccounts.Select(account => account.Name)));
         }
 
         private static GlitchAiExecutionResult TryExecuteGroupMoveStop(
@@ -931,7 +1076,7 @@ namespace Glitch.Services
                 if (account == null || account.Orders == null)
                     return recovered;
 
-                foreach (Order order in account.Orders)
+                foreach (Order order in SnapshotOrders(account))
                 {
                     string correlation;
                     int accountIndex;
@@ -965,10 +1110,14 @@ namespace Glitch.Services
                 Order recoveredTarget1 = FindNamedOrder(accounts[0], BuildSignalName(SignalTarget, correlation, 0, 0), instrument);
                 if (recoveredStop1 != null && recoveredTarget1 != null)
                     group.ProtectionLegs[0].Quantity = recoveredStop1.Quantity;
-                Order recoveredStop2 = FindNamedOrder(accounts[0], BuildSignalName(SignalStop, correlation, 0, 1), instrument);
-                Order recoveredTarget2 = FindNamedOrder(accounts[0], BuildSignalName(SignalTarget, correlation, 0, 1), instrument);
-                if (recoveredStop2 != null && recoveredTarget2 != null)
-                    group.ProtectionLegs.Add(new StructuralProtectionLeg { Quantity = recoveredStop2.Quantity });
+                for (int recoveredLegIndex = 1; recoveredLegIndex < 3; recoveredLegIndex++)
+                {
+                    Order recoveredStop = FindNamedOrder(accounts[0], BuildSignalName(SignalStop, correlation, 0, recoveredLegIndex), instrument);
+                    Order recoveredTarget = FindNamedOrder(accounts[0], BuildSignalName(SignalTarget, correlation, 0, recoveredLegIndex), instrument);
+                    if (recoveredStop == null || recoveredTarget == null)
+                        break;
+                    group.ProtectionLegs.Add(new StructuralProtectionLeg { Quantity = recoveredStop.Quantity });
+                }
 
                 bool complete = true;
                 for (int i = 0; i < accounts.Count; i++)
@@ -1027,7 +1176,7 @@ namespace Glitch.Services
             if (account == null || account.Orders == null || string.IsNullOrWhiteSpace(name))
                 return null;
 
-            List<Order> matches = account.Orders.Where(order => order != null
+            List<Order> matches = SnapshotOrders(account).Where(order => order != null
                 && string.Equals(order.Name, name, StringComparison.Ordinal)
                 && ReferenceEquals(order.Account, account)
                 && SameInstrument(order.Instrument, instrument)).ToList();
@@ -1262,7 +1411,6 @@ namespace Glitch.Services
             }
             else
             {
-                bool allTerminal = group.Orders.All(IsTerminalTrackedOrder);
                 terminal = group.Orders.All(IsTerminalTrackedOrder);
                 if (!terminal)
                     return;
@@ -1278,8 +1426,8 @@ namespace Glitch.Services
                     GlitchAiExecutionJournalWriter.TryAppend(
                         group.IntentId,
                         GlitchAiExecutionResult.Succeeded(
-                            "group_trade_closed",
-                            BuildGroupEvidenceMessage(group) + "|state=flat_and_orders_terminal"),
+                            "master_trade_closed",
+                            BuildGroupEvidenceMessage(group) + "|state=master_flat_and_orders_terminal"),
                         DateTime.UtcNow);
                 }
             }
@@ -1341,7 +1489,7 @@ namespace Glitch.Services
                 GlitchAiExecutionJournalWriter.TryAppend(
                     group.IntentId,
                     GlitchAiExecutionResult.Succeeded(
-                        "group_entry_filled",
+                        "master_entry_filled",
                         BuildGroupEvidenceMessage(group) + "|state=master_entry_filled"),
                     DateTime.UtcNow);
             }
@@ -1357,8 +1505,8 @@ namespace Glitch.Services
                 GlitchAiExecutionJournalWriter.TryAppend(
                     group.IntentId,
                     GlitchAiExecutionResult.Succeeded(
-                        "group_entry_open_protected",
-                        BuildGroupEvidenceMessage(group) + "|state=positions_exact_and_brackets_working"),
+                        "master_entry_open_protected",
+                        BuildGroupEvidenceMessage(group) + "|state=master_position_exact_and_brackets_working"),
                     DateTime.UtcNow);
             }
         }
@@ -1463,8 +1611,10 @@ namespace Glitch.Services
                     || (entry.OrderAction == OrderAction.SellShort
                         && (stop.OrderAction != OrderAction.BuyToCover || target.OrderAction != OrderAction.BuyToCover)))
                     return false;
-                stopCoverage += stop.Quantity;
-                targetCoverage += target.Quantity;
+                if (stop.OrderState == OrderState.PartFilled || target.OrderState == OrderState.PartFilled)
+                    return false;
+                stopCoverage += RemainingQuantity(stop);
+                targetCoverage += RemainingQuantity(target);
             }
 
             return ReferenceEquals(entry.Account, account)
@@ -1473,40 +1623,12 @@ namespace Glitch.Services
                 && targetCoverage == entry.Filled;
         }
 
-        private static bool HasExactNetPosition(Account account, Instrument instrument, int expectedNet)
-        {
-            if (account == null || instrument == null || expectedNet == 0 || account.Positions == null)
-                return false;
-
-            try
-            {
-                int actualNet = 0;
-                foreach (Position position in account.Positions)
-                {
-                    if (position == null || position.Instrument == null
-                        || !SameInstrument(position.Instrument, instrument))
-                        continue;
-
-                    if (position.MarketPosition == MarketPosition.Long)
-                        actualNet += position.Quantity;
-                    else if (position.MarketPosition == MarketPosition.Short)
-                        actualNet -= position.Quantity;
-                }
-
-                return actualNet == expectedNet;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
         private static int GetNetPosition(Account account, Instrument instrument)
         {
             if (account == null || instrument == null || account.Positions == null)
                 return 0;
             int net = 0;
-            foreach (Position position in account.Positions)
+            foreach (Position position in SnapshotPositions(account))
             {
                 if (position == null || position.Instrument == null || !SameInstrument(position.Instrument, instrument))
                     continue;
@@ -1526,34 +1648,84 @@ namespace Glitch.Services
             int net = GetNetPosition(account, instrument);
             if (net == 0)
                 return false;
+            OrderAction expectedExitAction = net > 0 ? OrderAction.Sell : OrderAction.BuyToCover;
+            List<Order> protection = SnapshotOrders(account).Where(order => order != null
+                && order.Instrument != null
+                && SameInstrument(order.Instrument, instrument)
+                && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState)
+                && (IsOwnedStopSignal(order.Name) || IsOwnedTargetSignal(order.Name)))
+                .ToList();
+            if (protection.Count == 0 || protection.Any(order => order.OrderState == OrderState.PartFilled))
+                return false;
+
             int stopCoverage = 0;
             int targetCoverage = 0;
-            foreach (Order order in account.Orders)
+            foreach (IGrouping<string, Order> pair in protection.GroupBy(order => order.Oco ?? string.Empty, StringComparer.Ordinal))
             {
-                if (order == null || order.Instrument == null || !SameInstrument(order.Instrument, instrument)
-                    || !GlitchReplicationEngine.IsWorkingOrderState(order.OrderState))
-                    continue;
-                if (IsOwnedStopSignal(order.Name))
-                {
-                    stops.Add(order);
-                    stopCoverage += order.Quantity;
-                }
-                else if (IsOwnedTargetSignal(order.Name))
-                    targetCoverage += order.Quantity;
+                if (string.IsNullOrWhiteSpace(pair.Key))
+                    return false;
+                List<Order> pairStops = pair.Where(order => IsOwnedStopSignal(order.Name)).ToList();
+                List<Order> pairTargets = pair.Where(order => IsOwnedTargetSignal(order.Name)).ToList();
+                if (pairStops.Count != 1 || pairTargets.Count != 1
+                    || pairStops[0].OrderAction != expectedExitAction || pairTargets[0].OrderAction != expectedExitAction
+                    || pairStops[0].OrderType != OrderType.StopMarket || pairTargets[0].OrderType != OrderType.Limit)
+                    return false;
+                int stopRemaining = RemainingQuantity(pairStops[0]);
+                int targetRemaining = RemainingQuantity(pairTargets[0]);
+                if (stopRemaining <= 0 || stopRemaining != targetRemaining)
+                    return false;
+                stops.Add(pairStops[0]);
+                stopCoverage += stopRemaining;
+                targetCoverage += targetRemaining;
             }
             return stopCoverage == Math.Abs(net) && targetCoverage == Math.Abs(net);
+        }
+
+        private static int RemainingQuantity(Order order)
+        {
+            return order == null ? 0 : Math.Max(0, order.Quantity - order.Filled);
         }
 
         private static bool HasWorkingNonProtectionOrder(Account account, Instrument instrument)
         {
             if (account == null || account.Orders == null)
                 return false;
-            return account.Orders.Any(order => order != null
+            return SnapshotOrders(account).Any(order => order != null
                 && order.Instrument != null
                 && SameInstrument(order.Instrument, instrument)
                 && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState)
                 && !IsOwnedStopSignal(order.Name)
                 && !IsOwnedTargetSignal(order.Name));
+        }
+
+        private static Order[] SnapshotOrders(Account account)
+        {
+            if (account?.Orders == null)
+                return Array.Empty<Order>();
+            try
+            {
+                lock (account.Orders)
+                    return account.Orders.ToArray();
+            }
+            catch
+            {
+                return Array.Empty<Order>();
+            }
+        }
+
+        private static Position[] SnapshotPositions(Account account)
+        {
+            if (account?.Positions == null)
+                return Array.Empty<Position>();
+            try
+            {
+                lock (account.Positions)
+                    return account.Positions.ToArray();
+            }
+            catch
+            {
+                return Array.Empty<Position>();
+            }
         }
 
         private static bool IsOwnedStopSignal(string name)

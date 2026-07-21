@@ -25,7 +25,7 @@ class GlitchAiUiContractTests(unittest.TestCase):
         self.assertNotIn('"Hermes"', header)
         self.assertNotIn("ON / Paper", main)
 
-    def test_ai_on_requires_recent_native_cycle_health(self):
+    def test_ai_switch_distinguishes_stopped_running_and_stale(self):
         main = (UI / "GlitchMainWindow.cs").read_text(encoding="utf-8")
         refresh = (UI / "GlitchMainWindow.RefreshPipeline.partial.cs").read_text(encoding="utf-8")
         self.assertIn('Value = "Stale"', main)
@@ -33,7 +33,14 @@ class GlitchAiUiContractTests(unittest.TestCase):
         self.assertIn("IsAiDecisionLoopHealthy() ? \"Running\" : \"Stale\"", main)
         self.assertIn('Path.Combine("hermes", "exchange", "hermes", "events", "cycles.jsonl")', main)
         self.assertIn("TimeSpan.FromMinutes(12)", main)
+        self.assertIn("GlitchAiOrderExecutor.IsExecutionEnabled(policy)", main)
         self.assertIn("UpdateHermesModeUi", refresh)
+
+    def test_ai_feed_uses_account_scope_not_paper_live_label(self):
+        source = (UI / "GlitchMainWindow.AiTab.partial.cs").read_text(encoding="utf-8")
+        self.assertIn("AI scope ", source)
+        self.assertIn("AI config invalid", source)
+        self.assertNotIn("effectivePolicy.Mode", source)
 
     def test_scope_is_policy_binding_not_a_second_group_model(self):
         source = POLICY.read_text(encoding="utf-8")

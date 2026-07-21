@@ -164,8 +164,11 @@ namespace Glitch.Services
 
                 double quantity;
                 GlitchAiJsonFields.TryExtractNumber(rawJson, "quantity", out quantity);
-                if (quantity > policy.MaxContracts)
-                    return Reject(trail, 12, "max_contracts_exceeded", quantity.ToString(CultureInfo.InvariantCulture));
+                if (!GlitchAiJsonFields.TryExtractNumber(portfolioAccountJson, "max_contracts", out double maxContracts)
+                    || maxContracts <= 0)
+                    return Reject(trail, 12, "prop_max_contracts_unavailable", account);
+                if (quantity > maxContracts)
+                    return Reject(trail, 12, "prop_max_contracts_exceeded", quantity.ToString(CultureInfo.InvariantCulture));
             }
 
             trail.Add("12_bracket_sane:pass");
@@ -184,8 +187,9 @@ namespace Glitch.Services
                     || (string.Equals(action, "ENTER_SHORT", StringComparison.Ordinal) && openQty > 0);
                 if (opposite)
                     return Reject(trail, 13, "position_conflict", "opposite_position_exists");
-                if (Math.Abs(openQty) + requestedQuantity > policy.MaxContracts)
-                    return Reject(trail, 13, "max_contracts_exceeded", (Math.Abs(openQty) + requestedQuantity).ToString(CultureInfo.InvariantCulture));
+                GlitchAiJsonFields.TryExtractNumber(portfolioAccountJson, "max_contracts", out double maxContracts);
+                if (Math.Abs(openQty) + requestedQuantity > maxContracts)
+                    return Reject(trail, 13, "prop_max_contracts_exceeded", (Math.Abs(openQty) + requestedQuantity).ToString(CultureInfo.InvariantCulture));
             }
 
             trail.Add("13_position_conflict:pass");
@@ -300,6 +304,20 @@ namespace Glitch.Services
             if (GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss_2", out stopLoss2) && !IsTickRounded(stopLoss2, tick))
             {
                 failure = "stop_loss_2";
+                return false;
+            }
+
+            double takeProfit3;
+            if (GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_3", out takeProfit3) && !IsTickRounded(takeProfit3, tick))
+            {
+                failure = "take_profit_3";
+                return false;
+            }
+
+            double stopLoss3;
+            if (GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss_3", out stopLoss3) && !IsTickRounded(stopLoss3, tick))
+            {
+                failure = "stop_loss_3";
                 return false;
             }
 
@@ -444,6 +462,50 @@ namespace Glitch.Services
                 else if (stopLoss2 >= stopLoss || stopLoss2 <= entry)
                 {
                     failure = "stop_loss_2_not_tighter_loss_side";
+                    return false;
+                }
+            }
+
+            double takeProfit3;
+            if (GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_3", out takeProfit3))
+            {
+                double quantity;
+                double quantityTp1;
+                double quantityTp2;
+                if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_2", out takeProfit2))
+                {
+                    failure = "tp3_requires_tp2";
+                    return false;
+                }
+                if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "quantity", out quantity) || quantity < 3
+                    || !GlitchAiJsonFields.TryExtractNumber(rawJson, "quantity_tp1", out quantityTp1) || quantityTp1 < 1
+                    || !GlitchAiJsonFields.TryExtractNumber(rawJson, "quantity_tp2", out quantityTp2) || quantityTp2 < 1
+                    || quantityTp1 + quantityTp2 >= quantity)
+                {
+                    failure = "invalid_three_leg_quantity_split";
+                    return false;
+                }
+                if (isLong ? takeProfit3 <= takeProfit2 : takeProfit3 >= takeProfit2)
+                {
+                    failure = "tp3_not_beyond_tp2";
+                    return false;
+                }
+            }
+
+            double stopLoss3;
+            if (GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss_3", out stopLoss3))
+            {
+                if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_3", out takeProfit3))
+                {
+                    failure = "stop_loss_3_requires_tp3";
+                    return false;
+                }
+                double referenceStop = GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss_2", out stopLoss2)
+                    ? stopLoss2
+                    : stopLoss;
+                if (isLong ? stopLoss3 <= referenceStop || stopLoss3 >= entry : stopLoss3 >= referenceStop || stopLoss3 <= entry)
+                {
+                    failure = "stop_loss_3_not_tighter_loss_side";
                     return false;
                 }
             }

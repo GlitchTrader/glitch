@@ -32,7 +32,11 @@ def packet():
                 "snapshot_hash": "12345",
                 "instruments": [{"instrument": "MNQ", "current_price": 20000.0}],
             },
-            "portfolio_snapshot": {"accounts": []},
+            "portfolio_snapshot": {"accounts": [
+                {"account": "Sim101", "account_status": "Sim", "account_size": 100000, "max_contracts": 14, "positions": []},
+                {"account": "Sim102", "account_status": "Sim", "account_size": 100000, "max_contracts": 14, "positions": []},
+                {"account": "Sim201", "account_status": "Sim", "account_size": 100000, "max_contracts": 14, "positions": []},
+            ]},
         })
     return {
         "schema_version": "glitch.hermes.decision_packet.v1",
@@ -200,10 +204,12 @@ class DirectCycleTests(unittest.TestCase):
         self.assertIn("next_review_seconds", value)
         self.assertIn("one-minute evidence", value)
 
-    def test_prompt_exposes_optional_two_leg_native_scale_out(self):
+    def test_prompt_exposes_optional_multi_leg_native_scale_out(self):
         value = MODULE.build_prompt(packet(), MODULE.build_scenario(packet()), {})
         self.assertIn("take_profit_2", value)
+        self.assertIn("take_profit_3", value)
         self.assertIn("quantity_tp1", value)
+        self.assertIn("quantity_tp2", value)
         self.assertIn("own native OCO stop/target pair", value)
 
     def test_prompt_supports_read_only_native_memory_canary(self):
@@ -227,19 +233,55 @@ class DirectCycleTests(unittest.TestCase):
         self.assertEqual([book["route_id"] for book in scenario["books"]], ["glitch", "glitch-second"])
         self.assertEqual(scenario["books"][0]["followers"][0]["ratio"], 2.0)
 
-    def test_sim_capacity_uses_glitch_execution_policy_not_zero_display_placeholder(self):
+    def test_group_capacity_uses_prop_limits_and_follower_ratios(self):
         value = packet()
-        value["policy"]["max_contracts"] = 3
         for frame in value["frames"]:
             frame["portfolio_snapshot"] = {
-                "accounts": [{"account": "Sim101", "account_status": "Sim", "max_contracts": 0}]
+                "accounts": [
+                    {"account": "Sim101", "account_status": "Sim", "max_contracts": 27, "positions": []},
+                    {"account": "Sim102", "account_status": "Sim", "max_contracts": 27, "positions": []},
+                    {"account": "Sim201", "account_status": "Sim", "max_contracts": 27, "positions": []},
+                ]
             }
-        model_packet = MODULE.packet_for_model(value, MODULE.build_scenario(value))
-        account = model_packet["frames"][-1]["portfolio_snapshot"]["accounts"][0]
-        self.assertEqual(account["max_contracts"], 3)
-        self.assertEqual(account["max_contracts_source"], "glitch_ai_policy")
+        scenario = MODULE.build_scenario(value)
+        first = scenario["books"][0]
+        self.assertEqual(first["effective_master_remaining_capacity"], 13)
+        self.assertEqual(first["valid_entry_quantities"], list(range(1, 14)))
+        self.assertEqual(first["max_exposure_accounts"], ["Sim102"])
 
-    def test_model_packet_contains_only_configured_sim_group_and_mnq(self):
+    def test_one_two_three_group_is_limited_by_highest_exposure_account(self):
+        value = packet()
+        value["policy"]["profile_account_bindings"] = ["glitch=Sim101"]
+        value["account_groups_tsv"] = (
+            "G\tg1\tSim101\t250000\n"
+            "M\tg1\tSim102\t250000\t2\t250000\t1\n"
+            "M\tg1\tSim103\t250000\t3\t250000\t1\n"
+        )
+        for frame in value["frames"]:
+            frame["portfolio_snapshot"]["accounts"] = [
+                {"account": name, "account_status": "Sim", "account_size": 250000,
+                 "max_contracts": 27, "positions": []}
+                for name in ("Sim101", "Sim102", "Sim103")
+            ]
+        book = MODULE.build_scenario(value)["books"][0]
+        self.assertEqual(book["effective_master_remaining_capacity"], 9)
+        self.assertEqual(book["max_exposure_accounts"], ["Sim103"])
+        self.assertEqual(book["valid_entry_quantities"], list(range(1, 10)))
+
+    def test_entry_above_ratio_adjusted_prop_capacity_is_rejected(self):
+        value = packet()
+        scenario = MODULE.build_scenario(value)
+        entry = decision("glitch", "Sim101", 1, "ENTER_LONG")
+        entry["quantity"] = 8
+        batch = {
+            "schema_version": "glitch.intent.batch.v1",
+            "cycle_id": scenario["cycle_id"],
+            "decisions": [entry, decision("glitch-second", "Sim201", 2)],
+        }
+        with self.assertRaisesRegex(ValueError, "entry_quantity_exceeds_group_capacity"):
+            MODULE.validate_batch(batch, scenario)
+
+    def test_model_packet_contains_only_configured_group_accounts_and_current_mnq_scope(self):
         value = packet()
         for frame in value["frames"]:
             frame["market_snapshot"]["instruments"].append({"instrument": "MES", "current_price": 7000})
@@ -248,8 +290,8 @@ class DirectCycleTests(unittest.TestCase):
             ]
             frame["portfolio_snapshot"] = {
                 "accounts": [
-                    {"account": "Sim101", "account_status": "Sim", "max_contracts": 0},
-                    {"account": "Sim102", "account_status": "Sim", "max_contracts": 0},
+                    {"account": "Sim101", "account_status": "Sim", "max_contracts": 14, "positions": []},
+                    {"account": "Sim102", "account_status": "Sim", "max_contracts": 14, "positions": []},
                     {"account": "APEX-LIVE", "account_status": "Eval", "max_contracts": 20},
                 ]
             }
@@ -330,10 +372,8 @@ class DirectCycleTests(unittest.TestCase):
         model_packet = MODULE.packet_for_model(value, scenario)
         self.assertNotIn("max_trades_per_day", model_packet["policy"])
         self.assertNotIn("cooldown_after_loss_minutes", model_packet["policy"])
-        self.assertEqual(
-            model_packet["policy"]["paper_daily_profit_objective_usd"],
-            {"minimum": 1000, "stretch": 2500},
-        )
+        self.assertNotIn("paper_daily_profit_objective_usd", model_packet["policy"])
+        self.assertNotIn("max_contracts", model_packet["policy"])
         self.assertEqual(model_packet["policy"]["profile_account_bindings"], ["glitch=Sim101"])
         self.assertEqual(model_packet["policy"]["account_allowlist"], ["Sim101", "Sim102"])
 
@@ -432,7 +472,38 @@ class DirectCycleTests(unittest.TestCase):
         old["window_close_utc"] = "2000-01-01T00:00:00Z"
         self.assertFalse(MODULE.packet_is_current(old))
 
-    def test_runtime_off_or_non_paper_spends_no_model_call(self):
+    def test_completed_packet_receipt_cannot_invoke_or_submit_twice(self):
+        with tempfile.TemporaryDirectory() as root:
+            glitch_data = Path(root)
+            exchange = glitch_data / "hermes" / "exchange"
+            (glitch_data / "hermes").mkdir(parents=True)
+            (glitch_data / "ai").mkdir(parents=True)
+            (exchange / "glitch").mkdir(parents=True)
+            (exchange / "hermes" / "receipts").mkdir(parents=True)
+            (glitch_data / "hermes" / "control-state.json").write_text(
+                json.dumps({"trading_paused": False}), encoding="utf-8"
+            )
+            (glitch_data / "ai" / "policy.json").write_text(
+                json.dumps({"mode": "paper"}), encoding="utf-8"
+            )
+            current = packet()
+            (exchange / "glitch" / "latest-decision-packet.json").write_text(
+                json.dumps(current), encoding="utf-8"
+            )
+            (exchange / "hermes" / "receipts" / f"{current['packet_id']}.json").write_text(
+                json.dumps({"complete": True}), encoding="utf-8"
+            )
+            args = SimpleNamespace(profile="glitch", timeout_seconds=30, dry_run=False)
+            with mock.patch.object(MODULE, "packet_is_current", return_value=True), mock.patch.object(
+                MODULE, "invoke_hermes"
+            ) as invoke, mock.patch.object(MODULE, "submit_batch") as submit:
+                result = MODULE.run_once(args, glitch_data, exchange)
+
+        self.assertEqual(result, 0)
+        invoke.assert_not_called()
+        submit.assert_not_called()
+
+    def test_runtime_switch_accepts_paper_and_live_but_rejects_disabled(self):
         with tempfile.TemporaryDirectory() as root:
             glitch_data = Path(root)
             (glitch_data / "hermes").mkdir(parents=True)

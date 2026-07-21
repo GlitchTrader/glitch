@@ -1,6 +1,6 @@
 # Hermes / Glitch direct bridge
 
-The canonical runtime is direct: Glitch publishes five immutable one-minute frames, Hermes native cron wakes the persistent `glitch` profile for one decision, and Hermes posts the validated result to Glitch's existing localhost intent firewall. Codex is a builder and is not part of the trading runtime.
+The canonical runtime is direct: Glitch publishes immutable one-minute frames and a rolling five-frame packet, Hermes native cron checks each minute without an LLM call, and the persistent `glitch` profile decides on five-minute boundaries plus justified one-minute follow-ups. Hermes posts validated results to Glitch's existing localhost intent firewall. Codex is a builder and is not part of the trading runtime.
 
 The role split and the slow builder handoff are defined in `glitch_hermes_docs/docs/13_three_layer_handoff.md`. Hermes chat supervises Hermes trading through append-only supervisor records and may escalate approved source work to Codex. A bounded Codex automation reviews approved requests every two hours, then validates and hands control back to Hermes; it never polls market data or submits intents.
 
@@ -15,7 +15,7 @@ Installation and activation are separate:
 .\tools\hermes\enable-direct-hermes-cron.ps1
 ```
 
-The installer changes only the host `glitch` profile to a local backend, enables native memory/session persistence, installs the worker, skills, and deterministic `glitch-control` plugin, and seeds two named sessions: `chat` and `trading`. It does not create a cron job. The enable script creates one headless Hermes-native job at minutes `01,06,11...`, after Glitch publishes the `x0/x5` closed-window packet. Neither touches the Workframe dogfood Docker stack.
+The installer changes only the host `glitch` profile to a local backend, enables native memory/session persistence, installs the worker, skills, and deterministic `glitch-control` plugin, and seeds two named sessions: `chat` and `trading`. It does not create a cron job. The enable script creates one headless Hermes-native job that checks each minute; the worker spends model tokens only on five-minute boundaries, while positioned, when a prior decision requests a one-minute review, or for a pending operator directive. Neither touches the Workframe dogfood Docker stack.
 
 `run-direct-glitch-cycle.py` spends zero model calls until a new complete packet exists. It resumes only the named `trading` session and fails closed if that session is unavailable; it never resumes the interactive chat by accident. It validates output contract and scope and posts to `127.0.0.1:8788`. Glitch owns policy, groups, risk, native brackets, execution, and outcomes.
 
@@ -29,8 +29,10 @@ Deterministic slash commands are handled directly by the plugin, without an LLM 
 
 ```text
 /chat_mode       chat normally; leave the current trading-job state unchanged
-/trade_mode paper turn trading ON; this is the complete paper-trading activation command
+/trade_mode       turn Glitch AI ON for the account scope selected in the AddOn
 /pause_trading   turn trading OFF
+/reset_trading   archive and clear only the Hermes trading epoch; leave trading OFF
+/reset_memory    alias for /reset_trading
 /flatten_all     pause trading, then invoke Glitch's existing Flatten All workflow
 /bias_long       suggest a long bias for the next cycle; Hermes retains final authority
 /bias_short      suggest a short bias for the next cycle; Hermes retains final authority
@@ -42,7 +44,7 @@ Deterministic slash commands are handled directly by the plugin, without an LLM 
 /glitch_status   show Glitch mode, job state, and replication state
 ```
 
-Commands use the existing bearer token and the localhost Glitch control endpoint on `127.0.0.1:8789`. Command IDs are idempotent. The Glitch header shows `Hermes: OFF` or `Hermes: ON / Paper`; replication and flatten continue to use the existing Glitch UI/state paths. ON/OFF is the only paper activation switch: `/trade_mode paper` starts the gateway hidden when needed, then reconciles the scheduler and Glitch gate. It needs neither a gateway-service install nor a separate executor-arm ritual. Live remains uninstalled and requires explicit human authorization.
+Commands use the existing bearer token and the localhost Glitch control endpoint on `127.0.0.1:8789`. Command IDs are idempotent. The Glitch header shows `Glitch AI` ON or OFF; the AI tab defines the allowed master-account scope. Replication and Flatten All continue to use the existing Glitch UI/state paths. `/trade_mode` is the only activation command and needs no separate mode, kill-switch, or executor-arm ritual.
 
 Bias commands write one expiring advisory to the Hermes-owned exchange. The direct trading worker consumes it on the next valid packet, records it in the prompt, and marks it consumed after producing a validated batch. Biases never bypass Glitch risk, bracket, account, or execution validation; they are not persistent memory and older directives cannot affect later cycles.
 
@@ -51,6 +53,14 @@ Bias commands write one expiring advisory to the Hermes-owned exchange. The dire
 Entry decisions have a 180-second analytical-snapshot window and still require a separate live execution price no older than five seconds. `EXIT`, `HOLD`, and `NOTHING` do not use entry-grade snapshot freshness: exits reduce an existing position, while hold/nothing are non-executing journal decisions.
 
 ## Clean paper epoch reset
+
+Hermes already reserves `/reset` for clearing the current conversation. Glitch
+therefore uses `/reset_trading` (alias `/reset_memory`) for a full trading-epoch
+reset. The command turns Glitch AI off, pauses the native trading job, refuses
+to erase history while any Sim account still has a position or working order,
+then runs the installed reset helper without an LLM turn. Trading remains off
+afterward so the human can reset the other two owners of state: Glitch Journal
+and NinjaTrader Sim accounts.
 
 `reset-hermes-trading-epoch.ps1` previews by default. It inventories the exact
 Hermes/Glitch trading artifacts that would be archived and cleared, but makes no
@@ -61,7 +71,7 @@ Hermes cron job is enabled.
 # Preview only
 .\tools\hermes\reset-hermes-trading-epoch.ps1
 
-# After /pause_trading and the manual Glitch/NT resets
+# Direct script equivalent of /reset_trading
 .\tools\hermes\reset-hermes-trading-epoch.ps1 -Apply
 ```
 

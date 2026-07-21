@@ -771,12 +771,12 @@ namespace Glitch.UI
 
         private void OnReplicateButtonClick(object sender, RoutedEventArgs e)
         {
-            SetReplicationFromExternalSurface(!_isReplicatingUi, "user_click");
+            SetReplicationFromExternalSurface(!IsReplicationRuntimeActive(), "user_click");
         }
 
         internal bool SetReplicationFromExternalSurface(bool enabled, string origin)
         {
-            if (_isReplicatingUi == enabled)
+            if (_isReplicatingUi == enabled && IsReplicationRuntimeActive() == enabled)
                 return true;
 
             if (enabled)
@@ -798,31 +798,28 @@ namespace Glitch.UI
             _isReplicatingUi = enabled;
             _lastUiRefreshUtc = DateTime.MinValue;
             List<Account> activeAccounts = GetActiveAccountsSnapshot();
-            if (_isReplicatingUi)
+            RefreshCopyEngineConfiguration(activeAccounts);
+            bool runtimeActive = IsReplicationRuntimeActive();
+
+            if (runtimeActive)
             {
                 AppendJournal("System", "Replication", "replication_enabled|origin=" + (origin ?? "external"));
-            }
-            else
-            {
-                CancelGlitchWorkingOrdersOnFollowers(activeAccounts);
-            }
-
-            RefreshCopyEngineConfiguration(activeAccounts);
-
-            if (_isReplicatingUi)
                 AlignAllEnabledFollowersToMaster("replicate_on");
+            }
 
             AppendJournal(
                 "System",
                 "Replication",
-                _isReplicatingUi
+                runtimeActive
                     ? "Replication gate opened."
-                    : "Replication gate closed.");
+                    : enabled
+                        ? "Replication requested but runtime is inactive."
+                        : "Replication gate closed.");
             UpdateReplicateButtonState();
             UpdateRefreshTimerCadence();
             PersistReplicationUiState();
             PublishGlitchShellState();
-            return true;
+            return enabled ? runtimeActive : !runtimeActive;
         }
 
         internal void ToggleReplicationFromExternalSurface()
@@ -835,13 +832,22 @@ namespace Glitch.UI
             _ = RunFlattenAllAsync(showHeaderButtonFeedback: true);
         }
 
-        internal bool IsReplicationEnabledFromExternalSurface() => _isReplicatingUi;
+        private bool IsReplicationRuntimeActive()
+        {
+            return _isReplicatingUi && _copyEngine != null && _copyEngine.IsEnabled;
+        }
+
+        internal bool IsReplicationEnabledFromExternalSurface() => IsReplicationRuntimeActive();
 
         private void UpdateHermesModeUi(bool paused)
         {
             if (_aiTradingButton == null)
                 return;
-            _aiTradingButton.Tag = paused ? "Stopped" : (IsAiDecisionLoopHealthy() ? "Running" : "Stale");
+            GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
+            bool executionEnabled = !paused && GlitchAiOrderExecutor.IsExecutionEnabled(policy);
+            _aiTradingButton.Tag = !executionEnabled
+                ? "Stopped"
+                : (IsAiDecisionLoopHealthy() ? "Running" : "Stale");
         }
 
         private static bool IsAiDecisionLoopHealthy()
@@ -940,7 +946,7 @@ namespace Glitch.UI
             if (_replicateButton == null)
                 return;
 
-            _replicateButton.Tag = _isReplicatingUi ? "Running" : "Stopped";
+            _replicateButton.Tag = IsReplicationRuntimeActive() ? "Running" : "Stopped";
         }
 
         private void UpdateRefreshTimerCadence()
@@ -1548,7 +1554,7 @@ namespace Glitch.UI
             _isFlattenAllInProgress = true;
             var flattenStopwatch = Stopwatch.StartNew();
             int flattenSubmitCount = 0;
-            bool restoreCopyEngine = _isReplicatingUi && !UseLegacyReplicationEngine();
+            bool restoreCopyEngine = _isReplicatingUi;
             try
             {
                 if (restoreCopyEngine)
@@ -1624,8 +1630,14 @@ namespace Glitch.UI
 
                 return complete;
             }
-            catch
+            catch (Exception ex)
             {
+                RecordSubsystemFault("flatten_all", ex);
+                RaiseCriticalWarning(
+                    "System",
+                    "Flatten All failed before every account could be verified flat. NinjaTrader controls remain available; inspect the account connection and retry explicitly.",
+                    "FlattenAllException",
+                    unlocksTrading: false);
                 return false;
             }
             finally
@@ -1982,6 +1994,12 @@ namespace Glitch.UI
             var ratioColumn = CreateEditableFollowerRatioColumn(context, centerHeaderStyle);
             ratioColumn.MinWidth = 56;
             grid.Columns.Add(ratioColumn);
+
+            var routeColumn = CreateTextColumn("Route", nameof(AccountGroupMemberRow.RouteStatus), centerTextStyle, centerHeaderStyle);
+            routeColumn.IsReadOnly = true;
+            routeColumn.Width = DataGridLength.Auto;
+            routeColumn.MinWidth = 72;
+            grid.Columns.Add(routeColumn);
 
             var maxDdColumn = CreateTextColumn(L("dashboard.group.column.max_dd", "Max DD"), nameof(AccountGroupMemberRow.MaxDd), centerTextStyle, centerHeaderStyle);
             maxDdColumn.IsReadOnly = true;
@@ -3705,11 +3723,15 @@ namespace Glitch.UI
             _replicationUserIntentLive = true;
             if (_isReplicatingUi)
             {
-                AlignAllEnabledFollowersToMaster("startup");
+                if (!IsReplicationRuntimeActive())
+                    RefreshCopyEngineConfiguration(GetActiveAccountsSnapshot());
+
                 AppendJournal(
                     "System",
                     "Replication",
-                    "replication_restored|origin=startup|catchup=applied");
+                    IsReplicationRuntimeActive()
+                        ? "replication_restored|origin=startup|mode=runtime_active"
+                        : "replication_restore_failed|origin=startup|mode=runtime_inactive");
             }
 
             _refreshTimer.Start();
@@ -3909,6 +3931,7 @@ namespace Glitch.UI
             PruneAccountItemUpdateThrottle(nowUtc);
             PruneActiveAccountCache(nowUtc);
             MaybeRunLicenseHeartbeat(nowUtc);
+            _copyEngine?.AuditPendingFollowerFlattens();
 
             if (_isEditingAccountsGrid || _isCommittingAccountsGridEdit)
             {

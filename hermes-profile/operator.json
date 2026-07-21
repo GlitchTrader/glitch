@@ -5,7 +5,7 @@
   "principles": {
     "invariant": "Hermes proposes. Glitch validates, executes, journals, and protects.",
     "cognitive_freedom": "Patterns, archetypes, plans, and memories are evidence rather than trading gates.",
-    "group_source": "Every live cycle derives groups, masters, followers, ratios, positions, limits, and prop rules from the Glitch packet.",
+    "group_source": "Every live cycle derives groups, masters, followers, ratios, positions, prop rules, and ratio-adjusted valid entry quantities from the Glitch packet; the maximum-exposure account limits each group.",
     "native_capabilities": "Glitch skills overlay Hermes native skills, memory, sessions, and upkeep; they do not replace them.",
     "no_silent_model_downgrade": true
   },

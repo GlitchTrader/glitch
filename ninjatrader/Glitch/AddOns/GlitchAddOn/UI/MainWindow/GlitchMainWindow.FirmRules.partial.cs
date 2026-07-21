@@ -1005,7 +1005,9 @@ namespace Glitch.UI
                         new FirmTierRule { AccountSize = 50000, MaxContracts = 10, MaxDrawdown = 2500, IntratradeDrawdown = 0, ProfitTarget = 3000 },
                         new FirmTierRule { AccountSize = 75000, MaxContracts = 12, MaxDrawdown = 2750, IntratradeDrawdown = 0, ProfitTarget = 4500 },
                         new FirmTierRule { AccountSize = 100000, MaxContracts = 14, MaxDrawdown = 3000, IntratradeDrawdown = 0, ProfitTarget = 6000 },
-                        new FirmTierRule { AccountSize = 150000, MaxContracts = 17, MaxDrawdown = 5000, IntratradeDrawdown = 0, ProfitTarget = 9000 }
+                        new FirmTierRule { AccountSize = 150000, MaxContracts = 17, MaxDrawdown = 5000, IntratradeDrawdown = 0, ProfitTarget = 9000 },
+                        new FirmTierRule { AccountSize = 250000, MaxContracts = 27, MaxDrawdown = 6500, IntratradeDrawdown = 0, ProfitTarget = 15000 },
+                        new FirmTierRule { AccountSize = 300000, MaxContracts = 35, MaxDrawdown = 7500, IntratradeDrawdown = 0, ProfitTarget = 20000 }
                     }
                 },
                 ["TakeProfitTrader"] = new FirmRuleMetadata

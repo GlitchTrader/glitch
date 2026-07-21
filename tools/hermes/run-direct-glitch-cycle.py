@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -27,7 +28,10 @@ from typing import Any
 ACTIONS = {"ENTER_LONG", "ENTER_SHORT", "HOLD", "MOVE_STOP", "EXIT", "NOTHING"}
 ACTION_ALIASES = {"NO_ACTION": "NOTHING"}
 REQUIRED_ENTRY_FIELDS = {"quantity", "order_type", "stop_loss", "take_profit_1"}
-ENTRY_FIELDS = REQUIRED_ENTRY_FIELDS | {"take_profit_2", "stop_loss_2", "quantity_tp1"}
+ENTRY_FIELDS = REQUIRED_ENTRY_FIELDS | {
+    "take_profit_2", "stop_loss_2", "quantity_tp1",
+    "take_profit_3", "stop_loss_3", "quantity_tp2",
+}
 MANAGEMENT_FIELDS = {"stop_loss"}
 DECISION_FIELDS = {
     "schema_version", "intent_id", "created_utc", "instrument", "account",
@@ -35,7 +39,6 @@ DECISION_FIELDS = {
     "prompt_version", "reason", "decision_audit",
 }
 DEFAULT_GLITCH_DATA = Path.home() / "Documents" / "NinjaTrader 8" / "GlitchData"
-
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -103,6 +106,7 @@ def parse_groups(tsv: str, policy: dict[str, Any]) -> list[dict[str, Any]]:
         elif fields[0] == "M" and len(fields) >= 7 and fields[1] in groups:
             groups[fields[1]]["followers"].append({
                 "account": fields[2],
+                "account_size": float(fields[3]),
                 "ratio": float(fields[4]),
                 "enabled": fields[6].strip() == "1",
             })
@@ -129,6 +133,84 @@ def parse_groups(tsv: str, policy: dict[str, Any]) -> list[dict[str, Any]]:
             "followers": group["followers"],
         })
     return books
+
+
+def _account_mnq_quantity(account: dict[str, Any]) -> int:
+    total = 0
+    for position in account.get("positions", []):
+        if not isinstance(position, dict):
+            continue
+        root = str(position.get("instrument_root") or position.get("instrument") or "").upper()
+        if root != "MNQ":
+            continue
+        quantity = int(round(abs(float(position.get("quantity", 0) or 0))))
+        side = str(position.get("market_position", "")).lower()
+        total += -quantity if side == "short" else quantity if side == "long" else 0
+    return total
+
+
+def add_group_exposure_context(
+    packet: dict[str, Any],
+    books: list[dict[str, Any]],
+) -> None:
+    """Publish ratio-adjusted quantities Hermes may safely choose."""
+    frames = packet.get("frames")
+    latest = frames[-1] if isinstance(frames, list) and frames else {}
+    portfolio = latest.get("portfolio_snapshot") if isinstance(latest, dict) else {}
+    accounts = portfolio.get("accounts") if isinstance(portfolio, dict) else []
+    by_name = {
+        str(account.get("account")): account
+        for account in accounts
+        if isinstance(account, dict) and account.get("account")
+    }
+    for book in books:
+        members = [{
+            "account": book["master_account"],
+            "account_size": book["master_size"],
+            "ratio": 1.0,
+            "role": "master",
+        }]
+        members.extend({
+            "account": follower["account"],
+            "account_size": follower.get("account_size", book["master_size"]),
+            "ratio": float(follower["ratio"]),
+            "role": "follower",
+        } for follower in book["followers"] if follower["enabled"])
+
+        exposure: list[dict[str, Any]] = []
+        max_candidate: int | None = None
+        for member in members:
+            observed = by_name.get(member["account"], {})
+            size = float(member["account_size"] or observed.get("account_size") or 0)
+            account_cap = int(round(float(observed.get("max_contracts", 0) or 0)))
+            current_quantity = _account_mnq_quantity(observed)
+            remaining = max(0, account_cap - abs(current_quantity))
+            ratio = float(member["ratio"])
+            member_master_capacity = int(math.floor(remaining / ratio)) if account_cap > 0 else 0
+            max_candidate = member_master_capacity if max_candidate is None else min(max_candidate, member_master_capacity)
+            context = {
+                **member,
+                "current_mnq_quantity": current_quantity,
+                "prop_firm_id": observed.get("prop_firm_id"),
+                "rule_status": observed.get("rule_status") or observed.get("account_status"),
+                "rules_are_simulated": bool(observed.get("rules_are_simulated", False)),
+                "prop_contract_ceiling": account_cap,
+                "remaining_account_capacity": remaining,
+            }
+            exposure.append(context)
+
+        valid_quantities = [
+            candidate for candidate in range(1, (max_candidate or 0) + 1)
+            if all(abs(candidate * float(member["ratio"]) - round(candidate * float(member["ratio"]))) < 1e-9
+                   for member in members)
+        ]
+        book["exposure"] = exposure
+        book["valid_entry_quantities"] = valid_quantities
+        book["effective_master_remaining_capacity"] = max(valid_quantities, default=0)
+        book["max_exposure_accounts"] = [
+            member["account"] for member in exposure
+            if int(math.floor(member["remaining_account_capacity"] / float(member["ratio"]))) == (max_candidate or 0)
+        ]
 
 
 def latest_market(packet: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -247,6 +329,7 @@ def build_scenario(packet: dict[str, Any]) -> dict[str, Any]:
     books = parse_groups(str(packet.get("account_groups_tsv", "")), policy)
     if not books:
         raise ValueError("no_route_bound_groups")
+    add_group_exposure_context(packet, books)
     market, mnq = latest_market(packet)
     return {
         "cycle_id": packet["packet_id"],
@@ -302,13 +385,25 @@ def validate_batch(
             quantity = intent.get("quantity")
             if not isinstance(quantity, int) or isinstance(quantity, bool) or quantity < 1:
                 raise ValueError(f"entry_quantity_invalid:{index}")
+            if quantity not in book.get("valid_entry_quantities", []):
+                raise ValueError(f"entry_quantity_exceeds_group_capacity:{index}")
             if "take_profit_2" in intent:
                 quantity_tp1 = intent.get("quantity_tp1")
                 if (quantity < 2 or not isinstance(quantity_tp1, int)
                         or isinstance(quantity_tp1, bool) or quantity_tp1 < 1 or quantity_tp1 >= quantity):
                     raise ValueError(f"entry_quantity_split_invalid:{index}")
+                if "take_profit_3" in intent:
+                    quantity_tp2 = intent.get("quantity_tp2")
+                    if (quantity < 3 or not isinstance(quantity_tp2, int)
+                            or isinstance(quantity_tp2, bool) or quantity_tp2 < 1
+                            or quantity_tp1 + quantity_tp2 >= quantity):
+                        raise ValueError(f"entry_three_leg_quantity_split_invalid:{index}")
+                elif "quantity_tp2" in intent or "stop_loss_3" in intent:
+                    raise ValueError(f"entry_third_leg_incomplete:{index}")
             elif "quantity_tp1" in intent or "stop_loss_2" in intent:
                 raise ValueError(f"entry_second_leg_incomplete:{index}")
+            if "take_profit_3" in intent and "take_profit_2" not in intent:
+                raise ValueError(f"entry_third_leg_requires_second:{index}")
         elif action == "MOVE_STOP":
             if not isinstance(intent.get("stop_loss"), (int, float)) or isinstance(intent.get("stop_loss"), bool):
                 raise ValueError(f"move_stop_price_required:{index}")
@@ -378,11 +473,10 @@ def packet_for_model(packet: dict[str, Any], scenario: dict[str, Any]) -> dict[s
     if policy.get("mode") == "paper":
         policy.pop("max_trades_per_day", None)
         policy.pop("cooldown_after_loss_minutes", None)
-        policy["paper_daily_profit_objective_usd"] = {"minimum": 1000, "stretch": 2500}
-    # Sim rows have no prop-firm contract tier, so the UI naturally reports
-    # zero/unspecified. Hermes must see Glitch's actual AI execution cap rather
-    # than interpreting that display placeholder as zero executable capacity.
-    ai_contract_cap = max(1, int(policy.get("max_contracts", 1)))
+        policy.pop("paper_daily_profit_objective_usd", None)
+    # Contract capacity is derived from the rule-enriched account snapshots and
+    # configured ratios in execution_scope, not from a second AI-only ceiling.
+    policy.pop("max_contracts", None)
     scoped_accounts: list[str] = []
     for book in scenario["books"]:
         scoped_accounts.append(book["master_account"])
@@ -411,12 +505,6 @@ def packet_for_model(packet: dict[str, Any], scenario: dict[str, Any]) -> dict[s
             if isinstance(account, dict) and account.get("account") in scoped_account_set
         ]
         portfolio["account_count"] = len(portfolio["accounts"])
-        for account in portfolio["accounts"]:
-            if not isinstance(account, dict) or str(account.get("account_status", "")).lower() != "sim":
-                continue
-            if not account.get("max_contracts"):
-                account["max_contracts"] = ai_contract_cap
-                account["max_contracts_source"] = "glitch_ai_policy"
     policy["profile_account_bindings"] = [
         f'{book["route_id"]}={book["master_account"]}' for book in scenario["books"]
     ]
@@ -597,9 +685,11 @@ def build_prompt(
     return (
         "You are the persistent Glitch trading operator. Review the five one-minute frames, current "
         "portfolio/risk state, configured groups, your native memory, and the authoritative Glitch ledger. "
-        "Use probabilistic judgment; do not wait for a named archetype and do not manufacture an arbitrary trade. Paper learning "
-        "has no daily trade-count quota and no deterministic cooldown. Treat $1,000-$2,500 for the current 250k "
-        "paper book as an aspirational daily range, never as a reason to chase, force, or widen risk. "
+        "Use probabilistic judgment; do not wait for a named archetype and do not manufacture an arbitrary trade. Own profitability, "
+        "risk, position management, and adaptation across directional, choppy, quiet, and volatile regimes. Paper learning has no "
+        "daily trade-count quota or deterministic cooldown. Treat $100-$500 for a 25k account and $1,000-$5,000 for a 250k account "
+        "as aspirational daily performance ranges, never quotas or permission to chase losses, force negative-expectancy trades, or "
+        "violate structure and prop-firm risk. "
         "Each cycle be proactive and opinionated: look for calculated-risk opportunities and prefer the best actionable side when "
         "evidence leans long or short and a structure-aware invalidation can bound the loss. Do not require high certainty, full "
         "timeframe alignment, a perfect entry, or a confirmed break-and-retest sequence. Mixed timeframes, proximity to support "
@@ -607,7 +697,7 @@ def build_prompt(
         "Express uncertainty through confidence, contextual quantity, and protected stop/target geometry rather than habitual "
         "inactivity. NOTHING remains valid when neither side has positive expected value after costs or risk cannot be bounded, "
         "but it must identify the concrete reason both actionable sides fail now. Avoid staying idle merely to await ideal confirmation. "
-        "In paper mode, use bounded experimentation to sample multiple valid setup types over time without imposing a trade quota. "
+        "For configured Sim account groups, use bounded experimentation to sample multiple valid setup types over time without imposing a trade quota. "
         "State the most likely next-five-minute path in decisive_evidence and its concrete invalidation in change_condition. "
         "At every five-minute cycle make an active posture decision: if positioned, stay with the thesis or exit when it is invalidated; "
         "if flat, enter long, enter short, or remain flat on current evidence. Independently decide each supplied group. "
@@ -623,12 +713,19 @@ def build_prompt(
         "conservative_case, decisive_evidence, disconfirming_evidence, change_condition, and final_choice; "
         "final_choice must equal action. For NOTHING, HOLD, and EXIT omit quantity, order_type, stop_loss, "
         "and take_profit_1. Keep reason to at most 24 words and each decision_audit value to at most 18 words. "
-        "For ENTER_LONG/ENTER_SHORT choose an integer quantity from 1 through the remaining "
-        "Glitch max_contracts capacity, use order_type=MARKET, and include native stop_loss/take_profit_1. When quantity is at least 2, "
-        "you may scale out by adding take_profit_2 and quantity_tp1; optionally add an initial tighter stop_loss_2 for the runner. "
+        "For ENTER_LONG/ENTER_SHORT choose quantity only from that book's valid_entry_quantities in execution_scope. Glitch derives this "
+        "list dynamically from every member's prop-firm contract ceiling, current MNQ exposure, and configured ratio; the maximum-exposure "
+        "account therefore limits the group. A 25k account normally adds one contract per entry. A 250k account may justify 3, 6, 10, "
+        "12, or more when that quantity is supplied as valid and regime, structure, and risk support it; never size up merely to catch up "
+        "to a daily objective. Use order_type=MARKET and include native stop_loss/take_profit_1. When quantity is at least 2, "
+        "you may scale out with two legs by adding take_profit_2 and quantity_tp1. For quantity at least 3, you may use three legs "
+        "by also adding take_profit_3 and quantity_tp2; quantity_tp1 and quantity_tp2 are explicit and the remainder is leg 3. "
+        "Every leg quantity must be positive and the split must sum to quantity. Keep splits compatible with follower ratios. "
+        "Targets progress farther in the profitable direction: increasing for long and decreasing for short. Optionally add "
+        "stop_loss_2 and stop_loss_3; each must be strictly tighter than the prior stop and remain on the loss side of entry. "
         "Glitch immediately protects each leg with its own native OCO stop/target pair. Each entry "
-        "is an independently protected tranche; same-direction entries may add to a position and their native targets "
-        "can scale it out. Never exceed current capacity or add in the opposite direction. For MOVE_STOP include only "
+        "is an independently protected tranche. Later same-direction intents average in; multiple targets inside one intent "
+        "scale out that decision. Never exceed current capacity or add in the opposite direction. For MOVE_STOP include only "
         "stop_loss and tighten the active Glitch-owned native stops; never loosen risk. Echo cycle_id, account/operator_profile, "
         "and MNQ snapshot_hash exactly. "
         "Use the top-level key decisions, never intents. Close every intent object before closing the decisions "

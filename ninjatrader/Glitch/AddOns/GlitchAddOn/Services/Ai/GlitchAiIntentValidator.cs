@@ -104,6 +104,21 @@ namespace Glitch.Services
             if (TryExtractNumber(json, "stop_loss_2", out _) && !TryExtractNumber(json, "take_profit_2", out _))
                 errors.Add("stop_loss_2_requires_take_profit_2");
 
+            if (TryExtractNumber(json, "take_profit_3", out _))
+            {
+                if (!TryExtractNumber(json, "take_profit_2", out _))
+                    errors.Add("tp3_requires_take_profit_2");
+                if (!TryExtractNumber(json, "quantity", out double quantity) || quantity < 3)
+                    errors.Add("tp3_requires_quantity_ge_3");
+                if (!TryExtractNumber(json, "quantity_tp1", out double quantityTp1) || quantityTp1 < 1
+                    || !TryExtractNumber(json, "quantity_tp2", out double quantityTp2) || quantityTp2 < 1
+                    || quantityTp1 + quantityTp2 >= quantity)
+                    errors.Add("tp3_requires_valid_quantity_split");
+            }
+
+            if (TryExtractNumber(json, "stop_loss_3", out _) && !TryExtractNumber(json, "take_profit_3", out _))
+                errors.Add("stop_loss_3_requires_take_profit_3");
+
             string intentId = ExtractString(json, "intent_id");
             string instrument = ExtractString(json, "instrument");
 

@@ -10,6 +10,7 @@ namespace Glitch.Services
 {
     internal sealed class GlitchAiRailPolicy
     {
+        public bool IsValid { get; set; }
         public bool AiEnabled { get; set; } = true;
         public bool AiKillSwitch { get; set; } = false;
         public bool RequireValidLicense { get; set; } = false;
@@ -51,15 +52,15 @@ namespace Glitch.Services
 
         public static GlitchAiRailPolicy Load()
         {
-            EnsureDefaultExists();
             try
             {
+                EnsureDefaultExists();
                 string json = File.ReadAllText(GetPolicyPath());
                 return Parse(json);
             }
             catch
             {
-                return new GlitchAiRailPolicy();
+                return InvalidPolicy();
             }
         }
 
@@ -295,8 +296,14 @@ namespace Glitch.Services
         private static GlitchAiRailPolicy Parse(string json)
         {
             var policy = new GlitchAiRailPolicy();
-            if (string.IsNullOrWhiteSpace(json))
-                return policy;
+            if (string.IsNullOrWhiteSpace(json)
+                || !string.Equals(
+                    GlitchAiJsonFields.ExtractString(json, "schema_version"),
+                    "glitch.ai.policy.v1",
+                    StringComparison.Ordinal))
+                return InvalidPolicy();
+
+            policy.IsValid = true;
 
             if (GlitchAiJsonFields.TryExtractBool(json, "ai_enabled", out bool aiEnabled))
                 policy.AiEnabled = aiEnabled;
@@ -331,6 +338,19 @@ namespace Glitch.Services
             policy.ProfileAccountBindings = ParseProfileAccountBindings(json, policy.ProfileAccountBindings);
             policy.AccountAllowlist.UnionWith(policy.ProfileAccountBindings.Values);
             policy.BlockedSessions = ParseStringArray(json, "blocked_sessions", policy.BlockedSessions);
+            return policy;
+        }
+
+        private static GlitchAiRailPolicy InvalidPolicy()
+        {
+            var policy = new GlitchAiRailPolicy
+            {
+                IsValid = false,
+                AiEnabled = false,
+                AiKillSwitch = true
+            };
+            policy.ProfileAccountBindings.Clear();
+            policy.AccountAllowlist.Clear();
             return policy;
         }
 

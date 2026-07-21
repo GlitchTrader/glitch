@@ -5,13 +5,13 @@ description: Read one completed Glitch MNQ market snapshot and bounded historica
 
 # Observe Market
 
-Use only files supplied in `/opt/glitch-data`.
+Use only the current decision packet and bounded evidence explicitly supplied by Glitch for this cycle. Runtime transport paths are implementation details and are never market authority.
 
-1. For a supplied `glitch.hermes.portfolio_cycle.v1`, treat that cycle's market envelope and `local_safety_attestation` as the only current-cycle authority. Require its snapshot hash, MNQ, completed bars, and machine features. Do not inspect or use `current/policy.json`, `current/portfolio.latest.json`, or old journal records to re-decide current account eligibility; Glitch already performed that private local check. For other cycle types, require the explicitly supplied current market and policy inputs. Mark the cycle invalid only when a required supplied item is absent or stale.
-2. Describe only observable state: session, price location, trend/alignment across 1m/5m/15m/60m, volatility, momentum, liquidity/order flow when present, and conflicts.
-3. Use supplied `market.machine_features` and `market.archetype_evaluation` as the exact local measurement layer. Compare with active `knowledge/archetypes.v2.json` and retrieved examples under `history/market/`. V2 statuses and regime preconditions are authoritative evidence; archetypes remain priors rather than a whitelist.
-4. Never claim or tag an archetype match unless its supplied `exact_match` is true. If no exact match exists, a falsifiable novel thesis remains allowed but must be tagged `discretionary_candidate:<short_name>` and must name the mismatch with the closest archetype.
-5. Do not recompute or override supplied machine features, infer indicators that are missing, or use future bars.
-6. Pass a compact observation to the risk and thesis steps: `data_valid`, `regime`, `supporting_signals`, `conflicting_signals`, `matched_archetypes`, and `novel_pattern_notes`.
+1. Treat the supplied `glitch.hermes.decision_packet.v1` as current-cycle authority. Require exactly five ordered one-minute frames, a current MNQ snapshot hash, and complete supplied market and portfolio snapshots.
+2. Read the objective measurement layer across 1m/5m/15m/60m: OHLCV, session location, ATR/volatility, ADX and directional movement, RSI/Stochastic/CCI/z-score, MACD and EMA alignment, raw/directional/tradeability scores, oscillator and moving-average composites, and order flow when available.
+3. Describe observable regime, price structure, supporting evidence, conflicts, and the most likely next-five-minute path. Human-facing labels such as Weak Sell or Strong Buy are deliberately absent; form your own probabilistic view from the numeric evidence.
+4. Treat news, sentiment, liquidity, or order-flow fields as evidence only when Glitch supplies them with current provenance. Never invent missing values, recompute supplied features, or use future bars.
+5. Patterns and remembered examples are priors, not a whitelist. A falsifiable discretionary thesis is valid without a named archetype.
+6. Pass a compact observation to risk and thesis: `data_valid`, `regime`, `supporting_signals`, `conflicting_signals`, and `novel_pattern_notes`.
 
 This skill never emits or submits an intent.

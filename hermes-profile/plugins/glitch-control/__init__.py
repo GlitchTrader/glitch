@@ -27,6 +27,8 @@ GLITCH_DATA = Path(os.environ.get(
 DIRECTIVE_DIR = GLITCH_DATA / "hermes" / "exchange" / "hermes"
 DIRECTIVE_PATH = DIRECTIVE_DIR / "operator-directive.json"
 DIRECTIVE_LOG = DIRECTIVE_DIR / "operator-directives.jsonl"
+PROFILE_ROOT = Path(__file__).resolve().parents[2]
+RESET_SCRIPT = PROFILE_ROOT / "scripts" / "reset-hermes-trading-epoch.ps1"
 
 
 def _token() -> str:
@@ -121,10 +123,9 @@ def _status_text() -> str:
     enabled = bool(state.get("trading_enabled", not state.get("trading_paused", True)))
     gateway = "running" if _gateway_running() else "stopped"
     on = enabled and job_state == "running" and gateway == "running"
-    mode = str(state.get("mode", "paper")).upper()
     replication = "on" if state.get("replication_enabled", False) else "off"
     mismatch = "" if on or (not enabled and job_state != "running") else "; state mismatch: run /trade_mode or /pause_trading"
-    return f"Glitch trading: {'ON' if on else 'OFF'}; mode: {mode}; replication: {replication}; gateway: {gateway}{mismatch}."
+    return f"Glitch trading: {'ON' if on else 'OFF'}; account scope: Glitch AI selection; replication: {replication}; gateway: {gateway}{mismatch}."
 
 
 def _write_operator_directive(bias: str, raw_args: str, *, directive_type: str = "advisory") -> str:
@@ -221,11 +222,8 @@ def _chat_mode(_raw_args: str) -> str:
 
 
 def _trade_mode(raw_args: str) -> str:
-    requested_mode = raw_args.strip().lower() or "paper"
-    if requested_mode not in {"paper", "live"}:
-        return "Usage: /trade_mode [paper|live]."
-    if requested_mode == "live":
-        return "Live mode is not installed or authorized; no state changed. Use /trade_mode paper."
+    if raw_args.strip():
+        return "Usage: /trade_mode. Capital scope is controlled by the accounts selected in Glitch AI."
     from cron.jobs import resume_job
     job = _job()
     if not job:
@@ -252,6 +250,75 @@ def _pause_trading(_raw_args: str) -> str:
     return f"Trading is OFF; trading job: {job_state}."
 
 
+def _assert_sim_reset_safe() -> None:
+    active = []
+    for row in _portfolio().get("accounts", []):
+        account = str(row.get("account") or "")
+        if not account.startswith("Sim"):
+            continue
+        positions = row.get("positions") or []
+        working_orders = int(row.get("working_orders") or 0)
+        if positions or working_orders:
+            active.append(
+                f"{account}(positions={len(positions)},working_orders={working_orders})"
+            )
+    if active:
+        raise RuntimeError(
+            "Trading was turned OFF, but the Hermes epoch was not reset because Sim exposure "
+            "still exists: " + ", ".join(active) + ". Flatten/reset those accounts first."
+        )
+
+
+def _reset_trading(raw_args: str) -> str:
+    if raw_args.strip():
+        return "Usage: /reset_trading (alias: /reset_memory)."
+    _request("/control", action="TRADING_OFF")
+    job_state = _pause_job("reset_trading_epoch")
+    _assert_sim_reset_safe()
+    if not RESET_SCRIPT.is_file():
+        raise RuntimeError(
+            "The installed Glitch reset helper is missing. Run install-direct-hermes-bridge.ps1 once."
+        )
+    powershell = shutil.which("powershell.exe") or shutil.which("powershell")
+    if not powershell:
+        raise RuntimeError("PowerShell is unavailable; the Hermes trading epoch was not reset.")
+    completed = subprocess.run(
+        [
+            powershell,
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(RESET_SCRIPT),
+            "-Profile",
+            "glitch",
+            "-GlitchData",
+            str(GLITCH_DATA),
+            "-Apply",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0,
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip() or "reset helper failed"
+        raise RuntimeError(f"Trading remains OFF; Hermes epoch reset failed: {detail}")
+    try:
+        result = json.loads(completed.stdout.strip())
+    except json.JSONDecodeError as error:
+        raise RuntimeError(
+            "Trading remains OFF; reset helper returned malformed evidence."
+        ) from error
+    if result.get("mode") != "applied" or not result.get("new_trading_session_id"):
+        raise RuntimeError("Trading remains OFF; reset helper did not prove a new trading epoch.")
+    return (
+        "Hermes trading epoch reset and archived; chat, SOUL, skills, plugins, and configuration "
+        f"were preserved. Trading remains OFF; trading job: {job_state}. "
+        "Now use Glitch Reset Data and reset the NinjaTrader Sim accounts, then run /trade_mode."
+    )
+
+
 def _flatten_all(_raw_args: str) -> str:
     _request("/control", action="TRADING_OFF")
     job_state = _pause_job("flatten_all_slash_command")
@@ -276,14 +343,16 @@ def _status(_raw_args: str) -> str:
 def register(ctx) -> None:
     commands = {
         "chat-mode": (_chat_mode, "Chat normally without changing scheduled trading."),
-        "trade-mode": (_trade_mode, "Turn trading ON in paper mode: /trade_mode paper."),
+        "trade-mode": (_trade_mode, "Turn trading ON for the account scope selected in Glitch AI: /trade_mode."),
         "pause-trading": (_pause_trading, "Turn trading OFF."),
+        "reset-trading": (_reset_trading, "Archive and reset Hermes trading state; preserve chat and agent capabilities."),
+        "reset-memory": (_reset_trading, "Alias for /reset_trading."),
         "flatten-all": (_flatten_all, "Pause trading and ask Glitch to flatten all configured accounts."),
         "bias-long": (_bias_long, "Suggest a long bias for the next Glitch cycle; Hermes decides."),
         "bias-short": (_bias_short, "Suggest a short bias for the next Glitch cycle; Hermes decides."),
         "bias-neutral": (_bias_neutral, "Remove directional bias for the next Glitch cycle."),
-        "long": (_long, "Queue one protected operator-directed long for the next paper cycle."),
-        "short": (_short, "Queue one protected operator-directed short for the next paper cycle."),
+        "long": (_long, "Queue one protected operator-directed long for the next configured-account cycle."),
+        "short": (_short, "Queue one protected operator-directed short for the next configured-account cycle."),
         "replicate-on": (_replicate_on, "Enable Glitch replication idempotently."),
         "replicate-off": (_replicate_off, "Disable Glitch replication idempotently."),
         "glitch-status": (_status, "Show Glitch, trading-job, and replication state."),

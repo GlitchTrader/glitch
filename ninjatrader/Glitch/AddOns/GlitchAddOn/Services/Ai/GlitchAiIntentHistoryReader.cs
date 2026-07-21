@@ -6,7 +6,8 @@ namespace Glitch.Services
 {
     internal static class GlitchAiIntentHistoryReader
     {
-        private const string FilledExecutionCode = "group_entry_filled";
+        private const string FilledExecutionCode = "master_entry_filled";
+        private const string LegacyFilledExecutionCode = "group_entry_filled";
 
         public static int CountTradesTodayUtc(string account, DateTime nowUtc)
         {
@@ -50,11 +51,12 @@ namespace Glitch.Services
             DateTime dayStart = new DateTime(nowUtc.Year, nowUtc.Month, nowUtc.Day, 0, 0, 0, DateTimeKind.Utc);
             foreach (string line in File.ReadLines(path))
             {
-                if (string.IsNullOrWhiteSpace(line)
-                    || !string.Equals(GlitchAiJsonFields.ExtractString(line, "code"), FilledExecutionCode, StringComparison.Ordinal))
-                {
+                if (string.IsNullOrWhiteSpace(line))
                     continue;
-                }
+                string code = GlitchAiJsonFields.ExtractString(line, "code");
+                if (!string.Equals(code, FilledExecutionCode, StringComparison.Ordinal)
+                    && !string.Equals(code, LegacyFilledExecutionCode, StringComparison.Ordinal))
+                    continue;
 
                 DateTime? recordedUtc = GlitchAiJsonFields.TryExtractUtc(line, "recorded_utc");
                 if (!recordedUtc.HasValue || recordedUtc.Value < dayStart || recordedUtc.Value > nowUtc)

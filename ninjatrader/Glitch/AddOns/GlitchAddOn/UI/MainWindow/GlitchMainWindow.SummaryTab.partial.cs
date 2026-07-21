@@ -608,12 +608,76 @@ namespace Glitch.UI
 
         private async void OnResetSummaryAndJournalDataClick(object sender, RoutedEventArgs e)
         {
+            if (!TryValidateCleanResetState(out string resetBlocker))
+            {
+                MessageBox.Show(
+                    this,
+                    "Reset refused: " + resetBlocker,
+                    L("summary.reset_data.title", "Reset Data"),
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
             if (!ShowResetDataConfirmationDialog())
                 return;
 
             ResetSummaryAndJournalData();
             if (sender is Button button)
                 await ShowTransientTealButtonFeedbackAsync(button, "Data reset", 3000);
+        }
+
+        private bool TryValidateCleanResetState(out string blocker)
+        {
+            blocker = null;
+            if (!GlitchHermesControlStateStore.Load().TradingPaused)
+            {
+                blocker = "turn Glitch AI off before clearing its evidence.";
+                return false;
+            }
+
+            var configuredNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (AccountGroupDefinition group in _accountGroups ?? new ObservableCollection<AccountGroupDefinition>())
+            {
+                if (group == null)
+                    continue;
+                if (!string.IsNullOrWhiteSpace(group.MasterAccount))
+                    configuredNames.Add(group.MasterAccount.Trim());
+                foreach (AccountGroupMemberRow member in group.Members ?? new ObservableCollection<AccountGroupMemberRow>())
+                {
+                    if (member != null && !string.IsNullOrWhiteSpace(member.FollowerAccount))
+                        configuredNames.Add(member.FollowerAccount.Trim());
+                }
+            }
+
+            GlitchAiRailPolicy aiPolicy = GlitchAiRailPolicyStore.Load();
+            foreach (string accountName in aiPolicy?.AccountAllowlist ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase))
+            {
+                if (!string.IsNullOrWhiteSpace(accountName))
+                    configuredNames.Add(accountName.Trim());
+            }
+
+            foreach (string accountName in configuredNames)
+            {
+                Account account = TryFindConnectedAccountByName(accountName);
+                if (account == null)
+                {
+                    blocker = accountName + " is not connected, so flat/order-free state cannot be proven.";
+                    return false;
+                }
+                if (!GlitchReplicationEngine.IsAccountFlat(account))
+                {
+                    blocker = accountName + " still has an open position.";
+                    return false;
+                }
+                if (account.Orders != null && account.Orders.Any(order => order != null
+                    && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState)))
+                {
+                    blocker = accountName + " still has a working order.";
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private bool ShowResetDataConfirmationDialog()

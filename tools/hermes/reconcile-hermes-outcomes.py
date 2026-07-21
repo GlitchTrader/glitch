@@ -221,6 +221,19 @@ def infer_close_kind(exit_price, stop_price, target_price):
     return min(distances)[1] if distances else "unknown"
 
 
+def infer_trade_close_kind(trade, stop_price, target_price):
+    identity = "|".join(str(trade.get(key) or "") for key in (
+        "close_reason", "exit_signal", "exit_type"
+    )).lower()
+    if "stop" in identity or "-s-" in identity:
+        return "stop"
+    if "target" in identity or "profit" in identity or "-t-" in identity:
+        return "target"
+    if "flatten" in identity or "exit" in identity:
+        return "exit"
+    return infer_close_kind(trade.get("exit_price"), stop_price, target_price)
+
+
 def _float(fields, key, fallback=None):
     try:
         return float(fields.get(key))
@@ -275,17 +288,22 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None):
     intents = find_intents(evidence_root, decision_root)
     snapshots = portfolio_snapshots(glitch_data)
     trade_ledger = read_trade_ledger(glitch_data / "TradeLedger.tsv")
-    existing = {str(row.get("intent_id")): row for row in read_jsonl(output_path) if row.get("intent_id")}
+    existing_rows = [row for row in read_jsonl(output_path) if row.get("intent_id")]
+    existing_ids = {str(row.get("intent_id")) for row in existing_rows}
+    new_rows = []
     by_intent = {}
     for row in executions:
         by_intent.setdefault(str(row.get("intent_id") or ""), []).append(row)
 
     for intent_id, intent in intents.items():
+        if intent_id in existing_ids:
+            continue
         if intent.get("action") not in {"ENTER_LONG", "ENTER_SHORT"}:
             continue
         events = by_intent.get(intent_id, [])
         submitted = next((row for row in events if row.get("code") in {"master_entry_submitted", "group_entries_submitted"}), None)
         brackets = [row for row in events if row.get("code") in {
+            "master_structural_brackets_submitted",
             "group_structural_brackets_submitted",
             "group_fill_anchored_brackets_submitted",
             "follower_structural_brackets_submitted",
@@ -328,13 +346,15 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None):
             entry_price = trade["entry_price"]
             exit_price = trade["exit_price"]
             quantity = int(abs(trade["contracts"]) or 1)
-            stop_price = _float(fields, "sl", _float(intent, "stop_loss"))
+            stop_price = _float(fields, "sl1", _float(fields, "sl", _float(intent, "stop_loss")))
             target_price = _float(fields, "tp1", _float(intent, "take_profit_1"))
             point_value = POINT_VALUE.get(instrument_root)
             if point_value is None:
                 incomplete_outcome = True
                 continue
-            pnl_usd = trade["pnl_points"] * point_value * max(quantity, 1) - trade["commission_total"]
+            # TradeLedger pnl_points already includes closed quantity. Multiplying
+            # by contracts again overstates every multi-contract outcome.
+            pnl_usd = trade["pnl_points"] * point_value - trade["commission_total"]
             account_outcomes.append({
                 "account": account,
                 "quantity": quantity,
@@ -342,13 +362,13 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None):
                 "exit_price": exit_price,
                 "realized_pnl_usd": pnl_usd,
                 "trade_id": trade["trade_id"],
-                "close_kind": infer_close_kind(exit_price, stop_price, target_price),
+                "close_kind": infer_trade_close_kind(trade, stop_price, target_price),
                 **excursion(snapshots, account, entry_utc, exit_utc, instrument_root),
             })
         if incomplete_outcome or len(account_outcomes) != len(expected_accounts):
             continue
 
-        existing[intent_id] = {
+        outcome = {
             "schema_version": "glitch.hermes.trade_outcome.v1",
             "recorded_utc": exit_utc.isoformat().replace("+00:00", "Z"),
             "intent_id": intent_id,
@@ -370,11 +390,15 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None):
             "group_realized_pnl_usd": sum(row["realized_pnl_usd"] for row in account_outcomes),
             "evidence": intent.get("_evidence_path"),
         }
+        new_rows.append(outcome)
+        existing_ids.add(intent_id)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    ordered = sorted(existing.values(), key=lambda row: (row.get("exit_utc", ""), row.get("intent_id", "")))
-    output_path.write_text("".join(json.dumps(row, separators=(",", ":")) + "\n" for row in ordered), encoding="utf-8")
-    return ordered
+    if new_rows:
+        with output_path.open("a", encoding="utf-8") as stream:
+            for row in sorted(new_rows, key=lambda value: (value.get("exit_utc", ""), value.get("intent_id", ""))):
+                stream.write(json.dumps(row, separators=(",", ":")) + "\n")
+    return existing_rows + new_rows
 
 
 def main():

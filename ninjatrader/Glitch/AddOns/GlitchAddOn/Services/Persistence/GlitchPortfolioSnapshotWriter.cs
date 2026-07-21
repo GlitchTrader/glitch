@@ -22,6 +22,8 @@ namespace Glitch.Services
         public string AccountName { get; set; }
         public string AccountStatus { get; set; }
         public string PropFirmId { get; set; }
+        public string RuleStatus { get; set; }
+        public bool RulesAreSimulated { get; set; }
         public double AccountSize { get; set; }
         public double ProfitTarget { get; set; }
         public double MaxDrawdown { get; set; }
@@ -90,8 +92,19 @@ namespace Glitch.Services
                 string tempPath = path + ".tmp";
                 File.WriteAllText(tempPath, json, new UTF8Encoding(false));
                 if (File.Exists(path))
-                    File.Delete(path);
-                File.Move(tempPath, path);
+                {
+                    try
+                    {
+                        File.Replace(tempPath, path, null);
+                    }
+                    catch (PlatformNotSupportedException)
+                    {
+                        File.Delete(path);
+                        File.Move(tempPath, path);
+                    }
+                }
+                else
+                    File.Move(tempPath, path);
 
                 GlitchHistoricalSnapshotExporter.TryArchivePortfolioSnapshot(json, nowUtc);
 
@@ -219,10 +232,15 @@ namespace Glitch.Services
                 }
             }
 
+            // Reader contract: account must remain the first field in each
+            // account object because the lightweight reader locates the owning
+            // object boundary immediately before this marker.
             return "{"
                 + "\"account\":" + GlitchSnapshotJson.String(account.AccountName) + ","
                 + "\"account_status\":" + GlitchSnapshotJson.String(account.AccountStatus) + ","
                 + "\"prop_firm_id\":" + GlitchSnapshotJson.String(account.PropFirmId) + ","
+                + "\"rule_status\":" + GlitchSnapshotJson.String(account.RuleStatus) + ","
+                + "\"rules_are_simulated\":" + GlitchSnapshotJson.Bool(account.RulesAreSimulated) + ","
                 + "\"account_size\":" + GlitchSnapshotJson.Number(account.AccountSize) + ","
                 + "\"profit_target\":" + GlitchSnapshotJson.Number(account.ProfitTarget) + ","
                 + "\"max_drawdown\":" + GlitchSnapshotJson.Number(account.MaxDrawdown) + ","

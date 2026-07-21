@@ -138,7 +138,7 @@ namespace Glitch.UI
 
         private TimeSpan ComputeRefreshTimerInterval()
         {
-            if (_isReplicatingUi && IsGlitchShellUiActive())
+            if (IsReplicationRuntimeActive() && IsGlitchShellUiActive())
                 return ReplicationActiveUiRefreshInterval;
             if (IsGlitchShellUiActive())
                 return ActiveUiRefreshInterval;
@@ -309,7 +309,7 @@ namespace Glitch.UI
         {
             snapshot = new GlitchShellSnapshot
             {
-                IsReplicating = _isReplicatingUi,
+                IsReplicating = IsReplicationRuntimeActive(),
                 GroupsByMaster = BuildGlitchShellGroupSummaries(rows)
             };
 

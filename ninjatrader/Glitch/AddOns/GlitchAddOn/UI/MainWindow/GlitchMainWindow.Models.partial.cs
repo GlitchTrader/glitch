@@ -83,6 +83,7 @@ namespace Glitch.UI
             private string _maxL;
             private string _maxContracts;
             private string _position;
+            private string _routeStatus;
 
             public event PropertyChangedEventHandler PropertyChanged;
 
@@ -162,6 +163,12 @@ namespace Glitch.UI
             {
                 get => _ratio;
                 set => SetField(ref _ratio, value, nameof(Ratio));
+            }
+
+            public string RouteStatus
+            {
+                get => _routeStatus;
+                set => SetField(ref _routeStatus, value, nameof(RouteStatus));
             }
 
             public string Pnl
