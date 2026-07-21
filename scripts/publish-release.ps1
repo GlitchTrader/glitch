@@ -140,7 +140,10 @@ $catalogRaw = [IO.File]::ReadAllText($catalogPath)
 $checksumsRaw = [IO.File]::ReadAllText($checksumsPath)
 $destinationCreated = $false
 try {
-    $catalog = @($catalogRaw | ConvertFrom-Json)
+    # Windows PowerShell 5.1 preserves a top-level JSON array as one nested
+    # object when ConvertFrom-Json is used in a pipeline. Cast explicitly so
+    # every release remains a catalog entry on all supported PowerShell hosts.
+    $catalog = [array](ConvertFrom-Json -InputObject $catalogRaw)
     if ($catalog | Where-Object { $_.fileName -eq $fileName -or ($_.edition -eq $Edition -and $_.version -eq $Version) }) {
         throw "Release is already registered: $Edition $Version"
     }
