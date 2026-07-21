@@ -2,6 +2,14 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-21 - accountable management and execution geometry
+
+- Trade-by-trade evidence isolated the giveback failure: Hermes was often directionally sound, but repeated `HOLD` after its own change condition arrived; an advisory plan had turned caution into a provisional one-contract baseline; malformed output and rejected amendments could remove a positioned review; and a delayed market entry could preserve stale absolute prices while making risk larger and reward smaller than Hermes assessed.
+- Corrected the ownership boundaries without coding strategy. `HOLD` now carries an explicit burden of proof, prior change conditions are accountable, quantity stays adaptive under Hermes, and the 0.4%-2% daily objective is long-run expectancy/sizing feedback rather than a quota or forced per-trade rule. Hourly supervision may propose the existing single reversible cognitive overlay after two comparable episodes instead of waiting for the daily loop. Supervisor plan/guidance advanced to v2, so stale v1 one-contract instructions are excluded from both decision and learning continuity until Hermes regenerates compatible cognition.
+- Invalid model content receives one exact-template regeneration for the same packet. Provider, contract, delivery, or executor errors wait for a fresh minute packet and make one bounded new decision attempt. Rejected execution is persisted as failed rather than being mistaken for a completed management action.
+- Glitch now rejects an entry when live price has moved adversely from the assessed snapshot, because that would make the structural stop farther and target nearer. Equal or favorable geometry preserves Hermes's absolute stop/target levels. No point, ATR, ratio, strategy, or quantity formula was added.
+- Validation/deployment: the complete Hermes/Glitch Python suite passes 112/112; Python compilation and diff checks pass. The canonical 87-file AddOn was deployed once with 87 matches, zero missing, zero mismatches, and zero extras; Alan confirmed NinjaTrader compile green. Installed Hermes profile, skills, plugin, and five worker scripts match source with zero hash mismatches. Live resolution proved the durable v1 plan and guidance are both excluded, and bounded post-install operator ticks completed through `2026-07-21T17:17:14Z`; the book was flat with zero working orders during reload.
+
 ## 2026-07-21 - learning removed from the trading critical path
 
 - Reconstructed the recurring ten-minute decision gaps from the native cron

@@ -48,6 +48,8 @@ DECISION_AUDIT_FIELDS = {
     "decisive_evidence", "disconfirming_evidence", "change_condition", "final_choice",
 }
 DEFAULT_GLITCH_DATA = Path.home() / "Documents" / "NinjaTrader 8" / "GlitchData"
+CURRENT_PLAN_SCHEMA = "glitch.hermes.portfolio_plan.v2"
+CURRENT_GUIDANCE_SCHEMA = "glitch.hermes.trading_guidance.v2"
 
 
 def utc_now() -> str:
@@ -327,8 +329,13 @@ def journal_tail(glitch_data: Path, max_lines: int = 6) -> dict[str, list[str]]:
 def read_optional_json(path: Path) -> dict[str, Any] | None:
     try:
         return read_json(path) if path.is_file() else None
-    except (OSError, ValueError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return None
+
+
+def read_current_learning_artifact(path: Path, schema_version: str) -> dict[str, Any] | None:
+    value = read_optional_json(path)
+    return value if value and value.get("schema_version") == schema_version else None
 
 
 def learning_context(exchange: Path) -> dict[str, Any]:
@@ -337,8 +344,12 @@ def learning_context(exchange: Path) -> dict[str, Any]:
     if not overlay or overlay.get("status") not in {"active", "promoted"} or not overlay.get("instruction"):
         overlay = None
     return {
-        "current_plan": read_optional_json(supervisor / "current-plan.json"),
-        "current_guidance": read_optional_json(supervisor / "current-guidance.json"),
+        "current_plan": read_current_learning_artifact(
+            supervisor / "current-plan.json", CURRENT_PLAN_SCHEMA
+        ),
+        "current_guidance": read_current_learning_artifact(
+            supervisor / "current-guidance.json", CURRENT_GUIDANCE_SCHEMA
+        ),
         "active_cognitive_overlay": overlay,
     }
 
@@ -904,6 +915,35 @@ def invoke_hermes(profile: str, prompt: str, timeout_seconds: int) -> dict[str, 
     return extract_json(completed.stdout)
 
 
+def invoke_validated_batch(
+    profile: str,
+    prompt: str,
+    scenario: dict[str, Any],
+    directive: dict[str, Any] | None,
+    timeout_seconds: int,
+) -> tuple[dict[str, Any], int]:
+    """Regenerate once when Luna's content, rather than its provider, is invalid."""
+    for repair_count in range(2):
+        try:
+            batch = normalize_batch(invoke_hermes(profile, prompt, timeout_seconds), scenario)
+            validate_batch(batch, scenario, directive)
+            return batch, repair_count
+        except ValueError as error:
+            if repair_count:
+                raise
+            prompt += (
+                "\nSTRICT_OUTPUT_CORRECTION="
+                + json.dumps({
+                    "validation_error": str(error)[:240],
+                    "instruction": (
+                        "Regenerate the same CURRENT_CYCLE decision from the supplied required_output_template. "
+                        "Return one complete strict JSON object only; do not change cycle or scoped identities."
+                    ),
+                }, separators=(",", ":"))
+            )
+    raise AssertionError("unreachable")
+
+
 def post_intent(intent: dict[str, Any], token: str) -> dict[str, Any]:
     body = json.dumps(intent, separators=(",", ":")).encode("utf-8")
     request = urllib.request.Request(
@@ -948,6 +988,15 @@ def submit_batch(batch: dict[str, Any], glitch_data: Path, exchange: Path) -> di
     }
     write_json_atomic(exchange / "hermes" / "receipts" / f"{batch['cycle_id']}.json", receipt)
     return receipt
+
+
+def receipt_requires_new_packet_retry(receipt: dict[str, Any]) -> bool:
+    for item in receipt.get("results", []):
+        result = item.get("result") if isinstance(item, dict) else None
+        body = result.get("body") if isinstance(result, dict) else None
+        if isinstance(body, dict) and body.get("executor") == "failed":
+            return True
+    return not receipt.get("complete", False)
 
 
 def build_prompt(
@@ -1020,7 +1069,9 @@ def build_prompt(
         "Choose quantity only from execution_scope.books[].valid_entry_quantities. Follower accounts and ratios are user-owned replication "
         "configuration: they never constrain cognition, strategy, or master quantity, and Glitch CopyEngine handles each follower independently. "
         "The long-run performance objective is approximately 0.4%-2% of master account size per trading day ($100-$500 on $25k; "
-        "$1,000-$5,000 on $250k). This is an aspiration, never a trade quota, loss entitlement, forced sizing rule, or reason to manufacture a trade. "
+        "$1,000-$5,000 on $250k). Use it as long-run feedback for expectancy and master-quantity calibration, never as a trade quota, "
+        "loss entitlement, forced per-trade sizing rule, or reason to manufacture a trade. Do not inherit any fixed or provisional quantity "
+        "baseline from advisory plans: Hermes owns quantity from current evidence, structural risk, remaining opportunity, drawdown, and supplied valid quantities. "
         "A quantity of two or more may use TP2 plus quantity_tp1; "
         "Treat execution_scope as current capacity authority: a historical infrastructure or capacity rejection is not a continuing veto when "
         "the current book has valid_entry_quantities and current native state is eligible. "
@@ -1046,8 +1097,13 @@ def build_prompt(
         "Use the top-level key decisions, never intents. Close every intent object before closing the decisions "
         "array. Before returning, silently verify that the entire response is one syntactically valid JSON object "
         "that a strict JSON parser can load. Return no markdown fences, commentary, or trailing text. "
-        "For an open position, HOLD, MOVE_STOP, MOVE_TP, a same-direction entry, and EXIT are active management decisions. Compare excursion and "
-        "rollback in initial-risk units, structure, volatility, and remaining opportunity rather than fixed dollar landmarks. Native "
+        "For an open position, HOLD, MOVE_STOP, MOVE_TP, a same-direction entry, and EXIT are active management decisions; HOLD is not the default. "
+        "Compare every valid action after meaningful favorable excursion, failed progress, objective rejection, pivot loss, or opportunity decay. "
+        "A prior change_condition is an accountable forecast: when current evidence satisfies it, do not silently move the threshold or repeat the "
+        "same HOLD thesis. Either choose the newly supported action or identify the genuinely new evidence that disproves the prior trigger. "
+        "Separate current timing and management pivots from hard structural invalidation; an EXIT or amendment need not wait for the catastrophe stop. "
+        "After a rejected amendment, reason immediately from the authoritative unchanged bracket. Compare excursion and rollback in initial-risk "
+        "units, structure, volatility, and remaining opportunity rather than fixed dollar landmarks. Native "
         "brackets are catastrophe protection, not a substitute for active thesis review. You may persist only durable lessons supported "
         "by repeated completed outcomes; never "
         "store current positions, stale attempts, account eligibility, trade quotas, or temporary directives as memory. If "
@@ -1170,7 +1226,7 @@ def prior_failed_attempt_requires_retry(exchange: Path, packet: dict[str, Any]) 
         except (OSError, ValueError, TypeError):
             continue
         age = (current_window - prior_window).total_seconds()
-        return attempt.get("status") == "failed" and 0 < age < 300
+        return attempt.get("status") in {"failed", "execution_failed", "delivery_incomplete"} and 0 < age < 300
     return False
 
 
@@ -1194,6 +1250,39 @@ def read_packet_after_imminent_rollover(packet_path: Path, wait_seconds: float) 
         if str(candidate.get("packet_id", "")) != packet_id:
             return candidate
     return packet
+
+
+def wait_for_newer_packet(packet_path: Path, prior_packet_id: str, wait_seconds: float) -> bool:
+    deadline = time.monotonic() + max(0.0, wait_seconds)
+    while True:
+        try:
+            candidate = read_json(packet_path)
+            candidate_id = str(candidate.get("packet_id", ""))
+            if candidate_id and candidate_id != prior_packet_id and packet_is_current(candidate):
+                return True
+        except (OSError, ValueError):
+            pass
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        time.sleep(min(0.1, remaining))
+
+
+def run_with_next_packet_fallback(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int:
+    packet_path = exchange / "glitch" / "latest-decision-packet.json"
+    try:
+        prior_packet_id = str(read_json(packet_path).get("packet_id", ""))
+    except (OSError, ValueError):
+        prior_packet_id = ""
+    try:
+        result = run_once(args, glitch_data, exchange)
+    except Exception:
+        if wait_for_newer_packet(packet_path, prior_packet_id, args.error_retry_wait_seconds):
+            return run_once(args, glitch_data, exchange)
+        raise
+    if result != 0 and wait_for_newer_packet(packet_path, prior_packet_id, args.error_retry_wait_seconds):
+        return run_once(args, glitch_data, exchange)
+    return result
 
 
 def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int:
@@ -1263,9 +1352,9 @@ def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int
         "hermes_session_mode": "isolated",
     })
     try:
-        batch = invoke_hermes(args.profile, prompt, args.timeout_seconds)
-        batch = normalize_batch(batch, scenario)
-        validate_batch(batch, scenario, directive)
+        batch, output_repair_count = invoke_validated_batch(
+            args.profile, prompt, scenario, directive, args.timeout_seconds
+        )
         persist_outbox(exchange, outbox_path, packet_id, batch, directive)
         write_json_atomic(attempt_path, {
             "schema_version": "glitch.hermes.model_attempt.v1",
@@ -1277,6 +1366,7 @@ def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int
             "provider": CORE_PROVIDER,
             "hermes_session_source": TRADING_SOURCE,
             "hermes_session_mode": "isolated",
+            "output_repair_count": output_repair_count,
         })
     except Exception as error:
         attempt = read_json(attempt_path)
@@ -1310,8 +1400,14 @@ def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int
         print(json.dumps({"cycle_id": packet_id, "decision_count": len(batch["decisions"]), "submitted": False}))
         return 0
     receipt = submit_batch(batch, glitch_data, exchange)
+    retry_on_next_packet = receipt_requires_new_packet_retry(receipt)
+    if retry_on_next_packet:
+        attempt = read_json(attempt_path)
+        attempt["status"] = "execution_failed" if receipt.get("complete") else "delivery_incomplete"
+        attempt["completed_utc"] = utc_now()
+        write_json_atomic(attempt_path, attempt)
     print(json.dumps(receipt, separators=(",", ":")))
-    return 0 if receipt["complete"] else 1
+    return 1 if retry_on_next_packet else 0
 
 
 def main() -> int:
@@ -1320,6 +1416,7 @@ def main() -> int:
     parser.add_argument("--profile", default="glitch")
     parser.add_argument("--timeout-seconds", type=int, default=240)
     parser.add_argument("--packet-rollover-wait-seconds", type=float, default=5)
+    parser.add_argument("--error-retry-wait-seconds", type=float, default=75)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -1340,7 +1437,7 @@ def main() -> int:
             return 0
     try:
         os.write(descriptor, str(os.getpid()).encode("ascii"))
-        return run_once(args, glitch_data, exchange)
+        return run_with_next_packet_fallback(args, glitch_data, exchange)
     finally:
         os.close(descriptor)
         lock_path.unlink(missing_ok=True)

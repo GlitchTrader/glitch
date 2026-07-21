@@ -128,6 +128,29 @@ class LearningCycleTests(unittest.TestCase):
         prompt = MODULE.build_prompt("daily", [], template, {})
         self.assertIn("targeting core_prompt, soul, or skill:<name>", prompt)
 
+    def test_hourly_loop_can_correct_repeated_cognition_without_fixed_quantity(self):
+        review_id = MODULE.stable_id("hourly-review", "20990101T14")
+        template = MODULE.output_template("hourly", [review_id])
+        candidate = template["records"][0]["cognitive_change_candidate"]
+        self.assertFalse(candidate["propose"])
+        self.assertEqual(candidate["target"], "core_prompt")
+        hourly = MODULE.build_prompt("hourly", [], template, {})
+        planning = MODULE.build_prompt("planning", [], MODULE.output_template("planning", ["plan-1"]), {})
+        self.assertIn("at least two comparable episodes", hourly)
+        self.assertIn("rather than waiting for the daily loop", hourly)
+        self.assertIn("Do not create a fixed or provisional quantity baseline", planning)
+        self.assertIn("master-quantity calibration", planning)
+
+    def test_supervisor_quantity_contract_is_versioned(self):
+        plan = MODULE.output_template("planning", ["plan-1"])["records"][0]
+        self.assertEqual(plan["schema_version"], MODULE.DIRECT.CURRENT_PLAN_SCHEMA)
+        with tempfile.TemporaryDirectory() as root:
+            supervisor = Path(root)
+            review = MODULE.output_template("hourly", ["review-1"])["records"][0]
+            MODULE.persist_hourly(review, supervisor, [], "paper")
+            guidance = json.loads((supervisor / "current-guidance.json").read_text(encoding="utf-8"))
+        self.assertEqual(guidance["schema_version"], MODULE.DIRECT.CURRENT_GUIDANCE_SCHEMA)
+
     def test_paper_candidate_activates_as_one_reversible_overlay(self):
         with tempfile.TemporaryDirectory() as root:
             supervisor = Path(root)

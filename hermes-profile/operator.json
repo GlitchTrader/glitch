@@ -48,7 +48,7 @@
       "provider": "openai-codex",
       "reasoning_effort": "high",
       "initial_activation": "active_paper",
-      "output_schema": "glitch.hermes.portfolio_plan.v1",
+      "output_schema": "glitch.hermes.portfolio_plan.v2",
       "execution_authority": false
     },
     {

@@ -32,7 +32,7 @@ EASTERN = ZoneInfo("America/New_York")
 LOOP_SCHEMAS = {
     "debrief": "glitch.hermes.trade_episode.v1",
     "hourly": "glitch.hermes.hourly_review.v1",
-    "planning": "glitch.hermes.portfolio_plan.v1",
+    "planning": "glitch.hermes.portfolio_plan.v2",
     "daily": "glitch.hermes.daily_journal.v1",
 }
 
@@ -242,6 +242,12 @@ def output_template(loop_id: str, record_ids: list[str], extra: dict[str, Any] |
                         "candidate_id": "COPY_ACTIVE_ID_OR_EMPTY", "action": "none",
                         "evidence_episode_ids": [], "reason": "REPLACE_OR_EMPTY",
                     },
+                    "cognitive_change_candidate": {
+                        "propose": False, "candidate_id": "GENERATE_OR_EMPTY",
+                        "target": "core_prompt", "instruction": "REPLACE_OR_EMPTY",
+                        "evidence_episode_ids": [], "expected_effect": "REPLACE_OR_EMPTY",
+                        "evaluation_metric": "REPLACE_OR_EMPTY", "rollback_condition": "REPLACE_OR_EMPTY",
+                    },
                 })
             elif loop_id == "planning":
                 record.update({
@@ -287,10 +293,12 @@ def build_prompt(loop_id: str, evidence: Any, template: dict[str, Any], continui
         ),
         "hourly": (
             "Supervise the latest episodes. Identify repeated correct reasoning, repeated mistakes, geometry/management/quantity patterns, false abstention versus overtrading, and system defects. "
-            "Issue advisory guidance, never an order. You may evaluate an active cognitive overlay and return a promote/continue/rollback decision only with later episode evidence."
+            "Issue advisory guidance, never an order. When at least two comparable episodes show the same cognitive failure, you may propose one compact versioned cognitive change now rather than waiting for the daily loop. "
+            "You may evaluate an active cognitive overlay and return a promote/continue/rollback decision only with later episode evidence."
         ),
         "planning": (
             "Create the next 300-minute Hermes plan. Hermes owns strategy and master quantity within current master limits. Set questions, hypotheses, sizing/geometry/management posture and experiments without deterministic entry gates. "
+            "Do not create a fixed or provisional quantity baseline: calibrate quantity from repeated risk-adjusted outcomes, current edge, structural risk, remaining opportunity, drawdown, and the long-run objective. "
             "Follower ratios are user configuration and must not affect the master plan."
         ),
         "daily": (
@@ -305,7 +313,9 @@ def build_prompt(loop_id: str, evidence: Any, template: dict[str, Any], continui
     )
     return (
         "Apply the Glitch SOUL and loaded learning skills. NinjaTrader/Glitch facts outrank memory; Hermes owns cognition, strategy, master sizing, and self-improvement. "
-        "The long-run objective is approximately 0.4%-2% of master account size per trading day ($100-$500 on $25k; $1,000-$5,000 on $250k), never a quota or promise. "
+        "The long-run objective is approximately 0.4%-2% of master account size per trading day ($100-$500 on $25k; $1,000-$5,000 on $250k). "
+        "Use it to evaluate expectancy and master-quantity calibration across repeated outcomes, never as a quota, promise, forced per-trade risk, or entry gate. "
+        "Do not turn caution or insufficient evidence for larger size into a fixed one-contract baseline; Hermes must keep quantity adaptive within current master limits. "
         + memory_instruction + loop_instruction + " "
         "Return exactly the required_output_template shape as one strict JSON object. Preserve every supplied record ID and schema_version exactly. Replace placeholders, emit no markdown or prose, and never call execution/control tools. "
         "CURRENT_LEARNING_CYCLE="
@@ -345,8 +355,12 @@ def validate_debrief_attribution(records: list[dict[str, Any]], outcomes: list[d
 
 def continuity(supervisor: Path) -> dict[str, Any]:
     return {
-        "current_plan": DIRECT.read_optional_json(supervisor / "current-plan.json"),
-        "current_guidance": DIRECT.read_optional_json(supervisor / "current-guidance.json"),
+        "current_plan": DIRECT.read_current_learning_artifact(
+            supervisor / "current-plan.json", DIRECT.CURRENT_PLAN_SCHEMA
+        ),
+        "current_guidance": DIRECT.read_current_learning_artifact(
+            supervisor / "current-guidance.json", DIRECT.CURRENT_GUIDANCE_SCHEMA
+        ),
         "active_cognitive_overlay": DIRECT.read_optional_json(supervisor / "active-cognitive-overlay.json"),
     }
 
@@ -451,10 +465,10 @@ def activate_cognitive_candidate(record: dict[str, Any], supervisor: Path, mode:
         DIRECT.write_json_atomic(supervisor / "active-cognitive-overlay.json", value)
 
 
-def persist_hourly(record: dict[str, Any], supervisor: Path, episode_ids: list[str]) -> None:
+def persist_hourly(record: dict[str, Any], supervisor: Path, episode_ids: list[str], mode: str) -> None:
     append_unique(supervisor / "observations.jsonl", [record], "review_id")
     guidance = {
-        "schema_version": "glitch.hermes.trading_guidance.v1",
+        "schema_version": DIRECT.CURRENT_GUIDANCE_SCHEMA,
         "guidance_id": stable_id("guidance", str(record["review_id"])),
         "recorded_utc": record.get("recorded_utc") or utc_now(),
         "source_review_id": record["review_id"],
@@ -475,6 +489,7 @@ def persist_hourly(record: dict[str, Any], supervisor: Path, episode_ids: list[s
         })
     append_unique(supervisor / "lessons.jsonl", lessons, "lesson_id")
     apply_cognitive_decision(record, supervisor, episode_ids)
+    activate_cognitive_candidate(record, supervisor, mode)
 
 
 def minutes_since(value: Any, now: datetime) -> float:
@@ -536,7 +551,7 @@ def run_once(args) -> dict[str, Any]:
         review_id = stable_id("hourly-review", now.strftime("%Y%m%dT%H"))
         if not args.dry_run:
             records = invoke_loop(args, "hourly", {"episodes": episodes[-24:]}, [review_id], supervisor)
-            persist_hourly(records[0], supervisor, episode_ids)
+            persist_hourly(records[0], supervisor, episode_ids, policy_mode(glitch_data))
             state["last_hourly_utc"] = utc_now()
             state["hourly_episode_count"] = len(episodes)
         result["hourly"] = True

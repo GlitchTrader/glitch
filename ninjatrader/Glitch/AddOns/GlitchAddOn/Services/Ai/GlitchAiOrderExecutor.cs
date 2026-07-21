@@ -372,9 +372,22 @@ namespace Glitch.Services
             if (!TryGetFreshExecutionPrice(instrument, DateTime.UtcNow, out liveExecutionPrice, out livePriceFailure))
                 return GlitchAiExecutionResult.Failed("group_live_price_invalid", livePriceFailure);
 
-            // Intent v2 prices are absolute structural levels. Preserve them.
-            // Ordinary market drift is acceptable; reject only when the market
-            // has already crossed a stop or target and the plan is no longer executable.
+            // Hermes assessed absolute geometry at snapshotMarketPrice. Glitch
+            // may execute equal or better geometry, but never make the stop
+            // farther and the target nearer without a fresh Hermes decision.
+            bool liveGeometryWorsened = isLong
+                ? liveExecutionPrice > snapshotMarketPrice
+                : liveExecutionPrice < snapshotMarketPrice;
+            if (liveGeometryWorsened)
+            {
+                return GlitchAiExecutionResult.Failed(
+                    "group_entry_geometry_changed_reassess",
+                    "snapshot_price=" + snapshotMarketPrice.ToString(CultureInfo.InvariantCulture)
+                        + "|live_price=" + liveExecutionPrice.ToString(CultureInfo.InvariantCulture));
+            }
+
+            // Intent v2 prices remain absolute structural levels when live
+            // geometry is equal or better and all bracket legs remain executable.
             if (!IsExecutableBracketPrice(isLong, liveExecutionPrice, stopLoss, takeProfit1))
                 return GlitchAiExecutionResult.Failed("group_structural_prices_crossed_before_entry", "leg=1");
             if (hasSecondTarget

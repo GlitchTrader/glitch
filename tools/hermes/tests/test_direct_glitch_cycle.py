@@ -355,6 +355,106 @@ class DirectCycleTests(unittest.TestCase):
         self.assertIn("live in-progress observations", value)
         self.assertIn("historical infrastructure or capacity rejection is not a continuing veto", value)
 
+    def test_prompt_makes_hold_accountable_and_keeps_quantity_adaptive(self):
+        value = MODULE.build_prompt(packet(), MODULE.build_scenario(packet()), {})
+        self.assertIn("HOLD is not the default", value)
+        self.assertIn("prior change_condition is an accountable forecast", value)
+        self.assertIn("do not silently move the threshold", value)
+        self.assertIn("Do not inherit any fixed or provisional quantity baseline", value)
+        self.assertIn("master-quantity calibration", value)
+
+    def test_obsolete_supervisor_quantity_artifacts_are_not_sent_to_luna(self):
+        with tempfile.TemporaryDirectory() as root:
+            supervisor = Path(root) / "hermes" / "supervisor"
+            supervisor.mkdir(parents=True)
+            plan_path = supervisor / "current-plan.json"
+            guidance_path = supervisor / "current-guidance.json"
+            plan_path.write_text(json.dumps({
+                "schema_version": "glitch.hermes.portfolio_plan.v1",
+                "sizing_guidance": "retain one contract",
+            }), encoding="utf-8")
+            guidance_path.write_text(json.dumps({
+                "schema_version": "glitch.hermes.trading_guidance.v1",
+                "guidance": {"summary": "preserve one contract"},
+            }), encoding="utf-8")
+
+            obsolete = MODULE.learning_context(Path(root))
+            self.assertIsNone(obsolete["current_plan"])
+            self.assertIsNone(obsolete["current_guidance"])
+
+            plan_path.write_text(json.dumps({
+                "schema_version": MODULE.CURRENT_PLAN_SCHEMA,
+                "sizing_guidance": "keep quantity adaptive",
+            }), encoding="utf-8")
+            guidance_path.write_text(json.dumps({
+                "schema_version": MODULE.CURRENT_GUIDANCE_SCHEMA,
+                "guidance": {"summary": "keep quantity adaptive"},
+            }), encoding="utf-8")
+
+            current = MODULE.learning_context(Path(root))
+            self.assertEqual(current["current_plan"]["schema_version"], MODULE.CURRENT_PLAN_SCHEMA)
+            self.assertEqual(
+                current["current_guidance"]["schema_version"], MODULE.CURRENT_GUIDANCE_SCHEMA
+            )
+
+    def test_invalid_content_gets_one_same_cycle_regeneration(self):
+        value = packet()
+        scenario = MODULE.build_scenario(value)
+        valid = {
+            "schema_version": "glitch.intent.batch.v1",
+            "cycle_id": scenario["cycle_id"],
+            "decisions": [
+                decision("glitch", "Sim101", 1),
+                decision("glitch-second", "Sim201", 2),
+            ],
+        }
+        invalid = {**valid, "cycle_id": "wrong-cycle"}
+        with mock.patch.object(MODULE, "invoke_hermes", side_effect=[invalid, valid]) as invoke:
+            actual, repair_count = MODULE.invoke_validated_batch(
+                "glitch", "PROMPT", scenario, None, 30
+            )
+
+        self.assertEqual(actual, valid)
+        self.assertEqual(repair_count, 1)
+        self.assertEqual(invoke.call_count, 2)
+        self.assertIn("STRICT_OUTPUT_CORRECTION", invoke.call_args.args[1])
+
+    def test_provider_failure_is_not_immediately_replayed_as_content_repair(self):
+        scenario = MODULE.build_scenario(packet())
+        with mock.patch.object(
+            MODULE, "invoke_hermes", side_effect=RuntimeError("provider unavailable")
+        ) as invoke, self.assertRaisesRegex(RuntimeError, "provider unavailable"):
+            MODULE.invoke_validated_batch("glitch", "PROMPT", scenario, None, 30)
+
+        self.assertEqual(invoke.call_count, 1)
+
+    def test_executor_failure_requests_a_new_packet_decision(self):
+        failed = {
+            "complete": True,
+            "results": [{"result": {"http_status": 202, "body": {
+                "executor": "failed", "executor_code": "group_entry_geometry_changed_reassess"
+            }}}],
+        }
+        submitted = {
+            "complete": True,
+            "results": [{"result": {"http_status": 202, "body": {
+                "executor": "submitted", "executor_code": "master_entry_submitted"
+            }}}],
+        }
+        self.assertTrue(MODULE.receipt_requires_new_packet_retry(failed))
+        self.assertFalse(MODULE.receipt_requires_new_packet_retry(submitted))
+
+    def test_runtime_error_gets_one_native_next_packet_fallback(self):
+        args = SimpleNamespace(error_retry_wait_seconds=75)
+        with tempfile.TemporaryDirectory() as root, mock.patch.object(
+            MODULE, "run_once", side_effect=[RuntimeError("first"), 0]
+        ) as run, mock.patch.object(MODULE, "wait_for_newer_packet", return_value=True) as wait:
+            result = MODULE.run_with_next_packet_fallback(args, Path(root), Path(root))
+
+        self.assertEqual(result, 0)
+        self.assertEqual(run.call_count, 2)
+        wait.assert_called_once()
+
     def test_prompt_exposes_optional_three_leg_native_scale_out(self):
         value = MODULE.build_prompt(packet(), MODULE.build_scenario(packet()), {})
         self.assertIn("take_profit_2", value)

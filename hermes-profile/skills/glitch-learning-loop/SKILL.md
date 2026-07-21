@@ -17,7 +17,11 @@ replication, and the immutable journal.
   never constrain the thesis or master quantity and never become cognitive rules.
 - The long-run objective is approximately 0.4%-2% of master account size per
   trading day: $100-$500 on $25k and $1,000-$5,000 on $250k. This is an
-  aspiration, not a quota, promised result, forced risk budget, or entry gate.
+  optimization signal for expectancy and quantity calibration across repeated
+  outcomes, not a quota, promised result, forced per-trade risk, or entry gate.
+- Keep master quantity adaptive within current limits. Never turn caution,
+  follower configuration, or insufficient evidence for larger size into a fixed
+  or provisional one-contract baseline.
 
 ## Learn like a trader
 
@@ -33,6 +37,9 @@ replication, and the immutable journal.
    changes, and exits. Do not impose trade quotas or fear-driven cooldowns.
 5. Never loosen an accepted live stop. Improve initial geometry, quantity,
    management, exit, or later re-entry instead.
+6. Treat each prior `change_condition` as accountable. If later evidence meets
+   it, record whether Hermes changed action or merely moved the threshold and
+   repeated the same thesis.
 
 ## Cognitive self-improvement
 
@@ -45,7 +52,8 @@ Hermes may propose one compact, versioned cognitive overlay targeting
 - evaluation metric;
 - rollback condition.
 
-Only one overlay is active at a time. Paper mode may activate it automatically.
+Only one overlay is active at a time. Hourly supervision or the daily loop may
+propose it from at least two comparable episodes; paper mode may activate it automatically.
 At least two distinct episodes recorded after activation or the preceding
 evaluation must promote, continue, revise, or roll it back. Never accumulate
 unattributed prompt fragments, rewrite Glitch policy, change account groups or

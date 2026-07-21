@@ -38,6 +38,22 @@ Glitch Flatten All remain authoritative.
   cycle/books and forbids `final_choice` outside `decision_audit`. A complete
   decoded object may shed only redundant trailing `]`/`}` delimiters before the
   unchanged schema/scope validator; prose, multiple objects, and semantic drift fail.
+- Invalid model content gets one same-packet regeneration from the exact output
+  template. Provider, contract, delivery, or executor failure waits for one fresh
+  minute packet and makes one new decision attempt, so a bad cycle cannot create a
+  ten-minute positioned blind spot or replay stale market state.
+- A prior positioned `change_condition` is accountable. `HOLD` has the same burden
+  of proof as MOVE_STOP, MOVE_TP, EXIT, or adding a protected tranche; Hermes must
+  act when its trigger arrives or identify genuinely new evidence that disproves it.
+  Advisory plans cannot impose a fixed one-contract baseline. Quantity remains a
+  Hermes decision from current evidence, structural risk, opportunity, drawdown,
+  and the long-run account objective. Obsolete v1 plan/guidance artifacts are not
+  sent back to Hermes; only v2 artifacts generated under this contract re-enter
+  decision or learning continuity.
+- Before an entry reaches NinjaTrader, Glitch compares the current executable price
+  with the snapshot price Hermes assessed. It accepts equal or better stop/target
+  geometry and rejects adverse drift for a fresh decision; Glitch never silently
+  turns a structural stop farther away and a target nearer.
 - Delivery is idempotent and crash-safe through a durable outbox/receipt pair.
   Retry reuses the same intent id and never spends a second model call for the
   same packet.
@@ -55,7 +71,9 @@ Glitch Flatten All remain authoritative.
   new reviews, and journals daily. Every nested call is an isolated `trading`
   session on Sol/high. Daily learning may update compact native memory and one
   versioned prompt/SOUL/skill cognitive overlay in paper mode. Activation needs
-  two attributable episodes; evaluation needs two distinct later episodes and
+  two attributable episodes; hourly supervision may now propose the one compact
+  overlay as soon as two comparable episodes expose the same cognitive failure.
+  Evaluation needs two distinct later episodes and
   appends promotion/continuation/rollback evidence.
 - AI Auto is one truthful switch for the whole core apparatus. ON means the Glitch
   execution gate is open and the named Hermes core job is enabled; OFF closes the
@@ -109,15 +127,11 @@ Glitch Flatten All remain authoritative.
 - Localization audit: **329 catalog keys**, **270 referenced code keys**, zero
   missing keys, zero malformed/empty six-locale rows; UTF-8 CJK/Cyrillic sentinels
   pass. This includes 18 older fallback-only labels closed during the AI UI pass.
-- The complete 87-file AddOn was deployed once from this candidate with **87/87
-  matching hashes, 0 mismatches, and 0 extra target files**. F5 rebuilt
-  `NinjaTrader.Custom.dll` at `2026-07-21T04:32:50Z` without an error surface.
-  The protected 1:1:2 Sim group was byte-for-byte unchanged across the adjacent
-  pre/post-compile portfolio packets: positions `1/1/2`, working orders `2/2/4`,
-  and identical native order details.
-- The installed Hermes SOUL, operator map, three workers, detached learning
-  launcher, and 13 skill files match
-  source. Exactly two no-agent jobs are enabled under the supervised gateway:
+- The complete 87-file AddOn was deployed once for this correction with **87/87
+  matching hashes, 0 missing, 0 mismatches, and 0 extra target files**. Alan
+  confirmed the NinjaTrader compile green while the book was flat and order-free.
+- The installed Hermes SOUL, operator map, plugin, five runtime scripts, and 13
+  skill files match source. Exactly two no-agent jobs are enabled:
   `glitch-direct-operator` at `* * * * *` and non-executing
   `glitch-learning-supervisor` at `*/15 * * * *`. The latter now launches its
   separately locked worker and returned in 145 ms during an installed no-model
@@ -126,7 +140,9 @@ Glitch Flatten All remain authoritative.
   newest eight pending outcomes first, including the two newest master wins,
   increased durable episodes from 24 to 32, and published a new hourly review and
   current guidance. Direct cron kept running during the slow worker and completed
-  a model decision at `04:48:14Z` while the learning lock was active.
+  a model decision at `04:48:14Z` while the learning lock was active. Live
+  resolution proved both durable v1 cognition artifacts are excluded, and bounded
+  post-install direct ticks completed through `2026-07-21T17:17:14Z`.
 - The TradeLedger writer now waits out its existing write throttle and requeues
   any dirty merge that arrived during an active flush. The formerly absent
   Sim103 two-contract `e2cd4674` target round trip is present in live
