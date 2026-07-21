@@ -27,11 +27,11 @@ namespace Glitch.UI
                 GlitchAiOrderExecutor.RaiseCritical = (account, message, key) =>
                     RaiseCriticalWarning(account, message, key, unlocksTrading: false);
                 GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
-                string mode = policy != null && policy.IsValid ? policy.Mode : "invalid";
                 AppendJournal(
                     "System",
                     "Intent",
-                    "intent_server_started|bind=127.0.0.1:8788|mode=" + mode
+                    "intent_server_started|bind=127.0.0.1:8788|policy="
+                        + (policy != null && policy.IsValid ? "valid" : "invalid")
                         + "|executor=" + (GlitchAiOrderExecutor.IsExecutionEnabled(policy) ? "enabled" : "disabled")
                         + "|token_file=GlitchData/telemetry.token");
             }
@@ -91,34 +91,30 @@ namespace Glitch.UI
 
         private void OnRailIntentAccepted(string intentId, string instrument, string action)
         {
-            GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
             AppendJournal(
                 "System",
                 "Intent",
                 string.Format(
                     System.Globalization.CultureInfo.InvariantCulture,
-                    "intent_approved|id={0}|instrument={1}|action={2}|mode={3}",
+                    "intent_approved|id={0}|instrument={1}|action={2}",
                     intentId,
                     instrument,
-                    action,
-                    policy != null && policy.IsValid ? policy.Mode : "invalid"));
+                    action));
         }
 
         private void OnRailIntentRejected(string intentId, string instrument, string action, int failedCheck, string failedCode)
         {
-            GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
             AppendJournal(
                 "System",
                 "Intent",
                 string.Format(
                     System.Globalization.CultureInfo.InvariantCulture,
-                    "intent_rejected|id={0}|instrument={1}|action={2}|check={3}|code={4}|mode={5}",
+                    "intent_rejected|id={0}|instrument={1}|action={2}|check={3}|code={4}",
                     intentId,
                     instrument,
                     action,
                     failedCheck,
-                    failedCode,
-                    policy != null && policy.IsValid ? policy.Mode : "invalid"));
+                    failedCode));
         }
 
         private GlitchAiExecutionResult InvokeOnUiThread(Func<GlitchAiExecutionResult> action)

@@ -53,7 +53,7 @@ namespace Glitch.Services
             }
         }
 
-        public static void AppendAcceptedMirror(string intentId, string rawJson, string mode, DateTime receivedUtc)
+        public static void AppendAcceptedMirror(string intentId, string rawJson, DateTime receivedUtc)
         {
             if (string.IsNullOrWhiteSpace(intentId) || string.IsNullOrWhiteSpace(rawJson))
                 return;
@@ -67,17 +67,11 @@ namespace Glitch.Services
                 + "\"schema_version\":" + GlitchSnapshotJson.String("glitch.intent.journal.v1") + ","
                 + "\"received_utc\":" + GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(receivedUtc)) + ","
                 + "\"status\":" + GlitchSnapshotJson.String("accepted") + ","
-                + "\"mode\":" + GlitchSnapshotJson.String(NormalizeMode(mode)) + ","
                 + "\"intent_id\":" + GlitchSnapshotJson.String(intentId) + ","
                 + "\"intent\":" + rawJson.Trim()
                 + "}";
 
             File.AppendAllText(path, line + Environment.NewLine, new UTF8Encoding(false));
-        }
-
-        private static string NormalizeMode(string mode)
-        {
-            return string.IsNullOrWhiteSpace(mode) ? "invalid" : mode.Trim().ToLowerInvariant();
         }
 
         private static void EnsureIdsLoaded()

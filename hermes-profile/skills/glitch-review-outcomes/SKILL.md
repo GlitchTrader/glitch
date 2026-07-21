@@ -1,6 +1,6 @@
 ---
 name: glitch-review-outcomes
-description: Review Glitch-journaled Hermes simulation outcomes separately from legacy Sim101 history and produce candidate lessons without changing active policy or archetypes.
+description: Review attributable Glitch-journaled Hermes outcomes and produce candidate lessons without changing active policy or archetypes.
 ---
 
 # Review Outcomes
@@ -28,7 +28,7 @@ epochs, or pre-reset cron output as current evidence.
    Never edit installed skills, prompts, `USER.md`, `SOUL.md`, active archetypes,
    policy, prop rules, operator identity, routes, or execution settings in place.
    The learning loop may propose or evaluate one versioned Hermes cognitive
-   overlay for prompt, SOUL, or skill behavior. Paper activation requires
+   overlay for prompt, SOUL, or skill behavior. Automatic activation requires
    repeated evidence, an expected effect, an evaluation metric, and rollback;
    the overlay never changes Glitch execution authority.
 

@@ -23,11 +23,11 @@ G\tg2\tSim201\t100000
 """
 
 
-def runtime_policy(mode="paper"):
+def runtime_policy():
     return {
-        "schema_version": "glitch.ai.policy.v1",
-        "mode": mode,
+        "schema_version": "glitch.ai.policy.v2",
         "snapshot_max_age_seconds": 300,
+        "executor_account": "Sim101",
         "profile_account_bindings": ["glitch=Sim101"],
         "instrument_allowlist": ["MNQ"],
         "account_allowlist": ["Sim101", "Sim102"],
@@ -683,7 +683,7 @@ class DirectCycleTests(unittest.TestCase):
         self.assertEqual(normalized["cycle_id"], scenario["cycle_id"])
         MODULE.validate_batch(normalized, scenario)
 
-    def test_model_packet_removes_stale_paper_gates_and_routes(self):
+    def test_model_packet_removes_retired_authority_gates_and_routes(self):
         value = packet()
         value["policy"].update({
             "mode": "paper",
@@ -698,6 +698,7 @@ class DirectCycleTests(unittest.TestCase):
         self.assertNotIn("cooldown_after_loss_minutes", model_packet["policy"])
         self.assertNotIn("paper_daily_profit_objective_usd", model_packet["policy"])
         self.assertNotIn("ai_enabled", model_packet["policy"])
+        self.assertNotIn("mode", model_packet["policy"])
         self.assertEqual(model_packet["observation_contract"]["missing_order_flow"], "neutral_not_bearish_or_bullish")
         self.assertEqual(model_packet["observation_contract"]["decision_horizon"], "next_5m_when_flat; next_1m_when_positioned")
         self.assertEqual(model_packet["policy"]["profile_account_bindings"], ["glitch=Sim101"])
@@ -855,7 +856,7 @@ class DirectCycleTests(unittest.TestCase):
         old["window_close_utc"] = "2000-01-01T00:00:00Z"
         self.assertFalse(MODULE.packet_is_current(old))
 
-    def test_runtime_accepts_paper_and_live_but_not_off_or_unsupported_modes(self):
+    def test_runtime_requires_ai_auto_and_policy_v2_without_a_mode(self):
         with tempfile.TemporaryDirectory() as root:
             glitch_data = Path(root)
             (glitch_data / "hermes").mkdir(parents=True)
@@ -864,7 +865,7 @@ class DirectCycleTests(unittest.TestCase):
                 json.dumps({"trading_paused": True}), encoding="utf-8"
             )
             (glitch_data / "ai" / "policy.json").write_text(
-                json.dumps(runtime_policy("paper")), encoding="utf-8"
+                json.dumps(runtime_policy()), encoding="utf-8"
             )
             self.assertFalse(MODULE.trading_runtime_enabled(glitch_data))
 
@@ -873,18 +874,13 @@ class DirectCycleTests(unittest.TestCase):
             )
             self.assertTrue(MODULE.trading_runtime_enabled(glitch_data))
 
-            (glitch_data / "ai" / "policy.json").write_text(
-                json.dumps(runtime_policy("live")), encoding="utf-8"
-            )
-            self.assertTrue(MODULE.trading_runtime_enabled(glitch_data))
-
-            (glitch_data / "ai" / "policy.json").write_text(
-                json.dumps(runtime_policy("disabled")), encoding="utf-8"
-            )
+            legacy_mode = runtime_policy()
+            legacy_mode["mode"] = "paper"
+            (glitch_data / "ai" / "policy.json").write_text(json.dumps(legacy_mode), encoding="utf-8")
             self.assertFalse(MODULE.trading_runtime_enabled(glitch_data))
 
             (glitch_data / "ai" / "policy.json").write_text(
-                json.dumps({"mode": "paper"}), encoding="utf-8"
+                json.dumps({"schema_version": "glitch.ai.policy.v1"}), encoding="utf-8"
             )
             self.assertFalse(MODULE.trading_runtime_enabled(glitch_data))
 

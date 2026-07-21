@@ -304,7 +304,7 @@ def build_prompt(loop_id: str, evidence: Any, template: dict[str, Any], continui
         "daily": (
             "Write the daily trader journal, compare the master against its proportional objective, update native semantic memory from repeated completed evidence, and decide how Hermes should improve. "
             "You may propose one compact versioned cognitive change targeting core_prompt, soul, or skill:<name>. It must state exact replacement guidance, evidence IDs, expected effect, evaluation metric, and rollback condition. "
-            "This changes Hermes cognition in paper mode; do not edit Glitch policy, groups, ratios, prop limits, execution, or code."
+            "This changes Hermes cognition for future configured Glitch cycles; do not edit Glitch policy, groups, ratios, prop limits, execution, or code."
         ),
     }[loop_id]
     memory_instruction = (
@@ -377,11 +377,6 @@ def invoke_loop(args, loop_id: str, evidence: Any, ids: list[str], supervisor: P
     return validate_output(value, loop_id, ids)
 
 
-def policy_mode(glitch_data: Path) -> str:
-    policy = DIRECT.read_optional_json(glitch_data / "ai" / "policy.json") or {}
-    return str(policy.get("mode") or "").lower()
-
-
 def apply_cognitive_decision(record: dict[str, Any], supervisor: Path, episode_ids: list[str]) -> None:
     active_path = supervisor / "active-cognitive-overlay.json"
     active = DIRECT.read_optional_json(active_path)
@@ -420,7 +415,7 @@ def apply_cognitive_decision(record: dict[str, Any], supervisor: Path, episode_i
     append_unique(supervisor / "cognitive-changes.jsonl", [event], "change_event_id")
 
 
-def activate_cognitive_candidate(record: dict[str, Any], supervisor: Path, mode: str) -> None:
+def activate_cognitive_candidate(record: dict[str, Any], supervisor: Path) -> None:
     candidate = record.get("cognitive_change_candidate")
     if not isinstance(candidate, dict):
         return
@@ -455,17 +450,16 @@ def activate_cognitive_candidate(record: dict[str, Any], supervisor: Path, mode:
         "expected_effect": candidate.get("expected_effect"),
         "evaluation_metric": candidate.get("evaluation_metric"),
         "rollback_condition": candidate.get("rollback_condition"),
-        "status": "active" if mode == "paper" else "proposed",
-        "activation_scope": mode,
+        "status": "active",
+        "activation_scope": "configured_glitch_scope",
     }
     value["change_event_id"] = stable_id("cognitive-change-event", candidate_id + "|proposed")
-    value["event"] = "proposed_and_activated" if mode == "paper" else "proposed"
+    value["event"] = "proposed_and_activated"
     append_unique(supervisor / "cognitive-changes.jsonl", [value], "change_event_id")
-    if mode == "paper":
-        DIRECT.write_json_atomic(supervisor / "active-cognitive-overlay.json", value)
+    DIRECT.write_json_atomic(supervisor / "active-cognitive-overlay.json", value)
 
 
-def persist_hourly(record: dict[str, Any], supervisor: Path, episode_ids: list[str], mode: str) -> None:
+def persist_hourly(record: dict[str, Any], supervisor: Path, episode_ids: list[str]) -> None:
     append_unique(supervisor / "observations.jsonl", [record], "review_id")
     guidance = {
         "schema_version": DIRECT.CURRENT_GUIDANCE_SCHEMA,
@@ -489,7 +483,7 @@ def persist_hourly(record: dict[str, Any], supervisor: Path, episode_ids: list[s
         })
     append_unique(supervisor / "lessons.jsonl", lessons, "lesson_id")
     apply_cognitive_decision(record, supervisor, episode_ids)
-    activate_cognitive_candidate(record, supervisor, mode)
+    activate_cognitive_candidate(record, supervisor)
 
 
 def minutes_since(value: Any, now: datetime) -> float:
@@ -551,7 +545,7 @@ def run_once(args) -> dict[str, Any]:
         review_id = stable_id("hourly-review", now.strftime("%Y%m%dT%H"))
         if not args.dry_run:
             records = invoke_loop(args, "hourly", {"episodes": episodes[-24:]}, [review_id], supervisor)
-            persist_hourly(records[0], supervisor, episode_ids, policy_mode(glitch_data))
+            persist_hourly(records[0], supervisor, episode_ids)
             state["last_hourly_utc"] = utc_now()
             state["hourly_episode_count"] = len(episodes)
         result["hourly"] = True
@@ -582,7 +576,7 @@ def run_once(args) -> dict[str, Any]:
             records = invoke_loop(args, "daily", evidence, [journal_id], supervisor)
             append_unique(supervisor / "daily-journal.jsonl", records, "journal_id")
             apply_cognitive_decision(records[0], supervisor, episode_ids)
-            activate_cognitive_candidate(records[0], supervisor, policy_mode(glitch_data))
+            activate_cognitive_candidate(records[0], supervisor)
             state["last_daily_session_date_et"] = session_date
         result["daily"] = True
 

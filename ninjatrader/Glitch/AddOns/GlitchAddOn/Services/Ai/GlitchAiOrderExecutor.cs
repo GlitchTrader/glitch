@@ -34,8 +34,8 @@ namespace Glitch.Services
             if (!IsExecutionEnabled(policy))
             {
                 return GlitchAiExecutionResult.Skipped(
-                    "executor_mode_" + (policy.Mode ?? "paper"),
-                    "trading is off or the execution mode is unsupported");
+                    "trading_off",
+                    "AI Auto is off");
             }
 
             string action = GlitchAiJsonFields.ExtractString(rawJson, "action");
@@ -188,8 +188,6 @@ namespace Glitch.Services
         {
             return policy != null
                 && policy.IsValid
-                && (string.Equals(policy.Mode, "paper", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(policy.Mode, "live", StringComparison.OrdinalIgnoreCase))
                 && !GlitchHermesControlStateStore.Load().TradingPaused;
         }
 
@@ -213,7 +211,7 @@ namespace Glitch.Services
             string groupId;
             string groupFailure;
             if (!TryResolveExecutionGroup(policy, boundAccount, out members, out groupId, out groupFailure))
-                return GlitchAiExecutionResult.Failed("sim_group_invalid", groupFailure);
+                return GlitchAiExecutionResult.Failed("execution_group_invalid", groupFailure);
 
             List<Account> accounts = new List<Account> { members[0].Account };
 

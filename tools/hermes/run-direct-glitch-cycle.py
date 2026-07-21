@@ -66,9 +66,9 @@ def read_json(path: Path) -> dict[str, Any]:
 
 
 def trading_runtime_enabled(glitch_data: Path) -> bool:
-    """The runtime has one operational switch plus one execution mode.
+    """The runtime has one operational switch and one valid Glitch scope.
 
-    This check happens before invoking Hermes so a paused or unsupported runtime
+    This check happens before invoking Hermes so a paused or invalid runtime
     cannot spend a model call merely to have Glitch reject the result.
     """
     state_path = glitch_data / "hermes" / "control-state.json"
@@ -81,9 +81,9 @@ def trading_runtime_enabled(glitch_data: Path) -> bool:
 
 
 def runtime_policy_is_valid(policy: dict[str, Any]) -> bool:
-    if policy.get("schema_version") != "glitch.ai.policy.v1":
+    if policy.get("schema_version") != "glitch.ai.policy.v2":
         return False
-    if str(policy.get("mode", "")).lower() not in {"paper", "live"}:
+    if "mode" in policy:
         return False
     snapshot_age = policy.get("snapshot_max_age_seconds")
     if not isinstance(snapshot_age, int) or isinstance(snapshot_age, bool) or not 1 <= snapshot_age <= 900:
@@ -776,10 +776,10 @@ def packet_for_model(packet: dict[str, Any], scenario: dict[str, Any]) -> dict[s
     policy = model_packet.get("policy")
     if not isinstance(policy, dict):
         return model_packet
-    if policy.get("mode") == "paper":
-        policy.pop("max_trades_per_day", None)
-        policy.pop("cooldown_after_loss_minutes", None)
-        policy.pop("paper_daily_profit_objective_usd", None)
+    policy.pop("mode", None)
+    policy.pop("max_trades_per_day", None)
+    policy.pop("cooldown_after_loss_minutes", None)
+    policy.pop("paper_daily_profit_objective_usd", None)
     # AI Auto is the operational authority. Do not expose the retired file
     # flag because it can contradict the live control state.
     policy.pop("ai_enabled", None)
@@ -1058,8 +1058,7 @@ def build_prompt(
         "the next fifteen. When positioned and reviewing each minute, predict the most likely next one-minute candle and manage the trade "
         "from that forecast, current structure, and risk. Avoid staying idle for too long: take a calculated-risk trade when current evidence "
         "offers positive expectancy, and do not let ordinary uncertainty become a permanent veto. Do not manufacture edge or force a trade. "
-        "Mixed timeframes are normal. In paper mode, bounded "
-        "experimentation may sample multiple valid setups without a trade quota or deterministic cooldown. After a stop, re-enter only "
+        "Mixed timeframes are normal; bounded experimentation may sample multiple valid setups without a trade quota or deterministic cooldown. After a stop, re-enter only "
         "when price or evidence has materially changed; a repeated thesis at nearly the same level is churn. State the most likely "
         "next-five-minute path in decisive_evidence and its concrete invalidation in change_condition. "
         "For entries, define structural invalidation before reward. Anchor every stop beyond a relevant recent pivot or swing, the actual "
@@ -1107,7 +1106,7 @@ def build_prompt(
         "brackets are catastrophe protection, not a substitute for active thesis review. You may persist only durable lessons supported "
         "by repeated completed outcomes; never "
         "store current positions, stale attempts, account eligibility, trade quotas, or temporary directives as memory. If "
-        "operator_advisory has directive_type=forced_entry, this is an operator-directed paper experiment: when "
+        "operator_advisory has directive_type=forced_entry, this is an operator-directed experiment: when "
         "the supplied group is flat, you MUST emit ENTER_LONG for bias=long or ENTER_SHORT for bias=short and "
         "choose structure-aware native stop/target geometry within Glitch policy; market evidence informs geometry, "
         "confidence, and rationale but cannot change the requested direction to NOTHING. For an ordinary advisory, "

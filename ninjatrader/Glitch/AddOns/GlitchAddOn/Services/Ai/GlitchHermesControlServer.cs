@@ -280,9 +280,9 @@ namespace Glitch.Services
             bool replication = getReplication != null && getReplication();
             return "{\"schema_version\":\"glitch.control.status.v1\",\"trading_paused\":"
                 + (state.TradingPaused ? "true" : "false") + ",\"trading_enabled\":"
-                + (state.TradingPaused ? "false" : "true") + ",\"mode\":"
-                + GlitchHermesControlStateStore.Quote(
-                    string.Equals(policy.Mode, "sim", StringComparison.OrdinalIgnoreCase) ? "paper" : policy.Mode)
+                + (state.TradingPaused ? "false" : "true") + ",\"policy_valid\":"
+                + (policy != null && policy.IsValid ? "true" : "false") + ",\"execution_enabled\":"
+                + (GlitchAiOrderExecutor.IsExecutionEnabled(policy) ? "true" : "false")
                 + ",\"replication_enabled\":"
                 + (replication ? "true" : "false") + ",\"duplicate\":" + (duplicate ? "true" : "false") + "}";
         }

@@ -113,7 +113,6 @@ namespace Glitch.Services
             sb.Append("\"intent\":{");
             sb.Append("\"is_running\":").Append(GlitchSnapshotJson.Bool(GlitchAiIntentServer.IsRunning)).Append(',');
             sb.Append("\"bind_address\":").Append(GlitchSnapshotJson.String(GlitchAiIntentServer.BindAddress)).Append(',');
-            sb.Append("\"mode\":").Append(GlitchSnapshotJson.String("paper")).Append(',');
             sb.Append("\"received_count\":").Append(GlitchAiIntentJournalWriter.CountReceived().ToString(CultureInfo.InvariantCulture));
             sb.Append("},");
             sb.Append("\"firewall\":{");
@@ -125,8 +124,7 @@ namespace Glitch.Services
             sb.Append("\"policy_valid\":").Append(GlitchSnapshotJson.Bool(policy.IsValid)).Append(',');
             sb.Append("\"policy_error\":").Append(GlitchSnapshotJson.String(policy.ValidationError ?? string.Empty)).Append(',');
             sb.Append("\"enabled\":").Append(GlitchSnapshotJson.Bool(GlitchAiOrderExecutor.IsExecutionEnabled(policy))).Append(',');
-            sb.Append("\"mode\":").Append(GlitchSnapshotJson.String(policy.IsValid ? policy.Mode : "invalid")).Append(',');
-            sb.Append("\"account\":").Append(GlitchSnapshotJson.String(policy.ExecutorAccount ?? "Sim101"));
+            sb.Append("\"account\":").Append(GlitchSnapshotJson.String(policy.ExecutorAccount ?? string.Empty));
             sb.Append("},");
             string sanityPath = GlitchSnapshotSanityWriter.GetLatestPath();
             string harnessPath = GlitchAiReplayHarnessWriter.GetLatestPath();

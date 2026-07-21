@@ -1,5 +1,5 @@
 {
-  "schema_version": "glitch.hermes.operator.v3",
+  "schema_version": "glitch.hermes.operator.v4",
   "operator_profile": "glitch",
   "description": "One probabilistic, self-improving Glitch operator; Glitch remains the deterministic execution and truth authority.",
   "principles": {
@@ -17,7 +17,7 @@
       "model": "gpt-5.6-luna",
       "provider": "openai-codex",
       "reasoning_effort": "medium",
-      "initial_activation": "stage_b_only",
+      "initial_activation": "managed_by_ai_auto",
       "output_schema": "glitch.intent.batch.v1",
       "execution_authority": false
     },
@@ -27,7 +27,7 @@
       "model": "gpt-5.6-sol",
       "provider": "openai-codex",
       "reasoning_effort": "high",
-      "initial_activation": "active_paper",
+      "initial_activation": "managed_by_ai_auto",
       "output_schema": "glitch.hermes.trade_episode.v1",
       "execution_authority": false
     },
@@ -37,7 +37,7 @@
       "model": "gpt-5.6-sol",
       "provider": "openai-codex",
       "reasoning_effort": "high",
-      "initial_activation": "active_paper",
+      "initial_activation": "managed_by_ai_auto",
       "output_schema": "glitch.hermes.hourly_review.v1",
       "execution_authority": false
     },
@@ -47,7 +47,7 @@
       "model": "gpt-5.6-sol",
       "provider": "openai-codex",
       "reasoning_effort": "high",
-      "initial_activation": "active_paper",
+      "initial_activation": "managed_by_ai_auto",
       "output_schema": "glitch.hermes.portfolio_plan.v2",
       "execution_authority": false
     },
@@ -57,7 +57,7 @@
       "model": "gpt-5.6-sol",
       "provider": "openai-codex",
       "reasoning_effort": "high",
-      "initial_activation": "active_paper",
+      "initial_activation": "managed_by_ai_auto",
       "output_schema": "glitch.hermes.daily_journal.v1",
       "execution_authority": false
     }
@@ -80,7 +80,7 @@
     "required_before_supervisory_activation": []
   },
   "activation": {
-    "current_scope": "core paper operator plus Hermes-owned debrief, supervision, planning, daily learning, native memory, and versioned cognitive overlays",
+    "current_scope": "AI Auto manages the core operator plus Hermes-owned debrief, supervision, planning, daily learning, native memory, and versioned cognitive overlays",
     "enable_now": [
       "trade_debrief",
       "portfolio_supervision",
@@ -89,36 +89,5 @@
     ],
     "deferred_loops": []
   },
-  "books_source": "dynamic_from_glitch_packet",
-  "books_compatibility_note": "These routes keep legacy offline harnesses readable. They are not strategy personalities or live group authority.",
-  "books": [
-    {
-      "book_id": "group_1_compat",
-      "route_id": "glitch",
-      "master_account": "Sim101",
-      "group_role": "Glitch-configured group",
-      "mandate": "Use the current Glitch packet, active Hermes plan, and probabilistic judgment. No fixed archetype or style mandate."
-    },
-    {
-      "book_id": "group_2_compat",
-      "route_id": "glitch-aggressive",
-      "master_account": "Sim201",
-      "group_role": "Glitch-configured group",
-      "mandate": "Use the current Glitch packet, active Hermes plan, and probabilistic judgment. Route names are compatibility labels, not cognitive restraints."
-    },
-    {
-      "book_id": "group_3_compat",
-      "route_id": "glitch-conservative",
-      "master_account": "Sim301",
-      "group_role": "Glitch-configured group",
-      "mandate": "Use the current Glitch packet, active Hermes plan, and probabilistic judgment. Route names are compatibility labels, not cognitive restraints."
-    },
-    {
-      "book_id": "group_4_compat",
-      "route_id": "glitch-stay-revert",
-      "master_account": "Sim401",
-      "group_role": "Glitch-configured group",
-      "mandate": "Use the current Glitch packet, active Hermes plan, and probabilistic judgment. Route names are compatibility labels, not cognitive restraints."
-    }
-  ]
+  "books_source": "dynamic_from_glitch_packet"
 }

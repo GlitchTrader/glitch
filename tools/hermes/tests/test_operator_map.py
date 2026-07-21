@@ -22,19 +22,48 @@ class OperatorMapTests(unittest.TestCase):
     def test_one_native_profile_uses_dynamic_glitch_groups(self):
         self.assertEqual(self.operator["operator_profile"], "glitch")
         self.assertEqual(self.operator["books_source"], "dynamic_from_glitch_packet")
+        self.assertNotIn("books", self.operator)
+        self.assertNotIn("Sim101", json.dumps(self.operator))
         self.assertTrue(self.operator["skills"]["native_hermes_preserved"])
 
-    def test_loop_model_routing_and_paper_activation(self):
+    def test_public_distribution_is_versioned_portable_and_paused_on_fresh_setup(self):
+        profile = ROOT / "hermes-profile"
+        distribution = (profile / "distribution.yaml").read_text(encoding="utf-8")
+        config = (profile / "config.yaml").read_text(encoding="utf-8")
+        setup = (profile / "setup.ps1").read_text(encoding="utf-8")
+        builder = (ROOT / "tools/hermes/build-public-profile.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("version: 0.0.2.0", distribution)
+        self.assertIn('hermes_requires: \">=0.18.2\"', distribution)
+        self.assertNotRegex(config, r"(?i)[a-z]:\\")
+        self.assertIn("$preserveEnabled = $false", setup)
+        self.assertIn("hermes cron pause $jobId", setup)
+        self.assertIn("[bool]$verified.enabled -ne $preserveEnabled", setup)
+        self.assertNotIn("hermes chat", setup.lower())
+        for worker in (
+            "run-direct-glitch-cycle.py",
+            "reconcile-hermes-outcomes.py",
+            "run-hermes-learning-cycle.py",
+            "launch-hermes-learning-cycle.py",
+            "ensure-named-sessions.py",
+        ):
+            self.assertIn(worker, builder)
+
+    def test_trade_command_controls_operator_and_learning_together(self):
+        plugin = (ROOT / "hermes-profile/plugins/glitch-control/__init__.py").read_text(encoding="utf-8")
+        self.assertIn('JOB_NAMES = ("glitch-direct-operator", "glitch-learning-supervisor")', plugin)
+        self.assertIn('"trade": (_trade,', plugin)
+        self.assertIn('"trade-mode": (_trade_mode,', plugin)
+        self.assertIn("no longer changes account authority", plugin)
+        self.assertNotIn('state.get("mode")', plugin)
+
+    def test_loop_model_routing_and_ai_auto_activation(self):
         loops = {item["id"]: item for item in self.operator["loops"]}
         self.assertEqual(loops["core_decision"]["model"], "gpt-5.6-luna")
-        for loop_id in (
-            "trade_debrief",
-            "portfolio_supervision",
-            "portfolio_planning",
-            "daily_learning",
-        ):
+        for loop_id in loops:
+            self.assertEqual(loops[loop_id]["initial_activation"], "managed_by_ai_auto")
+        for loop_id in ("trade_debrief", "portfolio_supervision", "portfolio_planning", "daily_learning"):
             self.assertEqual(loops[loop_id]["model"], "gpt-5.6-sol")
-            self.assertEqual(loops[loop_id]["initial_activation"], "active_paper")
         self.assertEqual(set(self.operator["activation"]["enable_now"]), {
             "trade_debrief", "portfolio_supervision", "portfolio_planning", "daily_learning",
         })

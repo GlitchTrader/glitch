@@ -59,8 +59,21 @@ $dirty = @(& git -C $repoRoot status --porcelain)
 if ($LASTEXITCODE -ne 0) {
     throw 'Could not inspect repository status.'
 }
-if ($dirty.Count -gt 0) {
-    throw "Release publisher requires a clean tree. Found:`n$($dirty -join "`n")"
+$publisherOwnedPaths = @(
+    'apps/download/src/lib/release-catalog.json',
+    'apps/download/public/files/checksums.json'
+)
+$unexpectedDirty = @($dirty | Where-Object {
+    $path = if ($_.Length -gt 3) { $_.Substring(3) } else { '' }
+    if ($path -match ' -> ') {
+        $path = ($path -split ' -> ', 2)[1]
+    }
+    $path = $path.Trim('"').Replace('\', '/')
+    $publisherOwnedPaths -notcontains $path -and
+        $path -notmatch '^apps/download/public/files/Glitch(?:_AI)?_v[^/]+\.zip$'
+})
+if ($unexpectedDirty.Count -gt 0) {
+    throw "Release publisher found non-release worktree changes:`n$($unexpectedDirty -join "`n")"
 }
 
 & git -C $repoRoot cat-file -e "$SourceCommit`^{commit}"

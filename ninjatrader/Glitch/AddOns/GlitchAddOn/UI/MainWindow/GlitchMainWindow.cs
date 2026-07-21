@@ -72,7 +72,7 @@ namespace Glitch.UI
         private const string ReplicationSignalName = "GLT-SYNC";
         private const string ProtectiveStopSignalName = "GLT-PROT-STP";
         private const string ProtectiveTargetSignalName = "GLT-PROT-TGT";
-        private const string CurrentClientVersion = "addon-0.0.2.0";
+        private const string CurrentClientVersion = "addon-ai-0.0.2.0";
         private const string DefaultLatestDownloadUrl = "https://download.glitchtrader.com/latest";
         private const double UnrealizedLossFlattenThresholdRatio = 0.80;
         private const double BufferCriticalLockThresholdRatio = 0.15;
@@ -1400,7 +1400,7 @@ namespace Glitch.UI
                 {
                     int build = Math.Max(0, version.Build);
                     int revision = Math.Max(0, version.Revision);
-                    return $"addon-{version.Major}.{version.Minor}.{build}.{revision}";
+                    return $"addon-ai-{version.Major}.{version.Minor}.{build}.{revision}";
                 }
             }
             catch

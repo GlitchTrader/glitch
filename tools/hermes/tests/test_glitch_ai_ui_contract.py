@@ -96,7 +96,9 @@ class GlitchAiUiContractTests(unittest.TestCase):
         self.assertIn("CreateNoWindow = true", bridge)
         self.assertIn("It never runs a model itself", bridge)
         self.assertIn('arguments[0] != "ai-auto"', plugin)
-        self.assertIn('_trade_mode("") if arguments[1] == "on" else _pause_trading("")', plugin)
+        self.assertIn('_trade("") if arguments[1] == "on" else _pause_trading("")', plugin)
+        self.assertIn('"trade": (_trade,', plugin)
+        self.assertIn('"trade-mode": (_trade_mode,', plugin)
 
 
 if __name__ == "__main__":

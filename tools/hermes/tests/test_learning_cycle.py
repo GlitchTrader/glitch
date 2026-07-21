@@ -147,11 +147,11 @@ class LearningCycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             supervisor = Path(root)
             review = MODULE.output_template("hourly", ["review-1"])["records"][0]
-            MODULE.persist_hourly(review, supervisor, [], "paper")
+            MODULE.persist_hourly(review, supervisor, [])
             guidance = json.loads((supervisor / "current-guidance.json").read_text(encoding="utf-8"))
         self.assertEqual(guidance["schema_version"], MODULE.DIRECT.CURRENT_GUIDANCE_SCHEMA)
 
-    def test_paper_candidate_activates_as_one_reversible_overlay(self):
+    def test_candidate_activates_as_one_reversible_overlay(self):
         with tempfile.TemporaryDirectory() as root:
             supervisor = Path(root)
             for episode_id in ("episode-1", "episode-2"):
@@ -171,7 +171,7 @@ class LearningCycleTests(unittest.TestCase):
                     "rollback_condition": "Worse normalized loss without improved capture.",
                 }
             }
-            MODULE.activate_cognitive_candidate(record, supervisor, "paper")
+            MODULE.activate_cognitive_candidate(record, supervisor)
             active = MODULE.DIRECT.read_json(supervisor / "active-cognitive-overlay.json")
             self.assertEqual(active["status"], "active")
             self.assertEqual(active["candidate_id"], "candidate-1")
@@ -199,7 +199,6 @@ class LearningCycleTests(unittest.TestCase):
                     }
                 },
                 supervisor,
-                "paper",
             )
             old_evidence_decision = {
                 "cognitive_change_decision": {

@@ -13,16 +13,12 @@ namespace Glitch.Services
         public bool IsValid { get; set; }
         public string ValidationError { get; set; }
         public bool RequireValidLicense { get; set; } = false;
-        public string Mode { get; set; } = "paper";
         public int SnapshotMaxAgeSeconds { get; set; } = 300;
-        public string ExecutorAccount { get; set; } = "Sim101";
+        public string ExecutorAccount { get; set; } = string.Empty;
         public Dictionary<string, string> ProfileAccountBindings { get; set; } =
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                { "glitch", "Sim101" }
-            };
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         public HashSet<string> InstrumentAllowlist { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "MNQ", "MES", "M2K" };
-        public HashSet<string> AccountAllowlist { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Sim101", "Sim102", "Sim103" };
+        public HashSet<string> AccountAllowlist { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         public HashSet<string> BlockedSessions { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public bool TryResolveProfileAccount(string profile, out string account)
@@ -108,12 +104,7 @@ namespace Glitch.Services
                 json = ReplaceStringArray(json, "account_allowlist", accounts);
                 json = ReplaceStringValue(json, "executor_account", masters.Count == 0 ? string.Empty : masters[0]);
 
-                string temporaryPath = path + ".tmp";
-                File.WriteAllText(temporaryPath, json, new UTF8Encoding(false));
-                if (File.Exists(path))
-                    File.Replace(temporaryPath, path, null);
-                else
-                    File.Move(temporaryPath, path);
+                WriteAtomically(path, json);
                 return true;
             }
             catch (Exception ex)
@@ -157,30 +148,40 @@ namespace Glitch.Services
                 bool changed = false;
                 foreach (string retiredBoolKey in new[] { "ai_enabled", "ai_kill_switch" })
                 {
-                    string upgraded = Regex.Replace(
-                        json,
-                        "\"" + Regex.Escape(retiredBoolKey) + "\"\\s*:\\s*(?:true|false)\\s*,?",
-                        string.Empty,
-                        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+                    string upgraded = RemoveJsonScalarProperty(json, retiredBoolKey, "(?:true|false)");
                     if (!string.Equals(upgraded, json, StringComparison.Ordinal))
                     {
                         json = upgraded;
                         changed = true;
                     }
                 }
-                string withoutRetiredExecutorGate = Regex.Replace(
-                    json,
-                    "\"executor_enabled\"\\s*:\\s*(?:true|false)\\s*,?",
-                    string.Empty,
-                    RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+                string withoutRetiredExecutorGate = RemoveJsonScalarProperty(json, "executor_enabled", "(?:true|false)");
                 if (!string.Equals(withoutRetiredExecutorGate, json, StringComparison.Ordinal))
                 {
                     json = withoutRetiredExecutorGate;
                     changed = true;
                 }
+                string withoutMode = RemoveJsonScalarProperty(json, "mode", "\"[^\"]*\"");
+                if (!string.Equals(withoutMode, json, StringComparison.Ordinal))
+                {
+                    json = withoutMode;
+                    changed = true;
+                }
+
+                string v2Schema = Regex.Replace(
+                    json,
+                    "\"schema_version\"\\s*:\\s*\"glitch\\.ai\\.policy\\.v1\"",
+                    "\"schema_version\":\"glitch.ai.policy.v2\"",
+                    RegexOptions.CultureInvariant);
+                if (!string.Equals(v2Schema, json, StringComparison.Ordinal))
+                {
+                    json = v2Schema;
+                    changed = true;
+                }
+
                 if (json.IndexOf("executor_account", StringComparison.OrdinalIgnoreCase) < 0)
                 {
-                    json = InsertAfterString(json, "mode", ",\"executor_account\":\"Sim101\"");
+                    json = InsertBeforeClosingBrace(json, "\"executor_account\":\"\"");
                     changed = true;
                 }
 
@@ -189,7 +190,7 @@ namespace Glitch.Services
                     json = InsertAfterString(
                         json,
                         "executor_account",
-                        ",\"profile_account_bindings\":[\"glitch=Sim101\"]");
+                        ",\"profile_account_bindings\":[]");
                     changed = true;
                 }
 
@@ -199,15 +200,14 @@ namespace Glitch.Services
                     "max_risk_per_contract_usd",
                     "max_loss_per_trade_usd",
                     "max_group_loss_per_trade_usd",
-                    "max_daily_loss_usd"
+                    "max_daily_loss_usd",
+                    "max_trades_per_day",
+                    "cooldown_after_loss_minutes",
+                    "paper_daily_profit_objective_usd"
                 };
                 foreach (string key in retiredRiskKeys)
                 {
-                    string upgraded = Regex.Replace(
-                        json,
-                        "\"" + Regex.Escape(key) + "\"\\s*:\\s*-?[0-9]+(?:\\.[0-9]+)?\\s*,?",
-                        string.Empty,
-                        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+                    string upgraded = RemoveJsonScalarProperty(json, key, "-?[0-9]+(?:\\.[0-9]+)?");
                     if (!string.Equals(upgraded, json, StringComparison.Ordinal))
                     {
                         json = upgraded;
@@ -230,8 +230,8 @@ namespace Glitch.Services
                     changed = true;
                 }
 
-                if (changed)
-                    File.WriteAllText(path, json, new UTF8Encoding(false));
+                if (changed && GlitchAiJsonFields.TryParseObject(json, out _))
+                    WriteAtomically(path, json);
             }
             catch
             {
@@ -249,17 +249,60 @@ namespace Glitch.Services
             return json.Substring(0, insertAt) + insert + json.Substring(insertAt);
         }
 
+        private static string RemoveJsonScalarProperty(string json, string key, string valuePattern)
+        {
+            string propertyPattern = "\"" + Regex.Escape(key) + "\"\\s*:\\s*" + valuePattern;
+            string withoutLastProperty = Regex.Replace(
+                json,
+                ",\\s*" + propertyPattern + "(?=\\s*})",
+                string.Empty,
+                RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+            return Regex.Replace(
+                withoutLastProperty,
+                propertyPattern + "\\s*,?",
+                string.Empty,
+                RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+        }
+
+        private static string InsertBeforeClosingBrace(string json, string property)
+        {
+            string trimmed = (json ?? string.Empty).TrimEnd();
+            if (!trimmed.EndsWith("}", StringComparison.Ordinal))
+                return json;
+
+            string prefix = trimmed.Substring(0, trimmed.Length - 1).TrimEnd();
+            string separator = prefix.EndsWith("{", StringComparison.Ordinal) ? string.Empty : ",";
+            return prefix + separator + property + "}";
+        }
+
+        private static void WriteAtomically(string path, string json)
+        {
+            string temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                File.WriteAllText(temporaryPath, json, new UTF8Encoding(false));
+                if (File.Exists(path))
+                    File.Replace(temporaryPath, path, null);
+                else
+                    File.Move(temporaryPath, path);
+            }
+            finally
+            {
+                if (File.Exists(temporaryPath))
+                    File.Delete(temporaryPath);
+            }
+        }
+
         private static string BuildDefaultTemplate()
         {
             return "{"
-                + "\"schema_version\":\"glitch.ai.policy.v1\","
+                + "\"schema_version\":\"glitch.ai.policy.v2\","
                 + "\"require_valid_license\":false,"
-                + "\"mode\":\"paper\","
                 + "\"snapshot_max_age_seconds\":300,"
-                + "\"executor_account\":\"Sim101\","
-                + "\"profile_account_bindings\":[\"glitch=Sim101\"],"
+                + "\"executor_account\":\"\","
+                + "\"profile_account_bindings\":[],"
                 + "\"instrument_allowlist\":[\"MNQ\",\"MES\",\"M2K\"],"
-                + "\"account_allowlist\":[\"Sim101\",\"Sim102\",\"Sim103\"],"
+                + "\"account_allowlist\":[],"
                 + "\"blocked_sessions\":[]"
                 + "}";
         }
@@ -273,15 +316,15 @@ namespace Glitch.Services
                 return Invalid("policy_json_invalid");
 
             string schemaVersion = GlitchAiJsonFields.ExtractString(json, "schema_version");
-            if (!string.Equals(schemaVersion, "glitch.ai.policy.v1", StringComparison.Ordinal))
+            if (!string.Equals(schemaVersion, "glitch.ai.policy.v2", StringComparison.Ordinal))
                 return Invalid("policy_schema_invalid");
             if (CountJsonKey(json, "schema_version") != 1)
                 return Invalid("policy_schema_duplicated");
 
             string[] requiredKeys =
             {
-                "mode",
                 "snapshot_max_age_seconds",
+                "executor_account",
                 "profile_account_bindings",
                 "instrument_allowlist",
                 "account_allowlist",
@@ -316,12 +359,8 @@ namespace Glitch.Services
             if (!string.IsNullOrWhiteSpace(executorAccount))
                 policy.ExecutorAccount = executorAccount.Trim();
 
-            string mode = GlitchAiJsonFields.ExtractString(json, "mode");
-            if (!string.IsNullOrWhiteSpace(mode))
-                policy.Mode = mode.Trim();
-            if (!string.Equals(policy.Mode, "paper", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(policy.Mode, "live", StringComparison.OrdinalIgnoreCase))
-                return Invalid("policy_mode_invalid");
+            if (CountJsonKey(json, "mode") != 0)
+                return Invalid("policy_key_retired_mode");
 
             if (!GlitchAiJsonFields.TryExtractNumber(json, "snapshot_max_age_seconds", out double snapshotAge)
                 || snapshotAge < 1 || snapshotAge > 900

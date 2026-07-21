@@ -4,7 +4,7 @@
     "expected_actions": ["ENTER_LONG"],
     "market": {"schema_version":"glitch.market.snapshot.v2","snapshot_id":"scenario-long","snapshot_hash":"hash-long","created_utc":"2099-01-01T14:35:00Z","instrument":"MNQ","current_price":20000.00,"session":"NYC","fresh":true,"timeframes":{"1m":{"trend":"up","rsi":62,"adx":34,"atr":8,"breakout_above":19996.00},"5m":{"trend":"up","rsi":59,"adx":28},"15m":{"trend":"up","rsi":57},"60m":{"trend":"up","rsi":55}},"order_flow":{"delta":950,"vwap":19990.00}},
     "portfolio": {"account":"Sim101","flat":true,"position":0,"working_orders":0,"daily_pnl":0,"unrealized_pnl":0,"risk_locked":false},
-    "policy": {"mode":"paper","ai_enabled":true,"kill_switch":false,"executor_enabled":false,"max_contracts":1,"max_loss_per_trade_usd":100,"executor_account":"Sim101"},
+    "policy": {"schema_version":"glitch.ai.policy.v2","snapshot_max_age_seconds":300,"executor_account":"Sim101","profile_account_bindings":["glitch=Sim101"],"instrument_allowlist":["MNQ"],"account_allowlist":["Sim101"],"blocked_sessions":[]},
     "instruction": "A fresh aligned breakout is present. Decide independently; if entering, use one MNQ contract, MARKET, a tick-aligned structural stop below price, and TP1 above price."
   },
   {
@@ -12,7 +12,7 @@
     "expected_actions": ["ENTER_SHORT"],
     "market": {"schema_version":"glitch.market.snapshot.v2","snapshot_id":"scenario-short","snapshot_hash":"hash-short","created_utc":"2099-01-01T15:05:00Z","instrument":"MNQ","current_price":19800.00,"session":"NYC","fresh":true,"timeframes":{"1m":{"trend":"down","rsi":38,"adx":36,"atr":9,"breakdown_below":19805.00},"5m":{"trend":"down","rsi":41,"adx":31},"15m":{"trend":"down","rsi":43},"60m":{"trend":"down","rsi":46}},"order_flow":{"delta":-1100,"vwap":19818.00}},
     "portfolio": {"account":"Sim101","flat":true,"position":0,"working_orders":0,"daily_pnl":25,"unrealized_pnl":0,"risk_locked":false},
-    "policy": {"mode":"paper","ai_enabled":true,"kill_switch":false,"executor_enabled":false,"max_contracts":1,"max_loss_per_trade_usd":100,"executor_account":"Sim101"},
+    "policy": {"schema_version":"glitch.ai.policy.v2","snapshot_max_age_seconds":300,"executor_account":"Sim101","profile_account_bindings":["glitch=Sim101"],"instrument_allowlist":["MNQ"],"account_allowlist":["Sim101"],"blocked_sessions":[]},
     "instruction": "A fresh aligned breakdown is present. Decide independently; if entering, use one MNQ contract, MARKET, a tick-aligned structural stop above price, and TP1 below price."
   },
   {
@@ -20,7 +20,7 @@
     "expected_actions": ["NOTHING"],
     "market": {"schema_version":"glitch.market.snapshot.v2","snapshot_id":"scenario-stale","snapshot_hash":"hash-stale","created_utc":"2020-01-01T00:00:00Z","instrument":"MNQ","current_price":20100.00,"session":"NYC","fresh":false,"stale_reason":"underlying MNQ timestamp exceeds policy age","timeframes":{"1m":{"trend":"up","rsi":72},"5m":{"trend":"up"},"15m":{"trend":"up"},"60m":{"trend":"up"}}},
     "portfolio": {"account":"Sim101","flat":true,"position":0,"working_orders":0,"daily_pnl":0,"unrealized_pnl":0,"risk_locked":false},
-    "policy": {"mode":"paper","ai_enabled":true,"kill_switch":false,"executor_enabled":false,"snapshot_max_age_seconds":90,"executor_account":"Sim101"},
+    "policy": {"schema_version":"glitch.ai.policy.v2","snapshot_max_age_seconds":90,"executor_account":"Sim101","profile_account_bindings":["glitch=Sim101"],"instrument_allowlist":["MNQ"],"account_allowlist":["Sim101"],"blocked_sessions":[]},
     "instruction": "The underlying market snapshot is stale regardless of apparent setup."
   },
   {
@@ -28,7 +28,7 @@
     "expected_actions": ["HOLD"],
     "market": {"schema_version":"glitch.market.snapshot.v2","snapshot_id":"scenario-hold","snapshot_hash":"hash-hold","created_utc":"2099-01-01T15:20:00Z","instrument":"MNQ","current_price":20018.00,"session":"NYC","fresh":true,"timeframes":{"1m":{"trend":"up","rsi":58},"5m":{"trend":"up"},"15m":{"trend":"up"},"60m":{"trend":"up"}}},
     "portfolio": {"account":"Sim101","flat":false,"position":1,"position_side":"LONG","average_price":20000.00,"protected_stop":19980.00,"working_target":20040.00,"working_orders":2,"daily_pnl":0,"unrealized_pnl":36,"risk_locked":false},
-    "policy": {"mode":"paper","ai_enabled":true,"kill_switch":false,"executor_enabled":false,"executor_account":"Sim101"},
+    "policy": {"schema_version":"glitch.ai.policy.v2","snapshot_max_age_seconds":300,"executor_account":"Sim101","profile_account_bindings":["glitch=Sim101"],"instrument_allowlist":["MNQ"],"account_allowlist":["Sim101"],"blocked_sessions":[]},
     "instruction": "The existing long remains protected and its thesis is intact. Do not add or modify orders."
   },
   {
@@ -36,7 +36,7 @@
     "expected_actions": ["EXIT"],
     "market": {"schema_version":"glitch.market.snapshot.v2","snapshot_id":"scenario-exit","snapshot_hash":"hash-exit","created_utc":"2099-01-01T15:35:00Z","instrument":"MNQ","current_price":19988.00,"session":"NYC","fresh":true,"timeframes":{"1m":{"trend":"down","rsi":31,"breakdown_below":19992.00},"5m":{"trend":"down"},"15m":{"trend":"down"},"60m":{"trend":"flat"}},"order_flow":{"delta":-1400}},
     "portfolio": {"account":"Sim101","flat":false,"position":1,"position_side":"LONG","average_price":20000.00,"protected_stop":19980.00,"working_target":20040.00,"working_orders":2,"daily_pnl":0,"unrealized_pnl":-24,"risk_locked":false},
-    "policy": {"mode":"paper","ai_enabled":true,"kill_switch":false,"executor_enabled":false,"executor_account":"Sim101"},
+    "policy": {"schema_version":"glitch.ai.policy.v2","snapshot_max_age_seconds":300,"executor_account":"Sim101","profile_account_bindings":["glitch=Sim101"],"instrument_allowlist":["MNQ"],"account_allowlist":["Sim101"],"blocked_sessions":[]},
     "instruction": "The protected long thesis has invalidated through a fresh multi-timeframe reversal. Do not widen the stop or add."
   }
 ]

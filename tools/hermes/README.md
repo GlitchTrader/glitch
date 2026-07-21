@@ -4,7 +4,7 @@ The canonical runtime is direct: Glitch publishes five immutable one-minute fram
 
 The role split and builder handoff are defined in `glitch_hermes_docs/docs/13_three_layer_handoff.md`. Hermes chat supervises Hermes trading through append-only supervisor records and may propose source work. Codex runs only when explicitly invoked for approved builder work; it never polls market data or submits intents.
 
-The cognitive, model, skill, memory, ledger, and self-improvement canon is `glitch_hermes_docs/docs/12_hermes_trading_skills_and_knowledge.md`. The active paper runtime uses the fast operator plus one evidence-gated learning worker: completed-trade debrief, hourly supervision, 300-minute planning, daily native-memory upkeep, and one reversible cognitive overlay.
+The cognitive, model, skill, memory, ledger, and self-improvement canon is `glitch_hermes_docs/docs/12_hermes_trading_skills_and_knowledge.md`. The active runtime uses the fast operator plus one evidence-gated learning worker: completed-trade debrief, hourly supervision, 300-minute planning, daily native-memory upkeep, and one reversible cognitive overlay.
 
 Glitch is the only writer below `GlitchData/hermes/exchange/glitch/`; Hermes is the only writer below `GlitchData/hermes/exchange/hermes/`. Stable packet, intent, route, account, and snapshot IDs join those physical streams into one logical ledger.
 
@@ -20,7 +20,7 @@ The installer changes only the host `glitch` profile to a local backend, pins th
 
 `run-direct-glitch-cycle.py` spends zero model calls until a new complete packet exists. It invokes Luna in an isolated `trading` session with current market/portfolio truth, master-only valid quantities, active trade state including native working-order geometry, recent outcomes, the active plan/guidance/cognitive overlay, native memory, and a literal valid JSON template. A bounded rollover check prevents the cron from selecting the prior packet when publication is milliseconds behind the wake-up; the chosen immutable packet remains the decision identity and Glitch revalidates current execution truth. Delivery remains idempotent.
 
-`launch-hermes-learning-cycle.py` is the fast cron boundary. `run-hermes-learning-cycle.py` is the detached, single-instance worker and invokes Sol only when evidence makes a loop due. It writes append-only master trade episodes, hourly observations/guidance, 300-minute plans, and daily journals under the Hermes supervisor exchange. Daily learning may update compact native memory and activate one versioned prompt/SOUL/skill cognitive overlay in paper mode; later episodes must promote, revise, or roll it back. `learning-worker-status.json` and `learning-worker.log` expose the real worker result independently of the launcher. Neither process has intent, order, policy, group, ratio, or execution authority.
+`launch-hermes-learning-cycle.py` is the fast cron boundary. `run-hermes-learning-cycle.py` is the detached, single-instance worker and invokes Sol only when evidence makes a loop due. It writes append-only master trade episodes, hourly observations/guidance, 300-minute plans, and daily journals under the Hermes supervisor exchange. Daily learning may update compact native memory and activate one versioned prompt/SOUL/skill cognitive overlay; later episodes must promote, revise, or roll it back. `learning-worker-status.json` and `learning-worker.log` expose the real worker result independently of the launcher. Neither process has intent, order, policy, group, ratio, or execution authority.
 
 Start the human-facing session with:
 
@@ -32,28 +32,29 @@ Deterministic slash commands are handled directly by the plugin, without an LLM 
 
 ```text
 /chat_mode       chat normally; leave the current trading-job state unchanged
-/trade_mode paper turn trading ON; this is the complete paper-trading activation command
-/pause_trading   turn trading OFF
+/trade           turn the operator and learning loops ON for the Glitch-configured scope
+/trade_mode      deprecated paper|live compatibility alias; delegates to /trade
+/pause_trading   turn both scheduled loops OFF
 /flatten_all     pause trading, then invoke Glitch's existing Flatten All workflow
 /bias_long       suggest a long bias for the next cycle; Hermes retains final authority
 /bias_short      suggest a short bias for the next cycle; Hermes retains final authority
 /bias_neutral    remove directional bias for the next cycle
-/long            require one protected long on the next flat paper cycle; Hermes chooses SL/TP
-/short           require one protected short on the next flat paper cycle; Hermes chooses SL/TP
+/long            require one protected long on the next flat configured cycle; Hermes chooses SL/TP
+/short           require one protected short on the next flat configured cycle; Hermes chooses SL/TP
 /replicate_on    request explicit replication-on state
 /replicate_off   request explicit replication-off state
-/glitch_status   show Glitch mode, job state, and replication state
+/glitch_status   show Glitch policy, job, gateway, and replication state
 ```
 
-Commands use the existing bearer token and the localhost Glitch control endpoint on `127.0.0.1:8789`. Command IDs are idempotent. The Glitch header shows the product-facing `AI Auto` state; replication and flatten continue to use the existing Glitch UI/state paths. ON/OFF is the only activation switch. Paper and live are execution-policy modes, not extra arm rituals; live still requires explicit human authorization.
+Commands use the existing bearer token and the localhost Glitch control endpoint on `127.0.0.1:8789`. Command IDs are idempotent. The Glitch header shows the product-facing `AI Auto` state; replication and flatten continue to use the existing Glitch UI/state paths. AI Auto is the only activation switch. Groups, accounts, ratios, limits, and account types come from Glitch packets and native state.
 
 Bias commands write one expiring advisory to the Hermes-owned exchange. The direct trading worker consumes it on the next valid packet, records its identity beside the durable outbox batch, and marks it consumed only after producing that validated batch. Delivery retries reuse that exact batch and its intent IDs without another model call. Biases never bypass Glitch risk, bracket, account, or execution validation; they are not persistent memory and older directives cannot consume or affect later cycles.
 
-`/long` and `/short` are stronger operator-directed paper experiments. They are accepted only when the configured Sim allowlist is flat and order-free, paper trading and replication are on, and no live account is in scope. When Glitch is already ON, they reconcile a stale paused Hermes scheduler so the Glitch ON/OFF control remains authoritative. Hermes must honor the requested direction and select structure-aware bracket geometry; Glitch still owns final risk validation, replication, execution, and native protection.
+`/long` and `/short` are stronger operator-directed experiments. They are accepted only when the configured Glitch scope is flat and order-free and trading and replication are on. They do not distinguish account types. When Glitch is already ON, they reconcile stale paused Hermes jobs so the Glitch ON/OFF control remains authoritative. Hermes must honor the requested direction and select structure-aware bracket geometry; Glitch still owns final risk validation, replication, execution, and native protection.
 
 Entry decisions have a 300-second analytical window matching the canonical five-minute flat-book cycle and still require a separate live execution price no older than five seconds. Absolute structural levels must remain executable at that live price. `EXIT`, `HOLD`, and `NOTHING` do not use entry-grade snapshot freshness: exits reduce an existing position, while hold/nothing are non-executing journal decisions.
 
-## Clean paper epoch reset
+## Clean trading epoch reset
 
 `reset-hermes-trading-epoch.ps1` previews by default. It inventories the exact
 Hermes/Glitch trading artifacts that would be archived and cleared, but makes no

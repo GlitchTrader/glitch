@@ -22,14 +22,14 @@ namespace Glitch.Services
             string snapshotHash = GlitchAiJsonFields.ExtractString(rawJson, "snapshot_hash");
             bool isEnter = IsEnterAction(action);
 
-            // Trading ON/OFF is the sole operational switch. The policy store
-            // removes retired ai_enabled/ai_kill_switch fields during migration.
-            trail.Add("01_trading_mode:delegated_to_control_state");
+            // AI Auto is the sole operational switch. Account authority comes
+            // from the Glitch-configured policy binding and native group state.
+            trail.Add("01_ai_auto:delegated_to_control_state");
 
             if (isEnter && GlitchHermesControlStateStore.Load().TradingPaused)
                 return Reject(trail, 2, "hermes_trading_paused", "Hermes trading is paused");
 
-            trail.Add("02_hermes_trading_mode:pass");
+            trail.Add("02_ai_auto:pass");
 
             if (policy.RequireValidLicense && !IsLicenseValid(nowUtc))
                 return Reject(trail, 2, "license_invalid", "Valid license required for AI bridge");

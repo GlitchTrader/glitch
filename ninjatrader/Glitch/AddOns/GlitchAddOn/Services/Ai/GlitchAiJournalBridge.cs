@@ -16,7 +16,6 @@ namespace Glitch.Services
         public static bool TryRecord(
             string intentId,
             string rawJson,
-            string mode,
             GlitchAiRiskDecision decision,
             DateTime recordedUtc,
             out bool isDuplicate)
@@ -43,7 +42,6 @@ namespace Glitch.Services
                     + "\"schema_version\":" + GlitchSnapshotJson.String("glitch.intent.decision.v1") + ","
                     + "\"recorded_utc\":" + GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(recordedUtc)) + ","
                     + "\"status\":" + GlitchSnapshotJson.String(status) + ","
-                    + "\"mode\":" + GlitchSnapshotJson.String(NormalizeMode(mode)) + ","
                     + "\"intent_id\":" + GlitchSnapshotJson.String(intentId) + ","
                     + "\"failed_check_number\":" + decision.FailedCheckNumber.ToString(System.Globalization.CultureInfo.InvariantCulture) + ","
                     + "\"failed_check_code\":" + GlitchSnapshotJson.String(decision.FailedCheckCode ?? string.Empty) + ","
@@ -56,15 +54,10 @@ namespace Glitch.Services
                 GlitchAiIntentJournalWriter.RegisterIntentId(intentId);
 
                 if (decision.IsApproved)
-                    GlitchAiIntentJournalWriter.AppendAcceptedMirror(intentId, rawJson, mode, recordedUtc);
+                    GlitchAiIntentJournalWriter.AppendAcceptedMirror(intentId, rawJson, recordedUtc);
 
                 return true;
             }
-        }
-
-        private static string NormalizeMode(string mode)
-        {
-            return string.IsNullOrWhiteSpace(mode) ? "invalid" : mode.Trim().ToLowerInvariant();
         }
 
         private static string BuildTrailJson(System.Collections.Generic.IReadOnlyList<string> trail)

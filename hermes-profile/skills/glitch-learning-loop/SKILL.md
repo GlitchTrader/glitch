@@ -53,7 +53,7 @@ Hermes may propose one compact, versioned cognitive overlay targeting
 - rollback condition.
 
 Only one overlay is active at a time. Hourly supervision or the daily loop may
-propose it from at least two comparable episodes; paper mode may activate it automatically.
+propose it from at least two comparable episodes; one reversible candidate may activate automatically for future configured Glitch cycles.
 At least two distinct episodes recorded after activation or the preceding
 evaluation must promote, continue, revise, or roll it back. Never accumulate
 unattributed prompt fragments, rewrite Glitch policy, change account groups or
