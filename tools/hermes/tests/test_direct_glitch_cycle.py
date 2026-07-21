@@ -260,6 +260,8 @@ class DirectCycleTests(unittest.TestCase):
         self.assertNotIn("'--resume'", wrapper)
         self.assertNotIn("'-z'", wrapper)
         self.assertEqual(run.call_args.kwargs["input"], "large prompt")
+        self.assertEqual(run.call_args.kwargs["encoding"], "utf-8")
+        self.assertEqual(run.call_args.kwargs["errors"], "replace")
 
     def test_prompt_supplies_a_strict_scoped_output_template(self):
         prompt = MODULE.build_prompt(packet(), MODULE.build_scenario(packet()), {})
@@ -664,11 +666,12 @@ class DirectCycleTests(unittest.TestCase):
         with self.assertRaises(json.JSONDecodeError):
             MODULE.extract_json(first + "\n" + second)
 
-    def test_transport_chatter_is_rejected(self):
+    def test_transport_chatter_yields_the_single_scoped_batch(self):
         batch = json.dumps({"schema_version": "glitch.intent.batch.v1", "decisions": []})
+        actual = MODULE.extract_json("renderer status\n" + batch + "\nDone")
 
-        with self.assertRaises(json.JSONDecodeError):
-            MODULE.extract_json("renderer status\n" + batch + "\nDone")
+        self.assertEqual(actual["schema_version"], "glitch.intent.batch.v1")
+        self.assertEqual(actual["decisions"], [])
 
     def test_missing_outer_batch_fields_are_restored_from_current_scenario(self):
         scenario = MODULE.build_scenario(packet())
