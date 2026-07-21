@@ -2,6 +2,42 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-21 - master-owned recursive learning activated
+
+- Preserved the cognitive boundary: Hermes owns thesis, strategy, master
+  quantity, management, reflection, and improvement. Glitch owns fact truth,
+  policy, execution, protection, and replication. User-owned followers and
+  ratios no longer reduce valid master quantities or veto a valid master entry;
+  CopyEngine still rejects unsafe follower submissions locally and visibly.
+- Added current native working-order details and bounded active-trade continuity
+  so every positioned minute carries entry thesis, original geometry, management
+  actions, current orders, excursion, and rollback. Master outcome attribution
+  now survives a missing, divergent, or still-open follower; follower failures
+  remain replication process diagnostics.
+- Replaced the missing learning path with one no-agent 15-minute worker. It
+  debriefs new master outcomes, supervises episodes hourly, plans after 300
+  minutes with new reviews, journals daily, updates native memory only from
+  repeated attributable evidence, and may test one paper-only versioned
+  prompt/SOUL/skill overlay. Two recorded episodes are required to activate it;
+  two distinct later episodes after activation or evaluation are required to
+  continue, promote, or roll it back. No deterministic trade geometry was coded.
+- Corrected two cadence/format defects before deployment. A bounded packet
+  rollover check handles the publisher/cron millisecond race without delaying
+  every call or discarding results that cross a minute. A complete decoded JSON
+  object may shed redundant trailing closing delimiters—the exact observed Luna
+  defect—before the unchanged semantic validator; prose or multiple objects fail
+  and retry on the next packet.
+- Verification passed 99 AI/Hermes and 37 shared contracts (136 total), Python
+  compilation, 30 PowerShell parses, 34 tracked JSON parses, and diff integrity.
+  The complete 87-file AddOn was deployed once with 87/87 SHA-256 parity and no
+  extras. NinjaTrader F5 completed without an error surface, and the next live
+  snapshot proved `working_order_details` active for all nine accounts.
+- Installed SOUL/operator/scripts/13 skill files match source. Exactly two
+  Hermes-native no-agent jobs are enabled: the minute direct operator and the
+  non-executing 15-minute learner. The installed learner's no-model dry run
+  found 14 eligible historical master outcomes for bounded backfill; its first
+  post-create scheduled boundary is 00:45 local gateway time (03:45 UTC).
+
 ## 2026-07-20 - decision continuity and follower protection root causes fixed
 
 - Reconstructed the stopped decision rail trade by trade. The gateway and cron

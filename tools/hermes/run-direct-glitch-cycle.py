@@ -189,12 +189,12 @@ def _account_total_contracts(account: dict[str, Any]) -> int:
     )
 
 
-def _round_ratio_quantity(value: float) -> int:
-    return int(math.floor(value + 0.5))
-
-
 def add_group_exposure_context(packet: dict[str, Any], books: list[dict[str, Any]]) -> None:
-    """Derive valid master quantities from Glitch's account ceilings and ratios."""
+    """Derive Hermes capacity from the master only.
+
+    Followers remain visible replication context, but user-owned ratios and
+    follower-local limits never change what Hermes may do on the master.
+    """
     frames = packet.get("frames")
     latest = frames[-1] if isinstance(frames, list) and frames else {}
     portfolio = latest.get("portfolio_snapshot") if isinstance(latest, dict) else {}
@@ -242,22 +242,8 @@ def add_group_exposure_context(packet: dict[str, Any], books: list[dict[str, Any
             })
 
         master = exposure[0]
-        master_current = abs(int(master["current_mnq_quantity"]))
         upper_bound = max(0, int(master["prop_contract_ceiling"]) - int(master["current_total_contracts"]))
-        valid_quantities = [
-            candidate for candidate in range(1, upper_bound + 1)
-            if all(
-                int(member["prop_contract_ceiling"]) > 0
-                and int(member["current_total_contracts"])
-                + max(
-                    0,
-                    _round_ratio_quantity((master_current + candidate) * float(member["ratio"]))
-                    - abs(int(member["current_mnq_quantity"])),
-                )
-                <= int(member["prop_contract_ceiling"])
-                for member in exposure
-            )
-        ]
+        valid_quantities = list(range(1, upper_bound + 1))
         book["exposure"] = exposure
         book["valid_entry_quantities"] = valid_quantities
         book["effective_master_remaining_capacity"] = max(valid_quantities, default=0)
@@ -307,7 +293,10 @@ def _is_learning_eligible_outcome(line: str) -> bool:
         value = json.loads(line)
     except json.JSONDecodeError:
         return False
-    return isinstance(value, dict) and value.get("learning_eligible", True) is not False
+    return isinstance(value, dict) and value.get(
+        "master_learning_eligible",
+        value.get("learning_eligible", True),
+    ) is not False
 
 
 def journal_tail(glitch_data: Path, max_lines: int = 6) -> dict[str, list[str]]:
@@ -333,6 +322,153 @@ def journal_tail(glitch_data: Path, max_lines: int = 6) -> dict[str, list[str]]:
     # current-day execution/outcome JSONL is the authoritative capacity input.
     result["journal"] = []
     return result
+
+
+def read_optional_json(path: Path) -> dict[str, Any] | None:
+    try:
+        return read_json(path) if path.is_file() else None
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+
+
+def learning_context(exchange: Path) -> dict[str, Any]:
+    supervisor = exchange / "hermes" / "supervisor"
+    overlay = read_optional_json(supervisor / "active-cognitive-overlay.json")
+    if not overlay or overlay.get("status") not in {"active", "promoted"} or not overlay.get("instruction"):
+        overlay = None
+    return {
+        "current_plan": read_optional_json(supervisor / "current-plan.json"),
+        "current_guidance": read_optional_json(supervisor / "current-guidance.json"),
+        "active_cognitive_overlay": overlay,
+    }
+
+
+def _jsonl_objects(path: Path) -> list[dict[str, Any]]:
+    if not path.is_file():
+        return []
+    values = []
+    for line in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            values.append(value)
+    return values
+
+
+def active_trade_state(
+    packet: dict[str, Any],
+    scenario: dict[str, Any],
+    glitch_data: Path,
+    exchange: Path,
+) -> dict[str, Any]:
+    """Materialize bounded, authoritative open-trade continuity for Hermes."""
+    frames = packet.get("frames")
+    latest = frames[-1] if isinstance(frames, list) and frames and isinstance(frames[-1], dict) else {}
+    portfolio = latest.get("portfolio_snapshot")
+    accounts = portfolio.get("accounts") if isinstance(portfolio, dict) else []
+    by_name = {
+        str(account.get("account")): account
+        for account in accounts if isinstance(account, dict) and account.get("account")
+    }
+    decisions = _jsonl_objects(glitch_data / "intents" / "decisions.jsonl")
+    executions = _jsonl_objects(glitch_data / "intents" / "executions.jsonl")
+    outcomes = _jsonl_objects(glitch_data / "intents" / "hermes-trade-outcomes.jsonl")
+    closed_entries = {str(row.get("intent_id")) for row in outcomes if row.get("intent_id")}
+    submitted_entries = {
+        str(row.get("intent_id")) for row in executions
+        if row.get("code") in {"master_entry_submitted", "group_entries_submitted"}
+    }
+    previous_path = exchange / "hermes" / "supervisor" / "active-trades.json"
+    previous = read_optional_json(previous_path) or {}
+    previous_by_account = {
+        str(row.get("master_account")): row
+        for row in previous.get("trades", []) if isinstance(row, dict)
+    }
+    now = datetime.now(timezone.utc)
+    trades = []
+    for book in scenario.get("books", []):
+        master = str(book.get("master_account") or "")
+        account = by_name.get(master, {})
+        net = _account_mnq_quantity(account)
+        if net == 0:
+            continue
+        side = "long" if net > 0 else "short"
+        position = next((
+            row for row in account.get("positions", [])
+            if isinstance(row, dict)
+            and str(row.get("instrument_root") or "").upper() == "MNQ"
+        ), {})
+        open_entries = []
+        management = []
+        for row in decisions:
+            intent = row.get("intent") if isinstance(row.get("intent"), dict) else {}
+            if str(intent.get("account")) != master:
+                continue
+            action = str(intent.get("action") or "")
+            intent_id = str(intent.get("intent_id") or "")
+            if action in {"ENTER_LONG", "ENTER_SHORT"} and intent_id in submitted_entries and intent_id not in closed_entries:
+                if (action == "ENTER_LONG") == (side == "long"):
+                    open_entries.append(intent)
+            elif action in {"HOLD", "MOVE_STOP", "MOVE_TP", "EXIT"}:
+                management.append(intent)
+        entry_ids = [str(row.get("intent_id")) for row in open_entries]
+        prior = previous_by_account.get(master, {})
+        same_trade = prior.get("entry_intent_ids") == entry_ids and prior.get("side") == side
+        unrealized = float(position.get("unrealized_pnl", 0) or 0)
+        peak = max(float(prior.get("peak_unrealized_pnl_usd", unrealized) or unrealized), unrealized) if same_trade else unrealized
+        trough = min(float(prior.get("trough_unrealized_pnl_usd", unrealized) or unrealized), unrealized) if same_trade else unrealized
+        created_values = [str(row.get("created_utc")) for row in open_entries if row.get("created_utc")]
+        entry_utc = min(created_values) if created_values else str(prior.get("entry_decision_utc") or "")
+        if entry_utc:
+            management = [row for row in management if str(row.get("created_utc") or "") >= entry_utc]
+        try:
+            age_seconds = max(0, int((now - datetime.fromisoformat(entry_utc.replace("Z", "+00:00"))).total_seconds()))
+        except (TypeError, ValueError):
+            age_seconds = None
+        orders = [
+            row for row in account.get("working_order_details", [])
+            if isinstance(row, dict) and str(row.get("instrument_root") or "").upper() == "MNQ"
+        ]
+        trades.append({
+            "master_account": master,
+            "route_id": book.get("route_id"),
+            "instrument": "MNQ",
+            "side": side,
+            "quantity": abs(net),
+            "average_price": position.get("average_price"),
+            "unrealized_pnl_usd": unrealized,
+            "peak_unrealized_pnl_usd": peak,
+            "trough_unrealized_pnl_usd": trough,
+            "rollback_from_peak_usd": peak - unrealized,
+            "entry_decision_utc": entry_utc or None,
+            "trade_age_seconds": age_seconds,
+            "entry_intent_ids": entry_ids,
+            "entry_plans": [{
+                "intent_id": row.get("intent_id"),
+                "quantity": row.get("quantity"),
+                "planned_stop": row.get("stop_loss"),
+                "planned_targets": [row.get(key) for key in ("take_profit_1", "take_profit_2", "take_profit_3") if row.get(key) is not None],
+                "reason": row.get("reason"),
+            } for row in open_entries],
+            "working_orders": orders,
+            "recent_management": [{
+                "intent_id": row.get("intent_id"),
+                "created_utc": row.get("created_utc"),
+                "action": row.get("action"),
+                "stop_loss": row.get("stop_loss"),
+                "take_profit_1": row.get("take_profit_1"),
+                "reason": row.get("reason"),
+            } for row in management[-20:]],
+        })
+    value = {
+        "schema_version": "glitch.hermes.active_trade_state.v1",
+        "recorded_utc": utc_now(),
+        "trades": trades,
+    }
+    write_json_atomic(previous_path, value)
+    return value
 
 
 def reconcile_completed_outcomes(glitch_data: Path, exchange: Path) -> None:
@@ -703,7 +839,14 @@ def packet_for_model(packet: dict[str, Any], scenario: dict[str, Any]) -> dict[s
 
 
 def extract_json(stdout: str) -> dict[str, Any]:
-    value = json.loads(stdout.strip())
+    text = stdout.strip()
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError:
+        value, end = json.JSONDecoder().raw_decode(text)
+        trailing = text[end:].strip()
+        if not trailing or any(character not in "]}" for character in trailing):
+            raise
     if not isinstance(value, dict):
         raise ValueError("hermes_output_not_object")
     return value
@@ -810,7 +953,7 @@ def submit_batch(batch: dict[str, Any], glitch_data: Path, exchange: Path) -> di
 def build_prompt(
     packet: dict[str, Any],
     scenario: dict[str, Any],
-    journals: dict[str, list[str]],
+    journals: dict[str, Any],
     directive: dict[str, Any] | None = None,
 ) -> str:
     decisions = []
@@ -874,7 +1017,11 @@ def build_prompt(
         "invalidation, and observable noise rather than merely offsetting it from the immediate price; "
         "never compress a stop to create attractive R:R. Use realistic targets supported by the same horizon and regime. stop_loss and "
         "take_profit fields are absolute MNQ prices, not distances, and Glitch preserves them unless the live market has already crossed them. "
-        "Choose quantity only from execution_scope.books[].valid_entry_quantities. A quantity of two or more may use TP2 plus quantity_tp1; "
+        "Choose quantity only from execution_scope.books[].valid_entry_quantities. Follower accounts and ratios are user-owned replication "
+        "configuration: they never constrain cognition, strategy, or master quantity, and Glitch CopyEngine handles each follower independently. "
+        "The long-run performance objective is approximately 0.4%-2% of master account size per trading day ($100-$500 on $25k; "
+        "$1,000-$5,000 on $250k). This is an aspiration, never a trade quota, loss entitlement, forced sizing rule, or reason to manufacture a trade. "
+        "A quantity of two or more may use TP2 plus quantity_tp1; "
         "Treat execution_scope as current capacity authority: a historical infrastructure or capacity rejection is not a continuing veto when "
         "the current book has valid_entry_quantities and current native state is eligible. "
         "a quantity of three or more may also use TP3 plus quantity_tp2. Each leg may have its own tighter initial stop, and every leg receives "
@@ -909,13 +1056,11 @@ def build_prompt(
         "choose structure-aware native stop/target geometry within Glitch policy; market evidence informs geometry, "
         "confidence, and rationale but cannot change the requested direction to NOTHING. For an ordinary advisory, "
         "treat it as a soft one-cycle preference: consider it, explain agreement or disagreement in the audit, and "
-        "never let it override market evidence, risk, bracket geometry, or Glitch policy. Do not emit prose outside "
-        "the required JSON or call execution or control tools. Native memory tools remain available: retrieve "
-        "durable lessons when useful and persist only compact, evidence-backed lessons supported by repeated completed outcomes. "
-        "If operator_advisory has directive_type=native_tool_canary, invoke native memory retrieval exactly once for Glitch "
-        "trading lessons before producing the normal decision JSON. This diagnostic must not bias the trade decision and must "
-        "not write memory. When recent_glitch_ledger.outcomes contains new learning-eligible completed outcomes, retrieve relevant durable lessons "
-        "before deciding; persist a new lesson only when at least two comparable completed outcomes support it. "
+        "never let it override market evidence, risk, bracket geometry, or Glitch policy. The current plan, guidance, active trade state, and "
+        "active cognitive overlay in recent_glitch_ledger are Hermes-owned advisory continuity; use them when relevant and revise them when "
+        "current evidence disagrees. Do not emit prose outside the required JSON or call execution or control tools. Before deciding, invoke "
+        "native memory retrieval exactly once for relevant Glitch trading lessons, then return the strict intent JSON without writing memory. "
+        "If operator_advisory has directive_type=native_tool_canary, the required retrieval also satisfies that diagnostic and must not bias the decision. "
         "Treat NinjaTrader/Glitch positions, orders, fills, balances, PnL, brackets, receipts, and outcomes as authoritative facts; "
         "memory and Hermes journals are interpretations. Never fabricate missing facts, hide a loss, reset a performance baseline, "
         "rewrite history, or mark a discrepancy resolved without current authoritative evidence. Preserve contradictions with "
@@ -972,7 +1117,7 @@ def any_flat_book_is_entry_eligible(packet: dict[str, Any], scenario: dict[str, 
     frames = packet.get("frames")
     latest = frames[-1] if isinstance(frames, list) and frames and isinstance(frames[-1], dict) else {}
     portfolio = latest.get("portfolio_snapshot")
-    if not isinstance(portfolio, dict) or portfolio.get("is_replicating") is not True:
+    if not isinstance(portfolio, dict):
         return False
     for book in scenario["books"]:
         exposure = book.get("exposure")
@@ -986,13 +1131,6 @@ def any_flat_book_is_entry_eligible(packet: dict[str, Any], scenario: dict[str, 
                 or master.get("is_risk_locked") is not False
                 or master.get("is_eval_target_locked") is not False
                 or int(master.get("working_orders", 0) or 0) != 0):
-            continue
-        if any(
-            member.get("native_state_available") is not True
-            or int(member.get("current_mnq_quantity", 0)) != 0
-            or int(member.get("working_orders", 0) or 0) != 0
-            for member in exposure[1:]
-        ):
             continue
         return True
     return False
@@ -1036,6 +1174,28 @@ def prior_failed_attempt_requires_retry(exchange: Path, packet: dict[str, Any]) 
     return False
 
 
+def read_packet_after_imminent_rollover(packet_path: Path, wait_seconds: float) -> dict[str, Any]:
+    """Avoid selecting the prior minute in the narrow publisher/cron race."""
+    packet = read_json(packet_path)
+    if wait_seconds <= 0 or not packet_is_current(packet):
+        return packet
+    try:
+        created = datetime.fromisoformat(str(packet.get("created_utc", "")).replace("Z", "+00:00"))
+        age_seconds = (datetime.now(timezone.utc) - created.astimezone(timezone.utc)).total_seconds()
+    except (TypeError, ValueError):
+        return packet
+    if age_seconds < 50:
+        return packet
+    packet_id = str(packet.get("packet_id", ""))
+    deadline = time.monotonic() + wait_seconds
+    while time.monotonic() < deadline:
+        time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
+        candidate = read_json(packet_path)
+        if str(candidate.get("packet_id", "")) != packet_id:
+            return candidate
+    return packet
+
+
 def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int:
     if not trading_runtime_enabled(glitch_data):
         return 0
@@ -1045,7 +1205,10 @@ def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int
     if not packet_path.is_file():
         return 0
 
-    packet = read_json(packet_path)
+    packet = read_packet_after_imminent_rollover(
+        packet_path,
+        float(getattr(args, "packet_rollover_wait_seconds", 0) or 0),
+    )
     packet_id = str(packet.get("packet_id", ""))
     if not packet_id:
         raise ValueError("packet_id_missing")
@@ -1059,6 +1222,7 @@ def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int
             return 0
 
     scenario = build_scenario(packet)
+    trade_state = active_trade_state(packet, scenario, glitch_data, exchange)
     if outbox_path.is_file():
         batch = normalize_batch(read_json(outbox_path), scenario)
         validate_batch(batch, scenario)
@@ -1085,6 +1249,8 @@ def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int
         return 0
     reconcile_completed_outcomes(glitch_data, exchange)
     journals = journal_tail(glitch_data)
+    journals.update(learning_context(exchange))
+    journals["active_trade_state"] = trade_state
     prompt = build_prompt(packet, scenario, journals, directive)
     write_json_atomic(attempt_path, {
         "schema_version": "glitch.hermes.model_attempt.v1",
@@ -1153,6 +1319,7 @@ def main() -> int:
     parser.add_argument("--glitch-data", type=Path, default=DEFAULT_GLITCH_DATA)
     parser.add_argument("--profile", default="glitch")
     parser.add_argument("--timeout-seconds", type=int, default=240)
+    parser.add_argument("--packet-rollover-wait-seconds", type=float, default=5)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 

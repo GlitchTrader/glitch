@@ -1,6 +1,6 @@
 # Now — clean AI candidate
 
-**Updated:** 2026-07-20
+**Updated:** 2026-07-21
 
 **Branch:** `cleanup/ai-core`
 
@@ -29,12 +29,15 @@ Glitch Flatten All remain authoritative.
 - Every Hermes model call uses an isolated session tagged `trading`,
   `gpt-5.6-luna`, medium reasoning, no fallback provider, and a four-turn ceiling.
   Continuity is explicit: five MNQ market frames, the latest portfolio, six recent
-  decisions/executions/outcomes, and native durable memory. Flat books are
+  decisions/executions/outcomes, active master-trade state and native working-order
+  geometry, current plan/guidance/cognitive overlay, and native durable memory. Flat books are
   considered at five-minute boundaries; positioned books each minute. A native
   one-minute zero-model check wakes the worker, and any failed model/contract
   attempt retries on the next newer packet.
 - The prompt supplies one literal strict JSON template scoped to the current
-  cycle/books and forbids `final_choice` outside `decision_audit`.
+  cycle/books and forbids `final_choice` outside `decision_audit`. A complete
+  decoded object may shed only redundant trailing `]`/`}` delimiters before the
+  unchanged schema/scope validator; prose, multiple objects, and semantic drift fail.
 - Delivery is idempotent and crash-safe through a durable outbox/receipt pair.
   Retry reuses the same intent id and never spends a second model call for the
   same packet.
@@ -42,8 +45,16 @@ Glitch Flatten All remain authoritative.
   re-entrant protection order callbacks cannot misclassify a just-filled follower
   as flat and cancel its new stop/target.
 - Glitch entry signals are the ledger lifecycle identity. The earliest terminal
-  exit wins, and failed/missing protection produces an auditable `process_error`
-  outcome that is excluded from trading memory instead of being silently dropped.
+  exit wins. A terminal attributable master round trip always enters master
+  learning; missing, divergent, or still-open follower evidence remains an
+  auditable replication `process_error` and never erases master cognition.
+- One 15-minute Hermes-native worker debriefs new master outcomes, supervises
+  accumulated episodes hourly, replaces the active plan after 300 minutes with
+  new reviews, and journals daily. Every nested call is an isolated `trading`
+  session on Sol/high. Daily learning may update compact native memory and one
+  versioned prompt/SOUL/skill cognitive overlay in paper mode. Activation needs
+  two attributable episodes; evaluation needs two distinct later episodes and
+  appends promotion/continuation/rollback evidence.
 - AI Auto is one truthful switch for the whole core apparatus. ON means the Glitch
   execution gate is open and the named Hermes core job is enabled; OFF closes the
   execution gate and pauses that job, so it cannot spend five-minute Luna calls.
@@ -63,9 +74,10 @@ Glitch Flatten All remain authoritative.
   table—is catalog-driven in all six supported locales. Changing language forces
   the dynamic feed to re-render. Model-authored reason/bull/bear/change text,
   account names, intent codes, and indicator symbols remain verbatim by design.
-- Account/group capacity is dynamic. Hermes receives valid master quantities
-  constrained by every enabled account's current rule ceiling, open exposure,
-  and follower ratio. One-to-three native OCO legs support protected scale-out;
+- Master capacity is dynamic. Hermes receives valid quantities constrained only
+  by the master's current account-wide exposure and prop-rule ceiling. Followers
+  and user-owned ratios never constrain cognition or master sizing; CopyEngine
+  applies each follower route and follower-local cap independently. One-to-three native OCO legs support protected scale-out;
   repeated same-direction entries remain independently protected tranches.
 - `MOVE_TP` moves every remaining Glitch-owned master target and may atomically
   tighten every remaining master stop. CopyEngine mirrors both changes to the
@@ -87,7 +99,7 @@ Glitch Flatten All remain authoritative.
 ## Verification and market-open acceptance
 
 - Shared source contracts: **37/37**.
-- AI/Hermes contracts: **90/90**; complete AI suite **127/127**.
+- AI/Hermes contracts: **99/99**; complete AI suite **136/136**.
 - Five production web builds: pass.
 - Five web lint runs: pass.
 - Python compilation, tracked PowerShell parsing, tracked JSON parsing, secret
@@ -95,13 +107,15 @@ Glitch Flatten All remain authoritative.
 - Localization audit: **329 catalog keys**, **270 referenced code keys**, zero
   missing keys, zero malformed/empty six-locale rows; UTF-8 CJK/Cyrillic sentinels
   pass. This includes 18 older fallback-only labels closed during the AI UI pass.
-- Complete 87-file AI AddOn folder deployed from this candidate with **87/87
-  files matching, 0 hash mismatches, and 0 extra target files**.
-- NinjaTrader F5 compile: green by operator confirmation after the complete
-  87-file deployment on 2026-07-20.
-- Installed Hermes worker matches source. Exactly one cron job is enabled:
-  `glitch-direct-operator`, stored as `* * * * *`; the supervised gateway is
-  running and the first post-install zero-model tick completed `ok`.
+- The complete 87-file AddOn was deployed once from this candidate with **87/87
+  matching hashes, 0 mismatches, and 0 extra target files**. F5 compile completed
+  without an error surface; the next live portfolio snapshot contained
+  `working_order_details` for all nine accounts, proving the new writer is active.
+- The installed Hermes SOUL, operator map, three workers, and 13 skill files match
+  source. Exactly two no-agent jobs are enabled under the supervised gateway:
+  `glitch-direct-operator` at `* * * * *` and non-executing
+  `glitch-learning-supervisor` at `*/15 * * * *`. A no-model installed dry run
+  found 14 eligible historical master outcomes for bounded episode backfill.
 - Bounded prior Sim evidence on this clean architecture includes protected
   1:2:3 replication, three independent legs, partial fills, same-direction
   protected tranches, duplicate-intent rejection, and fleet flatten.

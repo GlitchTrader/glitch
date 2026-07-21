@@ -80,9 +80,9 @@ Glitch resolves the enabled account group from `AccountGroups.tsv` and owns all 
 - a master AI exit is copied through the same replication path, and follower protection is cancelled after the copied close so no orphan order can reverse an account;
 - per-account and aggregate group risk use the actual scaled quantities;
 - unknown routes, mismatched masters, malformed groups, duplicate accounts, and unallowlisted members fail closed;
-- ratio quantities use the same NinjaTrader rounding semantics as the copy engine; Glitch publishes only master quantities that keep every enabled account within its current contract ceiling;
+- ratio quantities use the same NinjaTrader rounding semantics as the copy engine; Glitch publishes master quantities from the master's current account-wide exposure and prop ceiling only, while each follower independently accepts or rejects its user-configured copy quantity against follower-local truth;
 - startup is observe-only. Explicit Replicate ON, follower enable, or ratio change may request alignment; ordinary reload never submits, cancels, or replaces an order;
-- completed-outcome learning waits for master plus every enabled follower to close.
+- completed-outcome learning begins as soon as the master round trip is terminal and attributable. Follower round trips, misses, and protection failures remain explicit replication diagnostics and never suppress master cognition learning.
 
 Group composition and ratios are dynamic Glitch state. Results must therefore be compared using master-account and per-contract expectancy, MAE/MFE, drawdown, and risk-normalized returns—not raw aggregate group PnL.
 
@@ -221,7 +221,7 @@ Bracket mandate:
 
 - `ENTER_LONG` / `ENTER_SHORT` require `stop_loss` and `take_profit_1`.
 - TP2/SL2 and TP3/SL3 are optional and only valid when quantity supports positive leg splits.
-- Quantity must be one of Glitch's supplied valid master quantities. Glitch derives that list dynamically from every enabled account's current account-wide open contracts, prop-rule ceiling, MNQ exposure, and configured follower ratio; the maximum-exposure account limits the group.
+- Quantity must be one of Glitch's supplied valid master quantities. Glitch derives that list dynamically from the master's current account-wide open contracts and prop-rule ceiling. Followers and ratios never constrain Hermes cognition or master quantity; CopyEngine applies the user's route independently and visibly rejects a follower-local breach without cancelling the valid master decision.
 - A naked entry must be impossible.
 - NT/Glitch hold the protective bracket.
 - Native protection must work without Hermes. Hermes may tighten stops, move every remaining target (optionally with a tighter stop), or exit on later cycles, but may never widen stop protection.
@@ -385,7 +385,7 @@ Build in this order:
 2. Install and orient one persistent Hermes profile while preserving native skills, memory, and sessions.
 3. Enable only the core paper worker and validate 5m-flat/1m-positioned packet-to-journal continuity.
 4. Add hourly supervision only after core evidence is trustworthy.
-5. Add six-hour planning, then daily learning, as separate observable stages.
+5. Add 15-minute completed-trade debrief, hourly supervision, 300-minute planning, and daily learning as separate observable stages.
 6. Consider eval/live authority only after paper gates and explicit operator approval.
 ```
 
@@ -406,7 +406,7 @@ Never:
 
 ```text
 1. freeze the packet and outcome schema versions after source validation;
-2. define durable hourly review, six-hour plan, and daily journal schemas;
+2. define durable trade episode, hourly review, 300-minute plan, daily journal, and cognitive-overlay schemas;
 3. implement the planned Glitch overlay skills listed in document 12;
 4. define model-outage and no-silent-downgrade behavior in runtime tests;
 5. define paper-mode learning and performance metrics;

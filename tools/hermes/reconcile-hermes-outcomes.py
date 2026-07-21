@@ -2,9 +2,9 @@
 
 The direct exchange outbox is the decision authority. NinjaTrader execution
 events prove the AI-owned master lifecycle; CopyEngine Journal events prove
-follower-native protection; TradeLedger.tsv proves each account round trip.
-An outcome is emitted only after the master and every enabled follower in the
-Glitch group have closed.
+follower-native protection; TradeLedger.tsv proves each observed account round
+trip. A complete terminal master trade is always attributable to Hermes.
+Follower misses remain replication diagnostics and never erase master learning.
 """
 
 import argparse
@@ -219,8 +219,11 @@ def terminal_group_snapshot(snapshots, when, expected_accounts):
     return None
 
 
-def excursion(snapshots, account, entry_utc, exit_utc, instrument_root):
-    values = []
+def excursion(snapshots, account, entry_utc, exit_utc, instrument_root, realized_pnl):
+    # Minute snapshots are lower-resolution than fills. Include flat-at-entry
+    # and the realized terminal result so observed MFE cannot be negative and
+    # observed MAE cannot be positive for trades that close between samples.
+    values = [0.0, float(realized_pnl)]
     for stamp, snapshot in snapshots:
         if stamp < entry_utc or stamp > exit_utc:
             continue
@@ -233,7 +236,8 @@ def excursion(snapshots, account, entry_utc, exit_utc, instrument_root):
     return {
         "observed_mfe_usd": max(values) if values else None,
         "observed_mae_usd": min(values) if values else None,
-        "excursion_samples": len(values),
+        "excursion_samples": max(0, len(values) - 2),
+        "excursion_quality": "minute_unrealized_plus_terminal_bounds",
     }
 
 
@@ -312,7 +316,9 @@ def _match_ledger_trades(ledger, expected_accounts, bracket_by_account, intent, 
             price_distance = abs(trade["entry_price"] - bracket_fill) if bracket_fill is not None else 0
             candidates.append((delta_seconds, price_distance, trade["exit_utc"], trade["trade_id"], trade))
         if not candidates:
-            return None
+            if account_key == master.lower():
+                return None
+            continue
         candidates.sort(key=lambda item: item[:4])
         matched[account.lower()] = candidates[0][4]
     return matched, follower_protection
@@ -364,19 +370,33 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None):
             continue
         ledger_by_account, follower_protection = matched
 
-        entry_utc = min(ledger_by_account[account.lower()]["entry_utc"] for account in expected_accounts)
-        exit_utc = max(ledger_by_account[account.lower()]["exit_utc"] for account in expected_accounts)
-        terminal_utc = terminal_group_snapshot(snapshots, exit_utc, expected_accounts)
+        master_trade = ledger_by_account.get(master.lower())
+        if master_trade is None:
+            continue
+        entry_utc = master_trade["entry_utc"]
+        exit_utc = master_trade["exit_utc"]
+        terminal_check_utc = max(row["exit_utc"] for row in ledger_by_account.values())
+        terminal_utc = terminal_group_snapshot(snapshots, exit_utc, [master])
         if terminal_utc is None:
             continue
+        group_terminal_utc = terminal_group_snapshot(snapshots, terminal_check_utc, expected_accounts)
         instrument_root = str(intent.get("instrument", "MNQ")).upper()
         account_outcomes = []
         incomplete_outcome = False
-        process_error = False
+        process_error = group_terminal_utc is None
+        replication_diagnostics = []
         for account in expected_accounts:
+            trade = ledger_by_account.get(account.lower())
+            if trade is None:
+                process_error = True
+                replication_diagnostics.append({
+                    "account": account,
+                    "status": "missing_round_trip",
+                    "learning_role": "replication_only",
+                })
+                continue
             has_account_bracket = account.lower() in bracket_by_account
             _, fields = bracket_by_account.get(account.lower(), bracket_by_account[master.lower()])
-            trade = ledger_by_account[account.lower()]
             entry_price = trade["entry_price"]
             exit_price = trade["exit_price"]
             quantity = int(abs(trade["contracts"]) or 1)
@@ -412,11 +432,14 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None):
                 "protection_evidence": protection_evidence,
                 "protection_status": protection_status,
                 "close_kind": infer_close_kind(trade),
-                **excursion(snapshots, account, entry_utc, exit_utc, instrument_root),
+                **excursion(snapshots, account, trade["entry_utc"], trade["exit_utc"], instrument_root, pnl_usd),
             })
-        if incomplete_outcome or len(account_outcomes) != len(expected_accounts):
+        if incomplete_outcome:
             continue
 
+        master_outcome = next((row for row in account_outcomes if row["account"].lower() == master.lower()), None)
+        if master_outcome is None:
+            continue
         existing[intent_id] = {
             "schema_version": "glitch.hermes.trade_outcome.v1",
             "recorded_utc": exit_utc.isoformat().replace("+00:00", "Z"),
@@ -431,12 +454,20 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None):
             "entry_utc": entry_utc.isoformat().replace("+00:00", "Z"),
             "exit_utc": exit_utc.isoformat().replace("+00:00", "Z"),
             "terminal_verified_utc": terminal_utc.isoformat().replace("+00:00", "Z"),
+            "replication_terminal_verified_utc": (
+                group_terminal_utc.isoformat().replace("+00:00", "Z")
+                if group_terminal_utc is not None else None
+            ),
             "planned_stop": intent.get("stop_loss"),
             "planned_target": intent.get("take_profit_1"),
             "reason": intent.get("reason"),
             "decision_audit": intent.get("decision_audit"),
             "account_outcomes": account_outcomes,
+            "replication_diagnostics": replication_diagnostics,
+            "master_realized_pnl_usd": master_outcome["realized_pnl_usd"],
             "group_realized_pnl_usd": sum(row["realized_pnl_usd"] for row in account_outcomes),
+            "master_attribution_status": "complete",
+            "master_learning_eligible": True,
             "attribution_status": "process_error" if process_error else "complete",
             "learning_eligible": not process_error,
             "evidence": intent.get("_evidence_path"),

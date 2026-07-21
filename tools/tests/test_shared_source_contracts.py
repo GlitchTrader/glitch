@@ -81,29 +81,31 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("TryGetNetQuantityForInstrumentRoot", text)
         self.assertIn("TryGetOpenPositionInstruments", text)
 
-    def test_replication_admission_fails_closed_on_unknown_native_state_or_capacity(self):
+    def test_follower_submission_fails_closed_on_unknown_native_state_or_capacity(self):
         copy = source(COPY_ENGINE)
-        admission = method_body(copy, "public string GetEntryDenialReason", "public void Configure")
+        fanout = method_body(copy, "private void FanOutOpening", "private void FanOutCompleteClose")
+        submit = method_body(copy, "private void SubmitProtectedFollowerEntry", "private bool SubmitProtectionUnits")
         for token in (
-            "master_positions_unavailable",
-            "follower_positions_unavailable",
-            "follower_state_unavailable",
-            "follower_contract_cap_unavailable",
+            "copy_reject|native_state_unavailable",
+            "copy_reject|contract_cap_unavailable",
+            "copy_reject|max_contracts",
         ):
-            self.assertIn(token, admission)
+            self.assertIn(token, fanout)
+        self.assertIn("FollowerFinalAdmissionUnavailable", submit)
         self.assertIn("TryGetTotalOpenContracts", copy)
         self.assertIn("TryGetInFlightOpeningQuantity", copy)
         self.assertIn("TryResolveRouteContractCap", copy)
+        self.assertNotIn("GetEntryDenialReason", copy)
         self.assertNotIn("private static int GetTotalOpenContracts", copy)
         self.assertNotIn("private static Order[] SnapshotOrders", copy)
 
-    def test_replication_admission_requires_current_follower_alignment(self):
+    def test_replication_suppresses_only_the_divergent_follower(self):
         copy = source(COPY_ENGINE)
-        admission = method_body(copy, "public string GetEntryDenialReason", "public void Configure")
-        self.assertIn("expectedCurrent", admission)
-        self.assertIn("Math.Abs(actual) + inFlight != expectedCurrent", admission)
-        self.assertIn("follower_requires_explicit_resync", admission)
-        self.assertIn("master_direction_conflict", admission)
+        fanout = method_body(copy, "private void FanOutOpening", "private void FanOutCompleteClose")
+        self.assertIn("expectedBeforeFill", fanout)
+        self.assertIn("Math.Abs(actual) + inFlight != expectedBeforeFill", fanout)
+        self.assertIn("SuppressFollowerRoot", fanout)
+        self.assertIn("continue;", fanout)
 
     def test_explicit_resync_and_final_submit_use_the_configured_route_cap(self):
         copy = source(COPY_ENGINE)

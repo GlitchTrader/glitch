@@ -80,7 +80,10 @@ namespace Glitch.UI
             bool positionsAvailable = TryBuildPortfolioSnapshotPositions(
                 account,
                 out List<GlitchPortfolioSnapshotPositionRecord> positions);
-            bool ordersAvailable = TryGetPortfolioWorkingOrderCount(account, out int workingOrderCount);
+            bool ordersAvailable = TryBuildPortfolioSnapshotOrders(
+                account,
+                out List<GlitchPortfolioSnapshotOrderRecord> workingOrders);
+            int workingOrderCount = workingOrders.Count;
             double liveUnrealizedPnl = positions.Sum(position => position.UnrealizedPnl);
             string livePositionDisplay = BuildPortfolioPositionDisplay(positions);
 
@@ -110,7 +113,8 @@ namespace Glitch.UI
                 IsEvalTargetLocked = _evalTargetLockedAccounts.Contains(row.DisplayName),
                 TradingStartTime = ruleFirm?.TradingStartTime,
                 TradingEndTime = ruleFirm?.TradingEndTime,
-                Positions = positions
+                Positions = positions,
+                WorkingOrderDetails = workingOrders
             };
         }
 
@@ -180,21 +184,45 @@ namespace Glitch.UI
             }
         }
 
-        private static bool TryGetPortfolioWorkingOrderCount(Account account, out int count)
+        private static bool TryBuildPortfolioSnapshotOrders(
+            Account account,
+            out List<GlitchPortfolioSnapshotOrderRecord> records)
         {
-            count = 0;
+            records = new List<GlitchPortfolioSnapshotOrderRecord>();
             if (account?.Orders == null)
                 return false;
             try
             {
                 lock (account.Orders)
-                    count = account.Orders.Count(order => order != null
-                        && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState));
+                {
+                    foreach (Order order in account.Orders)
+                    {
+                        if (order == null || !GlitchReplicationEngine.IsWorkingOrderState(order.OrderState))
+                            continue;
+                        string instrumentFullName = order.Instrument?.FullName;
+                        string instrumentRoot = order.Instrument?.MasterInstrument?.Name;
+                        if (string.IsNullOrWhiteSpace(instrumentRoot))
+                            instrumentRoot = instrumentFullName;
+                        records.Add(new GlitchPortfolioSnapshotOrderRecord
+                        {
+                            InstrumentFullName = instrumentFullName,
+                            InstrumentRoot = instrumentRoot,
+                            Name = order.Name,
+                            OrderType = order.OrderType.ToString(),
+                            OrderState = order.OrderState.ToString(),
+                            Oco = order.Oco,
+                            Quantity = order.Quantity,
+                            Filled = order.Filled,
+                            LimitPrice = order.LimitPrice,
+                            StopPrice = order.StopPrice
+                        });
+                    }
+                }
                 return true;
             }
             catch
             {
-                count = 0;
+                records.Clear();
                 return false;
             }
         }

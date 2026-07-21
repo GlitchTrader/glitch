@@ -24,7 +24,8 @@ All loops belong to the same `glitch` profile and share native Hermes memory, bo
 |---|---:|---|---|---|
 | Core decision | 5m while flat; 1m while a scoped master is positioned; one-cycle directives | `gpt-5.6-luna`, medium | What should each configured group do now? | Strict intent batch; Glitch may reject or execute |
 | Portfolio supervision | hourly | `gpt-5.6-sol`, high | Is exposure, performance, risk posture, or system health drifting? | Review, bounded self-heal, and plan recommendations; no order |
-| Portfolio planning | every 6 hours | `gpt-5.6-sol`, high | Given today’s progress and prop rules, what targets and risk allocation should govern the next block? | Active Hermes plan inside Glitch’s hard limits; no Glitch-policy mutation |
+| Trade debrief | every 15 minutes when new outcomes exist | `gpt-5.6-sol`, high | Why did each master trade enter and exit; what did geometry, quantity, and management teach? | Append-only master episode; no order authority |
+| Portfolio planning | every 300 minutes with new reviews | `gpt-5.6-sol`, high | Given today’s progress and prop rules, what hypotheses, sizing, geometry, and management posture should guide the next block? | Active Hermes plan inside Glitch’s hard limits; no Glitch-policy mutation |
 | Daily learning | after session | `gpt-5.6-sol`, high | What was learned, what should change tomorrow, and which hypotheses deserve testing? | Journal, memory updates, hypotheses, and tomorrow plan; no live-policy promotion |
 
 Model IDs are explicit defaults, not permanent doctrine. Each job records provider, model, reasoning effort, prompt version, skill versions, token use, and latency so model routing can later be optimized from evidence. The core loop must never silently downgrade to a weaker fallback model. A failed model call produces no new intent. Supervisory loops may defer until their assigned model is available.
@@ -70,13 +71,13 @@ Output: `glitch.hermes.hourly_review.v1` containing:
 
 It may reduce Hermes’s intended exposure or pause proposals. It may not raise Glitch caps, alter account groups, enable execution, or place an order.
 
-### Six-hour portfolio planning loop
+### 300-minute portfolio planning loop
 
 Input: current prop-firm phase and rules, daily and trailing PnL, drawdown buffer, remaining session, market regime, group-level performance, hourly reviews, and recent lessons.
 
 Output: `glitch.hermes.portfolio_plan.v1` containing:
 
-- objectives for the next six hours and the trading day;
+- objectives for the next 300 minutes and the trading day;
 - per-group purpose and risk allocation;
 - preferred participation posture by market regime;
 - profit preservation, loss containment, and stop-trading conditions;
@@ -118,18 +119,12 @@ Existing Glitch overlay:
 | `glitch-self-learning` | Promote attributable outcomes into append-only episodic and durable lessons without turning memory into truth |
 | `glitch-self-heal` | Reconcile Hermes-owned state to Glitch truth, append the correction, and resume safe operation |
 | `glitch-supervisor-ledger` | Maintain append-only observations, guidance, lessons, and build requests |
+| `glitch-learning-loop` | Debrief master trades, supervise hourly, plan every 300 minutes, update daily memory, and evaluate one reversible cognitive overlay |
 | `glitch-escalate-to-codex` | Propose bounded source work without scheduling or operating Codex |
 
-Required overlay before supervisory loops activate:
-
-| Skill | Required capability |
-|---|---|
-| `glitch-read-ledger` | Query Glitch-owned events by packet, intent, trade, group, account, and time |
-| `glitch-write-ledger` | Append only to Hermes-owned review, plan, journal, and knowledge streams |
-| `glitch-prop-firm-rules` | Interpret account phase, drawdown, consistency, payout, evaluation, and PA objectives from Glitch-supplied rules |
-| `glitch-portfolio-supervision` | Assess aggregate exposure, performance, concentration, and risk allocation |
-| `glitch-daily-planning` | Define targets and plan revisions inside the hard envelope |
-| `glitch-knowledge-upkeep` | Maintain provenance, deduplicate lessons, age weak hypotheses, and preserve contradictions |
+`glitch-learning-loop` is the intentionally small supervisory overlay. It reuses
+the existing outcome, self-learning, self-heal, and supervisor-ledger skills
+instead of splitting read, write, planning, and upkeep into six thin wrappers.
 
 Skills teach procedures and expose resources. They do not encode a deterministic trading strategy, require an archetype match, force a trade quota, or silently become policy.
 
@@ -184,7 +179,7 @@ One writer owns every physical stream. Records join through `packet_id`, `snapsh
 | Episodic | decisions, trades, rejects, outcomes, operator conversations | append with Glitch evidence links |
 | Semantic | regimes, prop-rule interpretations, recurring market behavior | update with provenance and confidence |
 | Procedural | skills and output contracts | versioned source change |
-| Strategic | active targets, risk posture, experiment priorities | replaced by six-hour/daily plan; history retained |
+| Strategic | active targets, risk posture, experiment priorities | replaced by 300-minute/daily plan; history retained |
 | Reflective | lessons, contradictions, model/process failures | append, merge duplicates, never erase contrary evidence |
 
 Memory is context, not execution truth. Hermes may revise beliefs freely as evidence changes. It must preserve the provenance and uncertainty of those revisions.
@@ -240,9 +235,10 @@ Optimize relevance before shrinking intelligence:
 
 Core output remains tiny and executable. Supervisory outputs may be richer but must use versioned schemas and write only to Hermes-owned streams.
 
-## 9. Staged launch
+## 9. Paper activation
 
-Only Stage A and then Stage B are in immediate scope.
+Stages A and B established the observable core. Stages C-E now run together in
+one evidence-gated learning worker; they do not create additional executors.
 
 ### Stage A — interactive orientation
 
@@ -260,13 +256,15 @@ Only Stage A and then Stage B are in immediate scope.
 4. Validate: zero flat-book model calls between five-minute boundaries, minute calls only while positioned or explicitly directed, one batch per invoked group set, no duplicate delivery, and receipts/Glitch decisions joined by ID.
 5. Observe paper cycles and journal quality. Validate a complete protected open-to-close trade when Hermes chooses one; do not force an entry merely to satisfy infrastructure testing.
 
-### Deferred stages
+### Active learning stages
 
-- Stage C: hourly supervision after core packet/intent/outcome evidence is trustworthy.
-- Stage D: six-hour planning after the hourly review schema and ledger are useful.
-- Stage E: daily learning after outcomes, commissions, MAE/MFE, and attribution are reliable.
+- Stage C: debrief completed master outcomes every 15 minutes and supervise new episodes hourly.
+- Stage D: replace the active 300-minute plan only when a new hourly review exists.
+- Stage E: journal daily, update native memory from repeated attributable evidence, and evaluate one reversible cognitive overlay.
 
-No additional cron is enabled merely because it appears in this map.
+One 15-minute no-agent cron hosts all three learning stages and calls Sol only
+when their evidence and cadence gates are due. Every nested call is tagged
+`trading`; the worker has no execution authority.
 
 ## 10. Optimization rule
 

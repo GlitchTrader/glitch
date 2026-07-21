@@ -17,6 +17,20 @@ namespace Glitch.Services
         public double UnrealizedPnl { get; set; }
     }
 
+    internal sealed class GlitchPortfolioSnapshotOrderRecord
+    {
+        public string InstrumentFullName { get; set; }
+        public string InstrumentRoot { get; set; }
+        public string Name { get; set; }
+        public string OrderType { get; set; }
+        public string OrderState { get; set; }
+        public string Oco { get; set; }
+        public double Quantity { get; set; }
+        public double Filled { get; set; }
+        public double LimitPrice { get; set; }
+        public double StopPrice { get; set; }
+    }
+
     internal sealed class GlitchPortfolioSnapshotAccountRecord
     {
         public string AccountName { get; set; }
@@ -44,6 +58,7 @@ namespace Glitch.Services
         public string TradingStartTime { get; set; }
         public string TradingEndTime { get; set; }
         public List<GlitchPortfolioSnapshotPositionRecord> Positions { get; set; }
+        public List<GlitchPortfolioSnapshotOrderRecord> WorkingOrderDetails { get; set; }
     }
 
     internal sealed class GlitchPortfolioSnapshotCapture
@@ -223,6 +238,17 @@ namespace Glitch.Services
                     positions.Add(BuildPositionJson(position));
                 }
             }
+            var orders = new List<string>();
+            if (account.WorkingOrderDetails != null)
+            {
+                for (int i = 0; i < account.WorkingOrderDetails.Count; i++)
+                {
+                    GlitchPortfolioSnapshotOrderRecord order = account.WorkingOrderDetails[i];
+                    if (order == null)
+                        continue;
+                    orders.Add(BuildOrderJson(order));
+                }
+            }
 
             GlitchAiTradingWindowStatus tradingWindow = GlitchAiTradingWindow.Evaluate(
                 nowUtc,
@@ -260,7 +286,8 @@ namespace Glitch.Services
                 + "\"must_flat_utc\":" + GlitchSnapshotJson.String(
                     tradingWindow.MustFlatUtc.HasValue ? GlitchSnapshotJson.FormatUtc(tradingWindow.MustFlatUtc.Value) : string.Empty) + ","
                 + "\"seconds_until_must_flat\":" + GlitchSnapshotJson.Number(tradingWindow.SecondsUntilMustFlat) + ","
-                + "\"positions\":[" + string.Join(",", positions) + "]"
+                + "\"positions\":[" + string.Join(",", positions) + "],"
+                + "\"working_order_details\":[" + string.Join(",", orders) + "]"
                 + "}";
         }
 
@@ -273,6 +300,22 @@ namespace Glitch.Services
                 + "\"quantity\":" + GlitchSnapshotJson.Number(position.Quantity) + ","
                 + "\"average_price\":" + GlitchSnapshotJson.Number(position.AveragePrice) + ","
                 + "\"unrealized_pnl\":" + GlitchSnapshotJson.Number(position.UnrealizedPnl)
+                + "}";
+        }
+
+        private static string BuildOrderJson(GlitchPortfolioSnapshotOrderRecord order)
+        {
+            return "{"
+                + "\"instrument\":" + GlitchSnapshotJson.String(order.InstrumentFullName) + ","
+                + "\"instrument_root\":" + GlitchSnapshotJson.String(order.InstrumentRoot) + ","
+                + "\"name\":" + GlitchSnapshotJson.String(order.Name) + ","
+                + "\"order_type\":" + GlitchSnapshotJson.String(order.OrderType) + ","
+                + "\"order_state\":" + GlitchSnapshotJson.String(order.OrderState) + ","
+                + "\"oco\":" + GlitchSnapshotJson.String(order.Oco) + ","
+                + "\"quantity\":" + GlitchSnapshotJson.Number(order.Quantity) + ","
+                + "\"filled\":" + GlitchSnapshotJson.Number(order.Filled) + ","
+                + "\"limit_price\":" + GlitchSnapshotJson.Number(order.LimitPrice) + ","
+                + "\"stop_price\":" + GlitchSnapshotJson.Number(order.StopPrice)
                 + "}";
         }
     }

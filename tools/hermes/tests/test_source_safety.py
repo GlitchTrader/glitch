@@ -62,30 +62,28 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("masterMember.Account.Submit", entry)
         self.assertNotIn("FollowerAccount", resolver)
 
-    def test_ai_checks_replication_admission_before_master_submit(self):
+    def test_follower_admission_never_blocks_master_submit(self):
         executor = source(EXECUTOR)
         entry = method_body(
             executor,
             "private static GlitchAiExecutionResult TryExecuteGroupEnter",
             "private static bool TryGetEntryAccountIndex",
         )
-        self.assertIn("GetReplicationEntryDenialReason", entry)
-        self.assertLess(entry.index("GetReplicationEntryDenialReason"), entry.index("masterMember.Account.Submit"))
-        self.assertIn("GlitchAiOrderExecutor.GetReplicationEntryDenialReason", source(TELEMETRY_UI))
+        self.assertNotIn("GetReplicationEntryDenialReason", entry)
+        self.assertNotIn("GlitchAiOrderExecutor.GetReplicationEntryDenialReason", source(TELEMETRY_UI))
 
     def test_ai_refuses_firm_direction_conflicts(self):
         telemetry = source(TELEMETRY_UI)
         guard = source(APEX_DIRECTION_GUARD)
         executor = source(EXECUTOR)
-        self.assertIn("GetAiEntryDenialReason", telemetry)
+        self.assertNotIn("GetAiEntryDenialReason", telemetry)
         self.assertIn("GlitchApexDirectionGuard.TryApproveEntry", executor)
         self.assertIn("apex_cross_direction_conflict", guard)
 
-    def test_ai_refuses_to_trade_a_group_when_replication_routes_are_incomplete(self):
+    def test_ai_does_not_treat_replication_routes_as_a_cognitive_gate(self):
         telemetry = source(TELEMETRY_UI)
-        self.assertIn("expectedFollowerCount", telemetry)
-        self.assertIn("GetActiveRouteCount", telemetry)
-        self.assertIn("replication_routes_incomplete", telemetry)
+        self.assertNotIn("expectedFollowerCount", telemetry)
+        self.assertNotIn("replication_routes_incomplete", telemetry)
 
     def test_invalid_policy_cannot_arm_or_pass_the_firewall(self):
         executor = source(EXECUTOR)
@@ -202,7 +200,7 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         )
         self.assertIn("group.ProtectionSubmitted[accountIndex] = false", release)
         self.assertIn("GlitchAiOrderExecutor.ProcessAccountStateUpdate(activeAccount)", refresh)
-        self.assertIn("GlitchAiOrderExecutor.GetReplicationEntryDenialReason", telemetry)
+        self.assertNotIn("GlitchAiOrderExecutor.GetReplicationEntryDenialReason", telemetry)
 
     def test_ai_preserves_absolute_structural_prices(self):
         executor = source(EXECUTOR)
@@ -228,7 +226,7 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
             self.assertNotIn(retired, executor + firewall + policy)
         self.assertIn('TryExtractNumber(portfolioAccountJson, "max_contracts"', executor)
         self.assertIn('TryExtractNumber(portfolioAccountJson, "max_contracts"', firewall)
-        self.assertIn("GetReplicationEntryDenialReason", executor)
+        self.assertNotIn("GetReplicationEntryDenialReason", executor)
         self.assertIn("TryGetTotalOpenContracts(masterAccount", executor)
         self.assertIn("lock (account.Positions)", executor)
         self.assertIn("TryGetTotalOpenContractsFromAccountBlock", firewall)
@@ -282,7 +280,9 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("native_state_available", source(PORTFOLIO_READER))
         self.assertIn("portfolio_native_state_unavailable_", source(PORTFOLIO_READER))
         direct_cycle = source(ROOT / "tools" / "hermes" / "run-direct-glitch-cycle.py")
-        self.assertIn('member.get("native_state_available") is not True', direct_cycle)
+        self.assertNotIn('member.get("native_state_available") is not True', direct_cycle)
+        self.assertIn('master.get("native_state_available") is not True', direct_cycle)
+        self.assertIn("working_order_details", writer)
         self.assertIn("DayOfWeek.Saturday", window)
         self.assertIn("DayOfWeek.Sunday", window)
         self.assertIn("DayOfWeek.Friday", window)

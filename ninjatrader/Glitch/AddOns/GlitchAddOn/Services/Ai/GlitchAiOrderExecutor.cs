@@ -21,7 +21,6 @@ namespace Glitch.Services
 
         public static Func<Func<GlitchAiExecutionResult>, GlitchAiExecutionResult> UiInvoke;
         public static Action<string, string, string> RaiseCritical;
-        public static Func<Account, Instrument, OrderAction, int, string> GetReplicationEntryDenialReason;
 
         public static GlitchAiExecutionResult TryExecuteApprovedIntent(string rawJson, DateTime nowUtc)
         {
@@ -467,14 +466,6 @@ namespace Glitch.Services
                     "apex_direction_compliance_rejected",
                     apexDirectionFailure);
             }
-            string replicationDenial = GetReplicationEntryDenialReason?.Invoke(
-                masterAccount,
-                instrument,
-                entryAction,
-                masterQuantity);
-            if (!string.IsNullOrWhiteSpace(replicationDenial))
-                return GlitchAiExecutionResult.Failed("replication_entry_blocked", replicationDenial);
-
             GlitchAiTradingWindowStatus finalTradingWindow = GlitchAiTradingWindow.Evaluate(
                 DateTime.UtcNow,
                 GlitchAiJsonFields.ExtractString(portfolioAccountJson, "trading_start_time_et"),

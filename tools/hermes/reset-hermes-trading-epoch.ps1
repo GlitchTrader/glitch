@@ -82,9 +82,19 @@ foreach ($relative in @(
     Add-ExistingFile $files (Join-Path $exchangeRoot $relative) $exchangeRoot
 }
 foreach ($relative in @(
+    'hermes\supervisor\trade-episodes.jsonl',
     'hermes\supervisor\observations.jsonl',
     'hermes\supervisor\lessons.jsonl',
-    'hermes\supervisor\trading-guidance.jsonl'
+    'hermes\supervisor\trading-guidance.jsonl',
+    'hermes\supervisor\plans.jsonl',
+    'hermes\supervisor\daily-journal.jsonl',
+    'hermes\supervisor\cognitive-changes.jsonl',
+    'hermes\supervisor\current-guidance.json',
+    'hermes\supervisor\current-plan.json',
+    'hermes\supervisor\active-cognitive-overlay.json',
+    'hermes\supervisor\active-trades.json',
+    'hermes\supervisor\learning-state.json',
+    'hermes\learning-cycle.lock'
 )) {
     Add-ExistingFile $files (Join-Path $exchangeRoot $relative) $exchangeRoot
 }
@@ -151,7 +161,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Could not archive the named trading session.' }
 
         & hermes sessions export (Join-Path $staging 'one-shot-trading-sessions.jsonl') `
-            --source cli --cwd $exchangeRoot --min-messages 2 --max-messages 2 --redact --yes | Out-Null
+            --source trading --cwd $exchangeRoot --min-messages 2 --redact --yes | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'Could not archive one-shot trading sessions.' }
 
         & hermes sessions export (Join-Path $staging 'hourly-review-sessions.jsonl') `
@@ -201,8 +211,8 @@ try {
         $resetState = (& $hermesPython $sessionReset --title trading --preserve-title chat --apply | Out-String | ConvertFrom-Json)
         if ($LASTEXITCODE -ne 0) { throw 'Could not replace the named trading session.' }
 
-        & hermes sessions prune --source cli --cwd $exchangeRoot `
-            --min-messages 2 --max-messages 2 --include-archived --yes | Out-Null
+        & hermes sessions prune --source trading --cwd $exchangeRoot `
+            --min-messages 2 --include-archived --yes | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'Could not delete one-shot trading sessions.' }
 
         & hermes sessions prune --title glitch-hourly-review --include-archived --yes | Out-Null

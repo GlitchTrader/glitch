@@ -40,8 +40,9 @@ if ($coreJobs.Count -gt 1) {
     throw 'Multiple glitch-direct-operator jobs exist; refusing to guess which one owns trading.'
 }
 
+$allowedJobs = @('glitch-direct-operator', 'glitch-learning-supervisor')
 $disabledJobs = @()
-foreach ($job in @($jobs | Where-Object { $_.name -ne 'glitch-direct-operator' -and $_.enabled })) {
+foreach ($job in @($jobs | Where-Object { $_.name -notin $allowedJobs -and $_.enabled })) {
     & hermes cron pause ([string]$job.id) | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Could not pause non-core Glitch cron job: $($job.name)" }
     $disabledJobs += [string]$job.name

@@ -24,17 +24,20 @@ class OperatorMapTests(unittest.TestCase):
         self.assertEqual(self.operator["books_source"], "dynamic_from_glitch_packet")
         self.assertTrue(self.operator["skills"]["native_hermes_preserved"])
 
-    def test_loop_model_routing_and_initial_activation(self):
+    def test_loop_model_routing_and_paper_activation(self):
         loops = {item["id"]: item for item in self.operator["loops"]}
         self.assertEqual(loops["core_decision"]["model"], "gpt-5.6-luna")
         for loop_id in (
+            "trade_debrief",
             "portfolio_supervision",
             "portfolio_planning",
             "daily_learning",
         ):
             self.assertEqual(loops[loop_id]["model"], "gpt-5.6-sol")
-            self.assertEqual(loops[loop_id]["initial_activation"], "disabled")
-        self.assertEqual(self.operator["activation"]["enable_now"], [])
+            self.assertEqual(loops[loop_id]["initial_activation"], "active_paper")
+        self.assertEqual(set(self.operator["activation"]["enable_now"]), {
+            "trade_debrief", "portfolio_supervision", "portfolio_planning", "daily_learning",
+        })
 
     def test_core_model_is_pinned_without_silent_fallback(self):
         installer = (ROOT / "tools/hermes/install-direct-hermes-bridge.ps1").read_text(encoding="utf-8")
@@ -42,6 +45,7 @@ class OperatorMapTests(unittest.TestCase):
         self.assertIn("config set model.default gpt-5.6-luna", installer)
         self.assertIn("config set model.provider openai-codex", installer)
         self.assertIn("config set agent.reasoning_effort medium", installer)
+        self.assertIn("['gpt-5.6-sol']='high'", installer)
         self.assertIn("_write_chain; c=load_config(); _write_chain(c, [])", installer)
         self.assertIn('CORE_MODEL = "gpt-5.6-luna"', runner)
         self.assertIn('CORE_PROVIDER = "openai-codex"', runner)
@@ -60,7 +64,9 @@ class OperatorMapTests(unittest.TestCase):
         required = self.operator["skills"]["required_before_supervisory_activation"]
         self.assertIn("glitch-self-learning", installed)
         self.assertIn("glitch-self-heal", installed)
+        self.assertIn("glitch-learning-loop", installed)
         self.assertNotIn("glitch-self-heal", required)
+        self.assertEqual(required, [])
 
         heal = (ROOT / "hermes-profile/skills/glitch-self-heal/SKILL.md").read_text(encoding="utf-8")
         learn = (ROOT / "hermes-profile/skills/glitch-self-learning/SKILL.md").read_text(encoding="utf-8")

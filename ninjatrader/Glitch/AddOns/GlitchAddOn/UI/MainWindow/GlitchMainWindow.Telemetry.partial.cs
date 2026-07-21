@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using Glitch.Services;
 
 namespace Glitch.UI
@@ -27,8 +26,6 @@ namespace Glitch.UI
                 GlitchAiOrderExecutor.UiInvoke = InvokeOnUiThread;
                 GlitchAiOrderExecutor.RaiseCritical = (account, message, key) =>
                     RaiseCriticalWarning(account, message, key, unlocksTrading: false);
-                GlitchAiOrderExecutor.GetReplicationEntryDenialReason =
-                    GetAiEntryDenialReason;
                 GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
                 string mode = policy != null && policy.IsValid ? policy.Mode : "invalid";
                 AppendJournal(
@@ -63,34 +60,6 @@ namespace Glitch.UI
             GlitchRailSelfCheckWriter.TryWrite(System.DateTime.UtcNow);
         }
 
-        private string GetAiEntryDenialReason(
-            NinjaTrader.Cbi.Account account,
-            NinjaTrader.Cbi.Instrument instrument,
-            NinjaTrader.Cbi.OrderAction action,
-            int quantity)
-        {
-            AccountGroupDefinition group = _accountGroups.FirstOrDefault(candidate => candidate != null
-                && string.Equals(candidate.MasterAccount, account?.Name, StringComparison.OrdinalIgnoreCase));
-            int expectedFollowerCount = group?.Members?
-                .Where(member => member != null
-                    && !member.IsMasterRow
-                    && member.IsEnabled
-                    && !string.IsNullOrWhiteSpace(member.FollowerAccount)
-                    && !string.Equals(member.FollowerAccount, group.MasterAccount, StringComparison.OrdinalIgnoreCase))
-                .Select(member => member.FollowerAccount.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Count() ?? 0;
-            if (expectedFollowerCount > 0)
-            {
-                int activeRouteCount = _copyEngine?.GetActiveRouteCount(account?.Name) ?? 0;
-                if (!_isReplicatingUi || _copyEngine?.IsEnabled != true || activeRouteCount != expectedFollowerCount)
-                    return "replication_routes_incomplete|expected=" + expectedFollowerCount
-                        + "|active=" + activeRouteCount;
-            }
-
-            return _copyEngine?.GetEntryDenialReason(account, instrument, action, quantity);
-        }
-
         private void StopRailInfrastructure()
         {
             GlitchExternalTelemetryServer.TryStop();
@@ -102,7 +71,6 @@ namespace Glitch.UI
             GlitchHermesControlServer.TradingModeChanged = null;
             GlitchAiOrderExecutor.UiInvoke = null;
             GlitchAiOrderExecutor.RaiseCritical = null;
-            GlitchAiOrderExecutor.GetReplicationEntryDenialReason = null;
             GlitchRailSelfCheckWriter.TryWrite(System.DateTime.UtcNow);
         }
 

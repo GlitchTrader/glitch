@@ -136,11 +136,11 @@ Each client combines the recommendation with current local portfolio and group s
 
 Learning distinguishes shared market evidence from client execution evidence. Central outcomes may aggregate slippage, rejection, bracket, and PnL statistics without treating one customer's account state as universal policy. Only completed, ledger-correlated outcomes enter the learning corpus.
 
-## Layer 3 — hourly portfolio and risk review
+## Layer 3 — completed-trade debrief and hourly review
 
 Mode: Hermes cron, preferably script-assisted with bounded LLM reasoning only when needed.
 
-Cadence: every 1 hour.
+Cadence: debrief new completed master outcomes every 15 minutes; review accumulated episodes every 1 hour.
 
 Purpose:
 
@@ -154,11 +154,11 @@ recommend risk posture changes
 
 This layer does not place trades. It produces an hourly review, checks whether observed behavior matches the active plan, and may perform Tier 0 repairs only inside Hermes-owned state (for example rebuilding an index, retrying a receipt, quarantining a malformed memory item, or pausing its own unhealthy job). Risk-cap, account, Glitch-policy, deployment, and execution changes remain proposals requiring the authority defined in document 12.
 
-## Layer 4 — six-hour portfolio planning
+## Layer 4 — 300-minute portfolio planning
 
 Mode: Hermes cron, LLM-driven or script-assisted.
 
-Cadence: every 6 hours during active experimentation.
+Cadence: every 300 minutes when new hourly evidence exists.
 
 Purpose:
 
@@ -272,8 +272,9 @@ Do not store private/raw dumps or unreviewed lessons as active policy.
 ```text
 1 minute   central canonical ingest + packet assembly (client harness mirrors it)
 5 minutes  one central Hermes recommendation + client poll
+15 minutes Hermes debriefs newly completed master outcomes
 1 hour     Hermes portfolio/risk review
-6 hours    Hermes portfolio targets and risk planning
+300 minutes Hermes portfolio targets and risk planning
 Daily      Hermes lessons, memory upkeep, and tomorrow targets
 ```
 
@@ -287,8 +288,8 @@ one live exporter
 one historical exporter using the same schema
 one 5-minute operator job
 one script-only packet check
-one persistent supervised Hermes profile/memory system with isolated inference sessions and native capabilities intact
-interactive orientation, then only the 5-minute core
+one supervised Hermes profile/memory system with isolated `trading` inference sessions and native capabilities intact
+the core first, followed by evidence-gated debrief, supervision, planning, and daily learning
 ```
 
 Do not start with:
@@ -302,7 +303,7 @@ unreviewed auto-policy updates
 separate central/client schemas
 ```
 
-Add hourly supervision, six-hour planning, and daily learning only after the core packet-to-outcome cycle is observable and trustworthy. The complete cognitive and authority map is `12_hermes_trading_skills_and_knowledge.md`.
+Activate the 15-minute debrief, hourly supervision, 300-minute planning, and daily learning only from attributable master outcomes. Hermes may test one versioned cognitive overlay at a time in paper mode; later episodes must promote, revise, or roll it back. The complete cognitive and authority map is `12_hermes_trading_skills_and_knowledge.md`.
 
 ## Optional Kanban learning layer (deferred)
 
@@ -314,6 +315,6 @@ Hermes memory       hypotheses, distilled lessons, operator context
 Hermes Kanban       bounded review assignments with evidence links and completion criteria
 ```
 
-After the direct core is validated, a small projector may create an unassigned informational card for an unusual closed trade or anomaly. Assignment is what authorizes model work, so ordinary positions must not spawn agents or model calls. A practical first assigned card is one daily review that compares closed outcomes, updates a hypothesis with evidence, and records what should be tested next. Hourly or six-hour cards should exist only when a material exception or decision needs attention.
+After the direct core is validated, a small projector may create an unassigned informational card for an unusual closed trade or anomaly. Assignment is what authorizes model work, so ordinary positions must not spawn agents or model calls. A practical first assigned card is one daily review that compares closed outcomes, updates a hypothesis with evidence, and records what should be tested next. Hourly or 300-minute cards should exist only when a material exception or decision needs attention.
 
 The board must never control trading mode, replication, flattening, order submission, stops, or targets. It links back to immutable Glitch IDs rather than copying market and order truth into `kanban.db`. Only one Hermes gateway may own the Kanban dispatcher. Model routing, automatic card creation, per-position tickets, and dashboard integration are expansion candidates after the core produces trustworthy data; none are required for initial deployment.

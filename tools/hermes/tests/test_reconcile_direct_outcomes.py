@@ -31,7 +31,14 @@ def ledger_row(account, entry_utc, exit_utc, entry_price, exit_price, correlatio
 
 
 class DirectOutcomeReconcileTests(unittest.TestCase):
-    def test_waits_for_every_enabled_follower_then_emits_group_outcome(self):
+    def test_excursion_bounds_include_entry_and_terminal_fill(self):
+        now = datetime.now(timezone.utc)
+        loss = MODULE.excursion([], "Sim101", now, now, "MNQ", -15.1)
+        self.assertEqual(loss["observed_mfe_usd"], 0.0)
+        self.assertEqual(loss["observed_mae_usd"], -15.1)
+        self.assertEqual(loss["excursion_samples"], 0)
+
+    def test_master_learning_survives_a_missing_follower_round_trip(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             gd = root / "GlitchData"
@@ -80,7 +87,33 @@ class DirectOutcomeReconcileTests(unittest.TestCase):
                 f"{dotnet_ticks('2026-07-14T12:00:03Z')}\tSim102\tReplication\tfollower_protection|entry={sim102_signal}|protected_qty=2|result=submitted\n",
                 encoding="utf-8",
             )
-            self.assertEqual(MODULE.reconcile(gd, None, output, outbox), [])
+            snapshots = [
+                ("2026-07-14T12:00:00Z", {"Sim101": 0, "Sim102": 0, "Sim103": 0}),
+                ("2026-07-14T12:05:04Z", {"Sim101": 20, "Sim102": 18, "Sim103": 0}),
+            ]
+            snapshot_root = gd / "snapshots" / "historical" / "portfolio"
+            for index, (stamp, accounts) in enumerate(snapshots):
+                (snapshot_root / f"{index}.json").write_text(json.dumps({
+                    "created_utc": stamp,
+                    "accounts": [{
+                        "account": name,
+                        "realized_pnl": pnl,
+                        "positions": ([{"instrument_root": "MNQ"}] if index == 1 and name == "Sim103" else []),
+                    } for name, pnl in accounts.items()],
+                }), encoding="utf-8")
+
+            partial = MODULE.reconcile(gd, None, output, outbox)
+            self.assertEqual(len(partial), 1)
+            self.assertEqual([row["account"] for row in partial[0]["account_outcomes"]], ["Sim101", "Sim102"])
+            self.assertEqual(partial[0]["replication_diagnostics"], [{
+                "account": "Sim103",
+                "status": "missing_round_trip",
+                "learning_role": "replication_only",
+            }])
+            self.assertEqual(partial[0]["attribution_status"], "process_error")
+            self.assertTrue(partial[0]["master_learning_eligible"])
+            self.assertFalse(partial[0]["learning_eligible"])
+            self.assertIsNone(partial[0]["replication_terminal_verified_utc"])
 
             with ledger.open("a", encoding="utf-8") as stream:
                 stream.write(ledger_row("Sim103", "2026-07-14T12:00:04Z", "2026-07-14T12:05:03Z", 20002, 20010, quantity=3, entry_signal=sim103_signal))
@@ -89,17 +122,14 @@ class DirectOutcomeReconcileTests(unittest.TestCase):
                     f"{dotnet_ticks('2026-07-14T12:00:04Z')}\tSim103\tReplication\t"
                     f"follower_protection|entry={sim103_signal}|protected_qty=3|result=submitted\n"
                 )
-            snapshots = [
-                ("2026-07-14T12:00:00Z", {"Sim101": 0, "Sim102": 0, "Sim103": 0}),
-                ("2026-07-14T12:05:04Z", {"Sim101": 20, "Sim102": 18, "Sim103": 16}),
-            ]
-            snapshot_root = gd / "snapshots" / "historical" / "portfolio"
-            for index, (stamp, accounts) in enumerate(snapshots):
-                (snapshot_root / f"{index}.json").write_text(json.dumps({
-                    "created_utc": stamp,
-                    "accounts": [{"account": name, "realized_pnl": pnl, "positions": []} for name, pnl in accounts.items()],
-                }), encoding="utf-8")
-
+            (snapshot_root / "1.json").write_text(json.dumps({
+                "created_utc": "2026-07-14T12:05:04Z",
+                "accounts": [
+                    {"account": "Sim101", "realized_pnl": 20, "positions": []},
+                    {"account": "Sim102", "realized_pnl": 18, "positions": []},
+                    {"account": "Sim103", "realized_pnl": 16, "positions": []},
+                ],
+            }), encoding="utf-8")
             rows = MODULE.reconcile(gd, None, output, outbox)
             self.assertEqual(len(rows), 1)
             self.assertEqual([row["account"] for row in rows[0]["account_outcomes"]], ["Sim101", "Sim102", "Sim103"])
@@ -116,6 +146,7 @@ class DirectOutcomeReconcileTests(unittest.TestCase):
             )
             self.assertEqual(rows[0]["attribution_status"], "complete")
             self.assertTrue(rows[0]["learning_eligible"])
+            self.assertTrue(rows[0]["master_learning_eligible"])
             self.assertTrue(all(
                 row["protection_status"] == "submitted" for row in rows[0]["account_outcomes"]
             ))
@@ -138,6 +169,7 @@ class DirectOutcomeReconcileTests(unittest.TestCase):
             self.assertEqual(rows[0]["group_realized_pnl_usd"], 104)
             self.assertEqual(rows[0]["attribution_status"], "process_error")
             self.assertFalse(rows[0]["learning_eligible"])
+            self.assertTrue(rows[0]["master_learning_eligible"])
             self.assertEqual(sim102["exit_price"], 20010)
             self.assertEqual(sim102["protection_evidence"], "terminal_trade_ledger")
             self.assertEqual(sim102["protection_status"], "failed_or_missing")

@@ -102,6 +102,11 @@ def decision(route, account, suffix, action="NOTHING"):
 
 
 class DirectCycleTests(unittest.TestCase):
+    def test_json_parser_accepts_only_redundant_closing_delimiters(self):
+        self.assertEqual(MODULE.extract_json('{"ok":true}]}'), {"ok": True})
+        with self.assertRaises(json.JSONDecodeError):
+            MODULE.extract_json('{"ok":true}{"second":true}')
+
     def prepare_runtime(self, root, value=None):
         glitch_data = Path(root)
         exchange = glitch_data / "hermes" / "exchange"
@@ -165,12 +170,36 @@ class DirectCycleTests(unittest.TestCase):
                 value, MODULE.build_scenario(value), Path(root), {"status": "pending"}
             ))
 
-    def test_flat_ineligible_book_spends_no_model_call(self):
+    def test_replication_state_does_not_govern_master_cognition(self):
         value = packet()
         value["frames"][-1]["portfolio_snapshot"]["is_replicating"] = False
-        self.assertFalse(MODULE.should_invoke_luna(
+        self.assertTrue(MODULE.should_invoke_luna(
             value, MODULE.build_scenario(value), Path("."), None
         ))
+
+    def test_imminent_packet_rollover_uses_the_new_atomic_packet(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "latest-decision-packet.json"
+            now = datetime.now(timezone.utc)
+            old = {
+                "packet_id": "old",
+                "created_utc": datetime.fromtimestamp(now.timestamp() - 60, timezone.utc).isoformat(),
+                "window_close_utc": now.isoformat(),
+            }
+            new = {
+                "packet_id": "new",
+                "created_utc": now.isoformat(),
+                "window_close_utc": now.isoformat(),
+            }
+            path.write_text(json.dumps(old), encoding="utf-8")
+
+            def publish_new_packet(_seconds):
+                path.write_text(json.dumps(new), encoding="utf-8")
+
+            with mock.patch.object(MODULE.time, "sleep", side_effect=publish_new_packet):
+                selected = MODULE.read_packet_after_imminent_rollover(path, 1)
+
+            self.assertEqual(selected["packet_id"], "new")
 
     def test_unavailable_native_account_state_spends_no_model_call(self):
         value = packet()
@@ -393,15 +422,14 @@ class DirectCycleTests(unittest.TestCase):
         )
         self.assertIn("directive_type=native_tool_canary", value)
         self.assertIn("invoke native memory retrieval exactly once", value)
-        self.assertIn("must not write memory", value)
-        self.assertIn("at least two comparable completed outcomes", value)
+        self.assertIn("without writing memory", value)
 
     def test_groups_and_ratios_come_from_glitch_packet(self):
         scenario = MODULE.build_scenario(packet())
         self.assertEqual([book["route_id"] for book in scenario["books"]], ["glitch", "glitch-second"])
         self.assertEqual(scenario["books"][0]["followers"][0]["ratio"], 2.0)
-        self.assertEqual(scenario["books"][0]["effective_master_remaining_capacity"], 13)
-        self.assertEqual(scenario["books"][0]["valid_entry_quantities"], list(range(1, 14)))
+        self.assertEqual(scenario["books"][0]["effective_master_remaining_capacity"], 27)
+        self.assertEqual(scenario["books"][0]["valid_entry_quantities"], list(range(1, 28)))
 
     def test_capacity_has_no_ai_policy_fallback(self):
         value = packet()
@@ -422,7 +450,7 @@ class DirectCycleTests(unittest.TestCase):
         self.assertNotIn("max_contracts", model_packet["policy"])
         self.assertEqual(scenario["books"][0]["valid_entry_quantities"], [])
 
-    def test_group_capacity_counts_other_open_instruments_and_existing_ratio_exposure(self):
+    def test_master_capacity_counts_only_master_account_wide_exposure(self):
         value = packet()
         for frame in value["frames"]:
             frame["portfolio_snapshot"] = {
@@ -449,7 +477,7 @@ class DirectCycleTests(unittest.TestCase):
         first_book = scenario["books"][0]
         self.assertEqual(first_book["exposure"][0]["current_mnq_quantity"], -2)
         self.assertEqual(first_book["exposure"][0]["current_total_contracts"], 5)
-        self.assertEqual(first_book["valid_entry_quantities"], [1, 2])
+        self.assertEqual(first_book["valid_entry_quantities"], [1, 2, 3, 4, 5])
 
     def test_model_packet_contains_only_configured_sim_group_and_mnq(self):
         value = packet()
