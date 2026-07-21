@@ -263,3 +263,20 @@ overlay.premium_gate_message	To enable premium features purchase your license be
 overlay.button.get_license	Get License	Obter Licença	Obtener Licencia	获取许可证	Obtenir la Licence	Получить Лицензию
 overlay.button.manage_membership	Manage Membership	Gerenciar Assinatura	Gestionar Membresía	管理会员	Gérer l'Abonnement	Управление Подпиской
 analytics.button.opened_macro	Opened Nasdaq Macro	Nasdaq Macro aberto	Nasdaq Macro abierto	已打开 Nasdaq Macro	Nasdaq Macro ouvert	Nasdaq Macro открыт
+charttrader.metric.followers_compact	Followers:	Seguidores:	Seguidores:	跟随账户：	Suiveurs :	Последователи:
+charttrader.metric.pnl_compact	PnL:	PnL:	PnL:	盈亏：	PnL :	PnL:
+dashboard.group.select_all_tooltip	Select all followers	Selecionar todos os seguidores	Seleccionar todos los seguidores	选择所有跟随账户	Sélectionner tous les suiveurs	Выбрать всех последователей
+overlay.button.go_pro	Go Pro	Ativar Pro	Activar Pro	升级到 Pro	Passer Pro	Перейти на Pro
+overlay.button.member_hub	Open Member Hub	Abrir Central do Membro	Abrir Centro de Miembros	打开会员中心	Ouvrir l'Espace Membre	Открыть Кабинет Участника
+overlay.journal.go_pro_title	Go Pro for Journal	Ative o Pro para o Journal	Active Pro para el Diario	为日志升级到 Pro	Passez Pro pour le Journal	Перейти на Pro для Журнала
+overlay.settings.shortcut_link	Open Settings	Abrir Configurações	Abrir Configuración	打开设置	Ouvrir les Réglages	Открыть Настройки
+overlay.settings.shortcut_prefix	Already have a key?	Já tem uma chave?	¿Ya tiene una clave?	已有密钥？	Vous avez déjà une clé ?	Уже есть ключ?
+overlay.surface.premium_features	Premium Features	Recursos Premium	Funciones Premium	高级功能	Fonctionnalités Premium	Премиум-Функции
+settings.license.active_prefix	Active License:	Licença Ativa:	Licencia Activa:	有效许可证：	Licence Active :	Активная Лицензия:
+settings.license.plan_lite	Lite	Lite	Lite	Lite	Lite	Lite
+settings.license.plan_pro	Pro	Pro	Pro	Pro	Pro	Pro
+settings.license.upgrade_to_pro	Upgrade to Pro	Atualizar para Pro	Actualizar a Pro	升级到 Pro	Passer à Pro	Обновить до Pro
+settings.risk.enforce_max_contracts_flatten	Flatten and lock account when open contracts exceed the configured max-contracts limit.	Zerar e bloquear a conta quando os contratos abertos excederem o limite máximo configurado.	Cerrar y bloquear la cuenta cuando los contratos abiertos superen el límite máximo configurado.	当未平仓合约超过配置的最大合约数时，平仓并锁定账户。	Aplatir et verrouiller le compte lorsque les contrats ouverts dépassent la limite maximale configurée.	Закрыть позиции и заблокировать счёт, когда число открытых контрактов превышает заданный максимум.
+settings.risk.enforce_no_protection_flatten	Flatten and lock account when an open position has no working protective stop within the configured timeout.	Zerar e bloquear a conta quando uma posição aberta não tiver stop de proteção ativo dentro do prazo configurado.	Cerrar y bloquear la cuenta cuando una posición abierta no tenga un stop de protección activo dentro del plazo configurado.	当持仓在配置的超时时间内没有有效保护止损时，平仓并锁定账户。	Aplatir et verrouiller le compte lorsqu'une position ouverte ne dispose pas d'un stop de protection actif dans le délai configuré.	Закрыть позиции и заблокировать счёт, если у открытой позиции нет активного защитного стопа в заданный срок.
+settings.update.available_prefix	Update Available v.	Atualização Disponível v.	Actualización Disponible v.	有可用更新 v.	Mise à Jour Disponible v.	Доступно Обновление v.
+settings.update.download_latest	Download Latest	Baixar Mais Recente	Descargar la Última	下载最新版	Télécharger la Dernière	Скачать Последнюю
