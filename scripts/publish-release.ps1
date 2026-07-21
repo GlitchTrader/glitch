@@ -30,6 +30,7 @@ $filesDirectory = Join-Path $repoRoot 'apps\download\public\files'
 $catalogPath = Join-Path $repoRoot 'apps\download\src\lib\release-catalog.json'
 $checksumsPath = Join-Path $filesDirectory 'checksums.json'
 $fileName = if ($Edition -eq 'ai') { "Glitch_AI_v$Version.zip" } else { "Glitch_v$Version.zip" }
+$expectedAssemblyName = if ($Edition -eq 'ai') { 'Glitch_AI' } else { 'Glitch' }
 $destinationPath = Join-Path $filesDirectory $fileName
 $status = if ($Edition -eq 'ai') { 'experimental' } else { 'stable' }
 $resolvedSource = (Resolve-Path -LiteralPath $SourceZip).Path
@@ -122,7 +123,7 @@ try {
 
     [System.IO.Compression.ZipFileExtensions]::ExtractToFile($dllEntry[0], $temporaryDll, $false)
     $assemblyName = [Reflection.AssemblyName]::GetAssemblyName($temporaryDll)
-    if ($assemblyName.Name -ne 'Glitch') {
+    if ($assemblyName.Name -ne $expectedAssemblyName) {
         throw "Unexpected assembly name: $($assemblyName.Name)"
     }
     if ($assemblyName.Version.ToString() -ne $Version) {

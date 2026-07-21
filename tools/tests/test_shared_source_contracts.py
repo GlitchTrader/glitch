@@ -70,6 +70,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("does not match checksums.json", validator)
         self.assertIn("Refusing to overwrite existing release", publisher)
         self.assertIn("Expected exactly three NinjaTrader export entries", publisher)
+        self.assertIn("if ($Edition -eq 'ai') { 'Glitch_AI' } else { 'Glitch' }", publisher)
         self.assertIn("Assembly version", publisher)
         self.assertIn("npm.cmd run validate:releases", publisher)
         self.assertNotIn("git commit ", publisher.lower())
