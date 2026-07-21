@@ -2,6 +2,42 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-21 - learning removed from the trading critical path
+
+- Reconstructed the recurring ten-minute decision gaps from the native cron
+  execution ledger. The minute operator and the 15-minute Sol learner shared one
+  serialized script lane; learning runs of three to seven minutes held later
+  minute claims even though the gateway itself stayed healthy.
+- Replaced the learning job body with a 145 ms launcher that starts one detached,
+  lock-protected worker. The worker retains the same `glitch` profile, isolated
+  `trading` session source, Sol/high cognition, durable memory, and zero execution
+  authority. Its actual result is persisted separately in
+  `learning-worker-status.json`; failures return nonzero and are visible in the
+  worker log.
+- Removed contradictory learning authority from debrief evidence. The master-only
+  record now carries `master_learning_eligible`; follower divergence is a separate
+  replication diagnostic and cannot veto cognition. Pending outcomes are processed
+  newest-first in bounded groups of eight, preventing historical FIFO backfill from
+  starving current feedback.
+- Fixed the TradeLedger single-flight race at its source. A background writer now
+  waits the remaining throttle interval, flushes current state, and requeues a dirty
+  merge that arrived before the active writer released ownership. The missing
+  Sim103 two-contract `e2cd4674` target round trip was reconstructed from the
+  authoritative Journal and is now present in live `TradeLedger.tsv`.
+- Verification passed 104 AI/Hermes and 38 shared contracts (142 total), Python
+  compilation, 30 PowerShell parses, 34 JSON parses, secret scan, and diff
+  integrity. Installed script hashes match source; exactly the direct operator and
+  detached learning launcher are enabled. The complete 87-file AddOn matches live
+  87/87 with no extras, and F5 rebuilt `NinjaTrader.Custom.dll` at 04:32:50 UTC
+  without an error surface. A protected `1/1/2` Sim group retained identical
+  positions and native working-order details across the compile.
+- The first corrected scheduled learning boundary launched at 04:46:06 UTC and
+  released native cron after 198 ms. The detached worker finished `ok` at
+  04:52:26, debriefed the newest eight of 37 eligible outcomes, increased durable
+  episodes from 24 to 32, and emitted a new hourly review/current guidance.
+  Direct cron continued concurrently and completed a Luna decision at 04:48:14
+  while the learning lock was active.
+
 ## 2026-07-21 - master-owned recursive learning activated
 
 - Preserved the cognitive boundary: Hermes owns thesis, strategy, master

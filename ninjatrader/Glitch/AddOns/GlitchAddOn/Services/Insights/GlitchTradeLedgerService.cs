@@ -124,20 +124,37 @@ namespace Glitch.Services
 
             Task.Run(() =>
             {
+                bool failed = false;
                 try
                 {
+                    int waitMilliseconds;
                     lock (_sync)
                     {
                         EnsureLoadedUnsafe();
-                        FlushUnsafe(nowUtc, force);
+                        double remainingMilliseconds = MinWriteIntervalMs - (DateTime.UtcNow - _lastWriteUtc).TotalMilliseconds;
+                        waitMilliseconds = force || remainingMilliseconds <= 0
+                            ? 0
+                            : (int)Math.Ceiling(remainingMilliseconds);
                     }
+
+                    if (waitMilliseconds > 0)
+                        Thread.Sleep(waitMilliseconds);
+
+                    lock (_sync)
+                        FlushUnsafe(DateTime.UtcNow, force);
                 }
                 catch
                 {
+                    failed = true;
                 }
                 finally
                 {
                     Interlocked.Exchange(ref _backgroundFlushActive, 0);
+                    bool queuePendingWrite;
+                    lock (_sync)
+                        queuePendingWrite = !failed && _dirty;
+                    if (queuePendingWrite)
+                        QueueBackgroundFlush(DateTime.UtcNow, force: false);
                 }
             });
         }

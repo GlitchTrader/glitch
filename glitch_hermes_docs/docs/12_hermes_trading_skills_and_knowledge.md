@@ -262,9 +262,11 @@ one evidence-gated learning worker; they do not create additional executors.
 - Stage D: replace the active 300-minute plan only when a new hourly review exists.
 - Stage E: journal daily, update native memory from repeated attributable evidence, and evaluate one reversible cognitive overlay.
 
-One 15-minute no-agent cron hosts all three learning stages and calls Sol only
-when their evidence and cadence gates are due. Every nested call is tagged
-`trading`; the worker has no execution authority.
+One 15-minute no-agent cron launches a separately locked learning process and
+returns immediately, keeping slow Sol work outside the serialized minute-operator
+lane. That process hosts all three learning stages and calls Sol only when their
+evidence and cadence gates are due. Every nested call is tagged `trading`; the
+worker has no execution authority.
 
 ## 10. Optimization rule
 

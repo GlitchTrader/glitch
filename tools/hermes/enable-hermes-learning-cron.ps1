@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 if ($Profile -ne 'glitch') { throw 'The learning profile must be glitch.' }
 $profileRoot = Join-Path $env:LOCALAPPDATA "hermes\profiles\$Profile"
 $env:HERMES_HOME = $profileRoot
-$scriptPath = Join-Path $profileRoot 'scripts\run-hermes-learning-cycle.py'
+$scriptPath = Join-Path $profileRoot 'scripts\launch-hermes-learning-cycle.py'
 if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
     throw 'Install the direct Hermes bridge before enabling learning.'
 }
@@ -31,7 +31,7 @@ foreach ($legacy in @($jobs | Where-Object { $_.name -eq 'glitch-hourly-review' 
 if ($matches.Count -eq 1) {
     $job = $matches[0]
     & hermes cron edit ([string]$job.id) --schedule $Schedule `
-        --script 'run-hermes-learning-cycle.py' --no-agent --workdir $workdir | Out-Null
+        --script 'launch-hermes-learning-cycle.py' --no-agent --workdir $workdir | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Could not reconcile the Glitch learning job.' }
     if (-not $job.enabled) {
         & hermes cron resume ([string]$job.id) | Out-Null
@@ -40,7 +40,7 @@ if ($matches.Count -eq 1) {
 }
 else {
     & hermes cron create $Schedule --name 'glitch-learning-supervisor' `
-        --script 'run-hermes-learning-cycle.py' --no-agent --deliver local --workdir $workdir | Out-Null
+        --script 'launch-hermes-learning-cycle.py' --no-agent --deliver local --workdir $workdir | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Could not create the Glitch learning job.' }
 }
 
@@ -51,7 +51,7 @@ $job = $installed[0]
 $persistedSchedule = if ($job.schedule.display) { [string]$job.schedule.display } else { [string]$job.schedule.expr }
 $wrongContract = -not $job.enabled `
     -or -not $job.no_agent `
-    -or [string]$job.script -ne 'run-hermes-learning-cycle.py' `
+    -or [string]$job.script -ne 'launch-hermes-learning-cycle.py' `
     -or $persistedSchedule -ne $Schedule `
     -or [IO.Path]::GetFullPath([string]$job.workdir) -ne [IO.Path]::GetFullPath($workdir)
 if ($wrongContract) {
@@ -67,6 +67,7 @@ if ($wrongContract) {
     schedule = $persistedSchedule
     nested_session_source = 'trading'
     model = 'gpt-5.6-sol'
+    worker_process = 'detached'
     execution_authority = $false
     scheduler_owner = 'Hermes native cron'
     codex_in_runtime_path = $false

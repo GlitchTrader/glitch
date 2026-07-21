@@ -47,6 +47,8 @@ Copy-Item -LiteralPath (Join-Path $repo 'tools\hermes\reconcile-hermes-outcomes.
     -Destination (Join-Path $scriptsDestination 'reconcile-hermes-outcomes.py') -Force
 Copy-Item -LiteralPath (Join-Path $repo 'tools\hermes\run-hermes-learning-cycle.py') `
     -Destination (Join-Path $scriptsDestination 'run-hermes-learning-cycle.py') -Force
+Copy-Item -LiteralPath (Join-Path $repo 'tools\hermes\launch-hermes-learning-cycle.py') `
+    -Destination (Join-Path $scriptsDestination 'launch-hermes-learning-cycle.py') -Force
 Copy-Item -LiteralPath (Join-Path $repo 'tools\hermes\ensure-named-sessions.py') `
     -Destination (Join-Path $scriptsDestination 'ensure-named-sessions.py') -Force
 

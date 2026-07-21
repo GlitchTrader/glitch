@@ -1,9 +1,10 @@
 """Hermes-owned Glitch debrief, supervision, planning, and learning loop.
 
-One native 15-minute cron job runs this script. It calls Hermes only when new
-authoritative evidence makes a loop due. Every call uses an isolated `trading`
-session and durable Glitch/Hermes stores provide continuity; Codex is not in the
-runtime path.
+The native 15-minute cron launches this slow worker in an independent process,
+so learning can never occupy the minute operator's scheduler lane. It calls
+Hermes only when new authoritative evidence makes a loop due. Every call uses
+an isolated `trading` session and durable Glitch/Hermes stores provide
+continuity; Codex is not in the runtime path.
 """
 
 from __future__ import annotations
@@ -180,13 +181,24 @@ def debrief_evidence(glitch_data: Path, outcomes: list[dict[str, Any]]) -> list[
             row for row in outcome.get("account_outcomes", [])
             if str(row.get("account", "")).lower() == account.lower()
         ), None)
+        master_outcome = {
+            key: outcome.get(key)
+            for key in (
+                "schema_version", "recorded_utc", "intent_id", "cycle_id", "route_id",
+                "master_account", "instrument", "contract", "action", "confidence",
+                "entry_utc", "exit_utc", "terminal_verified_utc", "planned_stop",
+                "planned_target", "reason", "decision_audit", "master_realized_pnl_usd",
+                "master_attribution_status", "master_learning_eligible", "evidence",
+            )
+        }
         evidence.append({
             "expected_episode_id": stable_id("episode", str(outcome.get("intent_id"))),
-            "outcome": outcome,
+            "master_outcome": master_outcome,
             "master_result": master_result,
             "management_decisions": related_decisions,
             "execution_events": related_executions,
             "market_path": market_path(glitch_data, entry, exit_time),
+            "replication_diagnostics": outcome.get("replication_diagnostics", []),
         })
     return evidence
 
@@ -269,6 +281,7 @@ def build_prompt(loop_id: str, evidence: Any, template: dict[str, Any], continui
     loop_instruction = {
         "debrief": (
             "Produce exactly one honest human-trader debrief per supplied outcome. Attribute cognition and PnL to the master only; follower ratios and follower PnL are replication diagnostics. "
+            "Every supplied master_outcome has master_learning_eligible=true; that field alone authorizes cognitive learning, and replication diagnostics can never suppress it. "
             "Reconstruct why Hermes entered, why the trade actually exited, geometry, quantity, every management decision, favorable excursion/rollback, and plausible alternatives. "
             "A repeated stop geometry mistake is evidence for self-improvement, not permission to invent a fixed stop formula. Process errors are not strategy lessons."
         ),
@@ -471,6 +484,13 @@ def minutes_since(value: Any, now: datetime) -> float:
         return float("inf")
 
 
+def outcome_completed_utc(row: dict[str, Any]) -> datetime:
+    try:
+        return parse_utc(row.get("exit_utc") or row.get("recorded_utc"))
+    except (TypeError, ValueError):
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+
 def run_once(args) -> dict[str, Any]:
     glitch_data = args.glitch_data.resolve()
     exchange = glitch_data / "hermes" / "exchange"
@@ -487,7 +507,12 @@ def run_once(args) -> dict[str, Any]:
     processed = set(state.get("debriefed_intent_ids", [])) | {
         str(row.get("intent_id")) for row in existing_episodes if row.get("intent_id")
     }
-    new_outcomes = [row for row in eligible if str(row.get("intent_id")) not in processed][:8]
+    pending = [row for row in eligible if str(row.get("intent_id")) not in processed]
+    new_outcomes = sorted(
+        pending,
+        key=outcome_completed_utc,
+        reverse=True,
+    )[:8]
     now = datetime.now(timezone.utc)
     result = {"debriefed": 0, "hourly": False, "planning": False, "daily": False}
 
@@ -551,6 +576,7 @@ def run_once(args) -> dict[str, Any]:
         DIRECT.write_json_atomic(state_path, state)
     result["eligible_outcomes"] = len(eligible)
     result["episodes"] = len(episodes)
+    result["selected_intent_ids"] = [str(row.get("intent_id")) for row in new_outcomes]
     return result
 
 
@@ -563,6 +589,9 @@ def main() -> int:
     parser.add_argument("--force-loop", choices=("debrief", "hourly", "planning", "daily"))
     args = parser.parse_args()
     exchange = args.glitch_data.resolve() / "hermes" / "exchange"
+    supervisor = exchange / "hermes" / "supervisor"
+    supervisor.mkdir(parents=True, exist_ok=True)
+    status_path = supervisor / "learning-worker-status.json"
     lock_path = exchange / "hermes" / "learning-cycle.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -577,7 +606,25 @@ def main() -> int:
             return 0
     try:
         os.write(descriptor, str(os.getpid()).encode("ascii"))
-        print(json.dumps(run_once(args), separators=(",", ":")))
+        try:
+            result = run_once(args)
+        except Exception as error:
+            failure = {
+                "schema_version": "glitch.hermes.learning_worker_status.v1",
+                "recorded_utc": utc_now(),
+                "status": "failed",
+                "error": f"{type(error).__name__}:{error}"[:500],
+            }
+            DIRECT.write_json_atomic(status_path, failure)
+            print(json.dumps(failure, separators=(",", ":")), file=sys.stderr)
+            return 1
+        DIRECT.write_json_atomic(status_path, {
+            "schema_version": "glitch.hermes.learning_worker_status.v1",
+            "recorded_utc": utc_now(),
+            "status": "ok",
+            "result": result,
+        })
+        print(json.dumps(result, separators=(",", ":")))
         return 0
     finally:
         os.close(descriptor)
@@ -585,8 +632,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except Exception as error:
-        print(json.dumps({"event": "learning_cycle_failed", "error": f"{type(error).__name__}:{error}"}), file=sys.stderr)
-        raise SystemExit(1)
+    raise SystemExit(main())

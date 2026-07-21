@@ -94,6 +94,8 @@ foreach ($relative in @(
     'hermes\supervisor\active-cognitive-overlay.json',
     'hermes\supervisor\active-trades.json',
     'hermes\supervisor\learning-state.json',
+    'hermes\supervisor\learning-worker-status.json',
+    'hermes\supervisor\learning-worker.log',
     'hermes\learning-cycle.lock'
 )) {
     Add-ExistingFile $files (Join-Path $exchangeRoot $relative) $exchangeRoot

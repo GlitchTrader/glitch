@@ -1,6 +1,8 @@
 import importlib.util
+import json
 import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 
 
@@ -9,6 +11,10 @@ SCRIPT = ROOT / "tools" / "hermes" / "run-hermes-learning-cycle.py"
 SPEC = importlib.util.spec_from_file_location("glitch_learning_cycle", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+LAUNCHER_SCRIPT = ROOT / "tools" / "hermes" / "launch-hermes-learning-cycle.py"
+LAUNCHER_SPEC = importlib.util.spec_from_file_location("glitch_learning_launcher", LAUNCHER_SCRIPT)
+LAUNCHER = importlib.util.module_from_spec(LAUNCHER_SPEC)
+LAUNCHER_SPEC.loader.exec_module(LAUNCHER)
 
 
 class LearningCycleTests(unittest.TestCase):
@@ -27,6 +33,85 @@ class LearningCycleTests(unittest.TestCase):
         prompt = MODULE.build_prompt("debrief", [], template, {})
         self.assertIn("Attribute cognition and PnL to the master only", prompt)
         self.assertIn("repeated stop geometry mistake", prompt)
+        self.assertIn("master_learning_eligible=true", prompt)
+
+    def test_debrief_evidence_exposes_one_unambiguous_learning_authority(self):
+        with tempfile.TemporaryDirectory() as root:
+            glitch_data = Path(root)
+            (glitch_data / "intents").mkdir(parents=True)
+            outcome = {
+                "schema_version": "glitch.hermes.trade_outcome.v1",
+                "intent_id": "new-trade",
+                "master_account": "Sim101",
+                "instrument": "MNQ",
+                "entry_utc": "2099-01-01T00:00:00Z",
+                "exit_utc": "2099-01-01T00:01:00Z",
+                "master_learning_eligible": True,
+                "learning_eligible": False,
+                "attribution_status": "process_error",
+                "replication_diagnostics": [{"account": "Sim103", "status": "missing_round_trip"}],
+                "account_outcomes": [{"account": "Sim101", "realized_pnl_usd": 10}],
+            }
+
+            evidence = MODULE.debrief_evidence(glitch_data, [outcome])[0]
+
+            self.assertTrue(evidence["master_outcome"]["master_learning_eligible"])
+            self.assertNotIn("learning_eligible", evidence["master_outcome"])
+            self.assertNotIn("attribution_status", evidence["master_outcome"])
+            self.assertEqual(evidence["replication_diagnostics"][0]["account"], "Sim103")
+
+    def test_newest_completed_outcomes_are_selected_before_backfill(self):
+        with tempfile.TemporaryDirectory() as root:
+            glitch_data = Path(root)
+            outcomes = glitch_data / "intents" / "hermes-trade-outcomes.jsonl"
+            outcomes.parent.mkdir(parents=True)
+            values = []
+            for index in range(10):
+                values.append({
+                    "intent_id": f"intent-{index}",
+                    "exit_utc": f"2099-01-01T00:{index:02d}:00Z",
+                    "master_learning_eligible": True,
+                })
+            outcomes.write_text("\n".join(json.dumps(value) for value in values) + "\n", encoding="utf-8")
+            args = SimpleNamespace(
+                glitch_data=glitch_data,
+                profile="glitch",
+                timeout_seconds=30,
+                dry_run=True,
+                force_loop=None,
+            )
+
+            result = MODULE.run_once(args)
+
+            self.assertEqual(result["selected_intent_ids"], [f"intent-{index}" for index in range(9, 1, -1)])
+
+    def test_malformed_old_outcome_cannot_block_newest_selection(self):
+        self.assertLess(
+            MODULE.outcome_completed_utc({"intent_id": "bad"}),
+            MODULE.outcome_completed_utc({"exit_utc": "2099-01-01T00:00:00Z"}),
+        )
+
+    def test_worker_failure_is_persisted_and_returns_nonzero(self):
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('"status": "failed"', source)
+        self.assertIn("learning-worker-status.json", source)
+        self.assertIn("return 1", source)
+
+    def test_cron_launcher_detaches_the_slow_worker(self):
+        enabler = (ROOT / "tools" / "hermes" / "enable-hermes-learning-cron.ps1").read_text(encoding="utf-8")
+        installer = (ROOT / "tools" / "hermes" / "install-direct-hermes-bridge.ps1").read_text(encoding="utf-8")
+        launcher = LAUNCHER_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("launch-hermes-learning-cycle.py", enabler)
+        self.assertIn("launch-hermes-learning-cycle.py", installer)
+        self.assertIn("subprocess.Popen", launcher)
+        self.assertIn("DETACHED_PROCESS", launcher)
+        args = SimpleNamespace(
+            glitch_data=Path("C:/GlitchData"),
+            profile="glitch",
+            timeout_seconds=300,
+            dry_run=False,
+        )
+        self.assertIn("run-hermes-learning-cycle.py", LAUNCHER.worker_command(args)[1])
 
     def test_debrief_cannot_attach_learning_to_the_wrong_trade(self):
         records = [{"intent_id": "wrong", "master_account": "Sim101", "instrument": "MNQ"}]

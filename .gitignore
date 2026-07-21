@@ -2,6 +2,8 @@ node_modules/
 **/node_modules/
 .next/
 **/.next/
+**/__pycache__/
+*.pyc
 out/
 **/out/
 .env

@@ -48,7 +48,9 @@ Glitch Flatten All remain authoritative.
   exit wins. A terminal attributable master round trip always enters master
   learning; missing, divergent, or still-open follower evidence remains an
   auditable replication `process_error` and never erases master cognition.
-- One 15-minute Hermes-native worker debriefs new master outcomes, supervises
+- One 15-minute Hermes-native launcher starts a separately locked worker and
+  returns immediately, so slow learning cannot delay the minute operator. The
+  worker debriefs new master outcomes, supervises
   accumulated episodes hourly, replaces the active plan after 300 minutes with
   new reviews, and journals daily. Every nested call is an isolated `trading`
   session on Sol/high. Daily learning may update compact native memory and one
@@ -98,8 +100,8 @@ Glitch Flatten All remain authoritative.
 
 ## Verification and market-open acceptance
 
-- Shared source contracts: **37/37**.
-- AI/Hermes contracts: **99/99**; complete AI suite **136/136**.
+- Shared source contracts: **38/38**.
+- AI/Hermes contracts: **104/104**; complete AI suite **142/142**.
 - Five production web builds: pass.
 - Five web lint runs: pass.
 - Python compilation, tracked PowerShell parsing, tracked JSON parsing, secret
@@ -108,14 +110,27 @@ Glitch Flatten All remain authoritative.
   missing keys, zero malformed/empty six-locale rows; UTF-8 CJK/Cyrillic sentinels
   pass. This includes 18 older fallback-only labels closed during the AI UI pass.
 - The complete 87-file AddOn was deployed once from this candidate with **87/87
-  matching hashes, 0 mismatches, and 0 extra target files**. F5 compile completed
-  without an error surface; the next live portfolio snapshot contained
-  `working_order_details` for all nine accounts, proving the new writer is active.
-- The installed Hermes SOUL, operator map, three workers, and 13 skill files match
+  matching hashes, 0 mismatches, and 0 extra target files**. F5 rebuilt
+  `NinjaTrader.Custom.dll` at `2026-07-21T04:32:50Z` without an error surface.
+  The protected 1:1:2 Sim group was byte-for-byte unchanged across the adjacent
+  pre/post-compile portfolio packets: positions `1/1/2`, working orders `2/2/4`,
+  and identical native order details.
+- The installed Hermes SOUL, operator map, three workers, detached learning
+  launcher, and 13 skill files match
   source. Exactly two no-agent jobs are enabled under the supervised gateway:
   `glitch-direct-operator` at `* * * * *` and non-executing
-  `glitch-learning-supervisor` at `*/15 * * * *`. A no-model installed dry run
-  found 14 eligible historical master outcomes for bounded episode backfill.
+  `glitch-learning-supervisor` at `*/15 * * * *`. The latter now launches its
+  separately locked worker and returned in 145 ms during an installed no-model
+  proof. The first scheduled run launched at `04:46:06Z`, returned from cron in
+  198 ms, and finished successfully at `04:52:26Z`. It selected and debriefed the
+  newest eight pending outcomes first, including the two newest master wins,
+  increased durable episodes from 24 to 32, and published a new hourly review and
+  current guidance. Direct cron kept running during the slow worker and completed
+  a model decision at `04:48:14Z` while the learning lock was active.
+- The TradeLedger writer now waits out its existing write throttle and requeues
+  any dirty merge that arrived during an active flush. The formerly absent
+  Sim103 two-contract `e2cd4674` target round trip is present in live
+  `TradeLedger.tsv` alongside Sim102 after reconstruction from `Journal.tsv`.
 - Bounded prior Sim evidence on this clean architecture includes protected
   1:2:3 replication, three independent legs, partial fills, same-direction
   protected tranches, duplicate-intent rejection, and fleet flatten.

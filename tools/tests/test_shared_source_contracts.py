@@ -281,6 +281,18 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn('entrySignal.StartsWith("GLT-"', body)
         self.assertIn(".OrderBy(pair => pair.Value?.ExitUtc", body)
 
+    def test_trade_ledger_flush_cannot_drop_a_dirty_merge_that_arrives_mid_flush(self):
+        ledger = source(ADDON / "Services/Insights/GlitchTradeLedgerService.cs")
+        body = method_body(
+            ledger,
+            "private void QueueBackgroundFlush",
+            "internal void Reset",
+        )
+        self.assertIn("Thread.Sleep(waitMilliseconds)", body)
+        self.assertIn("FlushUnsafe(DateTime.UtcNow", body)
+        self.assertIn("queuePendingWrite = !failed && _dirty", body)
+        self.assertIn("QueueBackgroundFlush(DateTime.UtcNow, force: false)", body)
+
     def test_follower_failure_evidence_is_trade_scoped_and_unambiguous(self):
         copy_engine = source(COPY_ENGINE)
         self.assertIn(
