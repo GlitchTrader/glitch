@@ -1,16 +1,23 @@
-import { createHash } from "node:crypto";
-import { createReadStream, existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { cache } from "react";
-import releaseDateOverrides from "./release-dates.json";
+import checksumManifest from "../../public/files/checksums.json";
+import releaseCatalog from "./release-catalog.json";
 
 const defaultWebsiteUrl = "https://glitchtrader.com";
 const defaultDocsUrl = "https://docs.glitchtrader.com";
 const defaultDownloadsUrl = "https://download.glitchtrader.com";
 
+export type ReleaseEdition = "standard" | "ai";
+export type ReleaseStatus = "stable" | "experimental";
+
 export type ReleaseRecord = {
   version: string;
+  edition: ReleaseEdition;
+  status: ReleaseStatus;
+  sourceCommit: string;
+  hermesProfileVersion: string | null;
   slug: string;
   fileName: string;
   pathname: string;
@@ -25,13 +32,23 @@ export type ReleaseCatalog = {
   releases: ReleaseRecord[];
 };
 
+type CatalogEntry = {
+  fileName: string;
+  edition: ReleaseEdition;
+  version: string;
+  releaseDate: string;
+  status: ReleaseStatus;
+  sourceCommit: string;
+  hermesProfileVersion?: string;
+};
+
 type ParsedVersion = {
   numericParts: number[];
   prerelease: string | null;
   valid: boolean;
 };
 
-type ReleaseDateOverrideMap = Record<string, string>;
+type ChecksumMap = Record<string, string>;
 
 function getReleaseDirectoryPath(): string {
   const candidates = [
@@ -50,12 +67,6 @@ function getReleaseDirectoryPath(): string {
 
 function getBaseName(fileName: string): string {
   return fileName.replace(/\.zip$/i, "");
-}
-
-function deriveVersion(fileName: string): string {
-  const baseName = getBaseName(fileName);
-  const match = baseName.match(/(\d+(?:\.\d+)+(?:-[0-9A-Za-z.-]+)?)/);
-  return match?.[1] ?? baseName;
 }
 
 function toSlugValue(value: string): string {
@@ -147,50 +158,74 @@ function compareReleaseRecords(a: ReleaseRecord, b: ReleaseRecord): number {
   });
 }
 
-function resolveReleaseDate(fileName: string, fallbackDate: Date): Date {
-  const configuredValue = (releaseDateOverrides as ReleaseDateOverrideMap)[fileName];
-  if (!configuredValue) {
-    return fallbackDate;
+function validateCatalogEntry(entry: CatalogEntry): Date {
+  if (!entry.fileName || !entry.fileName.toLowerCase().endsWith(".zip")) {
+    throw new Error("Release catalog contains an invalid filename.");
+  }
+  if (entry.edition !== "standard" && entry.edition !== "ai") {
+    throw new Error(`Release catalog contains an invalid edition for ${entry.fileName}.`);
+  }
+  if (entry.status !== "stable" && entry.status !== "experimental") {
+    throw new Error(`Release catalog contains an invalid status for ${entry.fileName}.`);
+  }
+  if (!parseVersion(entry.version).valid) {
+    throw new Error(`Release catalog contains an invalid version for ${entry.fileName}.`);
+  }
+  if (!/^[0-9a-f]{40}$/i.test(entry.sourceCommit)) {
+    throw new Error(`Release catalog contains an invalid source commit for ${entry.fileName}.`);
+  }
+  if (entry.edition === "standard" && entry.hermesProfileVersion) {
+    throw new Error(`Standard release ${entry.fileName} cannot declare a Hermes profile.`);
+  }
+  if (entry.edition === "ai" && entry.status !== "experimental") {
+    throw new Error(`AI release ${entry.fileName} must be marked experimental.`);
   }
 
-  const parsed = new Date(configuredValue);
-  if (Number.isNaN(parsed.getTime())) {
-    return fallbackDate;
+  const releaseDate = new Date(entry.releaseDate);
+  if (Number.isNaN(releaseDate.getTime())) {
+    throw new Error(`Release catalog contains an invalid release date for ${entry.fileName}.`);
   }
-
-  return parsed;
+  return releaseDate;
 }
 
-async function hashFileSha256(filePath: string): Promise<string> {
-  const hash = createHash("sha256");
-  const stream = createReadStream(filePath);
-  for await (const chunk of stream) {
-    hash.update(chunk);
-  }
-  return hash.digest("hex").toUpperCase();
-}
-
-async function readLocalReleases(): Promise<ReleaseRecord[]> {
+async function readCatalogedReleases(): Promise<ReleaseRecord[]> {
   const directoryPath = getReleaseDirectoryPath();
-  const entries = await fs.readdir(directoryPath, { withFileTypes: true });
-
-  const zipFiles = entries
-    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".zip"))
-    .map((entry) => entry.name);
+  const entries = releaseCatalog as CatalogEntry[];
+  const checksums = checksumManifest as ChecksumMap;
+  const seenFiles = new Set<string>();
+  const seenSlugs = new Set<string>();
 
   const records = await Promise.all(
-    zipFiles.map(async (fileName) => {
-      const absolutePath = path.join(directoryPath, fileName);
-      const [stats, sha256] = await Promise.all([fs.stat(absolutePath), hashFileSha256(absolutePath)]);
-      const version = deriveVersion(fileName);
-      const pathname = `files/${fileName}`;
-      const downloadPath = `/${pathname.split("/").map(encodeURIComponent).join("/")}`;
-      const uploadedAt = resolveReleaseDate(fileName, new Date(stats.mtime));
+    entries.map(async (entry) => {
+      const uploadedAt = validateCatalogEntry(entry);
+      const slug = toSlug(entry.fileName);
+      if (seenFiles.has(entry.fileName) || seenSlugs.has(slug)) {
+        throw new Error(`Release catalog contains a duplicate entry for ${entry.fileName}.`);
+      }
+      seenFiles.add(entry.fileName);
+      seenSlugs.add(slug);
 
+      const sha256 = checksums[entry.fileName]?.trim().toUpperCase();
+      if (!sha256 || !/^[0-9A-F]{64}$/.test(sha256)) {
+        throw new Error(`Release checksum is missing or invalid for ${entry.fileName}.`);
+      }
+
+      const absolutePath = path.join(directoryPath, entry.fileName);
+      const stats = await fs.stat(absolutePath);
+      if (!stats.isFile()) {
+        throw new Error(`Cataloged release is not a file: ${entry.fileName}.`);
+      }
+
+      const pathname = `files/${entry.fileName}`;
+      const downloadPath = `/${pathname.split("/").map(encodeURIComponent).join("/")}`;
       return {
-        version,
-        slug: toSlug(fileName),
-        fileName,
+        version: entry.version,
+        edition: entry.edition,
+        status: entry.status,
+        sourceCommit: entry.sourceCommit,
+        hermesProfileVersion: entry.hermesProfileVersion?.trim() || null,
+        slug,
+        fileName: entry.fileName,
         pathname,
         size: stats.size,
         uploadedAt,
@@ -205,19 +240,12 @@ async function readLocalReleases(): Promise<ReleaseRecord[]> {
 
 export const getReleaseCatalog = cache(async (): Promise<ReleaseCatalog> => {
   try {
-    const releases = await readLocalReleases();
+    const releases = await readCatalogedReleases();
     return {
       error: null,
       releases,
     };
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
-      return {
-        error: null,
-        releases: [],
-      };
-    }
-
+  } catch {
     return {
       error: "Release catalog could not be loaded.",
       releases: [],
@@ -225,20 +253,28 @@ export const getReleaseCatalog = cache(async (): Promise<ReleaseCatalog> => {
   }
 });
 
-export const getLatestRelease = cache(async (): Promise<ReleaseRecord | null> => {
+export async function getLatestRelease(edition: ReleaseEdition = "standard"): Promise<ReleaseRecord | null> {
   const catalog = await getReleaseCatalog();
-  return catalog.releases[0] ?? null;
-});
+  return catalog.releases.find((release) => release.edition === edition) ?? null;
+}
 
-export const getReleaseBySlug = cache(async (slug: string): Promise<ReleaseRecord | null> => {
+export async function getReleaseBySlug(
+  slug: string,
+  defaultEdition: ReleaseEdition = "standard",
+): Promise<ReleaseRecord | null> {
   const catalog = await getReleaseCatalog();
   const normalizedSlug = toSlugValue(slug);
+  const exactSlug = catalog.releases.find((release) => release.slug === normalizedSlug);
+  if (exactSlug) {
+    return exactSlug;
+  }
+
   return (
     catalog.releases.find(
-      (release) => release.slug === normalizedSlug || toSlugValue(release.version) === normalizedSlug,
+      (release) => release.edition === defaultEdition && toSlugValue(release.version) === normalizedSlug,
     ) ?? null
   );
-});
+}
 
 export function getWebsiteUrl(): string {
   return process.env.NEXT_PUBLIC_WEBSITE_URL?.trim() || defaultWebsiteUrl;

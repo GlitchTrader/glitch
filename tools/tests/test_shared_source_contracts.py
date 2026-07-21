@@ -26,6 +26,13 @@ APEX_DIRECTION_GUARD = ADDON / "Services/Risk/GlitchApexDirectionGuard.cs"
 PROP_RULE_BUNDLE = ADDON / "UI/MainWindow/GlitchMainWindow.PropFirmRulesBundle.generated.cs"
 PROP_RULE_GENERATOR = ROOT / "scripts/generate_bundled_prop_rules.ps1"
 FUNDAMENTAL_ANALYSIS = ADDON / "Services/FundamentalAnalysis/GlitchFundamentalAnalysisService.cs"
+DOWNLOAD_APP = ROOT / "apps/download"
+RELEASE_CATALOG = DOWNLOAD_APP / "src/lib/release-catalog.json"
+RELEASE_CHECKSUMS = DOWNLOAD_APP / "public/files/checksums.json"
+RELEASES_LIB = DOWNLOAD_APP / "src/lib/releases.ts"
+RELEASE_VALIDATOR = DOWNLOAD_APP / "scripts/validate-releases.mjs"
+RELEASE_PUBLISHER = ROOT / "scripts/publish-release.ps1"
+ADDON_UPDATE = ROOT / "apps/api/src/lib/addon-update.ts"
 
 
 def source(path: Path) -> str:
@@ -37,6 +44,45 @@ def method_body(text: str, signature: str, next_signature: str) -> str:
 
 
 class SharedSourceArchitectureContractTests(unittest.TestCase):
+    def test_downloads_are_owned_by_an_explicit_edition_catalog(self):
+        catalog = json.loads(source(RELEASE_CATALOG))
+        checksums = json.loads(source(RELEASE_CHECKSUMS))
+        zip_names = {path.name for path in (DOWNLOAD_APP / "public/files").glob("*.zip")}
+        catalog_names = {entry["fileName"] for entry in catalog}
+
+        self.assertEqual(zip_names, catalog_names)
+        self.assertEqual(set(checksums), catalog_names)
+        self.assertTrue(all(entry["edition"] in {"standard", "ai"} for entry in catalog))
+        self.assertTrue(all(re.fullmatch(r"[0-9a-f]{40}", entry["sourceCommit"]) for entry in catalog))
+
+        releases = source(RELEASES_LIB)
+        self.assertIn('releaseCatalog from "./release-catalog.json"', releases)
+        self.assertNotIn("deriveVersion", releases)
+        self.assertNotIn("zipFiles", releases)
+        self.assertIn('edition: ReleaseEdition = "standard"', releases)
+        self.assertIn("release.slug === normalizedSlug", releases)
+        self.assertIn("release.edition === defaultEdition", releases)
+
+    def test_release_validation_and_publisher_fail_closed(self):
+        validator = source(RELEASE_VALIDATOR)
+        publisher = source(RELEASE_PUBLISHER)
+        self.assertIn("unregistered ZIP files are not publishable", validator)
+        self.assertIn("does not match checksums.json", validator)
+        self.assertIn("Refusing to overwrite existing release", publisher)
+        self.assertIn("Expected exactly three NinjaTrader export entries", publisher)
+        self.assertIn("Assembly version", publisher)
+        self.assertIn("npm.cmd run validate:releases", publisher)
+        self.assertNotIn("git commit ", publisher.lower())
+        self.assertNotIn("git push ", publisher.lower())
+
+    def test_update_channels_follow_the_client_edition(self):
+        update = source(ADDON_UPDATE)
+        client = source(MAIN_WINDOW)
+        self.assertIn('startsWith("addon-ai-")', update)
+        self.assertIn('searchParams.set("edition", "ai")', update)
+        self.assertIn("DEFAULT_AI_ADDON_DOWNLOAD_URL", update)
+        self.assertRegex(client, r'CurrentClientVersion = "addon(?:-ai)?-0\.0\.2\.0"')
+
     def test_follower_recovery_never_accepts_unscoped_instrument_protection(self):
         copy_engine = source(COPY_ENGINE)
         self.assertNotIn("HasCompleteFollowerProtectionForCurrentPosition", copy_engine)
