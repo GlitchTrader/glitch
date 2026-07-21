@@ -1,470 +1,372 @@
-# Installation Guide & Troubleshooting
+# Glitch v0.0.2.0 Installation, Upgrade, and Troubleshooting Guide
 
-This guide covers the standard Glitch setup flow for NinjaTrader 8, from install through license activation, chart setup, replication controls, and troubleshooting.
+This is the canonical setup guide for both Glitch editions on NinjaTrader 8.
 
----
+**Languages:** [English](/installation-guide-troubleshooting) · [Português](/pt/installation-guide-troubleshooting) · [Español](/es/installation-guide-troubleshooting) · [中文](/zh/installation-guide-troubleshooting) · [Français](/fr/installation-guide-troubleshooting) · [Русский](/ru/installation-guide-troubleshooting)
 
-## Quick Navigation
-
-1. [Installation and Import](#1-installation-and-import)
-2. [License Activation](#2-license-activation)
-3. [Add GlitchAnalyticsBridge](#3-add-glitchanalyticsbridge)
-4. [Chart Trader Widget and Manual Workflow](#4-chart-trader-widget-and-manual-workflow)
-5. [Account Detection and Risk Verification](#5-account-detection-and-risk-verification)
-6. [Creating Groups, Master, Followers, Ratios](#6-creating-groups-master-followers-ratios)
-7. [Replicate and Flatten All](#7-replicate-and-flatten-all)
-8. [Risk / Compliance Settings](#8-risk-and-compliance-settings)
-9. [Analytics, Macro, Fundamentals](#9-analytics-macro-fundamentals)
-10. [Troubleshooting / FAQ](#10-troubleshooting-and-faq)
+> Glitch AI is Experimental. It does not promise profitability, unattended operation, or live readiness. The user chooses the Glitch group, master account, followers, ratios, and risk limits. Hermes proposes decisions; Glitch remains the account, risk, execution, bracket, replication, and journal authority.
 
 ---
 
-## 1) Installation and Import
+## 1) Choose one edition
 
-### Step 1 - Download the latest release
+Glitch v0.0.2.0 has two complete, alternative packages:
 
-Download the latest Glitch package here:
+| Edition | Download | Use it when |
+|---|---|---|
+| Standard | [Latest Standard](https://download.glitchtrader.com/latest) | You want manual trading, replication, risk controls, Journal, Analytics, and your own strategies without the Glitch AI runtime. This is the default update channel. |
+| AI Experimental | [Latest AI](https://download.glitchtrader.com/latest/ai) | You want all manual Glitch features plus the Hermes/Luna operator and learning loops. AI is off until you activate it. |
 
-- [https://download.glitchtrader.com/latest](https://download.glitchtrader.com/latest)
+Do **not** install both packages. They contain overlapping NinjaScript types. The AI package is complete; you do not install Standard first.
 
-This downloads the latest Glitch zip package.
-
-### Step 2 - Approve browser / Windows prompts if needed
-
-Depending on your browser or Windows settings, you may see warnings for downloaded files from the internet.
-
-If that happens:
-
-- Keep the file.
-- Allow the download if you trust the source.
-- Make sure the zip remains available locally before importing into NinjaTrader.
-
-### Step 3 - Import into NinjaTrader
-
-In NinjaTrader 8, go to:
-
-- `Tools -> Import -> NinjaScript Add-On`
-
-Then:
-
-- Select the downloaded Glitch zip file.
-- Confirm the import.
-- Approve any NinjaTrader prompts related to importing third-party content.
-
-### Step 4 - Let NinjaTrader finish the import
-
-Wait for the import process to complete.
-
-If NinjaTrader asks you to reload or restart, do that before moving to the next step.
-
-### Step 5 - Open Glitch
-
-Once the import is complete, Glitch should be available inside NinjaTrader.
-
-Next step: [License Activation](#2-license-activation)
+If AI is off, the AI edition can still be used manually.
 
 ---
 
-## 2) License Activation
+## 2) Before installing or upgrading
 
-Glitch uses a license key to unlock your plan and features.
+1. Pause AI if it is running: turn **AI Auto** off or run `/pause_trading` in the Glitch Hermes profile.
+2. Finish or flatten open positions and verify the intended accounts are order-free.
+3. Back up `Documents\NinjaTrader 8\GlitchData`. This contains Glitch settings, journals, ledgers, policy, and the shared Hermes exchange.
+4. If you already use the `glitch` Hermes profile, back it up too:
 
-### Step 1 - Open Glitch
+```powershell
+hermes profile export glitch -o "$env:USERPROFILE\Desktop\glitch-profile-before-v0020.tar.gz"
+```
 
-Launch the Glitch window inside NinjaTrader.
+5. Do not mix a compiled ZIP installation with developer source files in `Documents\NinjaTrader 8\bin\Custom`. A source-mode installation must be moved to a clean backup before importing a compiled release.
 
-### Step 2 - Go to Settings
-
-Inside Glitch, open the `Settings` tab.
-
-### Step 3 - Paste your license key
-
-Find the `License Key` field and paste in your Glitch license.
-
-### Step 4 - Save
-
-Click `Save Settings`.
-
-If the key is valid, Glitch should recognize the active license and reflect the correct plan status.
-
-### Notes
-
-- Paste the full key exactly as provided.
-- If the plan does not update correctly, recheck the key and save again.
-- If needed, restart NinjaTrader after saving.
-
-Next step: [Add GlitchAnalyticsBridge](#3-add-glitchanalyticsbridge)
+The Glitch policy migrates from v1 to v2 automatically while preserving selected masters, allowlists, instruments, and snapshot settings.
 
 ---
 
-## 3) Add GlitchAnalyticsBridge
+## 3) Install or upgrade Glitch in NinjaTrader
 
-Glitch uses a chart-side indicator to feed chart context into the platform.
+### Fresh installation
 
-The indicator name is:
+1. Download exactly one edition from the table above.
+2. In NinjaTrader 8, open `Tools -> Import -> NinjaScript Add-On`.
+3. Select the downloaded ZIP and approve NinjaTrader's import prompt.
+4. Restart NinjaTrader if requested.
+5. Open Glitch from the NinjaTrader menu.
 
-- `GlitchAnalyticsBridge`
+### Upgrade from an older compiled Glitch release
 
-### What it does
+1. Complete the backup and flat/order-free checks above.
+2. In NinjaTrader, open `Tools -> Remove NinjaScript Assembly` and remove the prior compiled Glitch or Glitch AI assembly.
+3. Import the new ZIP through `Tools -> Import -> NinjaScript Add-On`.
+4. Restart NinjaTrader.
+5. Keep the existing `GlitchData` directory so settings, Journal, ledger, and learned state remain available.
 
-Adding this indicator helps power Glitch features tied to chart context, including:
+Do not delete `GlitchData` as part of a normal upgrade.
 
-- analytics
-- macro context
-- fundamentals-related display blocks
-- chart-linked workflow behavior
+### Activate the Glitch license
 
-### How to add it
-
-- Open a chart in NinjaTrader.
-- Open the chart's indicator list.
-- Find and add `GlitchAnalyticsBridge`.
-- Apply it to the chart.
-
-### Important
-
-If analytics or chart-linked context do not appear as expected, first confirm that:
-
-- The indicator is added to the chart.
-- The chart is active.
-- NinjaTrader has completed import/load correctly.
-- Your Pro license is valid.
-- The market is open (it does not work during daily maintenance breaks and weekends).
-
-### Related UI
-
-There is also a Glitch widget inside the Chart Trader area, which works alongside the chart workflow.
-
-Next step: [Chart Trader Widget and Manual Workflow](#4-chart-trader-widget-and-manual-workflow)
+1. Open Glitch and select `Settings`.
+2. Paste the complete license key.
+3. Select `Save Settings`.
+4. Confirm the expected plan is active. Restart NinjaTrader if the plan does not refresh immediately.
 
 ---
 
-## 4) Chart Trader Widget and Manual Workflow
+## 4) Configure accounts, groups, and risk
 
-Glitch includes a widget inside the NinjaTrader Chart Trader area.
+Glitch imports connected NinjaTrader accounts, but detection is not a substitute for verification.
 
-This lets you operate from the chart itself instead of relying only on the main Glitch window.
+Before trading:
 
-### What you can do from the chart workflow
+- verify each account name, prop firm, account size, and risk settings;
+- create a group and choose exactly one master;
+- add and intentionally enable the followers;
+- set follower ratios for the exposure you want;
+- review account limits and compliance controls;
+- confirm the selected group before enabling Replication or AI Auto.
 
-Inside the NinjaTrader Chart Trader area you will see a widget with:
+A follower ratio changes the follower order **quantity**. It does not create extra independent orders. A `2x` follower receives twice the master quantity in one follower-native order flow, subject to Glitch capacity and risk validation.
 
-- replication controls
-- follower visibility
-- group PnL visibility
-- quick access to replication / flatten actions
+Turn **Replication** on only when enabled followers should copy the master. Native follower brackets and OCO protection are created and managed on each follower account.
 
-### Basic manual workflow
+Use **Flatten All** as the emergency group exit. Always confirm all scoped accounts become flat and order-free.
 
-A common manual workflow looks like this:
-
-1. Open your chart.
-2. Open Chart Trader.
-3. Confirm the correct account is selected.
-4. Confirm your group / replication context.
-5. Trade manually from the chart.
-6. Use Glitch controls to manage replication behavior as needed.
-
-### Why this matters
-
-This is useful for traders who want:
-
-- manual execution
-- chart-based control
-- faster reaction without jumping between windows
-
-If you prefer automated strategies, you can run your own strategy on the master account and let Glitch handle follower replication.
-
-Next step: [Account Detection and Risk Verification](#5-account-detection-and-risk-verification)
+Start with one small Sim group and one bracketed trade. Verify entry quantity, follower-native protection, native master close propagation, final flat state, and Journal reconciliation before increasing scope.
 
 ---
 
-## 5) Account Detection and Risk Verification
+## 5) Add chart data and Analytics
 
-Glitch automatically imports connected accounts into the platform.
+### Standard and manual workflow
 
-That saves time, but you still need to verify detected information before trading live.
+Add `GlitchAnalyticsBridge` to the active trade chart:
 
-### What to verify
+1. Open a chart and its indicator list.
+2. Add `GlitchAnalyticsBridge`.
+3. Keep the chart open and receiving data.
 
-Check that Glitch correctly reflects:
+The bridge publishes chart context used by Analytics and the Glitch workflow. It automatically publishes 1-minute, 5-minute, 15-minute, and 60-minute context for its instrument.
 
-- account name
-- prop firm
-- account size
-- relevant risk / buffer assumptions
+The Chart Trader widget provides replication controls, follower visibility, group PnL, and quick access to replication and flatten actions. You can trade manually on the master or run your own strategy there and let Glitch replicate it.
 
-### Important example
+### Additional AI market feed
 
-Glitch may infer that an account is something like an Apex 25k account.
+For AI, keep `GlitchAnalyticsBridge` on the active MNQ trade chart. If broader market context is desired, use a dedicated MNQ 1-minute chart with `GlitchAiMarketIngest`:
 
-That can be helpful, but you should still confirm:
+- `Additional Instrument Roots` defaults to `MES,M2K`;
+- leave `Add Primary Timeframes` off when `GlitchAnalyticsBridge` already supplies MNQ multi-timeframe context;
+- keep the required charts open and receiving live or replay data.
 
-- the firm is correct
-- the account size is correct
-- the risk logic matches the actual account
-
-### Why this matters
-
-Risk-management and compliance logic depend on correct account classification.
-
-If the imported account profile is wrong, controls may not behave the way you expect.
-
-### Recommended habit
-
-Before you create live groups or enable replication:
-
-- review all imported accounts
-- confirm firm and size
-- confirm the numbers make sense for your actual account structure
-- review master/follower account ratios for replication
-
-Next step: [Creating Groups, Master, Followers, Ratios](#6-creating-groups-master-followers-ratios)
+During an active market, the Glitch AI Feed should progress to **5/5 snapshots** and show a sealed packet. Weekends, holidays, maintenance breaks, disconnected data, or a chart without fresh bars cannot produce fresh snapshots.
 
 ---
 
-## 6) Creating Groups, Master, Followers, Ratios
+## 6) Install Hermes for the AI edition
 
-Glitch is built around a master/follower workflow for multi-account execution.
+Skip this section for Standard.
 
-### Step 1 - Create a group
+Requirements:
 
-In the `Dashboard` tab, create a new group.
+- `Glitch_AI_v0.0.2.0.zip` installed in NinjaTrader;
+- Hermes `0.18.2` or newer;
+- an OpenAI Codex OAuth account authorized by the user.
 
-### Step 2 - Choose a master account
+### New PC with no Hermes installation
 
-Select the account that will act as the master.
+Install Hermes using its official Windows installer, then verify the version:
 
-This is the account whose trades or strategy actions will drive the rest of the group.
+```powershell
+iex (irm https://hermes-agent.nousresearch.com/install.ps1)
+hermes --version
+```
 
-### Step 3 - Add follower accounts
+Install the public Glitch profile, authorize it, and run setup:
 
-Add one or more follower accounts to the group.
+```powershell
+hermes profile install github.com/GlitchTrader/glitch-hermes-profile --alias
+hermes -p glitch auth add openai-codex --type oauth
+powershell -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\hermes\profiles\glitch\setup.ps1"
+```
 
-### Step 4 - Enable followers
+`profile install` makes no model call and creates no cron job. `setup.ps1` verifies the SHA-256 distribution manifest, enables `glitch-control`, installs the supervised gateway, seeds the named sessions, creates the operating and learning jobs, and leaves newly created jobs paused.
 
-Each follower can be enabled or disabled.
+If NinjaTrader uses a nonstandard data location, pass it explicitly:
 
-Only enabled followers should receive replicated activity.
+```powershell
+powershell -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\hermes\profiles\glitch\setup.ps1" -GlitchData "D:\YourPath\GlitchData"
+```
 
-### Step 5 - Set ratios
+### PC with Hermes but no Glitch profile
 
-Adjust the ratio between the master and follower accounts.
+Check the version:
 
-This is useful when:
+```powershell
+hermes --version
+```
 
-- accounts are different sizes
-- you want reduced follower exposure
-- you want to scale execution more carefully instead of copying 1:1
+If it is older than `0.18.2`, run:
 
-### Why this matters
+```powershell
+hermes update
+```
 
-The ratio layer is one of the main controls that makes replication safer and more practical across different account types.
+Then use the three profile install, OAuth, and setup commands above. The `glitch` profile is isolated from other Hermes profiles. OAuth authorization is profile-specific.
 
-### Best practice
+### Existing Glitch Hermes profile
 
-Start with one small test group first.
+First pause every old Glitch job and inspect the profile. Replace `JOB_ID` with each ID returned by the list command:
 
-Confirm the structure behaves as expected before expanding to more accounts.
+```powershell
+glitch cron list --all
+glitch cron pause JOB_ID
+hermes profile info glitch
+```
 
-Next step: [Replicate and Flatten All](#7-replicate-and-flatten-all)
+If the profile already tracks the public Glitch repository:
 
----
+```powershell
+hermes profile update glitch --yes
+```
 
-## 7) Replicate and Flatten All
+If it is an older unmanaged/local profile, bind it to the public distribution:
 
-Glitch gives you direct control over when replication is active and how to exit across grouped accounts.
+```powershell
+hermes profile install github.com/GlitchTrader/glitch-hermes-profile --alias --force --yes
+```
 
-### Replicate
+Verify or add OAuth, then reconcile setup:
 
-The `Replicate` button enables replication from the selected master account to the enabled follower accounts in the group.
+```powershell
+hermes -p glitch auth status openai-codex
+hermes -p glitch auth add openai-codex --type oauth
+powershell -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\hermes\profiles\glitch\setup.ps1"
+glitch cron list --all
+```
 
-Typical use cases:
+The supported v0.0.2.0 jobs are exactly:
 
-- you trade manually on the master account
-- your strategy runs on the master account
-- you want followers to mirror the master according to configured ratios and controls
+- `glitch-direct-operator` — checked every minute;
+- `glitch-learning-supervisor` — checked every 15 minutes.
 
-### Flatten All
-
-The `Flatten All` button is the emergency/control action for exiting active replicated positions across the group.
-
-Use it when you need to quickly flatten the active workflow.
-
-### Before using either button
-
-Always verify:
-
-- correct master account
-- correct follower accounts
-- followers are enabled intentionally
-- ratios are correct
-- you are operating in the intended group
-
-### Best practice
-
-Test replication behavior in sim or in a controlled environment before relying on it live.
-
-Next step: [Risk / Compliance Settings](#8-risk-and-compliance-settings)
-
----
-
-## 8) Risk and Compliance Settings
-
-Glitch includes configurable rules designed to support risk management and prop-style operating discipline.
-
-These settings live in the `Settings` tab.
-
-### What these settings are for
-
-The risk/compliance layer helps reduce preventable account damage by enforcing operating rules around risk conditions.
-
-Examples visible in the current workflow include:
-
-- flattening and freezing an account when drawdown buffer falls too low
-- forcing reduced replication when risk gets tighter
-- flattening an account when unrealized loss exceeds a configured portion of maximum intraday loss
-- locking evaluation accounts when a target equity threshold is reached
-
-### Why this matters
-
-These rules are part of the core Glitch philosophy:
-
-- risk-first before convenience
-
-The goal is not just to replicate trades.
-
-The goal is to replicate with guardrails.
-
-### Important
-
-Review these settings carefully and match them to:
-
-- your prop firm rules
-- your account type
-- your actual risk tolerance
-- your group structure
-
-Do not enable rules blindly.
-
-Understand what each one does before using it live.
-
-Next step: [Analytics, Macro, Fundamentals](#9-analytics-macro-fundamentals)
+Setup reconciles these two jobs but does not guess whether unknown legacy jobs are safe to delete. Keep obsolete hourly, review, or paper-mode jobs paused; remove them only after confirming they are no longer required.
 
 ---
 
-## 9) Analytics, Macro, Fundamentals
+## 7) What the AI jobs do
 
-Glitch is not only a replication tool. It also includes a context layer designed to help you trade with more structure.
+The two jobs form one operating and learning system:
 
-### What this section is for
+- The direct operator wakes every minute. While flat it normally requests a new Luna decision every five minutes; while positioned it can request a decision every minute so HOLD, move stop, move target, reduce, or exit decisions can react to the trade.
+- If a decision fails because of malformed JSON, timeout, compaction, or another recognized error, the next new packet can retry on the next minute instead of waiting for the normal flat cadence.
+- The learning supervisor wakes every 15 minutes and runs trade debriefs, hourly supervision, 300-minute planning, and daily journaling when each layer is due.
 
-The analytics side is meant to give you a broader operating view, not just order execution.
+Learning uses the NinjaTrader trade record, Glitch Journal and ledger, Hermes sessions/memory, decisions, receipts, and outcomes. Distribution updates replace owned cognition and scripts while preserving authentication, configuration overrides, sessions, memories, ledgers, and existing cron enabled/paused state.
 
-Visible elements in the current workflow include:
-
-- multi-timeframe analytics panels
-- instrument overview areas
-- latest headlines
-- upcoming news calendar
-- earnings analysis blocks
-- session/score/action context
-
-### Why this matters
-
-A lot of preventable mistakes happen because traders operate too narrowly:
-
-- one chart
-- one timeframe
-- no news awareness
-- no macro awareness
-- no structured review of context
-
-Glitch is designed to reduce that blindness.
-
-### Important dependency
-
-To enable chart-linked technical context, make sure `GlitchAnalyticsBridge` is added to the chart.
-
-If it is missing, parts of the analytics workflow may not populate as expected.
-
-### Practical use
-
-Use the analytics layer to:
-
-- check broader context before trading
-- avoid obvious bad timing around major events
-- bring macro/news awareness into your execution workflow
-- support more disciplined decision-making around your own setup
-
-Next step: [Troubleshooting / FAQ](#10-troubleshooting-and-faq)
+Hermes owns cognition, strategy, and master quantity proposals. Glitch validates the configured account/group scope, available capacity, risk, geometry, execution, brackets, replication, and receipts. No paper/live switch changes account authority.
 
 ---
 
-## 10) Troubleshooting and FAQ
+## 8) Verify before activating AI
 
-### I imported the zip but Glitch does not seem available
+Keep **AI Auto off** while checking the installation.
 
-- Confirm the import completed successfully.
+1. Confirm the correct Glitch group, master, followers, ratios, instruments, and risk limits.
+2. Confirm `GlitchAnalyticsBridge` and any optional ingest chart are active.
+3. Confirm the AI Feed reaches 5/5 snapshots and a packet is sealed during an active market.
+4. Run:
+
+```text
+/glitch_status
+```
+
+5. Confirm the gateway, policy, replication state, and both jobs are reported correctly.
+6. Enable **AI Auto** in Glitch or run:
+
+```text
+/trade
+```
+
+7. Observe one bounded valid decision and receipt. Confirm there is no unexpected account or order mutation.
+
+Useful controls:
+
+- `/trade` — activate both operating and learning loops for the Glitch-configured scope;
+- `/pause_trading` — pause both loops;
+- `/flatten_all` — pause both loops and ask Glitch to flatten the configured accounts;
+- `/glitch_status` — report policy, gateway, replication, and job state;
+- `/long` and `/short` — one-cycle directed experiments that still pass Glitch validation;
+- `/bias_long`, `/bias_short`, and `/bias_neutral` — advisory direction only.
+
+`/trade_mode paper|live` remains only as a deprecated compatibility alias. Its argument does not select accounts.
+
+---
+
+## 9) Update Glitch and Hermes later
+
+### Glitch package
+
+Use [Latest Standard](https://download.glitchtrader.com/latest) or [Latest AI](https://download.glitchtrader.com/latest/ai), pause/flatten/back up, remove the old compiled assembly, and import the new package. Never switch edition by layering one ZIP over the other.
+
+### Hermes profile
+
+```powershell
+hermes profile update glitch
+powershell -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\hermes\profiles\glitch\setup.ps1"
+```
+
+Re-running setup preserves whether the two supported jobs were enabled or paused. Audit with `glitch cron list --all` after every update.
+
+### Move the complete AI system to another PC
+
+On the old PC:
+
+```powershell
+hermes profile export glitch -o glitch-profile-backup.tar.gz
+```
+
+Copy both of these to the new PC:
+
+- `glitch-profile-backup.tar.gz`;
+- the complete `Documents\NinjaTrader 8\GlitchData` directory.
+
+On the new PC, install Hermes and Glitch AI, restore `GlitchData`, then run:
+
+```powershell
+hermes profile import .\glitch-profile-backup.tar.gz
+hermes profile install github.com/GlitchTrader/glitch-hermes-profile --alias --force --yes
+hermes -p glitch auth add openai-codex --type oauth
+powershell -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\hermes\profiles\glitch\setup.ps1"
+glitch cron list --all
+```
+
+Hermes profile export does not include OAuth credentials. `GlitchData` is separate from the Hermes profile and is required to move the Glitch Journal, trade ledger, policy, and shared learning exchange.
+
+---
+
+## 10) Troubleshooting
+
+### Glitch does not appear after import
+
+- Confirm NinjaTrader reported a successful import.
+- Confirm only one Glitch edition is installed.
+- Remove an older compiled assembly before importing the replacement.
 - Restart NinjaTrader.
-- Re-import if needed.
-- Make sure you imported the downloaded Glitch zip package.
+- If developer source exists under `bin\Custom`, do not mix it with the compiled package.
 
-### My license is not activating
+### License does not activate
 
-- Open `Settings`.
-- Paste the full key exactly.
-- Click `Save Settings`.
-- Restart NinjaTrader if needed.
-- Verify that the key matches your purchased plan.
+- Paste the complete key in `Settings` and save it.
+- Confirm the key belongs to the intended plan.
+- Restart NinjaTrader if the plan does not refresh.
 
-### Analytics are empty or not updating
+### Analytics or AI snapshots are empty
 
-- Confirm `GlitchAnalyticsBridge` is added to the chart.
-- Confirm the chart is open and active.
-- Re-apply the indicator if needed.
-- Check whether the relevant market/session context is available.
+- Confirm the chart is connected, open, and receiving fresh bars.
+- Confirm `GlitchAnalyticsBridge` is applied to the active instrument.
+- For AI, confirm the five-frame collection window progresses toward 5/5 and a packet seals.
+- Check the market session: weekends, holidays, and daily maintenance do not produce fresh bars.
+- If snapshot freshness advances but the count remains 0/5 or the packet remains missing beyond a full collection window, keep AI Auto off, restart the indicator/chart, and collect the Glitch logs before trading.
 
-### My accounts were imported, but the firm or size looks wrong
+### AI decision is overdue
 
-Do not ignore this.
+- Run `/glitch_status`.
+- Confirm the supervised gateway is running and both supported jobs exist.
+- Confirm AI Auto or `/trade` has enabled the jobs.
+- Confirm the packet is sealed and newer than the last decision.
+- Inspect old jobs with `glitch cron list --all`; duplicate legacy schedulers should remain paused.
+- A recognized failed decision should retry with the next new packet on the next minute. Repeated gaps require logs; do not compensate by creating additional cron jobs.
 
-- Verify account mapping manually.
-- Confirm the correct prop firm and account size before using risk controls live.
+### Replication is wrong
 
-### Replication is not behaving the way I expected
+Verify the master, enabled followers, group, ratios, Replication state, instrument mapping, capacity, and risk status. Ratios scale quantity; they do not create multiple independent orders.
 
-Check:
+### Daily PnL is zero
 
-- correct master account
-- correct follower accounts
-- followers are enabled
-- group is the intended one
-- ratio settings are correct
-- you are testing the expected workflow
+Compare Glitch with NinjaTrader's native account and trade displays for the same account and session. If NinjaTrader itself has not supplied session PnL, Glitch cannot invent it. Do not use an unverified zero as a risk decision input.
 
-### What is the safest way to start?
+### Safest first run
 
-Recommended first run:
+1. Use Sim.
+2. Configure one master and a small follower group.
+3. Confirm charts and, for AI, a sealed five-frame packet.
+4. Place one bracketed MNQ master entry.
+5. Verify ratio-scaled follower quantity and follower-native OCO protection.
+6. Close the master natively and verify one close propagation.
+7. Confirm every account is flat and order-free.
+8. Reconcile Glitch Journal with NinjaTrader for the same scope.
 
-1. Import Glitch.
-2. Activate the license.
-3. Add the indicator to a chart.
-4. Verify imported accounts.
-5. Create one small test group.
-6. Test the workflow in sim before going live.
+Any discrepancy stops the test. Use NinjaTrader's native **Flatten All** for cleanup when necessary.
 
-### Does Glitch replace my strategy?
+---
 
-No.
+## 11) Operating boundaries
 
-Glitch is designed to work around your strategy, setup, indicators, and bots.
+- Glitch does not replace your responsibility for account selection, prop-firm rules, holiday or special-close schedules, connectivity, or risk.
+- AI output can be wrong. Glitch's deterministic controls reduce operational error but do not guarantee trading results.
+- Profitability must be measured from reconciled executions over meaningful samples; it is not a release claim.
+- Keep recovery procedures, platform dependencies, and known limitations in mind before choosing any live account.
 
-It is the operating layer, not the edge itself.
+Useful links:
 
-### Where should I go next?
-
-- [Start Here](/)
-- [Glitch Download](https://download.glitchtrader.com/latest)
-- [Docs & Guides](/)
-- [Website](https://www.glitchtrader.com)
+- [Standard download](https://download.glitchtrader.com/latest)
+- [Experimental AI download](https://download.glitchtrader.com/latest/ai)
+- [Public Glitch Hermes profile](https://github.com/GlitchTrader/glitch-hermes-profile)
+- [Glitch Docs](/)
+- [Glitch website](https://www.glitchtrader.com)

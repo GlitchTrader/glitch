@@ -1,6 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { cache } from "react";
+import {
+  docsLocaleDetails,
+  getInstallationGuideHref,
+  installationGuideSlug,
+  type DocsLocale,
+} from "@/lib/docs-locales";
 
 const DOCS_ROOT = path.resolve(process.cwd(), "../../ninjatrader/Glitch/Docs");
 
@@ -13,16 +19,60 @@ type DocDefinition = {
   spotlight: string;
 };
 
+const localizedInstallationGuideCopy: Record<
+  DocsLocale,
+  Pick<DocDefinition, "navTitle" | "summary" | "spotlight">
+> = {
+  en: {
+    navTitle: "Installation Guide & Troubleshooting",
+    summary:
+      "Install or upgrade Standard and Experimental AI editions, configure NinjaTrader and Hermes, preserve learning data, and troubleshoot the complete runtime.",
+    spotlight:
+      "Use this guide for a fresh PC, an existing Glitch installation, or an existing Hermes profile without mixing editions or losing state.",
+  },
+  pt: {
+    navTitle: "Guia de instalação e solução de problemas",
+    summary:
+      "Instale ou atualize as edições Standard e AI Experimental, configure NinjaTrader e Hermes, preserve o aprendizado e solucione o runtime completo.",
+    spotlight:
+      "Use este guia em um PC novo, com uma instalação existente do Glitch ou com um perfil Hermes existente, sem misturar edições nem perder estado.",
+  },
+  es: {
+    navTitle: "Guía de instalación y solución de problemas",
+    summary:
+      "Instala o actualiza las ediciones Standard y AI Experimental, configura NinjaTrader y Hermes, conserva el aprendizaje y diagnostica todo el runtime.",
+    spotlight:
+      "Usa esta guía en un PC nuevo, con una instalación existente de Glitch o con un perfil Hermes existente, sin mezclar ediciones ni perder estado.",
+  },
+  zh: {
+    navTitle: "安装与故障排除指南",
+    summary: "安装或升级 Standard 与实验性 AI 版本，配置 NinjaTrader 和 Hermes，保留学习数据，并排查完整运行链路。",
+    spotlight: "适用于新电脑、已有 Glitch 安装或已有 Hermes 配置；避免混装版本或丢失状态。",
+  },
+  fr: {
+    navTitle: "Guide d’installation et de dépannage",
+    summary:
+      "Installez ou mettez à niveau les éditions Standard et AI Expérimentale, configurez NinjaTrader et Hermes, préservez l’apprentissage et dépannez l’ensemble du runtime.",
+    spotlight:
+      "Utilisez ce guide sur un nouveau PC, avec une installation Glitch existante ou avec un profil Hermes existant, sans mélanger les éditions ni perdre l’état.",
+  },
+  ru: {
+    navTitle: "Руководство по установке и устранению неполадок",
+    summary:
+      "Установите или обновите Standard и экспериментальную AI-редакцию, настройте NinjaTrader и Hermes, сохраните данные обучения и проверьте весь runtime.",
+    spotlight:
+      "Руководство подходит для нового ПК, существующей установки Glitch или профиля Hermes и помогает не смешать редакции и не потерять состояние.",
+  },
+};
+
 const publicDocDefinitions: DocDefinition[] = [
   {
-    slug: "installation-guide-troubleshooting",
+    slug: installationGuideSlug,
     fileName: "installation-guide-troubleshooting.md",
-    navTitle: "Installation Guide & Troubleshooting",
+    navTitle: localizedInstallationGuideCopy.en.navTitle,
     section: "Product",
-    summary:
-      "Step-by-step install, license activation, bridge indicator setup, replication workflow, risk controls, and troubleshooting FAQ.",
-    spotlight:
-      "Best operational walkthrough for getting live quickly while validating account mapping, risk settings, and chart-linked context.",
+    summary: localizedInstallationGuideCopy.en.summary,
+    spotlight: localizedInstallationGuideCopy.en.spotlight,
   },
   {
     slug: "architecture",
@@ -199,6 +249,30 @@ export const getDocPage = cache((slug: string): DocPage | null => {
     section: definition.section,
     summary: definition.summary,
     spotlight: definition.spotlight,
+    content: markdown,
+    headings: getDocHeadings(markdown),
+  };
+});
+
+export const getLocalizedInstallationGuide = cache((locale: DocsLocale): DocPage => {
+  const definition = publicDocDefinitions.find((item) => item.slug === installationGuideSlug);
+  if (!definition) {
+    throw new Error("The installation guide definition is missing.");
+  }
+
+  const localeDetails = docsLocaleDetails[locale];
+  const copy = localizedInstallationGuideCopy[locale];
+  const fileName = `installation-guide-troubleshooting${localeDetails.fileSuffix}.md`;
+  const markdown = readDocFile(fileName);
+
+  return {
+    slug: installationGuideSlug,
+    href: getInstallationGuideHref(locale),
+    navTitle: copy.navTitle,
+    title: getHeading(markdown, copy.navTitle),
+    section: definition.section,
+    summary: copy.summary,
+    spotlight: copy.spotlight,
     content: markdown,
     headings: getDocHeadings(markdown),
   };
