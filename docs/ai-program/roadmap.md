@@ -42,4 +42,4 @@ These version numbers are release identities, not a deterministic maturity ladde
 - profitability claims inferred from tests, prompts, or a small discretionary sample;
 - a centralized VPS as the required customer distribution model.
 
-See `operating-system-rail.md`, `docs/ledger/now.md`, and `docs/ledger/backlog.md` for current contracts and stop lines.
+See `operating-system-rail.md` and `docs/ledger/ledger.json` for current contracts, work, and stop lines.

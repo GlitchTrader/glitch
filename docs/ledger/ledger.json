@@ -1,0 +1,210 @@
+{
+  "schema_version": "1.0",
+  "project": "glitch",
+  "updated": "2026-07-22",
+  "roadmap_ref": "docs/ai-program/roadmap.md",
+  "items": [
+    {
+      "id": "GL-STD-01",
+      "title": "Keep Standard v0.0.2.0 no-regression evidence tied to its exact inspected artifact.",
+      "status": "ready",
+      "priority": "P1",
+      "owner_role": "tests",
+      "reviewer_role": "code-reviewer",
+      "acceptance": [
+        "Source, F5 compile evidence, exported artifact hash, release catalog entry, and customer-facing channel agree for Standard v0.0.2.0.",
+        "Shared fixes are independently verified in Standard and AI source before either release changes.",
+        "No release or public claim is made without operator approval and named evidence."
+      ],
+      "depends_on": [],
+      "evidence": [],
+      "sources": [
+        "docs/ledger/branching.md",
+        "apps/download/src/lib/release-catalog.json",
+        "branch:standard/20"
+      ],
+      "stop_line": "No release, production publication, live-capital authority, broker credential change, or customer claim without explicit operator approval and exact artifact evidence."
+    },
+    {
+      "id": "GL-AI-01",
+      "title": "Runtime-prove intent v3 per-leg TP/SL amendments and independent additions.",
+      "status": "ready",
+      "priority": "P0",
+      "owner_role": "tests",
+      "reviewer_role": "code-reviewer",
+      "acceptance": [
+        "In bounded Sim, changing one selected leg leaves sibling legs unchanged.",
+        "Follower-native protection mirrors the accepted master change and every account returns flat and order-free.",
+        "Rejected or stale input causes zero order mutation and a deterministic evidence record."
+      ],
+      "depends_on": [],
+      "evidence": [],
+      "sources": [
+        "branch:ai/22/glitch_hermes_docs/schemas/intent.v3.schema.json",
+        "docs/ai-program/roadmap.md"
+      ],
+      "stop_line": "Bounded Sim only. No evaluation, PA, live capital, unattended promotion, release, or external order authority without explicit operator approval."
+    },
+    {
+      "id": "GL-AI-02",
+      "title": "Runtime-prove safe widening and deterministic rejection outside authoritative Apex capacity.",
+      "status": "ready",
+      "priority": "P0",
+      "owner_role": "tests",
+      "reviewer_role": "code-reviewer",
+      "acceptance": [
+        "A widening request inside authoritative current capacity succeeds with complete protection evidence.",
+        "A request outside capacity mutates no order and records the exact rejection reason.",
+        "Master and follower state reconcile flat and order-free after the bounded fixture."
+      ],
+      "depends_on": [],
+      "evidence": [],
+      "sources": [
+        "branch:ai/22/ninjatrader/Glitch/AddOns/GlitchAddOn",
+        "docs/ai-program/roadmap.md"
+      ],
+      "stop_line": "Bounded Sim only. No evaluation, PA, live capital, unattended promotion, release, or external order authority without explicit operator approval."
+    },
+    {
+      "id": "GL-AI-03",
+      "title": "Prove hidden-window continuity, next-packet retry, stale-lock recovery, and crash reconciliation.",
+      "status": "ready",
+      "priority": "P0",
+      "owner_role": "tests",
+      "reviewer_role": "code-reviewer",
+      "acceptance": [
+        "Hidden or minimized UI does not stop the bounded runtime pipeline.",
+        "Recognized failure retries only on the next eligible packet and does not duplicate intent execution.",
+        "Restart recovery preserves truthful health, idempotent intent state, native protection, and final flat/order-free reconciliation."
+      ],
+      "depends_on": [],
+      "evidence": [],
+      "sources": [
+        "branch:ai/22/tools/hermes",
+        "branch:ai/22/ninjatrader/Glitch/AddOns/GlitchAddOn",
+        "docs/ai-program/roadmap.md"
+      ],
+      "stop_line": "Bounded Sim only. No evaluation, PA, live capital, unattended promotion, release, or external order authority without explicit operator approval."
+    },
+    {
+      "id": "GL-AI-04",
+      "title": "Prove learning continuity from NOTHING, rejection, and authoritative outcome episodes.",
+      "status": "ready",
+      "priority": "P1",
+      "owner_role": "tests",
+      "reviewer_role": "code-reviewer",
+      "acceptance": [
+        "Atomic deduplicated decision episodes reach the intended hourly, 300-minute, and daily learning loops exactly once.",
+        "Infrastructure faults and incomplete account outcomes never become strategy memory.",
+        "A later bounded cycle can retrieve evidence-linked learning without treating stale decisions as current authority."
+      ],
+      "depends_on": [],
+      "evidence": [],
+      "sources": [
+        "branch:ai/22/tools/hermes",
+        "branch:ai/22/glitch_hermes_docs",
+        "docs/ai-program/roadmap.md"
+      ],
+      "stop_line": "No policy promotion, strategy claim, unattended trading, evaluation, PA, or live use from synthetic or incomplete learning evidence."
+    },
+    {
+      "id": "GL-AI-05",
+      "title": "Freeze an attributable paper sample before altering cognition or making performance claims.",
+      "status": "backlog",
+      "priority": "P1",
+      "owner_role": "researcher",
+      "reviewer_role": "code-reviewer",
+      "acceptance": [
+        "The sample joins NinjaTrader and Glitch executions to exact packet, decision, protection, follower, and outcome evidence.",
+        "Inclusion, exclusion, time window, regime, and missing-data rules are frozen before evaluation.",
+        "Results report uncertainty and limitations and do not imply profitability or readiness beyond the observed paper evidence."
+      ],
+      "depends_on": [
+        "GL-AI-01",
+        "GL-AI-02",
+        "GL-AI-03",
+        "GL-AI-04"
+      ],
+      "evidence": [],
+      "sources": [
+        "docs/ai-program/roadmap.md",
+        "branch:ai/22"
+      ],
+      "stop_line": "No cognition change, fixed strategy extraction, profitability claim, evaluation, PA, or live promotion from an unfrozen or unattributable sample."
+    },
+    {
+      "id": "GL-063",
+      "title": "Establish authoritative holiday and special-close truth.",
+      "status": "blocked",
+      "priority": "P0",
+      "owner_role": "researcher",
+      "reviewer_role": "code-reviewer",
+      "acceptance": [
+        "A named authoritative source covers holidays, early closes, timezone/DST behavior, and source failure.",
+        "Deterministic tests prove trading is refused when the source is stale, incomplete, or contradictory.",
+        "The operator approves any authority-source or policy change before promotion."
+      ],
+      "depends_on": [],
+      "evidence": [],
+      "sources": [
+        "ninjatrader/Glitch/AddOns/GlitchAddOn/Resources/PropFirmRules.json",
+        "docs/ai-program/roadmap.md"
+      ],
+      "stop_line": "No unattended, evaluation, PA, or live-readiness claim while holiday or special-close truth is incomplete.",
+      "blocked_reason": "No complete authoritative holiday and special-close source is currently bound to the runtime contract."
+    },
+    {
+      "id": "GL-DEP-01",
+      "title": "Prove dependency and restart recovery across the maintained AI runtime.",
+      "status": "ready",
+      "priority": "P0",
+      "owner_role": "tests",
+      "reviewer_role": "code-reviewer",
+      "acceptance": [
+        "Provider, platform, network, process, and machine-restart failures each produce deterministic safe state and evidence.",
+        "Recovery never duplicates an intent, loses native protection, or reports healthy before dependencies and state agree.",
+        "Final fixtures reconcile every configured account flat and order-free."
+      ],
+      "depends_on": [],
+      "evidence": [],
+      "sources": [
+        "branch:ai/22/tools/hermes",
+        "branch:ai/22/ninjatrader/Glitch/AddOns/GlitchAddOn",
+        "docs/ai-program/roadmap.md"
+      ],
+      "stop_line": "No unattended, evaluation, PA, or live-readiness claim before named dependency and restart recovery fixtures pass."
+    },
+    {
+      "id": "GL-LIMIT-01",
+      "title": "Design and prove a complete pending limit-entry lifecycle before allowing AI limit entries.",
+      "status": "backlog",
+      "priority": "P2",
+      "owner_role": "architect",
+      "reviewer_role": "code-reviewer",
+      "acceptance": [
+        "The contract covers place, cancel, replace, TIF or expiry, partial-fill protection, replication, durable identity, and restart recovery.",
+        "Every failure path preserves native protection and idempotent final reconciliation.",
+        "Independent review and bounded Sim evidence precede any schema or runtime promotion."
+      ],
+      "depends_on": [
+        "GL-AI-01",
+        "GL-AI-02",
+        "GL-AI-03"
+      ],
+      "evidence": [],
+      "sources": [
+        "branch:ai/22/glitch_hermes_docs/schemas/intent.v3.schema.json",
+        "docs/ai-program/roadmap.md"
+      ],
+      "stop_line": "AI entries remain market-only until the full pending-entry lifecycle is independently verified and explicitly approved."
+    }
+  ],
+  "extensions": {
+    "canonical_branch": "main",
+    "maintained_source_branches": [
+      "standard/20",
+      "ai/22"
+    ],
+    "selection_rule": "Select the highest-priority dependency-clear ready item allowed by its branch and stop line. No eligible item means a clean stop without a write."
+  }
+}

@@ -23,6 +23,8 @@ This repo is shared between multiple agents. Work like a responsible teammate.
 ## Operating Rules
 
 - Workspace files are the only source of truth.
+- Durable current work lives only in `docs/ledger/ledger.json` on `main`. Backlog and queue are states in that ledger; roadmap, Git history, release records, and audits are not competing work lists.
+- Create or update a ledger item only when coordination must survive the session, cross a role or dependency, require review or approval, remain blocked, or carry material risk. Bounded work completed and verified in one interactive session needs no ticket.
 - Never directly edit `C:\Users\alan\Documents\NinjaTrader 8\bin\Custom`.
 - Treat `GlitchData` runtime files as state or sparse overrides, not source templates.
 - Treat customer-facing NinjaTrader export zips as release artifacts. Inspect them before publish and prefer bundled code fallbacks over manual post-export zip mutation for required static data.
@@ -38,8 +40,10 @@ When a bounded patch should be visible: skill `ab-patch-finish` → `abkb/projec
 
 ## Branching (NinjaTrader product)
 
-- **`main`:** v0.0.1.x — user downloads, non-AI patches only (`docs/ledger/branching.md`).
-- **`glitch/ai-rail`:** v0.0.2.x+ — operating-system rail R01–R23; no public zips until promotion merge.
+- **`main`:** production web surfaces, explicit release catalog, and the canonical work ledger.
+- **`standard/20`:** maintained Standard v0.0.2.0 source.
+- **`ai/22`:** maintained Experimental AI v0.0.2.2 source and bounded follow-on verification.
+- The old `glitch/ai-rail` branch is historical. Do not put new work there.
 - Confirm `git branch --show-current` before editing AddOn/Indicator code.
 
 ## Coding discipline

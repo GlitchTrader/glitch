@@ -28,6 +28,13 @@ The old `cleanup/main-core`, `cleanup/ai-core`, and `glitch/ai-rail` names are h
 - Shared C# fixes must be verified in both source lines before release. Never copy live NinjaTrader files back into source.
 - The public Hermes profile is a separate repository with its own compatible version and tag.
 
+## Coordination authority
+
+- `docs/ledger/ledger.json` on `main` is the one work ledger for Standard, AI, web, and release work.
+- `standard/20` and `ai/22` do not maintain branch-local queues, now files, or status ledgers.
+- A branch agent reads the default-branch ledger and asks the Glitch PM to persist any durable lifecycle transition there.
+- A push to `main` remains a publication action even when the diff is coordination-only.
+
 ## Promotion
 
 No branch name grants runtime or live authority. Promotion requires exact-source tests, F5 compile, bounded native lifecycle evidence, inspected artifact, checksum, catalog record, and operator approval. A push to `main` deploys public web surfaces and is therefore a publication action.

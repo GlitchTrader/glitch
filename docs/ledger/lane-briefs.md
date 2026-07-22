@@ -1,6 +1,6 @@
 # Lane Briefs — delegation prompts (relaunch-ready)
 
-> Historical archive from 2026-07-07. Do not relaunch these prompts verbatim: paths, branches, classes, and backlog IDs have changed. Use `now.md` and `backlog.md` for current work. In particular, there is no current `PropFirmRuleLoader.cs`.
+> Historical archive from 2026-07-07. Do not relaunch these prompts verbatim: paths, branches, classes, and backlog IDs have changed. Use `ledger.json` on `main` for current work. In particular, there is no current `PropFirmRuleLoader.cs`.
 
 Written 2026-07-07 after the first four lanes were killed mid-flight by a subscription session limit. Any lead agent can respawn a lane by giving the brief below verbatim to a subagent (models: LANE-1/2 = Opus, LANE-3/4 = Sonnet; run in background). Shared rules for ALL lanes at the bottom.
 

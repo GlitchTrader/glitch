@@ -30,4 +30,4 @@ Hermes decides; Glitch validates, executes, protects, replicates, reconciles, an
 
 Source tests, builds, and a green NinjaTrader compile prove software shape, not profitability or account authorization. Promotion claims require the exact artifact, named source commit, bounded native lifecycle evidence, and explicit operator approval.
 
-Historical plans and audits remain useful provenance but do not override `now.md`, the release catalog, current source, or current user direction.
+Historical plans and audits remain useful provenance but do not override `ledger.json`, the release catalog, current source, or current user direction.

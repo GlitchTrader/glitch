@@ -127,4 +127,4 @@ Outcome reconciliation is cross-process locked and atomically replaced. Only new
 - a pending LIMIT branch without its complete lifecycle;
 - code that lets health status silently veto a valid cognitive decision.
 
-Current work and acceptance live in `docs/ledger/now.md` and `docs/ledger/backlog.md`. Historical R01-R23 labels remain provenance, not current status authority.
+Current work and acceptance live only in `docs/ledger/ledger.json` on `main`. Historical R01-R23 labels remain provenance, not current status authority.

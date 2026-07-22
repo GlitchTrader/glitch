@@ -33,6 +33,6 @@ glitch_hermes_docs/ private Glitch/Hermes runtime contracts
 - Experimental AI v0.0.2.2 is `/latest/ai` and uses public Hermes profile v0.0.2.4.
 - `standard/20` and `ai/22` are the maintained source lanes.
 - The release catalog, not filenames, chooses latest.
-- Historical audits remain immutable evidence; `docs/ledger/now.md` is the compact current handoff.
+- Historical audits remain immutable evidence; `docs/ledger/ledger.json` is the one current work handoff.
 
 Delete duplication before adding pages. Derived docs yield to current source and native runtime evidence.
