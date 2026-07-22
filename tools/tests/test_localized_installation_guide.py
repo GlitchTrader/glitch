@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 DOCS_ROOT = ROOT / "ninjatrader/Glitch/Docs"
 DOCS_APP = ROOT / "apps/doc/src"
+DOWNLOAD_APP = ROOT / "apps/download/src"
 
 GUIDES = {
     "en": DOCS_ROOT / "installation-guide-troubleshooting.md",
@@ -99,17 +100,25 @@ class LocalizedInstallationGuideTests(unittest.TestCase):
 
     def test_docs_app_publishes_localized_routes_and_hreflang(self):
         locale_source = (DOCS_APP / "lib/docs-locales.ts").read_text(encoding="utf-8")
-        localized_route = (
-            DOCS_APP / "app/[locale]/[slug]/page.tsx"
-        ).read_text(encoding="utf-8")
-        canonical_route = (DOCS_APP / "app/[slug]/page.tsx").read_text(encoding="utf-8")
+        article_route = (DOCS_APP / "app/[...segments]/page.tsx").read_text(encoding="utf-8")
         sitemap = (DOCS_APP / "app/sitemap.ts").read_text(encoding="utf-8")
 
         self.assertIn('["en", "pt", "es", "zh", "fr", "ru"]', locale_source)
-        self.assertIn("getDocLanguages", localized_route)
-        self.assertIn("getDocLanguages", canonical_route)
+        self.assertIn("getDocLanguages", article_route)
+        self.assertIn("resolveArticle", article_route)
         self.assertIn("getDocsHref", sitemap)
         self.assertIn("getDocSummaries(locale)", sitemap)
+
+    def test_public_language_switchers_match_the_flagged_website_control(self):
+        for app in (DOCS_APP, DOWNLOAD_APP):
+            header = (app / "components/site-header.tsx").read_text(encoding="utf-8")
+            switcher = (app / "components/language-switcher.tsx").read_text(encoding="utf-8")
+            with self.subTest(app=app.parent.name):
+                self.assertNotIn("<select", header)
+                self.assertIn("<LanguageSwitcher", header)
+                self.assertIn('aria-haspopup="listbox"', switcher)
+                self.assertIn("/images/flags/square/br.svg", switcher)
+                self.assertIn("bg-glitch-teal", switcher)
 
     def test_canonical_guide_describes_both_editions_without_readiness_claims(self):
         text = GUIDES["en"].read_text(encoding="utf-8")

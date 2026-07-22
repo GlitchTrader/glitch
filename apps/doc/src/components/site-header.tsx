@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 type SiteHeaderProps = {
   websiteUrl: string;
@@ -69,9 +70,6 @@ export function SiteHeaderClient({
   const [open, setOpen] = useState(false);
 
   const closeMenu = () => setOpen(false);
-  const changeLanguage = (href: string) => {
-    window.location.assign(href);
-  };
 
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
@@ -124,16 +122,7 @@ export function SiteHeaderClient({
           <a href={goProUrl} className={goProClass}>
             {labels.goPro}
           </a>
-          <label className="sr-only" htmlFor="docs-language-desktop">{languageLabel}</label>
-          <select
-            id="docs-language-desktop"
-            value={locale}
-            onChange={(event) => changeLanguage(languageLinks.find((item) => item.locale === event.target.value)?.href ?? "/")}
-            className="rounded-full border border-white/15 bg-zinc-900 px-3 py-1.5 text-xs text-white"
-            aria-label={languageLabel}
-          >
-            {languageLinks.map((item) => <option key={item.locale} value={item.locale} lang={item.languageTag}>{item.label}</option>)}
-          </select>
+          <LanguageSwitcher locale={locale} label={languageLabel} options={languageLinks} />
         </nav>
       </div>
 
@@ -177,16 +166,10 @@ export function SiteHeaderClient({
               <a href={goProUrl} className={`${mobileItemClass} ${goProClass}`} onClick={closeMenu}>
                 <span>{labels.goPro}</span>
               </a>
-              <label className={`${mobileItemClass} ${mobileNeutralTextClass}`}>
+              <div className={`${mobileItemClass} ${mobileNeutralTextClass}`}>
                 <span>{languageLabel}</span>
-                <select
-                  value={locale}
-                  onChange={(event) => changeLanguage(languageLinks.find((item) => item.locale === event.target.value)?.href ?? "/")}
-                  className="rounded-lg border border-white/15 bg-zinc-950 px-2 py-1 text-xs text-white"
-                >
-                  {languageLinks.map((item) => <option key={item.locale} value={item.locale} lang={item.languageTag}>{item.label}</option>)}
-                </select>
-              </label>
+                <LanguageSwitcher locale={locale} label={languageLabel} options={languageLinks} />
+              </div>
             </nav>
           </div>
         </div>
