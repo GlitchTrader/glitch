@@ -50,10 +50,11 @@ Glitch Flatten All remain authoritative.
   and the long-run account objective. Obsolete v1 plan/guidance artifacts are not
   sent back to Hermes; only v2 artifacts generated under this contract re-enter
   decision or learning continuity.
-- Before an entry reaches NinjaTrader, Glitch compares the current executable price
-  with the snapshot price Hermes assessed. It accepts equal or better stop/target
-  geometry and rejects adverse drift for a fresh decision; Glitch never silently
-  turns a structural stop farther away and a target nearer.
+- Market intents permit ordinary movement between snapshot and submission; Glitch
+  does not reinterpret Hermes's thesis or impose a directional slippage veto. At
+  the final execution boundary it verifies that every absolute native stop/target
+  remains executable and recomputes complete protected downside from live price
+  against the authoritative Apex liquidation buffer.
 - Delivery is idempotent and crash-safe through a durable outbox/receipt pair.
   Retry reuses the same intent id and never spends a second model call for the
   same packet.
@@ -135,7 +136,7 @@ Glitch Flatten All remain authoritative.
 ## Verification and market-open acceptance
 
 - Shared source contracts: **41/41**.
-- AI/Hermes contracts: **127/127**; complete suite **168/168**.
+- AI/Hermes contracts: **128/128**; complete suite **169/169**.
 - Five production web builds: pass.
 - Five web lint runs: pass.
 - Python compilation, tracked PowerShell parsing, tracked JSON parsing, secret

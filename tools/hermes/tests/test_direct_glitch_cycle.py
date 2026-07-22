@@ -444,7 +444,7 @@ class DirectCycleTests(unittest.TestCase):
         failed = {
             "complete": True,
             "results": [{"result": {"http_status": 202, "body": {
-                "executor": "failed", "executor_code": "group_entry_geometry_changed_reassess"
+                "executor": "failed", "executor_code": "group_structural_prices_crossed_before_entry"
             }}}],
         }
         submitted = {

@@ -370,22 +370,10 @@ namespace Glitch.Services
             if (!TryGetFreshExecutionPrice(instrument, DateTime.UtcNow, out liveExecutionPrice, out livePriceFailure))
                 return GlitchAiExecutionResult.Failed("group_live_price_invalid", livePriceFailure);
 
-            // Hermes assessed absolute geometry at snapshotMarketPrice. Glitch
-            // may execute equal or better geometry, but never make the stop
-            // farther and the target nearer without a fresh Hermes decision.
-            bool liveGeometryWorsened = isLong
-                ? liveExecutionPrice > snapshotMarketPrice
-                : liveExecutionPrice < snapshotMarketPrice;
-            if (liveGeometryWorsened)
-            {
-                return GlitchAiExecutionResult.Failed(
-                    "group_entry_geometry_changed_reassess",
-                    "snapshot_price=" + snapshotMarketPrice.ToString(CultureInfo.InvariantCulture)
-                        + "|live_price=" + liveExecutionPrice.ToString(CultureInfo.InvariantCulture));
-            }
-
-            // Intent v2 prices remain absolute structural levels when live
-            // geometry is equal or better and all bracket legs remain executable.
+            // Market intents necessarily permit movement between observation and
+            // submission. Hermes owns whether the stated absolute geometry expresses
+            // its thesis; Glitch only verifies that the live bracket remains
+            // executable and inside authoritative account-survival boundaries.
             if (!IsExecutableBracketPrice(isLong, liveExecutionPrice, stopLoss, takeProfit1))
                 return GlitchAiExecutionResult.Failed("group_structural_prices_crossed_before_entry", "leg=1");
             if (hasSecondTarget
@@ -455,6 +443,44 @@ namespace Glitch.Services
                 return GlitchAiExecutionResult.Failed("master_account_risk_locked", masterAccount.Name);
             if (evalTargetLocked)
                 return GlitchAiExecutionResult.Failed("master_account_eval_target_locked", masterAccount.Name);
+
+            string propFirmId = GlitchAiJsonFields.ExtractString(portfolioAccountJson, "prop_firm_id");
+            string ruleStatus = GlitchAiJsonFields.ExtractString(portfolioAccountJson, "rule_status");
+            if (string.IsNullOrWhiteSpace(propFirmId) || string.IsNullOrWhiteSpace(ruleStatus))
+                return GlitchAiExecutionResult.Failed("account_rule_state_missing", masterAccount.Name);
+            bool isApexLegacyEval = string.Equals(propFirmId, "ApexTraderFunding", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(ruleStatus, "Eval", StringComparison.OrdinalIgnoreCase);
+            if (isApexLegacyEval)
+            {
+                if (!GlitchAiJsonFields.TryExtractNumber(portfolioAccountJson, "buffer_margin", out double bufferMargin)
+                    || bufferMargin <= 0)
+                    return GlitchAiExecutionResult.Failed("apex_liquidation_buffer_missing", masterAccount.Name);
+                if (!GlitchAiRiskFirewall.TryComputeTradeRiskUsd(
+                    rawJson,
+                    instrumentRoot,
+                    action,
+                    liveExecutionPrice,
+                    out double liveTradeRiskUsd))
+                    return GlitchAiExecutionResult.Failed("apex_protected_downside_unavailable", "live_trade_risk");
+                if (!GlitchAiPortfolioSnapshotReader.TryComputeOwnedProtectedDownsideUsdFromAccountBlock(
+                    portfolioAccountJson,
+                    instrumentRoot,
+                    liveExecutionPrice,
+                    metadata.PointValue,
+                    out double existingProtectedDownsideUsd,
+                    out string protectionFailure))
+                    return GlitchAiExecutionResult.Failed("apex_protected_downside_unavailable", protectionFailure);
+                double plannedProtectedDownsideUsd = existingProtectedDownsideUsd + liveTradeRiskUsd;
+                if (plannedProtectedDownsideUsd >= bufferMargin)
+                {
+                    return GlitchAiExecutionResult.Failed(
+                        "apex_liquidation_buffer_exceeded",
+                        "phase=execution|planned_downside_usd="
+                            + plannedProtectedDownsideUsd.ToString("F2", CultureInfo.InvariantCulture)
+                            + "|buffer_margin_usd="
+                            + bufferMargin.ToString("F2", CultureInfo.InvariantCulture));
+                }
+            }
             if (!GlitchAiJsonFields.TryExtractNumber(portfolioAccountJson, "max_contracts", out double maxContracts)
                 || maxContracts < 1)
                 return GlitchAiExecutionResult.Failed("master_contract_ceiling_missing", masterAccount.Name);

@@ -20,6 +20,20 @@ LAUNCHER_SPEC.loader.exec_module(LAUNCHER)
 
 
 class LearningCycleTests(unittest.TestCase):
+    def test_learning_parser_accepts_one_scoped_envelope_amid_transport_chatter(self):
+        value = {
+            "schema_version": "glitch.hermes.learning_output.v1",
+            "loop_id": "debrief",
+            "records": [],
+        }
+
+        actual = MODULE.DIRECT.extract_json(
+            "renderer status\n" + json.dumps(value) + "\nDone",
+            "glitch.hermes.learning_output.v1",
+        )
+
+        self.assertEqual(actual, value)
+
     def test_all_learning_calls_are_isolated_trading_sessions(self):
         source = SCRIPT.read_text(encoding="utf-8")
         self.assertIn('SOURCE = "trading"', source)

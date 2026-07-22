@@ -2,6 +2,35 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-21 - arbitrary entry-price veto removed
+
+- Runtime evidence showed that Hermes remained healthy and attempted three longs
+  after the last completed trade, but Glitch rejected all three with
+  `group_entry_geometry_changed_reassess`. The executor branch introduced by
+  `3f0639e` treated any higher live price for a long or lower live price for a
+  short—even one tick—as invalid. That deterministic veto contradicted market
+  order semantics and the Hermes/Glitch authority boundary.
+- Removed the snapshot-versus-live directional comparison completely. Hermes's
+  absolute stop/target intent now proceeds through normal market movement when
+  every native bracket leg remains executable. At the final submission boundary,
+  Glitch recomputes complete protected downside from the live price and rejects
+  only missing/invalid protection or authoritative Apex liquidation-buffer breach.
+  No slippage amount, reward/risk formula, or strategy threshold was substituted.
+- The same investigation proved that the learning worker's model sessions held
+  valid `glitch.hermes.learning_output.v1` JSON while the shared transport parser
+  rejected it. Structured extraction is now explicitly scoped to the caller's
+  expected schema, preserving ambiguity rejection without confusing learning
+  envelopes with trading-intent envelopes. The existing single repair remains.
+- Verification passes 41 shared and 128 AI/Hermes contracts (169 total), tracked
+  Python, PowerShell, and JSON parsing, localization, secret, and diff integrity
+  gates. The installed profile preserves auth, environment, memories, sessions,
+  job IDs, schedules, and prior enabled state; all 25 distribution hashes match.
+  The complete 87-file AddOn deployed once with exact source/live parity. The
+  compiled `Glitch_AI_v0.0.2.1` export identifies assembly version `0.0.2.1`,
+  omits the removed veto code, and retains structural-price and Apex survival
+  failures. AI Auto, replication, the supervised gateway, and both preserved jobs
+  were restored ON after export.
+
 ## 2026-07-21 - adaptive position building and staged learning candidate
 
 - Preserved the authority boundary: Hermes owns thesis, master quantity,

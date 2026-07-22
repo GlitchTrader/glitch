@@ -206,15 +206,18 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("GlitchAiOrderExecutor.ProcessAccountStateUpdate(activeAccount)", refresh)
         self.assertNotIn("GlitchAiOrderExecutor.GetReplicationEntryDenialReason", telemetry)
 
-    def test_ai_preserves_absolute_structural_prices(self):
+    def test_ai_preserves_absolute_structural_prices_without_arbitrary_slippage_veto(self):
         executor = source(EXECUTOR)
         self.assertIn("public double StopPrice", executor)
         self.assertIn("public double TargetPrice", executor)
         self.assertIn("structural_prices=preserved", executor)
         self.assertIn("IsExecutableBracketPrice", executor)
-        self.assertIn("group_entry_geometry_changed_reassess", executor)
-        self.assertIn("liveExecutionPrice > snapshotMarketPrice", executor)
-        self.assertIn("liveExecutionPrice < snapshotMarketPrice", executor)
+        self.assertNotIn("group_entry_geometry_changed_reassess", executor)
+        self.assertNotIn("liveGeometryWorsened", executor)
+        self.assertIn("liveExecutionPrice", executor)
+        self.assertIn("apex_liquidation_buffer_exceeded", executor)
+        self.assertIn("plannedProtectedDownsideUsd >= bufferMargin", executor)
+        self.assertIn("liveExecutionPrice,\n                    out double liveTradeRiskUsd", executor)
         self.assertNotIn("public double StopDistance", executor)
         self.assertNotIn("public double TargetDistance", executor)
         self.assertNotIn("re-anchor", executor)
