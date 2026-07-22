@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { DocPageContent } from "@/components/doc-page-content";
 import { getDocPage, getDocSummaries } from "@/lib/docs";
-import { docsLocaleDetails, docsLocales, getDocLanguages, isDocsLocale, type DocsLocale } from "@/lib/docs-locales";
+import { docsLocales, getDocLanguages, isDocsLocale, type DocsLocale } from "@/lib/docs-locales";
+import { buildDocsPageMetadata } from "@/lib/metadata";
 
 type Props = { params: Promise<{ segments: string[] }> };
 
@@ -30,12 +31,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!route) return { title: "Not Found" };
   const doc = getDocPage(route.slug, route.locale);
   if (!doc) return { title: "Not Found" };
-  return {
+  return buildDocsPageMetadata({
     title: doc.title,
     description: doc.summary,
-    alternates: { canonical: doc.href, languages: getDocLanguages(route.slug) },
-    openGraph: { locale: docsLocaleDetails[route.locale].languageTag.replace("-", "_") },
-  };
+    canonical: doc.href,
+    languages: getDocLanguages(route.slug),
+    locale: route.locale,
+  });
 }
 
 export default async function ArticlePage({ params }: Props) {
