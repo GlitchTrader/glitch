@@ -6,7 +6,7 @@
 
 ```text
 Glitch             execution, replication, compliance, brackets, trading truth
-Hermes trading     five-minute market decisions and position management
+Hermes trading     five elapsed minutes while flat; every complete packet while positioned; next-packet retry on error
 Hermes supervision internal analysis, self-heal, lessons, and escalation; no client Chat UI
 Codex              approved code changes, tests, deployment, and handoff
 ```

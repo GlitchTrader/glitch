@@ -1,444 +1,83 @@
 # 10 — Hermes Operator Contract
 
-## Status
+**Reconciled:** 2026-07-22
 
-Operator contract for the direct Glitch-to-Hermes filesystem exchange. This document defines authority and execution boundaries. The cognitive-loop, model-routing, skill, memory, and staged-activation canon is `12_hermes_trading_skills_and_knowledge.md`.
+This contract defines the local Experimental AI v0.0.2.2 operator. It does not authorize unattended, PA, or live trading.
 
-## Where this belongs
-
-Canonical repo location:
+## Authority
 
 ```text
-Glitch-Platform/glitch_hermes_docs/docs/10_hermes_operator_contract.md
+Hermes: cognition and master decisions
+Glitch: factual state, firewall, native execution/protection, replication, attribution, reconciliation, journals
+NinjaTrader: native account/order/execution/position truth
+Codex: source changes and verification only
 ```
 
-Builders should find it through:
+One persistent `glitch` profile owns durable memory. Every eligible model call uses an isolated session tagged `trading` and receives the immutable packet plus bounded recent decisions, receipts, outcomes, and relevant memory. Route labels are execution identities, not separate personalities. Hermes never emits follower intents.
+
+## Distribution and activation
+
+The profile is installed and updated locally from `GlitchTrader/glitch-hermes-profile`. Setup creates exactly:
+
+- minute `glitch-direct-operator`;
+- 15-minute `glitch-learning-supervisor`.
+
+Fresh setup leaves trading inactive. The user selects the master/group in Glitch and activates through AI Auto or `/trade`. `/trade_mode paper|live` is a deprecated alias that only activates the same selected scope; it does not create a second authority mode. Profile updates preserve authentication, overrides, sessions, memories, ledgers, and enabled/paused job state.
+
+## Decision input
+
+Each packet contains five latest paired complete minute frames, continuity and missing-minute metadata, current selected-master state, native protection, authoritative account capacity/buffer fields, valid master quantities, recent attributable history, and policy identity. Missing or ambiguous critical facts remain explicit.
+
+Hermes treats current acceptance, rejection, structure, excursion, and changed evidence as more important than stale forecasts. It may choose:
 
 ```text
-Glitch-Platform/docs/ai-program/roadmap.md
-Glitch-Platform/glitch_hermes_docs/README.md
-Glitch-Platform/glitch_hermes_docs/wiki_memory/07_LLM_WIKI_INDEX.md
-ABKB: projects/glitch/project_profile.md and projects/glitch/sources.md
+ENTER_LONG
+ENTER_SHORT
+HOLD
+MOVE_STOP
+MOVE_TP
+EXIT
+NOTHING
 ```
 
-When the bridge is implemented, this contract should be mirrored into the eventual AddOn-side AI bridge docs, likely near:
+Entries are MARKET-only and require complete protected legs. Hermes may choose one leg, several independent legs, reserve capacity, or add a later independently protected same-direction tranche. No numeric sizing schedule, stop formula, risk percentage, target formula, opportunity quota, grid, or martingale rule is encoded.
 
-```text
-ninjatrader/Glitch/Docs/addon-ai-bridge.md
-```
+## Intent v3
 
-The source implementation is not activation authority. Installation, cron creation, paper execution, and live/eval authority remain separate explicit actions.
+Each intent carries stable identity, packet/snapshot identity, route/master identity, action, confidence, reasoning, and the action-specific fields in `schemas/intent.v3.schema.json`.
 
-## Prime responsibility split
+- Entry leg quantities are positive and sum to the selected master quantity.
+- Every entry leg has an absolute protective stop and profit target on the correct side of live price.
+- Targets need not be ordered and stops need not become progressively tighter.
+- `MOVE_STOP` and `MOVE_TP` use named `protection_updates`; unspecified legs remain unchanged.
+- A stop may tighten or move farther away while protective. Widening requires fresh authoritative Apex state, complete Glitch-owned coverage, point value, and total-downside recomputation.
+- v2 entry/no-op/hold/exit/global MOVE_STOP remain compatibility inputs. Multi-target v2 MOVE_TP fails safely.
 
-```text
-Glitch = deterministic machine.
-Hermes = probabilistic operator.
-```
+## Firewall
 
-Glitch owns:
+Glitch rejects before mutation when policy/scope, schema, identity, idempotency, native state, ownership, instrument metadata, tick/side validity, complete protection, contract capacity, authoritative session state, or Apex liquidation survival cannot be established. Normal movement from snapshot price to market fill is not a cognitive veto.
 
-- NinjaTrader process access;
-- market/account/position source-of-truth snapshots;
-- prop-firm rule enforcement;
-- compliance and risk validation;
-- order submission and bracket/OCO management;
-- journaling of validation, execution, fills, rejects, risk locks, and account outcomes;
-- kill switches and operator override.
+Followers and ratios do not constrain Hermes's master quantity. CopyEngine validates and executes each follower route independently. Risk-reducing actions remain available when entry-grade data is absent; unsafe widening causes zero mutation.
 
-Hermes owns:
+## Cadence and delivery
 
-- scheduled analysis;
-- probabilistic pattern interpretation;
-- unconstrained probabilistic synthesis of market evidence;
-- lesson synthesis from past trades;
-- candidate intent generation;
-- daily/weekly learning memos;
-- policy/prompt/archetype versioning;
-- never order execution.
+- Flat: first eligible packet at least five elapsed minutes after the last attempt.
+- Positioned: every new complete packet.
+- Model, schema, validation, transport, firewall, or executor failure: next available packet.
 
-Invariant:
+Transport uncertainty reuses the same durable idempotent outbox. Terminal rejection requests new cognition on the next packet. Locks record PID/start time and replace dead owners. Intent state advances atomically from receipt to terminal result. Restart recovery reconciles deterministic native signals and journals and never blindly resubmits an ambiguous entry.
 
-```text
-Hermes proposes. Glitch validates, executes, journals, and protects.
-```
+## Learning
 
-Hermes must never receive NinjaTrader credentials, account credentials, broker credentials, or any direct order API that bypasses Glitch.
+The single 15-minute learning supervisor processes completed outcomes, NOTHING, rejected/non-executed actions, and five-frame forward decision episodes. It runs hourly supervision, 300-minute planning, and completed-session journals when due. Evidence joins the immutable packet through `cycle_id`; malformed output receives one bounded repair; unprocessed evidence remains pending.
 
-### Dynamic groups and execution routes
+Guidance follows propose → later independent confirmation/contradiction → activate/revise/rollback. Hermes cannot rewrite installed SOUL, skills, Glitch policy, groups, or execution code.
 
-One persistent Hermes profile (`glitch`) reasons over the groups present in each Glitch-owned decision packet. Every decision carries the packet's route label in `operator_profile` plus its master `account`; Glitch's policy binds that pair and rejects mismatches before execution. Route labels are execution identities, not separate Hermes agents or fixed trading personalities. Hermes never emits follower intents.
+## Stop lines
 
-Existing labels such as `glitch-aggressive`, `glitch-conservative`, or `glitch-stay-revert` may remain as compatibility/discovery labels in old fixtures. They must not constrain cognition unless the current Glitch packet explicitly supplies a versioned experiment mandate.
+- Do not give Hermes direct NinjaTrader/broker authority or follower ownership.
+- Do not make free-form text actionable or silently retry ambiguous native state.
+- Do not add LIMIT without place/cancel/replace, TIF/expiry, partial-fill protection, replication, and restart recovery.
+- Do not infer profitability or broader account authority from tests, compile, profile installation, or a short sample.
 
-Glitch resolves the enabled account group from `AccountGroups.tsv` and owns all fan-out behavior:
-
-- the route-bound master uses multiplier 1;
-- each enabled follower uses its current Glitch-configured ratio;
-- the AI executor submits only the route-bound master; the existing Glitch copy engine owns follower entry fan-out;
-- after each fill, Glitch creates a native GTC OCO stop/target on the master and independently on every follower at its scaled quantity;
-- a master AI exit is copied through the same replication path, and follower protection is cancelled after the copied close so no orphan order can reverse an account;
-- per-account and aggregate group risk use the actual scaled quantities;
-- unknown routes, mismatched masters, malformed groups, duplicate accounts, and unallowlisted members fail closed;
-- ratio quantities use the same NinjaTrader rounding semantics as the copy engine; Glitch publishes master quantities from the master's current account-wide exposure and prop ceiling only, while each follower independently accepts or rejects its user-configured copy quantity against follower-local truth;
-- startup is observe-only. Explicit Replicate ON, follower enable, or ratio change may request alignment; ordinary reload never submits, cancels, or replaces an order;
-- completed-outcome learning begins as soon as the master round trip is terminal and attributable. Follower round trips, misses, and protection failures remain explicit replication diagnostics and never suppress master cognition learning.
-
-Group composition and ratios are dynamic Glitch state. Results must therefore be compared using master-account and per-contract expectancy, MAE/MFE, drawdown, and risk-normalized returns—not raw aggregate group PnL.
-
-## Target 5-minute loop
-
-Cadence:
-
-```text
-Glitch publishes a rolling packet from the five latest observed paired frames each minute and reports missing-minute continuity explicitly. The lightweight worker wakes on Hermes's native one-minute tick, but invokes Hermes only after five elapsed minutes while flat, for every new packet while a scoped master is positioned, once for an explicit operator directive, or on the next packet after any model, validation, delivery, firewall, or executor failure.
-```
-
-Nominal loop:
-
-```text
-1. Glitch snapshots deterministic state.
-2. Hermes cron loads the operator brief and current snapshot.
-3. Hermes reads recent outcomes, lessons, hypotheses, relevant evidence, and risk posture.
-4. Hermes emits exactly one machine-readable intent per route-bound group per invoked cycle.
-5. Glitch validates the intent through deterministic checks.
-6. Glitch either rejects with reason codes or executes with NT-held protective brackets.
-7. Glitch journals the result.
-8. Glitch's authoritative journals remain in `GlitchData`; the next Hermes cycle reads their bounded tail directly.
-9. Hermes uses only matching `operator_profile` and master-account records as its own outcome history.
-```
-
-No Hermes output is actionable until Glitch accepts it.
-
-The broader snapshot, ingestion, historical replay, portfolio/risk, and learning cadence is defined in `11_snapshot_ingestion_learning_pipeline.md`.
-
-## Required Glitch-to-Hermes input bundle
-
-The Hermes operator prompt/job must receive a bounded, deterministic input bundle, not ad-hoc chat context.
-
-Minimum bundle:
-
-```text
-operator_brief:
-  role: Glitch operator
-  allowed authority: propose-only
-  forbidden authority: execute, bypass firewall, widen stop, alter prop-firm rules
-
-market_snapshot:
-  schema_version
-  snapshot_id
-  snapshot_hash
-  created_utc
-  instrument
-  current_price
-  session context
-  normalized timeframe readings
-  order-flow context when available
-  stale-data flags
-
-portfolio_snapshot:
-  account
-  account status
-  equity/balance
-  daily PnL
-  open PnL
-  position state
-  working-order state
-  drawdown/buffer remaining
-  lock state
-
-prop_firm_rules:
-  firm
-  tier/account size
-  max contracts
-  daily loss
-  max drawdown
-  trading-day/session restrictions
-  consistency/trading-day constraints when applicable
-
-recent_trade_memory:
-  recent accepted intents
-  recent rejected intents and reason codes
-  fills/exits
-  PnL/MAE/MFE/duration
-  current streak/churn/session quality
-
-lessons_and_archetypes:
-  relevant archetypes and hypotheses as advisory evidence
-  known failure conditions and uncertainty
-  regime-specific notes
-  prompt/policy version
-  archetype library version
-```
-
-All fields must be versioned or explicitly optional. Missing critical state should force `NOTHING`, not inference.
-
-## Required Hermes-to-Glitch output
-
-Hermes must output strict machine-readable intent only. Free-form prose is non-authoritative.
-
-Allowed M0-style actions:
-
-```text
-ENTER_LONG   // Buy
-ENTER_SHORT  // Sell
-HOLD         // keep existing position, no change
-MOVE_STOP    // amend selected native stop legs; tightening or safe widening
-MOVE_TP      // amend selected native target legs; optional same-leg stop change
-EXIT         // request flat/reduce risk now
-NOTHING      // stay flat / no action
-```
-
-Every entry intent must include:
-
-```text
-schema_version
-intent_id
-created_utc
-snapshot_hash
-instrument
-account
-operator_profile
-model_version
-prompt_version
-action
-quantity
-order_type
-stop_loss
-take_profit_1
-optional take_profit_2
-optional stop_loss_2
-optional quantity_tp1
-optional take_profit_3
-optional stop_loss_3
-optional quantity_tp2
-confidence
-reason
-decision_audit
-```
-
-Bracket mandate:
-
-- `ENTER_LONG` / `ENTER_SHORT` require `stop_loss` and `take_profit_1`.
-- TP2/SL2 and TP3/SL3 are optional and only valid when quantity supports positive leg splits.
-- Quantity must be one of Glitch's supplied valid master quantities. Glitch derives that list dynamically from the master's current account-wide open contracts and prop-rule ceiling. Followers and ratios never constrain Hermes cognition or master quantity; CopyEngine applies the user's route independently and visibly rejects a follower-local breach without cancelling the valid master decision.
-- A naked entry must be impossible.
-- NT/Glitch hold the protective bracket.
-- Native protection must work without Hermes. Hermes may tighten stops, move every remaining target (optionally with a tighter stop), or exit on later cycles, but may never widen stop protection.
-
-`HOLD`, `EXIT`, and `NOTHING` must still include the snapshot hash and reason codes so Glitch can journal why the cycle did or did not trade.
-
-## Deterministic Glitch firewall requirements
-
-Glitch must reject before order creation if any check fails. Minimum check chain:
-
-```text
-1. operator/AI feature enabled?
-2. local bridge authenticated?
-3. schema valid and version allowed?
-4. snapshot fresh and hash matches?
-5. intent_id unseen or idempotent retry?
-6. instrument allowlisted?
-7. account allowlisted?
-8. prop-firm rules loaded and fresh?
-9. current account/position state unambiguous?
-10. no forbidden position conflict?
-11. structural risk computable from entry/SL and instrument metadata?
-12. requested quantity plus account-wide open exposure within the authoritative account ceiling?
-13. bracket sane, absolute, correctly sided, and tick-rounded?
-14. authoritative session open, entry cutoff clear, and must-flat boundary not reached?
-15. existing compliance engine passes?
-16. trading is ON at the final submit boundary?
-```
-
-Trade frequency, cooldown, and minimum reward/risk are Hermes decisions, not deterministic firewall gates. `/trade_mode` is the single activation command for the account scope selected in Glitch AI; no separate mode, kill-switch, or executor-arm ritual exists.
-
-Failure result:
-
-```text
-accepted=false
-status=REJECTED
-reason_code=<stable code>
-no order exists
-journal record written
-```
-
-Success result:
-
-```text
-accepted=true
-status=ACCEPTED|PAPER_ACCEPTED|SUBMITTED
-trade_id or paper_trade_id
-journal record written
-```
-
-## Learning loop boundaries
-
-Hermes may learn from:
-
-- Glitch snapshots;
-- Glitch journal records;
-- rejected intent reason codes;
-- filled order outcomes;
-- MAE/MFE/duration/PnL after commission truth is fixed;
-- shadow trades and backtest replays;
-- operator-approved lessons.
-
-Hermes must not learn from:
-
-- unverified chat claims as trade truth;
-- gross PnL when net/commission-corrected PnL is required;
-- partial logs that Glitch marks stale or ambiguous;
-- any execution not journaled by Glitch;
-- hindsight-only labels without timestamped pre-trade snapshots.
-
-Hermes does not duplicate or rewrite Glitch's authoritative execution journal. The direct packet contains bounded Glitch-owned journal tails; stable IDs join those facts to Hermes-owned decisions, receipts, reviews, plans, lessons, and hypotheses. Each physical stream has one writer, and corrections are append-only linked events.
-
-Lesson storage should be structured, versioned, and promotable:
-
-```text
-raw event -> classified outcome -> candidate lesson -> reviewed/promotion decision -> active archetype/policy update
-```
-
-Do not silently mutate the operator policy from one trade. Policy changes require a versioned candidate and evaluation record.
-
-## Hermes runtime placement
-
-Product decision: one persistent Hermes profile and durable memory system run under a supervised gateway on the central VPS. Individual inference calls are isolated and receive bounded explicit continuity. Glitch clients do not install Hermes. They poll the authenticated recommendation API once per five-minute window, then apply local portfolio, compliance, group, sizing, and execution truth. Codex is never a scheduler, bridge, or operator.
-
-The direct filesystem exchange below remains the internal stabilization harness. It must stay contract-compatible with the future network transport so centralization changes transport, not cognition or execution semantics.
-
-Single-writer exchange:
-
-```text
-GlitchData/hermes/exchange/glitch/*  Glitch writes, Hermes reads
-GlitchData/hermes/exchange/hermes/* Hermes writes, Glitch/bridge reads
-```
-
-In the harness, Glitch writes one immutable minute frame after matching market and portfolio snapshots exist and publishes the latest rolling five-frame packet. Hermes native cron wakes a lightweight worker once per minute. The worker spends no model call unless cadence or a failed-attempt retry is due, creates an isolated session tagged `trading` for every eligible packet, supplies bounded recent decisions/executions/outcomes plus a literal valid-output template, and delivers strict intents through Glitch's authenticated localhost receiver. The failed packet is never repeated; its next newer packet retries before the normal five-minute boundary. Delivery retries reuse the same intent IDs; completed receipts prevent replay. The gateway must use Hermes native supervision, not an orphan child process.
-
-Full cognitive runtime map (only the core loop is enabled during initial validation):
-
-```text
-snapshot_sanity        script-only check, no LLM
-suggest_trade          5m flat / 1m positioned / next-packet error retry, Luna/medium, isolated trading-tagged session
-portfolio_supervision  hourly, Sol/high, risk/performance review + bounded self-heal
-portfolio_planning     6-hour, Sol/high, targets and risk allocation plan
-daily_learning         post-session, Sol/high, lessons + tomorrow targets + memory upkeep
-policy_store           versioned files/db records, no silent mutation
-lesson_store           Glitch-journaled outcomes and reviewed lessons
-```
-
-`suggest_trade` cron job shape:
-
-```text
-schedule: native one-minute zero-model worker check; model gate is 5m flat / 1m positioned / next-newer-packet error retry
-mode: LLM-driven Hermes cron
-session: fresh per model call, tagged trading
-input: five MNQ market frames + latest portfolio + six recent decisions/executions/outcomes + native Hermes memory
-output: one strict JSON decision per configured route-bound group
-transport today: Hermes-owned harness worker -> authenticated Glitch localhost intent receiver
-transport target: central recommendation store/API -> authenticated five-minute client poll -> local Glitch firewall
-```
-
-The model is invoked once per canonical recommendation cycle, not once per customer. Deterministic services monitor ingestion, freshness, delivery, and stuck handoffs without an LLM.
-
-Hermes cron may be used for analysis and intent generation. It must not be the execution scheduler. Execution timing and final validation belong to Glitch.
-
-## Builder instructions
-
-### Codex / Cursor / Claude starting point
-
-Read in order:
-
-```text
-1. AGENTS.md
-2. docs/ai-program/roadmap.md
-3. glitch_hermes_docs/README.md
-4. glitch_hermes_docs/docs/14_intent_v3_reliability.md
-5. glitch_hermes_docs/docs/10_hermes_operator_contract.md
-6. glitch_hermes_docs/docs/11_snapshot_ingestion_learning_pipeline.md
-7. glitch_hermes_docs/schemas/intent.v3.schema.json
-8. relevant AddOn source files
-```
-
-Relevant AddOn anchors:
-
-```text
-ninjatrader/Glitch/AddOns/GlitchAddOn/Services/GlitchShellBridge.cs
-ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Persistence/GlitchStateStore.cs
-ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Risk/GlitchComplianceEngine.cs
-ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Trading/GlitchReplicationEngine.cs
-ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Insights/GlitchTradeLedgerService.cs
-ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Insights/GlitchTradeInsightsService.cs
-ninjatrader/Glitch/AddOns/GlitchAddOn/UI/Analytics/GlitchAnalyticsFeedBus.cs
-ninjatrader/Glitch/AddOns/GlitchAddOn/UI/Analytics/GlitchAnalyticsLogic.cs
-ninjatrader/Glitch/Indicators/glitch/GlitchAnalyticsBridge.cs
-```
-
-### Staged implementation and activation
-
-Build in this order:
-
-```text
-1. Validate the direct snapshot/packet and receipt contracts in source.
-2. Install and orient one persistent Hermes profile while preserving native skills, memory, and sessions.
-3. Enable only the core paper worker and validate 5m-flat/1m-positioned packet-to-journal continuity.
-4. Add hourly supervision only after core evidence is trustworthy.
-5. Add 15-minute completed-trade debrief, hourly supervision, 300-minute planning, and daily learning as separate observable stages.
-6. Consider eval/live authority only after paper gates and explicit operator approval.
-```
-
-### What builders must not do
-
-Never:
-
-- give Hermes direct broker/NinjaTrader order authority;
-- bypass `GlitchAiRiskFirewall` or existing compliance checks;
-- make free-form LLM text actionable;
-- execute from stale snapshots;
-- accept an entry without SL + TP1;
-- let AI widen stops; it may tighten protection or exit when the thesis changes;
-- bypass the existing replication engine by having Hermes or the AI executor trade followers directly;
-- treat Hermes memory as trade truth when Glitch journal/source artifacts disagree.
-
-## Contracts to finish before broader activation
-
-```text
-1. freeze the packet and outcome schema versions after source validation;
-2. define durable trade episode, hourly review, 300-minute plan, daily journal, and cognitive-overlay schemas;
-3. implement the planned Glitch overlay skills listed in document 12;
-4. define model-outage and no-silent-downgrade behavior in runtime tests;
-5. define paper-mode learning and performance metrics;
-6. add observability for packets, calls, intents, rejects, outcomes, and memory upkeep.
-```
-
-## Session layout
-
-One `glitch` profile is one agent identity and one native memory system. Scheduled decisions use isolated sessions so a compaction or provider failure cannot poison later cycles:
-
-```text
-chat       internal maintainer/supervision session; never exposed in the Glitch client UI
-trading-*  isolated scheduled calls tagged trading; continuity comes from bounded source artifacts and durable memory
-```
-
-The core worker always supplies five current MNQ market frames, the latest portfolio, six recent decisions/executions/outcomes, native durable memory, and a strict output template to a fresh session. A failed call is recorded and retried only against the next newer packet; its transcript cannot contaminate the retry. The four-turn/timeout bounds remain local to each invocation. The chat session may inspect status and accept human slash commands while trading continues independently.
-
-The product UI exposes Feed, not the internal maintainer session. The local chat/slash-command surface remains a harness and maintainer tool, not a customer dependency.
-
-Slash commands are deterministic plugin handlers, not prompts to the model. They call Glitch's authenticated localhost control surface. Glitch persists trading pause state, performs replication/flatten through its existing UI execution paths, reflects state in the header, and rejects new entry intents while paused. `EXIT`, `HOLD`, and `NOTHING` remain admissible so pause does not trap an existing position.
-
-Activation remains two-step: install the profile/session/plugin layer, then separately create the native cron job. Installation never starts trading.
-
-## Completion criterion for this contract
-
-This contract is satisfied only when future builders can answer:
-
-```text
-What does Glitch expose?
-What does Hermes read?
-What exactly may Hermes emit?
-What must Glitch reject?
-Where are outcomes journaled?
-How does Hermes learn without bypassing deterministic safety?
-```
+Reliability details are canonical in `14_intent_v3_reliability.md`; acceptance state is in `../../docs/ledger/now.md` and `../../docs/ledger/backlog.md`.

@@ -2,6 +2,12 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-22 - AI ledger and rail reconciliation
+
+- Reconciled the maintained `ai/22` handoff to Standard 0.0.2.0, Experimental AI 0.0.2.2, public profile 0.0.2.4, and the explicit release catalog.
+- Replaced obsolete cleanup-branch, centralized-VPS, tighten-only, and old maturity-ladder claims with the shipped intent-v3, safe-fallback, gap-aware, crash-safe, hidden-runtime, and decision-episode contracts.
+- No source code, profile, runtime, account, order, or artifact changed.
+
 ## 2026-07-21 - arbitrary entry-price veto removed
 
 - Runtime evidence showed that Hermes remained healthy and attempted three longs

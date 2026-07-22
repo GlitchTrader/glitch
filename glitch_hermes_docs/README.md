@@ -1,62 +1,37 @@
-# Glitch + Hermes Autonomous Trading Contract
+# Glitch + Hermes Trading Contract
 
-**Audience:** private maintainers and agents. This is not public documentation and not live trading authority.
+**Audience:** private maintainers and agents. This is not public documentation or trading authority.
 
-Current authority order:
+## Authority order
 
-1. Glitch/NinjaTrader source and emitted runtime artifacts;
-2. `docs/09_intent_contract_v2_brackets.md` through `docs/14_intent_v3_reliability.md`;
-3. the installed `hermes-profile` SOUL, skills, and direct worker.
+1. Current Glitch/NinjaTrader source and emitted runtime evidence.
+2. `docs/14_intent_v3_reliability.md` and `schemas/intent.v3.schema.json`.
+3. `docs/10_hermes_operator_contract.md`, `docs/11_snapshot_ingestion_learning_pipeline.md`, and `docs/12_hermes_trading_skills_and_knowledge.md`.
+4. Installed public-profile SOUL, skills, plugin, and workers.
+5. Older documents, wiki memory, archetypes, and playbooks as historical evidence only.
 
-`docs/00` through `docs/08`, `wiki_memory/`, and mined archetype/playbook files are historical design evidence. They are not installed into the Hermes profile and must not be used as runtime instructions. In particular, their retired M0 one-contract, fixed-dollar, trade-count, cooldown, and archetype rules are not current gates.
+Documents `00` through `08`, `09_intent_contract_v2_brackets.md`, `99_original_extended_contract.md`, and `wiki_memory/` preserve provenance. They do not override v3, do not become runtime instructions, and must not revive fixed quantity, fixed-dollar, trade-count, cooldown, archetype, tighten-only, or centralized-VPS rules.
 
-This package contains two documentation styles:
+## Current shipped boundary
 
-- `docs/` — conventional architecture, runtime, risk, deployment, and implementation documents.
-- `wiki_memory/` — LLM-wiki / Claude-memory / Hermes-style memory files intended for agent ingestion.
+- AI AddOn v0.0.2.2 and public Hermes profile v0.0.2.4.
+- Customer-installable local profile from `GlitchTrader/glitch-hermes-profile`; no required centralized recommendation service.
+- Exactly two profile jobs: minute direct operator and 15-minute learning supervisor.
+- Every LLM trading call uses an isolated session tagged `trading` with bounded continuity.
+- `/trade` activates the existing Glitch-selected scope; `/trade_mode` is only a deprecated compatibility alias.
+- Hermes decides thesis, direction, master quantity, geometry, timing, scaling, and management.
+- Glitch validates factual executability, account survival, native protection, execution, replication, attribution, reconciliation, and journals.
+- CopyEngine alone owns followers and user ratios. Codex is not in the runtime loop.
 
-Scope: Glitch NinjaTrader AddOn + GlitchAnalyticsBridge + Hermes agent runtime.
+## Current behavior
 
-The active code-grounded validation state is summarized in
-`../docs/ledger/now.md`. The local `glitch` profile is an internal Sim/paper
-contract harness; the product target remains one centralized supervised brain
-with client-side Glitch execution and a customer Feed rather than Chat.
+- Intent v3 manages named stable Glitch legs independently.
+- Stops may tighten or safely fall back while remaining protective and within authoritative Apex capacity.
+- One publisher creates gap-aware five-frame packets from paired complete minutes.
+- Flat cadence is five elapsed minutes; positioned cadence is every new complete packet; recognized failures retry on the next packet.
+- Atomic intent state and native reconciliation prevent blind duplicate entry after crashes.
+- Closing the window hides a retained runtime rather than stopping its safety and exchange services.
+- One learning supervisor batches outcomes, NOTHING, rejections, and forward evidence into hourly, 300-minute, and completed-session review.
+- MARKET is the only current entry type. LIMIT is deferred until the full pending-order lifecycle exists.
 
-Grounding: this plan is based on the current Glitch repo, especially:
-
-- `GlitchAnalyticsBridge.cs`
-- `GlitchAddOn/UI/Analytics/GlitchAnalyticsFeedBus.cs`
-- `GlitchAddOn/UI/Analytics/GlitchAnalyticsLogic.cs`
-- `GlitchAddOn/Services/Risk/GlitchComplianceEngine.cs`
-- `GlitchAddOn/Services/Trading/GlitchCopyEngine.cs`
-- `GlitchAddOn/Services/Trading/GlitchReplicationEngine.cs`
-- `GlitchAddOn/Services/Insights/GlitchTradeInsightsService.cs`
-- `GlitchAddOn/Services/Insights/GlitchTradeLedgerService.cs`
-- `GlitchAddOn/Services/Insights/GlitchRiskLockLedgerService.cs`
-- `GlitchAddOn/Services/GlitchShellBridge.cs`
-- `GlitchAddOn/Services/Persistence/GlitchAnalyticsBridgeCacheStore.cs`
-
-Core invariant:
-
-```text
-Hermes proposes. Glitch validates, executes, journals, and protects the account.
-```
-
-## Amendments
-
-- **2026-07-13, amended 2026-07-20 — Direct control and sessions:** one `glitch` profile owns durable trading memory plus the named maintainer `chat` session. Every scheduled decision uses an isolated session tagged `trading` and receives bounded decision/outcome continuity; deterministic slash commands use `chat`, call Glitch's authenticated control endpoint, and are reflected in the Glitch UI. Native Kanban is deferred to learning/review and is never an execution rail.
-
-- **2026-07-19 — Truthful Glitch AI surface:** AI Auto is the single effective
-  ON/OFF control for the local core job and Glitch execution gate. AI Trading
-  Scope selects existing group masters; AI operates only the master and the
-  producer-neutral CopyEngine owns followers and ratios. The read-only Feed shows
-  current snapshot collection, latest snapshot/decision ages, the latest five
-  pipeline stages, and 20 expandable decisions with execution and packet evidence.
-  All authored UI copy is localized across `en-US`, `pt-BR`, `es-ES`, `zh-CN`,
-  `fr-FR`, and `ru-RU`; model-authored reasoning remains verbatim.
-
-- **2026-07-22 — Intent contract v3 (reliability and exact-leg authority):** `docs/14_intent_v3_reliability.md` + `schemas/intent.v3.schema.json`. Entries retain independent protected legs; management amends only named stable Glitch legs. Stops may tighten or safely widen within live protective side and authoritative Apex liquidation capacity. v2 remains bounded compatibility input.
-- **2026-07-08, amended 2026-07-20 — Intent contract v2 (legacy bracket mandate):** `docs/09_intent_contract_v2_brackets.md` + `schemas/intent.v2.schema.json`. Retained for compatibility; current cognition emits v3.
-- **2026-07-09, reconciled 2026-07-20 — Hermes operator contract:** `docs/10_hermes_operator_contract.md` defines the active local five-minute Sim/paper validation loop, required input bundle, strict JSON output template, next-newer-packet error retry, learning boundary, and target centralized transport. The worker runs under a supervised gateway and creates one isolated `trading`-tagged session per model call; Codex is not a scheduler or relay.
-- **2026-07-09 — Snapshot/learning pipeline:** `docs/11_snapshot_ingestion_learning_pipeline.md` defines the minute snapshot shape, 5-minute operator loop, hourly portfolio/risk review, 6-hour learning pass, daily trader journal, multi-instrument support, and historical exporter/replay corpus using the same schema as live.
-- **2026-07-13 — Cognitive operating map:** `docs/12_hermes_trading_skills_and_knowledge.md` is the canon for one persistent Hermes mind, native-capability preservation, dynamic Glitch groups, model routing, four separated cognitive loops, ledger ownership, memory layers, bounded self-heal, and staged activation. Archetypes and named routes are evidence/identity, never mandatory trading personalities or deterministic opportunity gates. Initial activation is interactive orientation plus the 5-minute paper core only; hourly, six-hour, and daily jobs remain deferred until core evidence is trustworthy.
+The compact release handoff is `../docs/ledger/now.md`; current stop lines are in `../docs/ledger/backlog.md`.

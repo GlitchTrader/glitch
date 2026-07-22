@@ -31,7 +31,7 @@ Allowed actions:
 - EXIT
 - NOTHING
 
-Every entry requires absolute SL + TP1 prices and may use second/third protected legs. Hermes never widens stops; it may tighten, move every remaining target (optionally with a tighter stop), or exit.
+Every entry requires complete protected legs. Current intent v3 can amend named legs independently; Hermes may tighten or safely fall back a stop while it remains protective and total downside stays inside authoritative Apex capacity.
 
 ## portfolio_risk_review
 

@@ -1,81 +1,27 @@
 # Glitch North Star
 
-**Original operator doctrine:** 2026-07-07
-**Current amendment:** 2026-07-19
-
-## Program sequence
+## Product doctrine
 
 ```text
-1. AUDIT   — first-principles consistency audit of the entire codebase
-2. FIX     — replication, protection, PnL, compliance, and state-truth defects
-3. IMPROVE — simplify the operator surface and remove arbitrary gates
-4. SHIP    — release a reproducible non-AI candidate to testers
-5. AI      — let Glitch AI decide while the same native Glitch rail executes safely
+Trust before intelligence.
+Native NinjaTrader state before cached or inferred state.
+Hermes decides; Glitch validates, executes, protects, replicates, reconciles, and journals.
 ```
 
-Trust precedes intelligence. AI work does not excuse a replication, bracket,
-portfolio, or Journal defect. The active clean candidates are `cleanup/main-core`
-and `cleanup/ai-core`; `docs/ledger/now.md` and `docs/ledger/backlog.md` hold their
-current evidence and open gates.
+## Current product lines
 
-## Product invariants
+- Standard v0.0.2.0 is the official default download.
+- Experimental AI v0.0.2.2 is separate, uses public Hermes profile v0.0.2.4, and carries no profitability, unattended-operation, PA, or live-readiness claim.
+- `main` owns the explicit release catalog. A ZIP is not a release until the catalog and checksum register it.
 
-- **PnL truth:** every displayed scope and basis must reconcile to the matching
-  NinjaTrader account/time scope. A divergence is a P0 bug.
-- **Replication integrity:** the configured master is the only producer. The
-  shared CopyEngine owns enabled followers, ratios, follower-native protection,
-  exits, and explicit resynchronization without loops or surprise re-entry.
-- **Protection from entry:** every opened position must receive valid native
-  protective orders. Protection failure uses one bounded recovery/flatten path;
-  it never leaves a knowingly naked position.
-- **User sovereignty:** Replicate, Flatten All, native NinjaTrader controls, and
-  Glitch AI Auto report and perform their literal meanings. Startup/recompile is
-  observe-only and cannot invent orders or override a manual action.
-- **Signal over noise:** warnings are reserved for actionable risk or failed
-  operations. Informational evidence belongs in the Journal/feed.
-- **One truth chain:** NinjaTrader owns native order/position truth; Glitch owns
-  normalized state, policy, execution evidence, and Journal truth; model output
-  is a proposal, never a replacement for either.
+## Invariants
 
-## AI invariant
+- Native NinjaTrader account, position, order, execution, and PnL truth outranks local state.
+- One producer-neutral CopyEngine owns followers, user ratios, native OCO protection, close propagation, and explicit resync.
+- Hermes owns thesis, direction, master quantity, geometry, timing, scaling, management, and self-review.
+- Glitch may reject only factual invalidity, ambiguous native state, ownership, incomplete protection, contract capacity, and authoritative account-survival violations.
+- Code never chooses a strategy, quantity schedule, stop formula, risk percentage, target formula, quota, grid, or martingale behavior.
+- Decisions, receipts, outcomes, journals, episodes, memory, and supervisory review remain attributable through stable IDs.
+- Codex builds and verifies code; it is not a runtime trader.
 
-```text
-Hermes decides. Glitch validates, executes, protects, replicates, and journals.
-```
-
-The active local `glitch` profile is an internal Sim/paper contract-validation
-harness. It reasons for configured masters from current five-frame market data,
-native portfolio state, account/group capacity, prop rules, Journal outcomes,
-and its native memory/skills. Scheduled decisions are stateless. Codex is a builder and is not in the runtime
-loop.
-
-Glitch AI is cognitive, not a disguised deterministic strategy. Direction,
-frequency, setup, quantity, and stop/target geometry remain model decisions
-within the capacities and rules Glitch publishes. There is no hidden one-contract,
-trade-count, fixed-dollar, cooldown, or mandatory-archetype gate.
-
-Every entry is market-executable at the earliest valid opportunity and carries
-native stop/target protection. Up to three independent OCO legs support scale-out;
-later same-direction entries may remain independently protected tranches. AI
-submits and manages only the configured master. The producer-neutral CopyEngine
-owns follower quantities and brackets.
-
-## Runtime and product direction
-
-- **Current validation:** one supervised local profile/session, one durable
-  exchange, one Luna decision per eligible five-minute flat window, optional
-  one-minute reconsideration while positioned, idempotent delivery, Sim/paper.
-- **Customer product:** one centralized supervised Glitch AI brain publishes one
-  versioned recommendation per market window; entitled clients poll it and apply
-  local portfolio, compliance, replication, bracket, and Journal truth.
-- **Customer UI:** Feed, not Chat. AI Auto is one truthful ON/OFF switch. The feed
-  exposes snapshot freshness, decision freshness, the latest pipeline, and a
-  durable recent decision history without translating model-authored reasoning.
-- **Promotion:** profitability is measured from frozen, reconciled paper epochs.
-  PA/live authority is a separate explicit operator decision after the current
-  software and market-open acceptance gates pass.
-
-Historical `glitch_hermes_docs/docs/00`–`08`, `wiki_memory/`, and retired M0
-fixed-cap playbooks remain research history only. Current normative contracts are
-`glitch_hermes_docs/docs/09`–`13`, `docs/ai-program/operating-system-rail.md`, and
-the active ledger.
+Tests and compiles prove software shape, not profitability or account authorization. Historical plans remain provenance and never override current source, `now.md`, the release catalog, or current operator direction.

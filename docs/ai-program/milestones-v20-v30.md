@@ -1,7 +1,5 @@
-# Milestones v20 → v30 (pointer)
+# Historical Milestone Map
 
-Superseded by **`operating-system-rail.md`** — the canonical first-principles doc and step rail (R01–R23).
+The former v20–v30 maturity ladder is archived. Current released identities are Standard v0.0.2.0, Experimental AI v0.0.2.2, and Hermes profile v0.0.2.4.
 
-That file replaces date-based milestones with evidence gates, documents market + portfolio snapshots, parallel mining, and fail-fast economics.
-
-Version labels (v20…v30) remain packaging names only; see §7 of the rail doc.
+Use `operating-system-rail.md`, `roadmap.md`, `docs/ledger/now.md`, and `docs/ledger/backlog.md` for current authority, behavior, evidence, and stop lines. Historical milestone names do not grant trading or release authority.

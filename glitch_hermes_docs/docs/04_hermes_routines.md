@@ -61,7 +61,7 @@ EXIT
 NOTHING
 ```
 
-Every entry intent requires absolute SL + TP1 prices. Optional second and third protected legs are contract-supported where quantity allows. Hermes never widens stops; it may tighten protection, move every remaining target (optionally with a tighter stop), add a protected same-direction tranche, or exit when the thesis changes.
+Every entry intent requires complete protected legs. Optional second and third legs are supported where quantity allows. Current intent v3 amends named legs independently and permits a stop to tighten or safely fall back while it remains protective and total downside stays inside authoritative Apex capacity.
 
 ## Routine 3 — portfolio_risk_review
 
