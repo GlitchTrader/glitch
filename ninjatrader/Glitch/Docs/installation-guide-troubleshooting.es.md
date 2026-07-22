@@ -1,4 +1,4 @@
-# Guía de instalación, actualización y solución de problemas de Glitch v0.0.2.0
+# Guía de instalación, actualización y solución de problemas de Glitch
 
 Esta es la guía canónica para configurar ambas ediciones de Glitch en NinjaTrader 8.
 
@@ -10,7 +10,7 @@ Esta es la guía canónica para configurar ambas ediciones de Glitch en NinjaTra
 
 ## 1) Elige una edición
 
-Glitch v0.0.2.0 tiene dos paquetes completos y alternativos:
+Los canales actuales de Glitch ofrecen dos paquetes completos y alternativos: Standard v0.0.2.0 y AI Experimental v0.0.2.2.
 
 | Edición | Descarga | Cuándo usarla |
 |---|---|---|
@@ -124,7 +124,7 @@ Omite esta sección para Standard.
 
 Requisitos:
 
-- `Glitch_AI_v0.0.2.0.zip` instalado;
+- `Glitch_AI_v0.0.2.2.zip` instalado;
 - Hermes `0.18.2` o posterior;
 - una cuenta OpenAI Codex autorizada mediante OAuth por el usuario.
 
@@ -188,7 +188,7 @@ powershell -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\hermes\profiles\glit
 glitch cron list --all
 ```
 
-Los únicos jobs compatibles con v0.0.2.0 son:
+Los únicos jobs compatibles son:
 
 - `glitch-direct-operator` — se comprueba cada minuto;
 - `glitch-learning-supervisor` — se comprueba cada 15 minutos.

@@ -2,90 +2,45 @@
 
 ## Storage root
 
-Glitch stores runtime state under `GlitchData` in the NinjaTrader user-data area. If that location is unavailable, the product falls back to a local application-data path.
+Glitch stores runtime state in `GlitchData` under NinjaTrader's user-data directory. If NinjaTrader does not expose that directory, Glitch falls back to the local application-data area.
 
-That design gives the AddOn a predictable, user-owned storage location while still allowing safe fallback behavior.
+The folder is user-owned runtime state. It is not compiled product source and should be backed up before replacing an installation or moving to another PC.
 
-## Persistence model
+## State model
 
-Glitch uses small tab-separated runtime files for operational state. Comment lines start with `#`, and the persistence layer ensures directories and template files exist before writing.
+Most operational records are UTF-8 TSV files with comments beginning with `#`. Analytics cache is JSON. The stores create missing directories and templates, normalize persisted tokens, and migrate recognized legacy files into `GlitchData`.
 
-Legacy resource files may be migrated forward on first use so newer builds can continue from earlier local state.
+Important files include:
 
-## Runtime files
+| File | Purpose |
+|---|---|
+| `AccountGroups.tsv` | masters, followers, ratios, and enabled routes |
+| `AccountOverrides.tsv` | manual account/firm classification overrides |
+| `AccountPeaks.tsv` | persisted peak-equity state used by risk views |
+| `WindowPlacement.tsv` | main-window position and size |
+| `Journal.tsv` | operator and subsystem events |
+| `CriticalWarnings.tsv` | durable critical warnings and dismissals |
+| `tradeledger.tsv` | execution-derived trade round trips |
+| `risklocks.tsv` | risk-lock evidence |
+| `FundamentalCache.tsv` | retained external market context |
+| `AnalyticsBridgeCache.json` | retained indicator readings by instrument/timeframe |
+| `uisettings.tsv` | UI preferences, including language |
+| `RuntimePolicy.tsv` | local feature, replication, and risk settings |
+| `LicenseCache.tsv` | protected cached entitlement state |
+| `Localization.tsv` | optional sparse runtime localization overrides |
 
-### `AccountOverrides.tsv`
+## Source versus runtime data
 
-Stores manual account classification or override state, such as account status or firm mapping overrides.
+The compiled AddOn ships defaults and a six-language localization catalog. Files in `GlitchData` preserve machine-specific state and sparse overrides. They must not be copied back into source control as product defaults.
 
-### `AccountGroups.tsv`
+Native NinjaTrader state remains authoritative for accounts, positions, orders, and executions. A persisted group or journal row cannot prove that an order is currently working.
 
-Stores replication groups, master accounts, follower memberships, sizing, and enabled state.
+## Recovery and migration
 
-### `AccountPeaks.tsv`
+For a normal upgrade, retain `GlitchData` and replace the compiled package according to the installation guide. To move machines, copy `GlitchData` while NinjaTrader is closed, then verify groups, account mappings, ratios, risk settings, license state, and native order state before enabling Replication.
 
-Stores peak-equity style state used by compliance and drawdown-aware workflows.
+If a file is malformed or cannot be read, Glitch falls back only where the corresponding store defines a safe default. It does not infer broker state from damaged local files.
 
-### `WindowPlacement.tsv`
+## Privacy and support
 
-Stores the Glitch main-window position, size, and maximized state.
-
-### `Journal.tsv`
-
-Stores journal entries used by the operator review surface.
-
-### `CriticalWarnings.tsv`
-
-Stores warning history and dismissal state for critical account warnings.
-
-### `TradeLedger.tsv`
-
-Stores trade round-trip history used by review and insight workflows.
-
-### `RiskLocks.tsv`
-
-Stores risk-lock events used by compliance-aware review surfaces.
-
-### `FundamentalCache.tsv`
-
-Stores cached market-context records used by the broader analytics layer.
-
-### `Localization.tsv`
-
-Stores the shared localization catalog used by the UI localization service.
-
-### `UiSettings.tsv`
-
-Stores UI preferences such as the preferred language code.
-
-### `RuntimePolicy.tsv`
-
-Stores local runtime policy settings and entitlement-related runtime preferences.
-
-### `LicenseCache.tsv`
-
-Stores cached license state so the AddOn can behave predictably between live entitlement checks.
-
-### `ApiKeys.tsv`
-
-Reserved for local key-style settings where applicable. Current public docs intentionally keep this description generic and do not publish provider-specific runtime configuration details.
-
-## Helper behavior
-
-The persistence layer also provides a small set of normalization helpers for:
-
-- cleaning stored text tokens
-- parsing common boolean values
-- skipping comment and blank lines
-- normalizing tab-escaped values
-
-## Summary
-
-What matters most is not the exact line format of every file, but the persistence contract:
-
-- state is local and predictable
-- operational files are small and inspectable
-- runtime recovery does not depend on opaque binary blobs
-- Glitch can restore its operating surface after restart without inventing state
-
-That makes the product easier to audit, easier to recover, and easier to reason about in production use.
+`GlitchData` can contain account identifiers, trade history, local settings, and protected license material. Treat backups as private. When sharing diagnostics, send only the files requested by support and remove credentials or unrelated account information.

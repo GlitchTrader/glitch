@@ -1,7 +1,5 @@
-# Milestones v20 → v30 (pointer)
+# Historical milestone pointer
 
-Superseded by **`operating-system-rail.md`** — the canonical first-principles doc and step rail (R01–R23).
+The v20-v30 milestone ladder is historical planning provenance. Current release identity, authority, cadence, and acceptance live in `docs/ledger/now.md`, `docs/ledger/backlog.md`, and `operating-system-rail.md`.
 
-That file replaces date-based milestones with evidence gates, documents market + portfolio snapshots, parallel mining, and fail-fast economics.
-
-Version labels (v20…v30) remain packaging names only; see §7 of the rail doc.
+Do not infer current capability or readiness from the old milestone names.

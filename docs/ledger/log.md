@@ -2,6 +2,15 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-22 - six-language public docs and state reconciliation
+
+- Rebuilt the six Standard reference pages from v0.0.2.0 source truth and published equivalent EN/PT/ES/ZH/FR/RU Markdown variants.
+- Generalized the Docs application to localized home and article routes with page-preserving language selection, localized navigation, metadata, hreflang, and sitemap entries.
+- Localized the Download application without changing the explicit release catalog or the stable Standard and AI update/download contracts.
+- Reconciled the source ledger and AI rail with Standard 0.0.2.0, Experimental AI 0.0.2.2, Hermes profile 0.0.2.4, and maintained `standard/20` / `ai/22` lanes.
+- Reconciled ABKB project/runtime state to the same facts. Historical audits and append-only entries remain historical evidence.
+- No NinjaTrader source, artifact, updater channel, profile, runtime, account, or order state changed.
+
 ## 2026-07-18 - weekend clean-candidate freeze
 
 - Completed the clean non-AI consolidation on `cleanup/main-core` without importing

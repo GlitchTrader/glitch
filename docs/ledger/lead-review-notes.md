@@ -2,6 +2,8 @@
 
 Append-only. Cursor/operator writes when wave work needs lead eyes; Fable 2-hourly monitor appends violations.
 
+> Historical wave record. Current status is in `now.md` and `backlog.md`; unchecked items below are not automatically active work.
+
 ## 2026-07-07 — Wave 1 post-compile (for Fable)
 
 **Branch:** `glitch/bulletproof-wave1`  

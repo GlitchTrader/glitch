@@ -1,174 +1,85 @@
-# API Reference
+# Internal Contract Reference
 
-This page summarizes the most important product contracts exposed across the AddOn, indicator, and shared service layers.
+This page names the principal in-process contracts in the Standard Glitch AddOn. It is not a public HTTP trading API.
 
-## AddOn entry points
+## Host and shell
 
 ### `GlitchAddOn`
 
-Primary host entry point for the product.
+NinjaTrader AddOn entry point. It owns activation, Control Center menu registration, Chart Trader attachment, and the single active main-window shell.
 
-Key responsibilities:
+### `GlitchShellBridge` and `GlitchShellSnapshot`
 
-- attach and detach Glitch UI surfaces
-- manage the active main-window instance
-- attach Chart Trader controls
-- expose the product entry point inside NinjaTrader
+The bridge publishes compact shell state and forwards user Replication/Flatten actions from secondary UI surfaces to the main window.
 
-### `GlitchShellBridge`
-
-Host-side shell bridge for compact surfaces and operator actions.
-
-Key responsibilities:
-
-- register and unregister the main window
-- publish shell snapshot state
-- expose current shell snapshot
-- forward replication and flatten actions
-
-### `GlitchShellSnapshot`
-
-Summary contract for shell state, including replication state and grouped runtime summaries.
-
-## Analytics contracts
-
-### `GlitchAnalyticsFeedBus`
-
-Runtime cache for indicator-published analytics.
-
-Key responsibilities:
-
-- accept published readings
-- track active bridge presence
-- expose fresh instrument snapshots
-- support bootstrap publishing when a feed is present but no fresh snapshot exists yet
-
-### `GlitchIndicatorReading`
-
-Normalized reading contract published from the indicator into the AddOn. It carries:
-
-- instrument and timeframe identity
-- timestamp
-- price and volatility context
-- signal and regime context
-- session context
-- optional order-flow context
-
-### `GlitchIndicatorInstrumentSnapshot`
-
-Instrument-level snapshot used by the AddOn analytics engine to build UI-ready summaries.
-
-### `GlitchAnalyticsEngine`
-
-Builds the AddOn-facing analytics snapshot from current accounts and fresh feed state.
-
-### `GlitchAnalyticsSnapshot`
-
-UI-ready analytics contract used by the Glitch main window. It includes:
-
-- current instrument context
-- consolidated timeframe readings
-- composite summary state
-- optional broader market-context enrichments
-
-## Indicator contract
+## Analytics
 
 ### `GlitchAnalyticsBridge`
 
-Primary chart-side publisher.
+Chart indicator that publishes normalized 1m/5m/15m/60m readings.
 
-Public surface includes:
+### `GlitchAnalyticsFeedBus`
 
-- public parameters for chart behavior and publishing
-- lifecycle hooks for configure, data load, realtime, and termination
-- publish behavior into the AddOn bridge
+Stores the latest reading per instrument and timeframe, tracks bridge presence, supports bootstrap publishing, and exposes instrument snapshots.
 
-## Persistence and runtime services
+### `GlitchIndicatorReading`
 
-### `GlitchStateStore`
+Normalized timeframe record containing identity, UTC time, price/volatility, directional/regime, session, and optional order-flow fields.
 
-Central file-backed state service for:
+### `GlitchInstrumentMetadataService`
 
-- account overrides
-- account groups
-- peak state
-- window placement
-- journal entries
-- warning history
+Resolves normalized instrument root, native contract instance, tick size, and point value. Callers can distinguish resolved from unknown metadata.
 
-### `GlitchRuntimePolicyStore`
+## Replication and protection
 
-File-backed runtime policy and cached entitlement state store.
+### `GlitchCopyEngine`
 
-### `GlitchLocalizationService`
+Execution-driven master-to-follower engine. It configures routes, deduplicates native executions, scales follower quantity by ratio, preserves manual divergence, and exposes explicit alignment.
 
-Loads and applies localized UI strings from the shared localization catalog and runtime settings.
+### `GlitchCopyFollowerRoute`
 
-## Replication and compliance services
+Defines master account, follower account, ratio, and enabled route state.
+
+### `GlitchReplicationProtection`
+
+Builds follower-native stop and target orders from the master protection template and follower fill geometry. Protection uses native OCO identity per copied leg.
 
 ### `GlitchReplicationEngine`
 
-Shared logic for:
+Contains shared native account/order helpers such as instrument lookup, flat/order-free checks, working-order classification, and bounded flatten waiting. It is not a second polling copy engine.
 
-- contract rounding
-- account and instrument matching
-- replication coordination
-- flatten and recovery workflows
+## Risk and policy
 
 ### `GlitchComplianceEngine`
 
-Shared logic for:
+Normalizes account status, firm metadata, contract ceilings, native liquidation thresholds, and drawdown-related values used by the UI and enabled controls.
 
-- account classification
-- rule normalization
-- drawdown-aware state support
-- compliance-oriented decision support
+### `GlitchRiskMitigationEngine`
 
-Public docs intentionally describe capability categories instead of publishing private compliance thresholds or heuristics.
+Computes triggers from native account snapshots and the user's runtime policy. Automatic actions remain opt-in.
 
-## Licensing and entitlement services
+### `GlitchRuntimePolicyStore`
+
+Reads and writes `RuntimePolicy.tsv` and the protected license cache.
+
+## Persistence, licensing, and review
+
+### `GlitchStateStore`
+
+Reads and writes account overrides, groups, peak state, window placement, journal, and critical warnings under `GlitchData`.
 
 ### `GlitchLicenseService`
 
-Handles license validation and heartbeat requests and returns normalized entitlement state to the AddOn.
+Validates and refreshes entitlement state through the configured Glitch API boundary.
 
-Public docs intentionally omit security-specific implementation details, token internals, and provider-host rules.
+### `GlitchLocalizationService`
 
-### `GlitchLicenseSnapshot`
+Loads the six-language authored UI catalog and applies sparse runtime overrides.
 
-Normalized license result contract describing whether a request succeeded, whether the license is valid, and what policy state the AddOn should respect.
+### `GlitchTradeLedgerService`, `GlitchTradeInsightsService`, and `GlitchRiskLockLedgerService`
 
-### `GlitchLicensePolicy`
+Persist execution-derived trade evidence and build review summaries. These services are reporting layers; NinjaTrader remains the source of truth for current orders and positions.
 
-Entitlement contract describing plan-level access and key feature limits such as analytics, macro access, advanced replication, and account-scale boundaries.
+## Compatibility promise
 
-## Insight and review services
-
-### `GlitchTradeLedgerService`
-
-Maintains file-backed trade history for downstream review.
-
-### `GlitchTradeInsightsService`
-
-Builds higher-level review snapshots from closed trade history.
-
-Key insight contracts include:
-
-- `TradeRoundTrip`
-- `TradeInsightsSnapshot`
-- `TradeStats`
-
-### `GlitchRiskLockLedgerService`
-
-Tracks risk-lock events used by review and warning surfaces.
-
-## Summary
-
-If you are auditing the product, the most important takeaway is the shape of the contracts:
-
-- the indicator publishes a normalized reading
-- the AddOn stores fresh feed state
-- the analytics engine builds a UI-ready snapshot
-- persistence and operational services stay outside the chart signal file
-
-That separation is what keeps the product inspectable without forcing all behavior into one oversized class.
+These are internal product contracts, not a stable third-party SDK. Public integrations should use documented download, licensing, and support surfaces rather than binding to private C# implementation details.

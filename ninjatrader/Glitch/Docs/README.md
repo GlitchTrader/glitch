@@ -2,6 +2,8 @@
 
 Technical product documentation for the live Glitch NinjaTrader AddOn and the GlitchAnalyticsBridge indicator.
 
+The six reference pages below describe the official Standard v0.0.2.0 source. Each page is published in English, Brazilian Portuguese, Spanish, Simplified Chinese, French, and Russian. Locale files use `.pt.md`, `.es.md`, `.zh.md`, `.fr.md`, and `.ru.md` beside the English source.
+
 ## Public documentation
 
 | Document | Description |
@@ -29,3 +31,4 @@ Technical product documentation for the live Glitch NinjaTrader AddOn and the Gl
 - The documents listed above are the public-safe set for the docs app.
 - Internal planning, commercial, and maintainer-only documents remain in the repo but are intentionally excluded from the public docs site.
 - Public docs describe product behavior, contracts, and operational intent. They do not publish proprietary signal formulas, security internals, or unnecessary implementation details.
+- The installation guide may identify the separate Experimental AI download and public Hermes setup without turning the Standard reference set into AI implementation documentation.

@@ -2,14 +2,16 @@ import Link from "next/link";
 import { getDocNavigation } from "@/lib/docs";
 import { websiteUrl } from "@/lib/site";
 import { SiteFooter, SiteHeader } from "@/components/site-chrome";
+import { docsLocaleDetails, type DocsLocale } from "@/lib/docs-locales";
 
 type DocsShellProps = {
   activeSlug: string | null;
+  locale: DocsLocale;
   children: React.ReactNode;
 };
 
-function NavGroups({ activeSlug }: { activeSlug: string | null }) {
-  const groups = getDocNavigation();
+function NavGroups({ activeSlug, locale }: { activeSlug: string | null; locale: DocsLocale }) {
+  const groups = getDocNavigation(locale);
 
   return (
     <div className="space-y-6">
@@ -41,16 +43,17 @@ function NavGroups({ activeSlug }: { activeSlug: string | null }) {
   );
 }
 
-export function DocsShell({ activeSlug, children }: DocsShellProps) {
+export function DocsShell({ activeSlug, locale, children }: DocsShellProps) {
+  const ui = docsLocaleDetails[locale].ui;
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <SiteHeader />
+      <SiteHeader locale={locale} activeSlug={activeSlug} />
       <div className="mx-auto max-w-[1440px] px-4 pb-16 pt-6 sm:px-6 lg:px-8">
         <div className="mb-6 lg:hidden">
           <details className="rounded-[1.5rem] border border-white/10 bg-white/[0.03]">
-            <summary className="cursor-pointer list-none px-5 py-4 text-sm font-medium text-zinc-100">Documentation menu</summary>
+            <summary className="cursor-pointer list-none px-5 py-4 text-sm font-medium text-zinc-100">{ui.documentationMenu}</summary>
             <div className="border-t border-white/10 px-4 py-4">
-              <NavGroups activeSlug={activeSlug} />
+              <NavGroups activeSlug={activeSlug} locale={locale} />
             </div>
           </details>
         </div>
@@ -59,24 +62,24 @@ export function DocsShell({ activeSlug, children }: DocsShellProps) {
           <aside className="hidden lg:block">
             <div className="sticky top-24 rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 shadow-[0_30px_80px_rgba(0,0,0,0.28)]">
               <div className="rounded-[1.5rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(26,188,156,0.16),transparent_58%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-glitch-teal">Glitch Docs</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-glitch-teal">{ui.shellTitle}</p>
                 <p className="mt-3 text-sm leading-6 text-zinc-300">
-                  Product documentation for the AddOn, bridge indicator, persistence model, and contracts that make Glitch work in real NinjaTrader workflows.
+                  {ui.shellDescription}
                 </p>
               </div>
               <div className="mt-6">
-                <NavGroups activeSlug={activeSlug} />
+                <NavGroups activeSlug={activeSlug} locale={locale} />
               </div>
               <div className="mt-6 rounded-[1.5rem] border border-white/10 bg-white/[0.02] p-4">
-                <p className="text-sm font-semibold text-white">Looking for pricing or onboarding?</p>
+                <p className="text-sm font-semibold text-white">{ui.accessTitle}</p>
                 <p className="mt-2 text-sm leading-6 text-zinc-400">
-                  Pricing, product pages, and member actions stay on the main website.
+                  {ui.accessDescription}
                 </p>
                 <a
                   href={websiteUrl}
                   className="mt-4 inline-flex rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-200 transition hover:border-white/20 hover:bg-white/[0.04] hover:text-white"
                 >
-                  Back to glitchtrader.com
+                  {ui.backToWebsite}
                 </a>
               </div>
             </div>
@@ -85,7 +88,7 @@ export function DocsShell({ activeSlug, children }: DocsShellProps) {
           <main className="min-w-0 lg:pt-2.5">{children}</main>
         </div>
       </div>
-      <SiteFooter />
+      <SiteFooter locale={locale} />
     </div>
   );
 }

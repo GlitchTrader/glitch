@@ -1,45 +1,33 @@
 # Glitch North Star
 
-**Recorded from operator dictation 2026-07-07.**
-
-## Program sequence (order is the doctrine)
+## Product doctrine
 
 ```text
-1. AUDIT   — first-principles consistency audit of the entire codebase
-2. FIX     — user-reported bugs (replication drift, PnL truth, compliance wiring)
-3. IMPROVE — simplify UI, reduce warning noise, opt-in compliance controls
-4. SHIP    — distribution loop to waiting test users (bin copy → recompile → re-export → push → in-app update)
-5. AI      — multi-asset bridge + Hermes decision layer (the killer feature)
+Trust before intelligence.
+Native NinjaTrader state before cached or inferred state.
+Hermes decides; Glitch validates, executes, protects, replicates, reconciles, and journals.
 ```
 
-**v0.0.1.9 (2026-07-09)** closes steps 2–4 for the **non-AI operator**. Step 5 follows `docs/ai-program/operating-system-rail.md` (R01–R23) on branch **`glitch/ai-rail`**; `main` stays v0.0.1.x for user downloads and patches (`docs/ledger/branching.md`).
+## Current product lines
 
-No AI work before the audit and bug fixes complete. Trust before intelligence.
+- **Standard v0.0.2.0** is the official default download for manual trading, analytics, account management, risk controls, journal, and replication.
+- **Experimental AI v0.0.2.2** is a separate package and update channel. It uses the public Hermes profile **v0.0.2.4** and is not a profitability, unattended-operation, or live-readiness claim.
+- `main` owns the explicit release catalog. A ZIP is not a release until the catalog and checksum register it.
 
-## Product invariants
+## Invariants
 
-- **PnL truth:** what Glitch displays must equal what NinjaTrader reports. Any divergence is a P0 bug, not a display quirk.
-- **Replication integrity:** no loops, no fake orders, no duplicated orders, no unexplained master↔follower drift or delay.
-- **User sovereignty:** compliance features are individually configurable and opt-in per feature on the Security tab. No sudden behaviors the user cannot individually control.
-- **Signal over noise:** fewer warnings; screens show only information that matters.
-- **Calm by default (operator + user reports, 2026-07-07):** red/orange pop-ups and flashes are stress-inducing and damage trader psychology. Warnings are reserved for genuine worst-case scenarios only (imminent breach, hard lock). Everything else is quiet status. A false-positive warning is itself a bug.
+- **PnL truth:** display the native NinjaTrader value for the same account and session. Unknown native data stays unknown.
+- **Replication integrity:** one producer-neutral `GlitchCopyEngine` owns followers, ratios, follower-native OCO protection, close propagation, and explicit resync.
+- **User sovereignty:** the user selects accounts, groups, ratios, and enabled risk actions. Startup and recompile are observe-only.
+- **Bounded mutation:** ambiguous order state is never blindly retried. Flatten and protection recovery report unresolved state.
+- **Cognitive authority:** Hermes owns thesis, direction, master quantity, geometry, timing, scaling, and management. Code does not hard-code a trading strategy.
+- **Survival boundary:** Glitch may reject only factual invalidity, missing native truth, ownership violations, incomplete protection, contract capacity, and authoritative account-survival limits.
+- **Learning continuity:** decisions, receipts, outcomes, journals, episodes, memory, and supervisory reviews remain attributable through stable IDs.
+- **Builder boundary:** Codex changes and verifies code. It is not a runtime trader or a substitute for Hermes cognition.
+- **Localization:** authored product, Docs, Guide, Website, and Download copy supports English, Brazilian Portuguese, Spanish, Simplified Chinese, French, and Russian. Broker/model text remains verbatim.
 
-## AI layer invariant (from `glitch_hermes_docs/`)
+## Release evidence
 
-```text
-Hermes proposes. Glitch validates, executes, journals, and protects the account.
-```
+Source tests, builds, and a green NinjaTrader compile prove software shape, not profitability or account authorization. Promotion claims require the exact artifact, named source commit, bounded native lifecycle evidence, and explicit operator approval.
 
-Hermes reads normalized bridge indicators on a 5-minute loop and emits BUY / SELL / HOLD / NOTHING intents. Glitch runs every intent through deterministic risk/compliance checks before any order exists. Hermes is never the risk engine.
-
-## AI phase ladder (operator, 2026-07-07)
-
-```text
-1. use prop-firm "cheap" methodical money ($100 downside per account, no big deal)
-2. ingest from bridge, normalize, monitor multiple markets, accumulate data (mktintel-style)
-3. mine patterns, develop strategies, backtest
-4. paper trade and learn
-5. once paper is profitable → live on cheap prop-firm accounts
-```
-
-Full contract, schemas, risk firewall, and M0–M3 milestones: `glitch_hermes_docs/` (docs + wiki_memory). M0 survival loop: MNQ only, 1 contract, $100/trade, $300/day, 3–5 trades/day, cooldowns, paper first.
+Historical plans and audits remain useful provenance but do not override `now.md`, the release catalog, current source, or current user direction.

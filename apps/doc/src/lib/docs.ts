@@ -2,8 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { cache } from "react";
 import {
+  defaultDocsLocale,
   docsLocaleDetails,
-  getInstallationGuideHref,
+  getDocsHref,
   installationGuideSlug,
   type DocsLocale,
 } from "@/lib/docs-locales";
@@ -12,160 +13,107 @@ const DOCS_ROOT = path.resolve(process.cwd(), "../../ninjatrader/Glitch/Docs");
 
 type DocDefinition = {
   slug: string;
-  fileName: string;
-  navTitle: string;
-  section: "Product" | "Reference";
-  summary: string;
-  spotlight: string;
-};
-
-const localizedInstallationGuideCopy: Record<
-  DocsLocale,
-  Pick<DocDefinition, "navTitle" | "summary" | "spotlight">
-> = {
-  en: {
-    navTitle: "Installation Guide & Troubleshooting",
-    summary:
-      "Install or upgrade Standard and Experimental AI editions, configure NinjaTrader and Hermes, preserve learning data, and troubleshoot the complete runtime.",
-    spotlight:
-      "Use this guide for a fresh PC, an existing Glitch installation, or an existing Hermes profile without mixing editions or losing state.",
-  },
-  pt: {
-    navTitle: "Guia de instalação e solução de problemas",
-    summary:
-      "Instale ou atualize as edições Standard e AI Experimental, configure NinjaTrader e Hermes, preserve o aprendizado e solucione o runtime completo.",
-    spotlight:
-      "Use este guia em um PC novo, com uma instalação existente do Glitch ou com um perfil Hermes existente, sem misturar edições nem perder estado.",
-  },
-  es: {
-    navTitle: "Guía de instalación y solución de problemas",
-    summary:
-      "Instala o actualiza las ediciones Standard y AI Experimental, configura NinjaTrader y Hermes, conserva el aprendizaje y diagnostica todo el runtime.",
-    spotlight:
-      "Usa esta guía en un PC nuevo, con una instalación existente de Glitch o con un perfil Hermes existente, sin mezclar ediciones ni perder estado.",
-  },
-  zh: {
-    navTitle: "安装与故障排除指南",
-    summary: "安装或升级 Standard 与实验性 AI 版本，配置 NinjaTrader 和 Hermes，保留学习数据，并排查完整运行链路。",
-    spotlight: "适用于新电脑、已有 Glitch 安装或已有 Hermes 配置；避免混装版本或丢失状态。",
-  },
-  fr: {
-    navTitle: "Guide d’installation et de dépannage",
-    summary:
-      "Installez ou mettez à niveau les éditions Standard et AI Expérimentale, configurez NinjaTrader et Hermes, préservez l’apprentissage et dépannez l’ensemble du runtime.",
-    spotlight:
-      "Utilisez ce guide sur un nouveau PC, avec une installation Glitch existante ou avec un profil Hermes existant, sans mélanger les éditions ni perdre l’état.",
-  },
-  ru: {
-    navTitle: "Руководство по установке и устранению неполадок",
-    summary:
-      "Установите или обновите Standard и экспериментальную AI-редакцию, настройте NinjaTrader и Hermes, сохраните данные обучения и проверьте весь runtime.",
-    spotlight:
-      "Руководство подходит для нового ПК, существующей установки Glitch или профиля Hermes и помогает не смешать редакции и не потерять состояние.",
-  },
+  baseFileName: string;
+  section: "product" | "reference";
 };
 
 const publicDocDefinitions: DocDefinition[] = [
-  {
-    slug: installationGuideSlug,
-    fileName: "installation-guide-troubleshooting.md",
-    navTitle: localizedInstallationGuideCopy.en.navTitle,
-    section: "Product",
-    summary: localizedInstallationGuideCopy.en.summary,
-    spotlight: localizedInstallationGuideCopy.en.spotlight,
-  },
-  {
-    slug: "architecture",
-    fileName: "architecture.md",
-    navTitle: "Architecture",
-    section: "Product",
-    summary: "See how the AddOn and GlitchAnalyticsBridge fit together across UI, services, and shared data flow.",
-    spotlight: "Best first read if you want the system map before diving into individual surfaces.",
-  },
-  {
-    slug: "addon",
-    fileName: "addon.md",
-    navTitle: "AddOn",
-    section: "Product",
-    summary: "Covers the GlitchAddOn entry point, windows, Chart Trader surfaces, services, and runtime behavior.",
-    spotlight: "Use this when you want the operator-facing product surface and service inventory.",
-  },
-  {
-    slug: "indicator",
-    fileName: "indicator.md",
-    navTitle: "Indicator",
-    section: "Product",
-    summary: "Breaks down the GlitchAnalyticsBridge indicator, parameter model, signal pipeline, and bridge publishing.",
-    spotlight: "Use this when you care about chart-side analytics, scoring, and multi-timeframe signal generation.",
-  },
-  {
-    slug: "data-flow-and-bridge",
-    fileName: "data-flow-and-bridge.md",
-    navTitle: "Data Flow",
-    section: "Product",
-    summary: "Follows readings from the indicator into the AddOn feed bus, state model, and compatibility bridge.",
-    spotlight: "Best page for understanding how analytics move from charts into the main Glitch UI.",
-  },
-  {
-    slug: "persistence",
-    fileName: "persistence.md",
-    navTitle: "Persistence",
-    section: "Product",
-    summary: "Documents GlitchData paths, record types, runtime policy storage, and fallback behavior.",
-    spotlight: "Use this for state files, machine persistence, and operational data location rules.",
-  },
-  {
-    slug: "api-reference",
-    fileName: "api-reference.md",
-    navTitle: "API Reference",
-    section: "Reference",
-    summary: "Reference view of key types and methods that matter across AddOn, indicator, services, and bridges.",
-    spotlight: "Keep this nearby when you need exact names instead of narrative walkthroughs.",
-  },
+  { slug: installationGuideSlug, baseFileName: installationGuideSlug, section: "product" },
+  { slug: "architecture", baseFileName: "architecture", section: "product" },
+  { slug: "addon", baseFileName: "addon", section: "product" },
+  { slug: "indicator", baseFileName: "indicator", section: "product" },
+  { slug: "data-flow-and-bridge", baseFileName: "data-flow-and-bridge", section: "product" },
+  { slug: "persistence", baseFileName: "persistence", section: "product" },
+  { slug: "api-reference", baseFileName: "api-reference", section: "reference" },
 ];
+
+const summaryCopy: Record<DocsLocale, Record<string, string>> = {
+  en: {
+    [installationGuideSlug]: "Install or upgrade Standard and Experimental AI editions without mixing packages or losing local state.",
+    architecture: "See the Standard AddOn, bridge indicator, replication boundary, and separate data paths as they exist in v0.0.2.0.",
+    addon: "Understand the four-tab operating window, Chart Trader widget, execution-driven replication, risk controls, and licensing.",
+    indicator: "Review the GlitchAnalyticsBridge timeframes, public parameters, publishing contract, freshness, and recovery behavior.",
+    "data-flow-and-bridge": "Follow analytics, shell actions, and native executions through separate, auditable runtime paths.",
+    persistence: "Learn what Glitch stores in GlitchData, what remains native NinjaTrader truth, and how to back up or migrate safely.",
+    "api-reference": "Reference the principal internal C# contracts in Standard Glitch; this is not a public trading API.",
+  },
+  pt: {
+    [installationGuideSlug]: "Instale ou atualize Standard e AI Experimental sem misturar pacotes nem perder o estado local.",
+    architecture: "Veja o AddOn Standard, o indicador bridge, o limite de replicação e os fluxos separados do v0.0.2.0.",
+    addon: "Entenda a janela de quatro abas, Chart Trader, replicação por execução, controles de risco e licença.",
+    indicator: "Revise timeframes, parâmetros, publicação, freshness e recuperação do GlitchAnalyticsBridge.",
+    "data-flow-and-bridge": "Acompanhe analytics, ações da interface e execuções nativas em fluxos separados e auditáveis.",
+    persistence: "Saiba o que fica em GlitchData, o que continua sendo verdade nativa do NinjaTrader e como migrar com segurança.",
+    "api-reference": "Consulte os principais contratos C# internos do Standard; não é uma API pública de trading.",
+  },
+  es: {
+    [installationGuideSlug]: "Instala o actualiza Standard y AI Experimental sin mezclar paquetes ni perder estado local.",
+    architecture: "Conoce el AddOn Standard, el indicador bridge, el límite de replicación y los flujos separados de v0.0.2.0.",
+    addon: "Entiende la ventana de cuatro pestañas, Chart Trader, replicación por ejecución, riesgo y licencia.",
+    indicator: "Revisa marcos, parámetros, publicación, frescura y recuperación de GlitchAnalyticsBridge.",
+    "data-flow-and-bridge": "Sigue analytics, acciones de UI y ejecuciones nativas por rutas separadas y auditables.",
+    persistence: "Aprende qué guarda GlitchData, qué sigue siendo verdad nativa y cómo migrar con seguridad.",
+    "api-reference": "Consulta los contratos C# internos principales de Standard; no es una API pública de trading.",
+  },
+  zh: {
+    [installationGuideSlug]: "安装或升级 Standard 与 Experimental AI，避免混装并保留本地状态。",
+    architecture: "了解 v0.0.2.0 的 Standard AddOn、Bridge 指标、复制边界和独立数据路径。",
+    addon: "了解四标签页主窗口、Chart Trader、成交驱动复制、风险控制和许可。",
+    indicator: "查看 GlitchAnalyticsBridge 的周期、参数、发布、新鲜度和恢复行为。",
+    "data-flow-and-bridge": "沿独立且可审计的路径追踪 analytics、界面动作和原生成交。",
+    persistence: "了解 GlitchData 的内容、NinjaTrader 原生事实边界以及安全备份和迁移。",
+    "api-reference": "参考 Standard 的主要内部 C# 契约；本页不是公开交易 API。",
+  },
+  fr: {
+    [installationGuideSlug]: "Installez ou mettez à niveau Standard et AI Expérimentale sans mélanger les paquets ni perdre l’état local.",
+    architecture: "Découvrez l’AddOn Standard, l’indicateur bridge, la limite de réplication et les flux séparés de v0.0.2.0.",
+    addon: "Comprenez la fenêtre à quatre onglets, Chart Trader, la réplication par exécution, le risque et la licence.",
+    indicator: "Consultez timeframes, paramètres, publication, fraîcheur et récupération de GlitchAnalyticsBridge.",
+    "data-flow-and-bridge": "Suivez analytics, actions UI et exécutions natives dans des chemins séparés et auditables.",
+    persistence: "Découvrez GlitchData, la vérité native NinjaTrader et les sauvegardes ou migrations sûres.",
+    "api-reference": "Référence des principaux contrats C# internes de Standard ; ce n’est pas une API de trading publique.",
+  },
+  ru: {
+    [installationGuideSlug]: "Установите или обновите Standard и Experimental AI без смешивания пакетов и потери локальных данных.",
+    architecture: "Изучите Standard AddOn, bridge-индикатор, границу репликации и отдельные пути v0.0.2.0.",
+    addon: "Изучите четыре вкладки, Chart Trader, репликацию по исполнениям, риск и лицензию.",
+    indicator: "Параметры, таймфреймы, публикация, свежесть и восстановление GlitchAnalyticsBridge.",
+    "data-flow-and-bridge": "Проследите analytics, действия UI и нативные исполнения по отдельным аудируемым путям.",
+    persistence: "Что хранит GlitchData, что остаётся истиной NinjaTrader и как безопасно переносить данные.",
+    "api-reference": "Справочник главных внутренних C# контрактов Standard; это не публичный торговый API.",
+  },
+};
+
+const leadCopy: Record<DocsLocale, { intro: string; secondary: string }> = {
+  en: { intro: "Code-grounded documentation for Standard Glitch v0.0.2.0 and its NinjaTrader runtime.", secondary: "Start with Architecture, then use the focused pages for the AddOn, indicator, data paths, persistence, and internal contracts." },
+  pt: { intro: "Documentação baseada no código do Glitch Standard v0.0.2.0 e seu runtime NinjaTrader.", secondary: "Comece por Arquitetura e use as páginas específicas para AddOn, indicador, fluxos, persistência e contratos internos." },
+  es: { intro: "Documentación basada en código de Glitch Standard v0.0.2.0 y su runtime NinjaTrader.", secondary: "Empieza por Arquitectura y usa las páginas específicas para AddOn, indicador, flujos, persistencia y contratos internos." },
+  zh: { intro: "基于源代码的 Glitch Standard v0.0.2.0 与 NinjaTrader 运行时文档。", secondary: "先阅读架构，再按需查看 AddOn、指标、数据路径、持久化和内部契约。" },
+  fr: { intro: "Documentation fondée sur le code de Glitch Standard v0.0.2.0 et de son runtime NinjaTrader.", secondary: "Commencez par Architecture, puis consultez les pages AddOn, indicateur, flux, persistance et contrats internes." },
+  ru: { intro: "Документация Glitch Standard v0.0.2.0 и runtime NinjaTrader, основанная на исходном коде.", secondary: "Начните с архитектуры, затем используйте страницы AddOn, индикатора, потоков, хранения и внутренних контрактов." },
+};
 
 export type DocSummary = {
   slug: string;
   href: string;
   navTitle: string;
   title: string;
-  section: DocDefinition["section"];
+  section: string;
+  sectionKey: DocDefinition["section"];
   summary: string;
 };
 
-export type DocPage = DocSummary & {
-  content: string;
-  spotlight: string;
-  headings: DocHeading[];
-};
+export type DocHeading = { id: string; text: string; level: 2 | 3 };
+export type DocPage = DocSummary & { content: string; spotlight: string; headings: DocHeading[] };
+type DocNavigationSection = { title: string; items: Array<{ href: string; label: string; slug: string | null }> };
 
-export type DocHeading = {
-  id: string;
-  text: string;
-  level: 2 | 3;
-};
-
-type DocNavigationSection = {
-  title: string;
-  items: Array<{
-    href: string;
-    label: string;
-    slug: string | null;
-  }>;
-};
-
-function readDocFile(fileName: string): string {
-  return fs.readFileSync(path.join(DOCS_ROOT, fileName), "utf8");
+function readDocFile(definition: DocDefinition, locale: DocsLocale): string {
+  const suffix = docsLocaleDetails[locale].fileSuffix;
+  return fs.readFileSync(path.join(DOCS_ROOT, `${definition.baseFileName}${suffix}.md`), "utf8");
 }
 
 function stripMarkdown(value: string): string {
-  return value
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")
-    .replace(/[*_~>#-]/g, "")
-    .replace(/\|/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return value.replace(/`([^`]+)`/g, "$1").replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1").replace(/[*_~>#-]/g, "").replace(/\|/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function getHeading(markdown: string, fallback: string): string {
@@ -173,172 +121,73 @@ function getHeading(markdown: string, fallback: string): string {
   return match ? stripMarkdown(match[1]) : fallback;
 }
 
-export const getDocsLead = cache(() => {
-  return {
-    intro:
-      "Glitch docs explain how the live NinjaTrader AddOn, bridge indicator, persistence layer, and operator workflows fit together in one risk-first trading system.",
-    secondary:
-      "Use these pages to understand the real product surface: how Glitch publishes analytics, enforces operational discipline, stores state, and exposes stable contracts across the stack.",
-  };
-});
-
 function slugifyHeading(value: string): string {
-  return stripMarkdown(value)
-    .toLowerCase()
-    .replace(/['".,()]/g, "")
-    .replace(/[^a-z0-9\u00C0-\u024F\u0400-\u04FF\u4E00-\u9FFF\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-");
+  return stripMarkdown(value).toLowerCase().replace(/['".,()]/g, "").replace(/[^a-z0-9\u00C0-\u024F\u0400-\u04FF\u4E00-\u9FFF\s-]/g, "").trim().replace(/\s+/g, "-");
 }
 
 function getDocHeadings(markdown: string): DocHeading[] {
-  return markdown
-    .split(/\r?\n/)
-    .map((line) => {
-      const match = /^(##|###)\s+(.+)$/.exec(line.trim());
-      if (!match) {
-        return null;
-      }
-
-      const level = match[1] === "##" ? 2 : 3;
-      const text = stripMarkdown(match[2]);
-
-      if (!text) {
-        return null;
-      }
-
-      return {
-        id: slugifyHeading(text),
-        text,
-        level,
-      } satisfies DocHeading;
-    })
-    .filter((heading): heading is DocHeading => Boolean(heading));
+  return markdown.split(/\r?\n/).map((line) => {
+    const match = /^(##|###)\s+(.+)$/.exec(line.trim());
+    if (!match) return null;
+    const text = stripMarkdown(match[2]);
+    if (!text) return null;
+    return { id: slugifyHeading(text), text, level: match[1] === "##" ? 2 : 3 } satisfies DocHeading;
+  }).filter((heading): heading is DocHeading => Boolean(heading));
 }
 
-export const getDocSummaries = cache((): DocSummary[] => {
-  return publicDocDefinitions.map((definition) => {
-    const markdown = readDocFile(definition.fileName);
-    const title = getHeading(markdown, definition.navTitle);
+export const getDocsLead = cache((locale: DocsLocale = defaultDocsLocale) => leadCopy[locale]);
 
+export const getDocSummaries = cache((locale: DocsLocale = defaultDocsLocale): DocSummary[] => {
+  const ui = docsLocaleDetails[locale].ui;
+  return publicDocDefinitions.map((definition) => {
+    const markdown = readDocFile(definition, locale);
+    const title = getHeading(markdown, definition.slug);
     return {
       slug: definition.slug,
-      href: `/${definition.slug}`,
-      navTitle: definition.navTitle,
+      href: getDocsHref(locale, definition.slug),
+      navTitle: title,
       title,
-      section: definition.section,
-      summary: definition.summary,
+      section: definition.section === "product" ? ui.product : ui.reference,
+      sectionKey: definition.section,
+      summary: summaryCopy[locale][definition.slug],
     };
   });
 });
 
-export const getDocPage = cache((slug: string): DocPage | null => {
+export const getDocPage = cache((slug: string, locale: DocsLocale = defaultDocsLocale): DocPage | null => {
   const definition = publicDocDefinitions.find((item) => item.slug === slug);
-  if (!definition) {
-    return null;
-  }
-
-  const markdown = readDocFile(definition.fileName);
-  const title = getHeading(markdown, definition.navTitle);
-
-  return {
-    slug: definition.slug,
-    href: `/${definition.slug}`,
-    navTitle: definition.navTitle,
-    title,
-    section: definition.section,
-    summary: definition.summary,
-    spotlight: definition.spotlight,
-    content: markdown,
-    headings: getDocHeadings(markdown),
-  };
+  if (!definition) return null;
+  const markdown = readDocFile(definition, locale);
+  const summary = getDocSummaries(locale).find((item) => item.slug === slug);
+  if (!summary) return null;
+  return { ...summary, content: markdown, spotlight: summary.summary, headings: getDocHeadings(markdown) };
 });
 
-export const getLocalizedInstallationGuide = cache((locale: DocsLocale): DocPage => {
-  const definition = publicDocDefinitions.find((item) => item.slug === installationGuideSlug);
-  if (!definition) {
-    throw new Error("The installation guide definition is missing.");
-  }
-
-  const localeDetails = docsLocaleDetails[locale];
-  const copy = localizedInstallationGuideCopy[locale];
-  const fileName = `installation-guide-troubleshooting${localeDetails.fileSuffix}.md`;
-  const markdown = readDocFile(fileName);
-
-  return {
-    slug: installationGuideSlug,
-    href: getInstallationGuideHref(locale),
-    navTitle: copy.navTitle,
-    title: getHeading(markdown, copy.navTitle),
-    section: definition.section,
-    summary: copy.summary,
-    spotlight: copy.spotlight,
-    content: markdown,
-    headings: getDocHeadings(markdown),
-  };
-});
-
-export function getDocNavigation(): DocNavigationSection[] {
-  const docs = getDocSummaries();
-
+export function getDocNavigation(locale: DocsLocale = defaultDocsLocale): DocNavigationSection[] {
+  const docs = getDocSummaries(locale);
+  const ui = docsLocaleDetails[locale].ui;
   return [
-    {
-      title: "Overview",
-      items: [{ href: "/", label: "Documentation Home", slug: null }],
-    },
-    {
-      title: "Product",
-      items: docs
-        .filter((item) => item.section === "Product")
-        .map((item) => ({ href: item.href, label: item.navTitle, slug: item.slug })),
-    },
-    {
-      title: "Reference",
-      items: docs
-        .filter((item) => item.section === "Reference")
-        .map((item) => ({ href: item.href, label: item.navTitle, slug: item.slug })),
-    },
+    { title: ui.overview, items: [{ href: getDocsHref(locale), label: ui.documentationHome, slug: null }] },
+    { title: ui.product, items: docs.filter((item) => item.sectionKey === "product").map((item) => ({ href: item.href, label: item.navTitle, slug: item.slug })) },
+    { title: ui.reference, items: docs.filter((item) => item.sectionKey === "reference").map((item) => ({ href: item.href, label: item.navTitle, slug: item.slug })) },
   ];
 }
 
-export function getAdjacentDocs(slug: string) {
-  const docs = getDocSummaries();
-  const currentIndex = docs.findIndex((item) => item.slug === slug);
-
-  return {
-    previous: currentIndex > 0 ? docs[currentIndex - 1] : null,
-    next: currentIndex >= 0 && currentIndex < docs.length - 1 ? docs[currentIndex + 1] : null,
-  };
+export function getAdjacentDocs(slug: string, locale: DocsLocale = defaultDocsLocale) {
+  const docs = getDocSummaries(locale);
+  const index = docs.findIndex((item) => item.slug === slug);
+  return { previous: index > 0 ? docs[index - 1] : null, next: index >= 0 && index < docs.length - 1 ? docs[index + 1] : null };
 }
 
-export function resolveMarkdownHref(href?: string): string | null {
-  if (!href) {
-    return null;
-  }
-
-  if (href.startsWith("#")) {
-    return href;
-  }
-
-  if (/^(https?:)?\/\//i.test(href) || href.startsWith("mailto:")) {
-    return href;
-  }
-
+export function resolveMarkdownHref(href: string | undefined, locale: DocsLocale = defaultDocsLocale): string | null {
+  if (!href) return null;
+  if (href.startsWith("#") || /^(https?:)?\/\//i.test(href) || href.startsWith("mailto:")) return href;
   const [pathname, hash] = href.split("#");
-
-  if (!pathname.endsWith(".md")) {
-    return href;
-  }
-
-  if (pathname === "README.md") {
-    return hash ? `/#${hash}` : "/";
-  }
-
-  const slug = pathname.replace(/\.md$/i, "");
-  const doc = publicDocDefinitions.find((item) => item.slug === slug);
-  if (!doc) {
-    return null;
-  }
-
-  return hash ? `/${slug}#${hash}` : `/${slug}`;
+  if (!pathname.endsWith(".md")) return href;
+  if (pathname === "README.md") return hash ? `${getDocsHref(locale)}#${hash}` : getDocsHref(locale);
+  const baseName = pathname.replace(/\.(pt|es|zh|fr|ru)\.md$/i, "").replace(/\.md$/i, "");
+  const doc = publicDocDefinitions.find((item) => item.baseFileName === baseName);
+  if (!doc) return null;
+  const resolved = getDocsHref(locale, doc.slug);
+  return hash ? `${resolved}#${hash}` : resolved;
 }

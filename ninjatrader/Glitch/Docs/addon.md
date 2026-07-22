@@ -2,141 +2,50 @@
 
 ## Role
 
-`GlitchAddOn` is the host-side control layer for the product. It owns the main Glitch window, attaches a compact control surface to Chart Trader, manages runtime services, and presents the operational views traders work from day to day.
+`GlitchAddOn` is the host-side operating layer for Glitch. It coordinates the main window, Chart Trader widget, account groups, replication, risk controls, journal, analytics presentation, licensing, localization, and local recovery.
 
-## Entry point and lifecycle
+## Lifecycle
 
-Type:
+The AddOn registers a Glitch entry in NinjaTrader's Control Center `New` menu and attaches a compact widget to supported Chart Trader windows. One active AddOn instance owns the Glitch shell. Activation replaces an older shell cleanly; NinjaTrader termination removes menus, widgets, and the window.
 
-- `NinjaTrader.NinjaScript.AddOns.GlitchAddOn`
+## Main window
 
-Lifecycle summary:
+The Standard edition has four tabs:
 
-- `State.SetDefaults` sets the product identity inside NinjaTrader.
-- `State.Active` activates the current AddOn instance, reattaches menus and chart surfaces, and ensures the main window is available.
-- `State.Terminated` detaches UI surfaces and releases the active instance.
+- **Dashboard** — native account state, configured groups, masters, followers, ratios, risk summaries, Replication, and Flatten All.
+- **Analytics** — the latest multi-timeframe readings published by `GlitchAnalyticsBridge`, plus available market context.
+- **Journal** — operator events, warnings, reconstructed trades, and performance review for the selected scope.
+- **Settings** — language, licensing, UI preferences, and granular runtime/risk controls.
 
-Only one active Glitch host window is intended to exist at a time.
+The header summarizes daily PnL, account risk state, warnings, Replication, and Flatten All. Values are derived from the selected native account scope; Glitch does not invent PnL when NinjaTrader has not supplied it.
 
-## Main window and navigation
+## Chart Trader widget
 
-Glitch adds an entry under the Control Center `New` menu. From there, traders can open the main window and work from a single operating surface instead of stitching together multiple panels manually.
+The compact widget exposes the same Replication and flatten actions as the main window and shows the current group state. `GlitchShellBridge` synchronizes these controls with the main window so the action logic remains in one place.
 
-The main window is organized around the product's core workflows:
+## Replication behavior
 
-- dashboard and account overview
-- replication setup and control
-- firm-rule and compliance review
-- journal and warning history
-- analytics and market context
-- localization and runtime settings
+Each group defines a master, enabled followers, and follower ratios. Ratios scale the quantity copied from the master. `GlitchCopyEngine` listens to native master executions and submits follower work once per execution.
 
-## Chart Trader surface
+Current behavior is deliberately conservative about ownership:
 
-The AddOn also places a compact Glitch control block inside chart windows when Chart Trader is available.
+- startup and recompile observe existing state instead of catching up automatically;
+- Replication off stops new copies while existing native protection remains working;
+- follower stops and targets are native OCO orders;
+- manual follower divergence is preserved until the user requests resync;
+- ambiguous submissions are not blindly retried;
+- a follower protection failure triggers one bounded native cleanup and no submission loop.
 
-That surface is designed for fast operator actions:
+## Risk and compliance
 
-- toggle replication
-- flatten followers when needed
-- view follower count and group PnL at a glance
+Glitch classifies accounts, reads bundled rule metadata, and uses native account fields where available. Display and review are the default posture. Automatic actions are individually enabled in Settings and journal the setting that authorized them.
 
-The chart-side control is intentionally lightweight. It is a convenience surface, not a replacement for the main operating window.
+`Flatten All` is always an operator control. It targets the configured scope through NinjaTrader's native flatten operation, waits for flat and order-free state, and reports any unresolved account.
 
-## Shell bridge
+## Licensing and localization
 
-`GlitchShellBridge` is the lightweight action bridge used between external surfaces and the main window.
+The AddOn validates its entitlement through the Glitch API and keeps a protected local cache for continuity between checks. Authored UI copy is available in English, Brazilian Portuguese, Spanish, Simplified Chinese, French, and Russian. Account names, broker messages, symbols, and externally authored text remain unchanged.
 
-It supports:
+## Standard versus Experimental AI
 
-- publishing shell state
-- reading the current replication snapshot
-- forwarding replication and flatten actions into the main window
-
-This keeps compact surfaces such as Chart Trader synchronized without duplicating main-window logic.
-
-## Service groups
-
-The AddOn coordinates several service layers.
-
-### Persistence and runtime state
-
-These services store:
-
-- account overrides
-- account groups
-- peak state
-- window placement
-- journal and warning history
-- runtime policy and cached license state
-
-The persistence model is file-based and designed for predictable local recovery after restarts.
-
-### Replication and compliance
-
-These services are responsible for:
-
-- group and follower coordination
-- replication intent tracking
-- flatten and recovery workflows
-- account classification and rule application
-- compliance-aware operating behavior
-
-The public docs describe the workflow surface and data model, not the private rule heuristics or enforcement thresholds.
-
-### Licensing and localization
-
-The AddOn validates entitlements, keeps a local runtime policy, and loads localized UI strings from the shared localization source.
-
-Public docs intentionally avoid publishing sensitive validation internals or security-specific implementation details.
-
-### Analytics, fundamentals, and insights
-
-The AddOn renders the analytics snapshot published by the indicator and can enrich the operator view with broader market context, journaling, and review surfaces.
-
-Public docs describe these as product capabilities. Proprietary weighting, scoring, and provider configuration are not part of the public documentation set.
-
-## Macro and context surfaces
-
-The UI includes dedicated views for broader market context alongside the main analytics workflow. These views are intended to support interpretation and operator awareness, not to expose implementation internals.
-
-## Partial file map
-
-Key UI partials include:
-
-- `GlitchMainWindow.Header.partial.cs`
-- `GlitchMainWindow.DashboardTab.partial.cs`
-- `GlitchMainWindow.SummaryTab.partial.cs`
-- `GlitchMainWindow.Replication.partial.cs`
-- `GlitchMainWindow.FirmRules.partial.cs`
-- `GlitchMainWindow.JournalTab.partial.cs`
-- `GlitchMainWindow.AnalyticsTab.partial.cs`
-- `GlitchMainWindow.Localization.partial.cs`
-- `GlitchMainWindow.Models.partial.cs`
-
-These files keep the AddOn readable by separating operator-facing surfaces from service and persistence code.
-
-## Warnings and dashboard coloring
-
-Glitch separates operator signals by severity:
-
-- **Critical warnings** appear in the header count (orange), the Journal critical-warnings grid, and persist until dismissed. They include trading locks such as buffer critical lock, eval profit target lock, replication freeze, max contracts breach, and no-protection lock.
-- **Operational warnings** appear in the header count (white) and the critical-warnings grid. They cover replication conflicts and hard resync blocks that need attention but do not use the same dismiss-to-unlock flow as risk locks.
-- **Informational signals** (for example transient replication submit failures, protective order rejections, policy limit notices, and risk flatten fallback notices) are written to the Journal under category `Warning` only. They do not increase the header warning count and are not persisted as critical warnings.
-
-Dashboard equity coloring uses neutral text unless net-liq or intratrade drawdown warnings are active. Small negative unrealized PnL stays neutral until it reaches the intratrade drawdown warning threshold.
-
-Replication protectives are placed relative to each follower's average entry when possible, using the same tick distance as the master template. Invalid protective prices are skipped with a structured replication journal entry instead of submitting a broker order that would be rejected.
-
-## Summary
-
-From a product review perspective, the AddOn is where Glitch becomes an operating system rather than a standalone indicator.
-
-It is responsible for:
-
-- stateful workflow management
-- recovery after restart
-- coordination across accounts
-- clear operator surfaces for replication, compliance, and review
-
-That is the layer traders depend on when the goal is not just signal generation, but durable account operation.
+Standard is the default release channel for manual trading, analytics, account management, and replication. Experimental AI is installed as a separate NinjaTrader package and is documented in the installation guide. Never layer one edition over the other.

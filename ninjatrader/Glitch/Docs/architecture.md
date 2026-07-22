@@ -1,92 +1,59 @@
 # Glitch Architecture
 
-## Overview
+## Product boundary
 
-Glitch is built from two active NinjaTrader 8 components that work as one product:
+The Standard edition of Glitch is a NinjaTrader 8 AddOn plus one chart indicator:
 
-1. `GlitchAddOn` is the host-side operating layer. It owns the main window, Chart Trader controls, persistence, compliance workflows, replication controls, and analytics presentation.
-2. `GlitchAnalyticsBridge` is the chart-side analytics publisher. It runs as a NinjaScript indicator, computes multi-timeframe context, and publishes normalized readings into the AddOn.
+1. `GlitchAddOn` owns the operating window, Chart Trader controls, account groups, replication, risk settings, journaling, licensing, localization, and persistence.
+2. `GlitchAnalyticsBridge` reads the active chart and publishes normalized 1-minute, 5-minute, 15-minute, and 60-minute market context to the AddOn.
 
-The product boundary is intentional: chart analytics stay on the chart side, while operational state and user-facing controls stay in the AddOn.
+The official Standard release contains no Hermes runtime or AI tab. The Experimental AI edition extends this base through a separate package and release channel.
 
-## Runtime boundary
+## Runtime components
 
-The AddOn and indicator are loosely coupled.
+### AddOn host
 
-- The indicator does not need a direct compile-time dependency on the AddOn assembly.
-- A bridge layer publishes normalized readings into the AddOn when the host surface is available.
-- The AddOn consumes those readings through a feed bus and turns them into UI-ready snapshots.
+`NinjaTrader.NinjaScript.AddOns.GlitchAddOn` attaches Glitch to the NinjaTrader Control Center and to supported Chart Trader windows. The main window has four tabs: Dashboard, Analytics, Journal, and Settings.
 
-This separation keeps the chart signal pipeline independent from the windowing, persistence, and operator-control layers.
+The AddOn treats NinjaTrader account, order, execution, and position state as authoritative. Local files preserve configuration and history; they do not replace native broker state.
 
-## Core components
+### Analytics indicator
 
-### GlitchAddOn
+`NinjaTrader.NinjaScript.Indicators.GlitchAnalyticsBridge` stays on the chart side. It calculates multi-timeframe context, optionally colors bars, and publishes readings without taking account or order authority.
 
-Responsibilities:
+### Service layer
 
-- Expose the Glitch entry point in NinjaTrader
-- Keep a single main window active
-- Attach a compact control surface to Chart Trader
-- Coordinate replication, flatten, compliance, and persistence workflows
-- Present dashboard, analytics, journal, and operating views
+The AddOn separates operational concerns into focused services:
 
-### GlitchAnalyticsBridge
+- `GlitchCopyEngine` handles execution-driven master-to-follower replication.
+- `GlitchReplicationProtection` creates follower-native protective orders from master protection.
+- `GlitchComplianceEngine` normalizes account and rule state.
+- `GlitchRiskMitigationEngine` evaluates only the risk actions enabled by the user.
+- `GlitchInstrumentMetadataService` resolves native tick size and point value.
+- persistence, licensing, localization, journal, trade-ledger, and insight services own their corresponding data.
 
-Responsibilities:
+## Replication boundary
 
-- Watch supported chart timeframes
-- Build structured market context for the current instrument
-- Optionally color bars for fast visual feedback
-- Publish analytics readings for the AddOn UI
+A configured group has one master and zero or more enabled followers. A follower ratio scales quantity; it does not create a second strategy or a chain of synthetic masters.
 
-## High-level data flow
+The copy engine reacts to native master executions. It deduplicates executions, refuses self-copy routes and cross-zero closes, and installs follower-native OCO protection. Startup and recompile are observe-only. Turning Replication off stops new copying but does not remove protection already working at NinjaTrader. A manual follower change remains owned by the user until an explicit resync.
 
-1. The indicator builds fresh readings from chart context.
-2. The bridge layer publishes a normalized reading for the instrument and timeframe.
-3. The AddOn feed bus stores the latest readings by instrument and timeframe.
-4. The analytics engine builds a snapshot for the main Glitch UI.
-5. The main window renders that snapshot alongside account, replication, and risk state.
+## Data paths
 
-Operational controls such as replication and flatten use a separate shell bridge. Analytics flow and operator actions are intentionally separated.
-
-## Namespaces and ownership
-
-- `NinjaTrader.NinjaScript.AddOns`: AddOn entry point and window integration
-- `Glitch.UI`: Main window, feed bus, analytics presentation, and related models
-- `Glitch.Services`: Persistence, licensing, localization, replication, compliance, and insight services
-- `NinjaTrader.NinjaScript.Indicators`: Chart-side indicator implementation
-
-## File layout
+Analytics and operator actions use separate bridges:
 
 ```text
-AddOns/GlitchAddOn/
-  GlitchAddOn.cs
-  GlitchAddOn.ChartTrader.partial.cs
-  Services/
-    Persistence/
-    Trading/
-    Risk/
-    Licensing/
-    Localization/
-    FundamentalAnalysis/
-    Insights/
-  UI/
-    MainWindow/
-    Analytics/
-    MacroAnalysisWindow/
+Chart bars -> GlitchAnalyticsBridge -> GlitchAnalyticsFeedBus -> Analytics UI
 
-Indicators/glitch/
-  GlitchAnalyticsBridge.cs
+Native executions/orders -> GlitchCopyEngine -> follower orders/protection -> Journal
+
+Chart Trader controls <-> GlitchShellBridge <-> main window
 ```
 
-## Design intent
+Keeping these paths separate prevents market-data rendering from becoming an order path and prevents compact UI controls from duplicating trading logic.
 
-Glitch is not organized like a single monolithic indicator. The design splits:
+## Safety and authority
 
-- analytics generation
-- operational enforcement
-- persistence
-- user-facing control surfaces
+Glitch owns deterministic execution mechanics, but the user owns account selection, group membership, ratios, and enabled risk actions. Risk features are individually configurable. `Flatten All` uses native account flattening across the configured scope and reports incomplete cleanup instead of pretending it succeeded.
 
-That architecture matters for real use. It lets the chart layer stay responsive, the AddOn stay stateful, and the operator work from one consistent control surface across multiple accounts and workflows.
+Glitch reduces operational error; it does not guarantee connectivity, prop-firm eligibility, or trading results.

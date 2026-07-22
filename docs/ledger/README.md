@@ -1,8 +1,13 @@
 # Glitch Ledger
 
-Workframe-style program ledger for Glitch. Seeded 2026-07-07 from operator dictation (Alan) via Fable session; see `d:/ab/projects/abkb/fable-findings/projects/glitch.md` for the full wargame.
+Current project state lives in this compact set:
 
-- `north-star.md` — program sequence and invariants
-- `backlog.md` — GL-xxx items with status; human-readable source of truth until a `backlog.json` + verify tooling exists
+- `north-star.md` — permanent product and authority invariants;
+- `now.md` — current release, branch, runtime, and evidence snapshot;
+- `backlog.md` — active work and unresolved stop lines;
+- `branching.md` — maintained source lanes and promotion rules;
+- `log.md` — append-only operator history.
 
-Discipline (borrowed from workframe `docs/ledger/`): verify-first (evidence before patching), one GL item per commit when possible, no drive-by refactors, statuses only flip with evidence.
+`audits/`, `research/`, `lane-briefs.md`, and `lead-review-notes.md` preserve dated evidence. They are not current status unless `now.md` or `backlog.md` explicitly promotes a finding.
+
+Discipline: source artifacts are truth; the ledger is the current index; evidence precedes status changes; historical records are not silently rewritten into present-tense claims.

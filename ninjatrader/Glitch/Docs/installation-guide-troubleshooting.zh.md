@@ -1,4 +1,4 @@
-# Glitch v0.0.2.0 安装、升级与故障排除指南
+# Glitch 安装、升级与故障排除指南
 
 这是在 NinjaTrader 8 中配置两个 Glitch 版本的规范指南。
 
@@ -10,7 +10,7 @@
 
 ## 1) 选择一个版本
 
-Glitch v0.0.2.0 提供两个完整且互斥的安装包：
+当前 Glitch 通道提供两个完整且互斥的安装包：Standard v0.0.2.0 与 Experimental AI v0.0.2.2。
 
 | 版本 | 下载 | 适用场景 |
 |---|---|---|
@@ -124,7 +124,7 @@ Standard 用户跳过本节。
 
 要求：
 
-- 已在 NinjaTrader 安装 `Glitch_AI_v0.0.2.0.zip`；
+- 已在 NinjaTrader 安装 `Glitch_AI_v0.0.2.2.zip`；
 - Hermes `0.18.2` 或更高版本；
 - 用户通过 OAuth 授权的 OpenAI Codex 账户。
 
@@ -188,7 +188,7 @@ powershell -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\hermes\profiles\glit
 glitch cron list --all
 ```
 
-v0.0.2.0 只支持以下两个 jobs：
+只支持以下两个 jobs：
 
 - `glitch-direct-operator` — 每分钟检查；
 - `glitch-learning-supervisor` — 每 15 分钟检查。

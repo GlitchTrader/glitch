@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { DocPageContent } from "@/components/doc-page-content";
 import { getDocPage, getDocSummaries } from "@/lib/docs";
-import { getInstallationGuideLanguages, installationGuideSlug } from "@/lib/docs-locales";
+import { getDocLanguages } from "@/lib/docs-locales";
 
 type DocPageProps = {
   params: Promise<{
@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: DocPageProps): Promise<Metada
     description: doc.summary,
     alternates: {
       canonical: doc.href,
-      ...(slug === installationGuideSlug ? { languages: getInstallationGuideLanguages() } : {}),
+      languages: getDocLanguages(slug),
     },
   };
 }
@@ -44,5 +44,5 @@ export default async function DocPage({ params }: DocPageProps) {
     notFound();
   }
 
-  return <DocPageContent doc={doc} />;
+  return <DocPageContent doc={doc} locale="en" />;
 }

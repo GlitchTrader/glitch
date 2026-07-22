@@ -318,8 +318,8 @@ export function formatReleaseSize(size: number): string {
   return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`;
 }
 
-export function formatReleaseDate(date: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
+export function formatReleaseDate(date: Date, locale = "en-US"): string {
+  return new Intl.DateTimeFormat(locale, {
     month: "long",
     day: "numeric",
     year: "numeric",

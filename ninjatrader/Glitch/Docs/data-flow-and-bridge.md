@@ -1,94 +1,52 @@
 # Data Flow and Bridge
 
-## End-to-end path
+## Analytics path
 
-Glitch analytics move through a simple staged pipeline:
+Glitch moves chart analytics through a one-way, read-only pipeline:
 
-1. `GlitchAnalyticsBridge` runs on the chart and builds a fresh reading for the active instrument.
-2. The bridge layer publishes that reading into the AddOn when the host-side feed bus is available.
-3. `GlitchAnalyticsFeedBus` stores the latest readings by normalized instrument root and timeframe.
-4. `GlitchAnalyticsEngine` turns those readings into a UI snapshot for the main Glitch window.
-5. The AddOn presents that snapshot alongside account, replication, and risk state.
+1. `GlitchAnalyticsBridge` calculates a reading from NinjaTrader chart data.
+2. The indicator publishes the reading through its compatibility bridge.
+3. `GlitchAnalyticsFeedBus` stores the latest reading by normalized instrument root and timeframe.
+4. the analytics logic builds a UI snapshot from fresh readings;
+5. the Analytics tab renders the snapshot.
 
-## What the bridge carries
+The indicator never receives account or order authority through this path.
 
-The published reading includes the categories the AddOn needs to stay useful:
+## Reading identity
 
-- instrument identity
-- timeframe identity
-- timestamp
-- price and volatility context
-- directional and tradeability context
-- session context
-- optional order-flow context
+A reading carries enough identity for the AddOn to reject mismatched or stale context:
 
-The bridge is designed to move structured state, not to expose private analytics internals.
+- instrument root and full contract name;
+- timeframe;
+- UTC observation time;
+- price, volatility, direction, regime, session, and optional order-flow fields.
 
-## Feed bus responsibilities
+Instrument metadata is resolved from NinjaTrader's native `Instrument` and `MasterInstrument` data. Unknown point value or tick size remains unknown rather than silently becoming a trading assumption.
 
-The AddOn feed bus is the runtime cache for chart analytics.
+## Fresh and retained state
 
-It is responsible for:
+The feed bus distinguishes live readings from retained last-known context. Fresh timeframe readings contribute to the live composite. Older readings may remain visible for continuity, but they do not silently influence the current composite.
 
-- storing the latest reading per instrument and timeframe
-- normalizing instrument roots so chart and AddOn agree on the same key
-- exposing snapshot access for the Glitch UI
-- tracking bridge presence so the AddOn knows whether a publisher is active
+`AnalyticsBridgeCache.json` stores the retained instrument feed under `GlitchData`. On startup, Glitch loads that cache and asks registered chart bridges to publish again. Retained entries are pruned on maintenance rather than deleted during every UI read.
 
-## Snapshot building
+## Bootstrap and reload
 
-The analytics engine reads the latest fresh instrument snapshot and builds a higher-level AddOn view from it.
+The chart and AddOn can be opened in either order. Registration, bridge-touch state, and bootstrap publishing allow the feed to recover after an AddOn open, chart reload, or NinjaScript recompile. Fresh native bars are still required; bootstrap cannot manufacture market data.
 
-That view powers:
+## Separate operator path
 
-- composite analytics cards
-- consolidated timeframe summaries
-- broader market context inside the main Glitch window
+`GlitchShellBridge` is separate from the analytics bridge. It carries compact UI state and user actions such as Replication toggle and Flatten All between Chart Trader and the main window.
 
-The public docs describe this as a layered aggregation process. They do not publish the proprietary weighting model behind the final summary score.
+Native executions and orders use another path again:
 
-## Bridge availability and bootstrap
+```text
+master execution -> GlitchCopyEngine -> follower execution/protection -> Journal
+```
 
-The bridge may become available after the AddOn is loaded, after the indicator is added, or after a recompile.
+This separation keeps read-heavy analytics, user controls, and broker mutations independently auditable.
 
-For that reason Glitch supports bootstrap behavior:
+## Failure behavior
 
-- the AddOn can detect that a bridge publisher exists
-- the indicator can publish a fresh reading on request
-- the UI can recover without waiting for a full manual reset
-
-This is important for day-to-day operator reliability, especially in a platform where charts and AddOn surfaces may be reloaded independently.
-
-## Instrument normalization
-
-Both sides normalize instrument identity before storing or requesting feed state. That normalization step is what allows the AddOn, chart surface, and any external snapshot consumers to stay aligned on the same instrument root.
-
-Composite scoring only includes timeframe readings whose own `UtcTime` is within the live window (~2 minutes). Retained per-timeframe readings may still display on dials, but stale timeframes do not pollute the header composite.
-
-## Freshness and pruning
-
-Glitch treats analytics as live operational state with a retained last-known layer.
-
-- **Live feed** — readings newer than ~2 minutes from an active chart bridge.
-- **Retained feed** — last-known readings kept in memory and `GlitchData/AnalyticsBridgeCache.json` for up to 7 days.
-- Stale entries are pruned on a maintenance cadence, not on every UI read (reads no longer delete retained data).
-
-On AddOn startup, persisted bridge cache is loaded and registered chart bridges are asked to publish immediately so analytics can populate even when Glitch opens after the indicator is already on a chart.
-
-## Shell bridge versus analytics bridge
-
-Glitch uses two distinct bridges for two distinct jobs.
-
-### Analytics bridge
-
-Moves market context from the indicator into the AddOn UI.
-
-### Shell bridge
-
-Moves operator actions and shell state such as:
-
-- replication state
-- group summary state
-- flatten and toggle actions
-
-Keeping these paths separate avoids mixing read-heavy market context with action-heavy operational controls.
+- Missing or stale analytics degrade the Analytics view; they do not authorize an order.
+- Missing native account/order state blocks operations that require certainty.
+- A failed copy or protection operation is journaled and bounded; Glitch does not create an unbounded retry loop.

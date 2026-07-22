@@ -9,6 +9,8 @@ out/
 !.env.example
 .license_signing_private.pem
 .vercel/
+__pycache__/
+*.py[cod]
 ninjatrader/Glitch/Strategies/
 ninjatrader/Glitch/Glitch.zip
 ninjatrader/Glitch/Glitch Screens *

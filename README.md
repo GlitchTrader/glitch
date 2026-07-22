@@ -9,6 +9,8 @@ Monorepo for the Glitch trading platform: NinjaTrader 8 AddOn and Indicator, mar
 | `apps/website` | Next.js marketing site (Whop checkout links, pricing, product, affiliate, legal pages). |
 | `apps/api` | Next.js backend: health, Whop webhooks, license validate/heartbeat, admin and internal endpoints, market fundamentals and provider proxy. |
 | `apps/app` | Next.js app workspace (placeholder). |
+| `apps/doc` | Six-language public product documentation. |
+| `apps/download` | Explicit Standard/AI release catalog and download channels. |
 | `ninjatrader/Glitch` | NinjaTrader 8 AddOn and Indicator source and docs (AddOns/GlitchAddOn, Indicators/glitch, Docs). |
 
 ## Workspaces
@@ -39,6 +41,8 @@ Development:
 ```bash
 npm run dev --workspace apps/website   # website
 npm run dev --workspace apps/api      # API
+npm run dev --workspace apps/doc      # Docs
+npm run dev --workspace apps/download # Download
 ```
 
 Secrets and environment are not committed; each app has an `.env.example`. Copy to `.env.local` and set values locally.

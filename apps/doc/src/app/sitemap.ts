@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { getDocSummaries } from "@/lib/docs";
-import { docsLocales, getInstallationGuideHref } from "@/lib/docs-locales";
+import { docsLocales, getDocsHref } from "@/lib/docs-locales";
 import { docsSiteUrl, resolveSiteUrl } from "@/lib/site";
 
 export default function sitemap(): MetadataRoute.Sitemap {
@@ -8,8 +8,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();
   const pathnames = [
     "/",
-    ...getDocSummaries().map((doc) => doc.href),
-    ...docsLocales.filter((locale) => locale !== "en").map(getInstallationGuideHref),
+    ...getDocSummaries("en").map((doc) => doc.href),
+    ...docsLocales.filter((locale) => locale !== "en").flatMap((locale) => [
+      getDocsHref(locale),
+      ...getDocSummaries(locale).map((doc) => doc.href),
+    ]),
   ];
 
   return pathnames.map((pathname) => ({

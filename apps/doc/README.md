@@ -1,23 +1,14 @@
 # Glitch Docs
 
-Next.js docs workspace for `docs.glitchtrader.com`. It renders the public-safe markdown docs from `ninjatrader/Glitch/Docs` so the repo keeps one source of truth for product documentation.
+Next.js workspace for `docs.glitchtrader.com`. It renders the installation guide and six source-grounded Standard reference pages from `ninjatrader/Glitch/Docs`.
 
-The installation guide is published in the same six languages as Glitch: English at the stable unprefixed URL and Portuguese, Spanish, Chinese, French, and Russian at locale-prefixed URLs. Locale files use `.pt.md`, `.es.md`, `.zh.md`, `.fr.md`, and `.ru.md` suffixes beside the English source.
+All pages and site chrome support English, Brazilian Portuguese, Spanish, Simplified Chinese, French, and Russian. English URLs are unprefixed; translated routes use `/pt`, `/es`, `/zh`, `/fr`, and `/ru`. The header switcher preserves the current article.
 
-Optional environment variables (defaults match the marketing site):
-
-- `NEXT_PUBLIC_WHOP_FREE_ACCESS_URL` — Glitch Lite checkout.
-- `NEXT_PUBLIC_WHOP_GO_PRO_CHECKOUT_URL` — Glitch Pro checkout.
-- `NEXT_PUBLIC_WHOP_MEMBER_HUB_URL` — Member Hub after purchase.
-
-Run from repo root:
+Run from the repo root:
 
 ```bash
-npm run dev --workspace apps/doc
-```
-
-Build:
-
-```bash
+npm run lint --workspace apps/doc
 npm run build --workspace apps/doc
 ```
+
+Optional public environment variables configure Website, Download, member, and checkout links. Never place secrets or private IDs in documentation content.

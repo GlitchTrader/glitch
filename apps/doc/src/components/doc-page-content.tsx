@@ -1,14 +1,13 @@
 import Link from "next/link";
 import { DocsMarkdown } from "@/components/docs-markdown";
 import { DocsShell } from "@/components/docs-shell";
-import { GuideLanguageSwitcher } from "@/components/guide-language-switcher";
 import { JsonLd } from "@/components/json-ld";
 import { getAdjacentDocs, type DocPage } from "@/lib/docs";
-import { docsLocaleDetails, installationGuideSlug, type DocsLocale } from "@/lib/docs-locales";
+import { docsLocaleDetails, type DocsLocale } from "@/lib/docs-locales";
 import { docsSiteUrl, resolveSiteUrl, websiteUrl } from "@/lib/site";
 
 export function DocPageContent({ doc, locale = "en" }: { doc: DocPage; locale?: DocsLocale }) {
-  const adjacent = getAdjacentDocs(doc.slug);
+  const adjacent = getAdjacentDocs(doc.slug, locale);
   const localeDetails = docsLocaleDetails[locale];
   const docsOrigin = resolveSiteUrl("NEXT_PUBLIC_DOCS_URL", docsSiteUrl).toString().replace(/\/$/, "");
   const pageUrl = `${docsOrigin}${doc.href}`;
@@ -59,11 +58,9 @@ export function DocPageContent({ doc, locale = "en" }: { doc: DocPage; locale?: 
   ];
 
   return (
-    <DocsShell activeSlug={doc.slug}>
+    <DocsShell activeSlug={doc.slug} locale={locale}>
       <JsonLd data={jsonLd} />
       <div className="space-y-6" lang={localeDetails.languageTag}>
-        {doc.slug === installationGuideSlug ? <GuideLanguageSwitcher locale={locale} /> : null}
-
         <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-7 shadow-[0_30px_90px_rgba(0,0,0,0.22)] sm:p-9">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-glitch-teal">{doc.section}</p>
           <h1 className="mt-4 text-4xl font-bold tracking-tight text-white sm:text-5xl">{doc.title}</h1>
@@ -73,14 +70,14 @@ export function DocPageContent({ doc, locale = "en" }: { doc: DocPage; locale?: 
 
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_250px]">
           <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_30px_90px_rgba(0,0,0,0.18)] sm:p-8">
-            <DocsMarkdown content={doc.content} />
+            <DocsMarkdown content={doc.content} locale={locale} />
           </div>
 
           <aside className="space-y-4">
             {doc.headings.length > 0 ? (
               <div className="xl:sticky xl:top-24 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-glitch-teal">
-                  {localeDetails.pageLabels.onThisPage}
+                  {localeDetails.ui.onThisPage}
                 </p>
                 <div className="mt-4 space-y-2">
                   {doc.headings.map((heading) => (
@@ -107,7 +104,7 @@ export function DocPageContent({ doc, locale = "en" }: { doc: DocPage; locale?: 
               className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-5 transition hover:border-white/20 hover:bg-white/[0.05]"
             >
               <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                {localeDetails.pageLabels.previous}
+                {localeDetails.ui.previous}
               </p>
               <p className="mt-2 text-lg font-semibold text-white">{adjacent.previous.navTitle}</p>
             </Link>
@@ -120,7 +117,7 @@ export function DocPageContent({ doc, locale = "en" }: { doc: DocPage; locale?: 
               href={adjacent.next.href}
               className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-5 text-left transition hover:border-white/20 hover:bg-white/[0.05] sm:ml-auto"
             >
-              <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">{localeDetails.pageLabels.next}</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">{localeDetails.ui.next}</p>
               <p className="mt-2 text-lg font-semibold text-white">{adjacent.next.navTitle}</p>
             </Link>
           ) : (

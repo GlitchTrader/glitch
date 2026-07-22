@@ -1,46 +1,68 @@
+"use client";
+
 import Image from "next/image";
-import { getDocsUrl, getDownloadsUrl, getWebsiteUrl } from "@/lib/releases";
+import { usePathname } from "next/navigation";
 import { SiteHeaderClient } from "@/components/site-header";
+import { downloadCopy, downloadLocales, getDownloadHomeHref, isDownloadLocale, type DownloadLocale } from "@/lib/download-locales";
 
 const defaultMemberHubUrl = "https://whop.com/joined/glitchtrader/";
 const defaultStartFreeUrl = "https://whop.com/checkout/plan_IROhfJAbF79K6";
 const defaultGoProUrl = "https://whop.com/checkout/plan_G81vTccV19dNA";
-const installationGuideUrl = "https://docs.glitchtrader.com/installation-guide-troubleshooting";
-
+const defaultWebsiteUrl = "https://glitchtrader.com";
+const defaultDocsUrl = "https://docs.glitchtrader.com";
+const defaultDownloadsUrl = "https://download.glitchtrader.com";
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
 }
 
-function websitePath(baseUrl: string, pathname: string): string {
-  return `${trimTrailingSlash(baseUrl)}${pathname}`;
+function websitePath(baseUrl: string, pathname: string, locale: DownloadLocale): string {
+  return `${trimTrailingSlash(baseUrl)}/${locale}${pathname === "/" ? "" : pathname}`;
+}
+
+function useDownloadLocale(): DownloadLocale {
+  const firstSegment = usePathname().split("/").filter(Boolean)[0];
+  return firstSegment && isDownloadLocale(firstSegment) ? firstSegment : "en";
+}
+
+function docsPath(baseUrl: string, locale: DownloadLocale, slug?: string): string {
+  const prefix = locale === "en" ? "" : `/${locale}`;
+  return `${trimTrailingSlash(baseUrl)}${prefix}${slug ? `/${slug}` : ""}`;
 }
 
 export function SiteHeader() {
-  const websiteUrl = getWebsiteUrl();
-  const docsUrl = trimTrailingSlash(getDocsUrl());
+  const locale = useDownloadLocale();
+  const copy = downloadCopy[locale];
+  const websiteUrl = process.env.NEXT_PUBLIC_WEBSITE_URL?.trim() || defaultWebsiteUrl;
+  const docsUrl = trimTrailingSlash(process.env.NEXT_PUBLIC_DOCS_URL?.trim() || defaultDocsUrl);
   const memberHubUrl = process.env.NEXT_PUBLIC_WHOP_MEMBER_HUB_URL?.trim() || defaultMemberHubUrl;
   const startFreeUrl = process.env.NEXT_PUBLIC_WHOP_FREE_ACCESS_URL?.trim() || defaultStartFreeUrl;
   const goProUrl = process.env.NEXT_PUBLIC_WHOP_GO_PRO_CHECKOUT_URL?.trim() || defaultGoProUrl;
 
   return (
     <SiteHeaderClient
-      websiteUrl={websiteUrl}
-      homeUrl={websitePath(websiteUrl, "/")}
-      pricingUrl={websitePath(websiteUrl, "/pricing")}
-      affiliateUrl={websitePath(websiteUrl, "/affiliate")}
-      docsUrl={docsUrl}
-      guideUrl={installationGuideUrl}
+      websiteUrl={websitePath(websiteUrl, "/", locale)}
+      homeUrl={websitePath(websiteUrl, "/", locale)}
+      pricingUrl={websitePath(websiteUrl, "/pricing", locale)}
+      affiliateUrl={websitePath(websiteUrl, "/affiliate", locale)}
+      docsUrl={docsPath(docsUrl, locale)}
+      guideUrl={docsPath(docsUrl, locale, "installation-guide-troubleshooting")}
       startFreeUrl={startFreeUrl}
       memberHubUrl={memberHubUrl}
       goProUrl={goProUrl}
+      labels={copy.nav}
+      languageLabel={copy.language}
+      locale={locale}
+      languageLinks={downloadLocales.map((item) => ({ locale: item, label: downloadCopy[item].label, languageTag: downloadCopy[item].languageTag, href: getDownloadHomeHref(item) }))}
     />
   );
 }
 
 export function SiteFooter() {
-  const websiteUrl = getWebsiteUrl();
-  const docsUrl = trimTrailingSlash(getDocsUrl());
-  const downloadsUrl = trimTrailingSlash(getDownloadsUrl());
+  const locale = useDownloadLocale();
+  const copy = downloadCopy[locale];
+  const websiteUrl = process.env.NEXT_PUBLIC_WEBSITE_URL?.trim() || defaultWebsiteUrl;
+  const docsUrl = trimTrailingSlash(process.env.NEXT_PUBLIC_DOCS_URL?.trim() || defaultDocsUrl);
+  const downloadsUrl = trimTrailingSlash(process.env.NEXT_PUBLIC_DOWNLOADS_URL?.trim() || defaultDownloadsUrl);
   const memberHubUrl = process.env.NEXT_PUBLIC_WHOP_MEMBER_HUB_URL?.trim() || defaultMemberHubUrl;
   const year = new Date().getFullYear();
 
@@ -56,22 +78,22 @@ export function SiteFooter() {
             className="h-7 w-auto"
             unoptimized
           />
-          <h2 className="mt-5 text-lg font-semibold tracking-tight">Need product access or account help?</h2>
+          <h2 className="mt-5 text-lg font-semibold tracking-tight">{copy.footerTitle}</h2>
           <p className="mt-2 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-            Use the same official links across Website, Docs, and Download for onboarding and updates.
+            {copy.footerDescription}
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <a
               href={downloadsUrl}
               className="inline-flex h-11 items-center justify-center rounded-full bg-glitch-orange px-5 text-sm font-medium text-white transition-opacity hover:opacity-90"
             >
-              Download
+              {copy.download}
             </a>
             <a
               href={memberHubUrl}
               className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-300 px-5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900"
             >
-              Member Hub
+              {copy.nav.memberHub}
             </a>
           </div>
         </div>
@@ -80,22 +102,22 @@ export function SiteFooter() {
           <span>© {year} Glitch. All rights reserved.</span>
           <div className="flex flex-wrap gap-6">
             <a href={downloadsUrl} className="hover:text-zinc-700 dark:hover:text-zinc-300">
-              Download
+              {copy.download}
             </a>
-            <a href={installationGuideUrl} className="hover:text-zinc-700 dark:hover:text-zinc-300">
-              Guide
+            <a href={docsPath(docsUrl, locale, "installation-guide-troubleshooting")} className="hover:text-zinc-700 dark:hover:text-zinc-300">
+              {copy.nav.guide}
             </a>
-            <a href={docsUrl} className="hover:text-zinc-700 dark:hover:text-zinc-300">
-              Docs
+            <a href={docsPath(docsUrl, locale)} className="hover:text-zinc-700 dark:hover:text-zinc-300">
+              {copy.nav.docs}
             </a>
-            <a href={websitePath(websiteUrl, "/risk-disclosure")} className="hover:text-zinc-700 dark:hover:text-zinc-300">
-              Risk
+            <a href={websitePath(websiteUrl, "/risk-disclosure", locale)} className="hover:text-zinc-700 dark:hover:text-zinc-300">
+              {copy.risk}
             </a>
-            <a href={websitePath(websiteUrl, "/terms")} className="hover:text-zinc-700 dark:hover:text-zinc-300">
-              Terms
+            <a href={websitePath(websiteUrl, "/terms", locale)} className="hover:text-zinc-700 dark:hover:text-zinc-300">
+              {copy.terms}
             </a>
-            <a href={websitePath(websiteUrl, "/privacy")} className="hover:text-zinc-700 dark:hover:text-zinc-300">
-              Privacy
+            <a href={websitePath(websiteUrl, "/privacy", locale)} className="hover:text-zinc-700 dark:hover:text-zinc-300">
+              {copy.privacy}
             </a>
           </div>
         </div>

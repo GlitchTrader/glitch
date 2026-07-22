@@ -1,4 +1,4 @@
-"""Public installation-guide localization and release contracts."""
+"""Public documentation localization and release contracts."""
 
 import unittest
 from pathlib import Path
@@ -17,6 +17,25 @@ GUIDES = {
     "ru": DOCS_ROOT / "installation-guide-troubleshooting.ru.md",
 }
 
+PUBLIC_DOCS = (
+    "installation-guide-troubleshooting",
+    "architecture",
+    "addon",
+    "indicator",
+    "data-flow-and-bridge",
+    "persistence",
+    "api-reference",
+)
+
+LOCALE_SUFFIXES = {
+    "en": "",
+    "pt": ".pt",
+    "es": ".es",
+    "zh": ".zh",
+    "fr": ".fr",
+    "ru": ".ru",
+}
+
 LANGUAGE_HREFS = {
     "en": "/installation-guide-troubleshooting",
     "pt": "/pt/installation-guide-troubleshooting",
@@ -28,6 +47,7 @@ LANGUAGE_HREFS = {
 
 REQUIRED_TOKENS = (
     "v0.0.2.0",
+    "v0.0.2.2",
     "https://download.glitchtrader.com/latest",
     "https://download.glitchtrader.com/latest/ai",
     "github.com/GlitchTrader/glitch-hermes-profile",
@@ -53,6 +73,14 @@ REQUIRED_TOKENS = (
 
 
 class LocalizedInstallationGuideTests(unittest.TestCase):
+    def test_every_public_document_has_all_six_locales(self):
+        for slug in PUBLIC_DOCS:
+            for locale, suffix in LOCALE_SUFFIXES.items():
+                path = DOCS_ROOT / f"{slug}{suffix}.md"
+                with self.subTest(slug=slug, locale=locale):
+                    self.assertTrue(path.is_file(), f"missing localized document: {path}")
+                    self.assertGreater(len(path.read_text(encoding="utf-8")), 300)
+
     def test_every_supported_locale_has_a_complete_guide(self):
         for locale, path in GUIDES.items():
             with self.subTest(locale=locale):
@@ -72,15 +100,16 @@ class LocalizedInstallationGuideTests(unittest.TestCase):
     def test_docs_app_publishes_localized_routes_and_hreflang(self):
         locale_source = (DOCS_APP / "lib/docs-locales.ts").read_text(encoding="utf-8")
         localized_route = (
-            DOCS_APP / "app/[locale]/installation-guide-troubleshooting/page.tsx"
+            DOCS_APP / "app/[locale]/[slug]/page.tsx"
         ).read_text(encoding="utf-8")
         canonical_route = (DOCS_APP / "app/[slug]/page.tsx").read_text(encoding="utf-8")
         sitemap = (DOCS_APP / "app/sitemap.ts").read_text(encoding="utf-8")
 
         self.assertIn('["en", "pt", "es", "zh", "fr", "ru"]', locale_source)
-        self.assertIn("getInstallationGuideLanguages", localized_route)
-        self.assertIn("getInstallationGuideLanguages", canonical_route)
-        self.assertIn("getInstallationGuideHref", sitemap)
+        self.assertIn("getDocLanguages", localized_route)
+        self.assertIn("getDocLanguages", canonical_route)
+        self.assertIn("getDocsHref", sitemap)
+        self.assertIn("getDocSummaries(locale)", sitemap)
 
     def test_canonical_guide_describes_both_editions_without_readiness_claims(self):
         text = GUIDES["en"].read_text(encoding="utf-8")

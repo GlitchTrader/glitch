@@ -1,292 +1,130 @@
-# Glitch Operating System — First Principles & Rail
+# Glitch AI Operating Rail
 
-**Audience:** private maintainers and agents only.  
-**Author:** operator + Cursor · 2026-07-09  
-**Doctrine:** ABKB evidence ladder · Ponytail · north-star · prime invariant.
+**Audience:** private maintainers and agents
+**Reconciled:** 2026-07-22
 
-```text
-Hermes proposes. Glitch validates, executes, journals, and protects.
-```
-
-**Version shorthand (labels only, not schedule):** v19 = v0.0.1.9 (baseline) · v20 = v0.0.2.0 · v30 = v0.0.3.0.
-
-**Baseline:** v0.0.1.9 shipped — Trust + stable + non-AI operator. Ledger pruned; all new work is R01+.
-
-**Branching:** R01+ **product code** on `glitch/ai-rail`; `main` = v0.0.1.x patches + user downloads only. See `docs/ledger/branching.md`.
-
-Duration is **open**. Advance the rail on **evidence**, not calendar. Parallelize compute wherever steps are read-only.
-
----
-
-## 1. What we are building (first principles)
-
-We already have ~95% of the substrate:
+## Prime invariant
 
 ```text
-Glitch ingests markets · risk-assesses · replicates · journals
+Hermes decides.
+Glitch validates factual executability, protects, executes, replicates, reconciles, and journals.
+NinjaTrader owns native account, order, execution, OCO, and position truth.
+Codex builds and verifies code; it is not in the trading loop.
 ```
 
-The operating system **uses these systems to build the system that runs Glitch**:
-
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│ NinjaTrader 8 + GlitchAnalyticsBridge + GlitchAddOn             │
-│   deterministic: compliance · replication · ledger · firewall   │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │ writes
-                            ▼
-              ┌─────────────────────────────┐
-              │  MARKET snapshot (file)      │  instruments, prices,
-              │  PORTFOLIO snapshot (file)   │  groups, accounts, risk
-              └─────────────┬───────────────┘
-                            │ same schema for historical export
-                            ▼
-              ┌─────────────────────────────┐
-              │  Hermes operator bundle        │
-              │   · snapshots                  │
-              │   · prop firm rules / account    │
-              │   · memory + mined patterns      │
-              │   · skills (full kit)            │
-              │   · instructions                 │
-              │   · output format (Intent v2)    │
-              └─────────────┬───────────────┘
-                            │ POST intent (when armed)
-                            ▼
-              ┌─────────────────────────────┐
-              │  Glitch firewall → execute     │
-              │  journal → feedback loop       │
-              └─────────────────────────────┘
-```
-
-**That is the whole system.** No second trading platform. No LLM with NT credentials.
-
-### 1.1 Market snapshot (what Hermes sees about the tape)
-
-Per instrument (multi-asset), per export tick:
-
-```text
-instrument root · timestamp · price / OHLC / volume
-timeframes: 1m · 5m · 15m · 60m · 4h · 12h · 24h (extend bridge only as needed)
-session high/low · previous session high/low
-raw indicators · normalized indicators · Glitch score / components
-regime · trend · volatility · order flow (when enabled)
-no_trade_reasons
-schema_version · snapshot_id · snapshot_hash · provenance
-```
-
-Prefer **one chart / one bridge instance** feeding multiple instruments via `BarsInProgress` / `AddData` before asking the operator to open many charts. Multiple charts is acceptable when NT requires it.
-
-### 1.2 Portfolio snapshot (what Hermes sees about the book)
-
-```text
-groups · accounts · connection state
-positions · working orders · sizes
-realized / unrealized PnL (commission-true)
-drawdown · buffer remaining · lock state
-prop firm id · tier · encoded rules version
-risk levels · compliance flags
-```
-
-### 1.3 Hermes operator input bundle
-
-Each decision cycle, Hermes receives:
-
-| Input | Source |
-|-------|--------|
-| Latest market + portfolio snapshots | Glitch file export and/or localhost telemetry |
-| Prop firm rules | Per account or group, from `PropFirmRules.json` + ComplianceEngine |
-| Memory + patterns | Hermes store + mined archetypes from historical/replay corpus |
-| Skills | Full Hermes kit: portfolio mgmt, sentiment, calculus, scripts, web search, trading skills |
-| Instructions | `10_hermes_operator_contract.md` + versioned prompt/policy |
-| Output format | Intent v2 JSON — mandatory SL + TP1, optional TP2/SL2 |
-
-### 1.4 Learning loops (three compounding sources)
-
-```text
-1. Market data + patterns     → archetypes, regime filters, setup ranking
-2. Trades + lessons           → journal round-trips, intent→outcome correlation
-3. Portfolio + risk over time → drawdown behavior, sizing, fleet coordination
-```
-
-Historical export **must use the same schema** as live snapshots so mining transfers to the operator.
-
----
-
-## 2. Operator economics (anti–fail-slow)
-
-```text
-Fail fast many times     = good   (~$17 eval + tokens + lessons)
-Pay tokens to build/test/mine = good
-Stall on dev / test / trade   = bad
-
-Fail slow into $600 renewal while halfway = worst outcome
-→ prefer cancel · pay $17 · fresh eval · apply lessons
-```
-
-Sunk-cost logic is **inverted**: paying to keep a stalled eval is worse than blowing it cheap and restarting with a better system.
-
-**Preferred trajectory (compute-limited, not calendar-limited):**
-
-```text
-~3 days build rail through snapshots + exporter
-~7 days train/mine/replay/paper in parallel (agent sessions)
-~7–15 days live eval sprint when evidence green
-```
+The goal is an adaptive cognitive operator inside a deterministic operational harness. The harness must not become a hidden strategy engine.
 
-No self-sabotage: do not cap the live eval at paper-survival dollars/day when the goal is **$15k pass on $250k eval**. Use **prop-encoded limits** tightened by Glitch, paced toward target — not arbitrary timidity.
+## Shipped experimental state
 
----
+- AI AddOn: **v0.0.2.2**, source `2975b2e4070af118d7e752ca7566aa2353647ccf`.
+- Public Hermes profile: **v0.0.2.4**.
+- Distribution: local customer profile installed and updated from `GlitchTrader/glitch-hermes-profile`.
+- Exactly two jobs: minute `glitch-direct-operator` and 15-minute `glitch-learning-supervisor`.
+- Entry type: MARKET only. A safe pending LIMIT lifecycle is deferred.
+- AI authority: configured Glitch group master only. CopyEngine owns followers and ratios.
+- Status: Experimental. No profitability, unattended-operation, or PA/live-readiness claim.
 
-## 3. Roles & parallel lanes
+## Cognitive authority
 
-| Lane | Owner | Rail steps |
-|------|-------|------------|
-| **Glitch build** | Cursor | R01–R05, R08–R16, R22 |
-| **Hermes ingest/mine** | Hermes + parallel agent sessions | R06, R07, R11+ (can start at R05) |
-| **Live verify** | Operator | F5, GL-041, account enable |
-| **Architecture** | Fable | contract changes only |
+Hermes owns:
 
-**Parallel now:** R06 pattern mining on `Glitch-Collab` + historical exports does not wait for R16 live trading.
+- direction, thesis, entry timing, master quantity, and target/stop geometry;
+- whether to use one protected leg, multiple native TP legs, reserve capacity, or add a later protected tranche;
+- HOLD, NOTHING, EXIT, MOVE_STOP, MOVE_TP, and same-direction protected additions;
+- whether a stop should tighten or fall back when current evidence and account capacity support it;
+- trade debriefs, hypotheses, proposed guidance, contradiction review, and cognitive overlays.
 
----
+Glitch must not encode fixed quantities, stop distances, risk percentages, target formulas, setup archetypes, trade quotas, winners-only additions, grid, or martingale behavior.
 
-## 4. The rail (one step after another)
+## Deterministic boundary
 
-Advance when the step’s **acceptance** is met. Skip nothing in §4.5 safety. Labels map to version bands for packaging only.
+Glitch may reject an intent only for evidence-backed operational reasons:
 
-### Phase A — Observe (read-only)
+- AI Auto/policy/account/group authority is invalid;
+- schema, identity, idempotency, ownership, or native state is invalid or ambiguous;
+- requested quantity exceeds the authoritative master contract ceiling;
+- an entry or addition lacks complete native protection;
+- prices are not tick-valid or are on the wrong protective/profit side of live price;
+- complete stated-stop downside reaches or exceeds the authoritative Apex Legacy liquidation buffer;
+- execution, replication, or session state cannot be proven safe.
 
-| Step | Label | Work | Acceptance |
-|------|-------|------|------------|
-| **R01** | v20 | `GlitchInstrumentMetadataService` — point value, tick size, session from `MasterInstrument`; kill F2 silent fallback | Unknown instrument errors visibly; MNQ/NQ comparable |
-| **R02** | v20 | Multi-asset bridge normalization; prefer single-chart `AddData` | ≥2 roots publish normalized readings; Analytics selector works |
-| **R03** | v21 | **Market snapshot** writer → `GlitchData/snapshots/market/` | Valid JSON; schema versioned; all required TFs for active set |
-| **R04** | v21 | **Portfolio snapshot** writer → `GlitchData/snapshots/portfolio/` | Accounts, positions, PnL net of commission, rules version |
-| **R05** | v21 | Historical exporter — **same schema** as R03/R04 | Replay file validates; Hermes ingests without transform |
-| **R06** | H-1 | **Parallel:** pattern mining, backtest harness, archetype docs | Ranked setups with evidence; seed Hermes memory |
-| **R07** | v21 | `GlitchExternalTelemetryServer` (localhost GET) — optional if files suffice | Schema-valid GET `/snapshot`; bearer auth; off UI thread |
+Ordinary movement between snapshot and live price is not a thesis veto. Followers and user ratios never constrain Hermes’s master sizing decision; follower-local validation applies when CopyEngine executes each route.
 
-### Phase B — Propose (paper only)
+Risk-reducing actions remain available when entry-grade data is unavailable. A stop-widening request requires fresh authoritative Apex state and a recomputation of downside across all remaining protected quantity. Unsafe widening changes no order.
 
-| Step | Label | Work | Acceptance |
-|------|-------|------|------------|
-| **R08** | v22 | `GlitchAiIntentServer` POST `/intent` — **no executor registered** | 100% intents journaled; zero `CreateOrder` in path |
-| **R09** | v22 | `GlitchAiRiskFirewall` — 15-step chain | Adversarial intents rejected with per-check journal |
-| **R10** | v22 | `GlitchAiJournalBridge` — intent ↔ snapshot_hash ↔ verdict | Round-trip reconstructable from journal alone |
-| **R11** | v22 | Hermes `suggest_trade` → paper endpoint | End-to-end propose without execution |
+## Intent contract
 
-**Gate:** GL-024 commission-true journal before Hermes learns from outcomes.
+`glitch.intent.v3` is current; compatible v2 entry/no-op/hold/exit remains accepted.
 
-### Phase C — Execute sim
+- Entry legs are independently valid. There is no target ordering or progressively tighter-stop rule.
+- Stable Glitch `leg_id` values identify AI-owned native protection without exposing broker order IDs.
+- `MOVE_STOP` v3 updates selected legs through `protection_updates`.
+- `MOVE_TP` v3 updates selected targets and may update the corresponding stop in the same request.
+- Unspecified legs remain unchanged.
+- Legacy v2 global MOVE_STOP remains compatible.
+- Legacy v2 MOVE_TP is accepted only when one target remains; ambiguous multi-target changes fail safely.
 
-| Step | Label | Work | Acceptance |
-|------|-------|------|------------|
-| **R12** | v23 | `GlitchAiOrderExecutor` Sim101 — bracket-mandatory, `GlitchAI*` signals | Zero naked entries; attach failure ⇒ entry cancelled |
-| **R13** | v23 | Replay harness — archetypes vs baseline on Eval risk profile | ≥1 archetype beats baseline on replay evidence |
+## Minute publication and decision cadence
 
-**Gate:** R08–R11 clean (zero firewall bypasses, zero schema drift rejects) — **session count, not weeks**.
+One authoritative minute publisher owns market and portfolio publication:
 
-### Phase D — Execute live (fail-fast friendly)
+1. Retry a minute until both snapshots and its frame exist.
+2. Mark the minute complete only after the paired frame is present.
+3. Build packets from the five latest complete frames.
+4. Publish continuity, observed span, and missing-minute metadata; a gap is evidence, not a packet blackout.
 
-| Step | Label | Work | Acceptance |
-|------|-------|------|------------|
-| **R14** | — | **GL-041** Honest Copy live verification | Protocol §7 green |
-| **R15** | v24 | Eval allowlist + **Eval Sprint profile** (prop-paced) | Rules match firm; firewall stricter than prop |
-| **R16** | v24 | Live Hermes loop on **one** eval; kill switch | Brackets NT-held; unauthorized trade impossible |
-| **R17** | — | Blow → journal → $17 restart | Lesson doc exists; not a silent bug |
+Decision cadence:
 
-**Eval Sprint profile (live pass pacing, not paper timidity):**
+- flat: first available packet at least five elapsed minutes after the last attempt;
+- positioned: every new packet;
+- after model, contract, transport, delivery, firewall, or executor failure: next available packet;
+- transport uncertainty reuses the idempotent outbox; terminal rejection requests a new decision.
 
-```text
-Encode prop rules for ~$250k eval: $15k target · $6.5k max loss
-Track buffer remaining; auto-disable AI at operator-set fraction (e.g. 50% buffer consumed)
-Per-trade risk from bracket geometry × point value — sized for pass pace, not $100 toy cap
-Max concurrent AI positions per account: start 1; scale on evidence
-No pyramiding · no averaging down · no stop widening
-```
+Every model call uses the trading session and exact output template. One bounded repair is allowed for malformed learning output; repeated failure remains unprocessed evidence for a later cycle.
 
-### Phase E — Compound (M1 → M3)
+## Crash and window continuity
 
-| Step | Label | Work | Acceptance |
-|------|-------|------|------------|
-| **R18** | v25 | Confidence gating + no-trade reason respect | Churn down; PnL/trade flat or up |
-| **R19** | v26 | `ADJUST_STOP` tighten-only · `PARTIAL_EXIT` · optional 1m exit cadence | Widening attempts always rejected |
-| **R20** | v27 | Fleet: 2–3 evals; portfolio open-risk; correlation guard | Cap breach blocks intent |
-| **R21** | v28 | Shadow model + VPS 24/7 runbook | Shadow journaled; soak without stuck handoffs |
-| **R22** | v29 | Self-heal: sanity fail → disable AI; schema drift → paper; fault → degrade | Injected faults recover without code deploy |
-| **R23** | v30 | Self-learn: promotion gate; versioned policy candidates | Promotion beats baseline on replay; audit trail |
+- Direct and learning locks store PID and start time. Dead owners are replaced immediately; unreadable locks get only bounded grace.
+- Per-intent state advances atomically: `received -> approved/rejected -> execution_started -> executed/failed`.
+- The UUID is claimed before firewall/execution. Same UUID/same content returns the stored result; same UUID/different content conflicts.
+- Restart recovery reconciles native signal identity and journals. Ambiguous entries are never blindly resubmitted.
+- Closing the Glitch window hides the retained runtime instance. Snapshot publication, account refresh, risk mitigation, reconciliation, daily-close enforcement, and local servers continue until AddOn replacement or NinjaTrader termination.
 
-**Milestone names (M0–M3)** remain in `glitch_hermes_docs/docs/05_milestones_m0_m3.md`; this rail is the **implementation order**.
+## Learning rail
 
----
+The learning supervisor batches evidence instead of calling a model for every decision:
 
-## 4.5 Safety invariants (never “move fast” past these)
+- trade outcomes and management history;
+- flat NOTHING decisions;
+- rejected or non-executed entries and amendments;
+- five subsequent complete frames for decision episodes;
+- hourly supervision, 300-minute planning, and completed-session daily journals.
 
-- Hermes has no order API, no NT credentials.
-- Every ENTER: SL + TP1; NT OCO; AI never manages loss mid-flight.
-- Glitch firewall runs before any order; failure ⇒ no order.
-- GL-041 before live eval AI.
-- Replication path and AI path stay separate.
+Every episode joins its immutable pre-decision packet through `cycle_id` and preserves uncertainty. Infrastructure faults are code evidence and never become trading strategy memory.
 
----
+Cognitive overlays follow a staged path: propose from evidence, confirm or contradict with later independent evidence, then activate/revise/rollback. Hermes cannot rewrite installed SOUL, skills, policy, groups, or execution code directly.
 
-## 5. Hermes cron (when armed)
+## Health and reconciliation
 
-| Job | Cadence | LLM |
-|-----|---------|-----|
-| market + portfolio snapshot flush | 1 min | no |
-| snapshot_sanity | 5 min | no |
-| suggest_trade | 5 min | yes |
-| portfolio_risk_review | 1 hr | optional |
-| learning_pass | 6 hr | yes |
-| daily_learning | post-session | yes |
+Health is observational, not a strategy veto. It reports operating, packet, decision-worker, and learning-worker status separately, with reason codes, continuity/age, selected-master state, policy, servers, and feed freshness.
 
-Cron first. Daemon only if cron fails a measured need.
+Outcome reconciliation is cross-process locked and atomically replaced. Only newline-complete JSONL records are consumed; malformed completed records fail visibly and never overwrite good evidence.
 
----
+## Open stop lines
 
-## 6. Ponytail — do not build
-
-- Public telemetry/intent endpoints.
-- AI inside replication engine.
-- Separate live vs historical snapshot shapes.
-- Martingale / buffer-chase logic.
-- Calendar gates (“wait 2 weeks”) — use evidence gates.
-- Extra indicators before bridge truth is exported.
-- Always-on Hermes microservice platform.
-
----
-
-## 7. Version labels (packaging map)
-
-| Versions | Rail steps | Outcome name |
-|----------|------------|--------------|
-| v0.0.2.0 | R01–R02 | Eyes |
-| v0.0.2.1 | R03–R07 | Voice |
-| v0.0.2.2 | R08–R11 | Ears |
-| v0.0.2.3 | R12–R13 | Hands-sim |
-| v0.0.2.4 | R14–R17 | Hands-eval |
-| v0.0.2.5–v0.0.2.9 | R18–R21 | Filter → Shadow |
-| v0.0.3.0 | R22–R23 | Learn |
-
----
-
-## 8. Active pointer
-
-**Next step:** R01 — instrument metadata + multi-asset bridge (GL-025, GL-026).
-
-**Parallel:** R06 — mine `Glitch-Collab` / historical exports in separate Hermes sessions now.
-
-**Blocker check:** GL-041 status before R16.
-
----
-
-## References
-
-- `docs/ledger/north-star.md`
-- `docs/ai-program/roadmap.md`
-- `docs/ledger/backlog.md`
-- `glitch_hermes_docs/docs/09_intent_contract_v2_brackets.md`
-- `glitch_hermes_docs/docs/10_hermes_operator_contract.md`
-- `glitch_hermes_docs/docs/11_snapshot_ingestion_learning_pipeline.md`
-- `docs/ai-program/tradovate-apex-instrument-universe.md`
+- Runtime-prove per-leg amendments, distinct additions, safe widening, unsafe zero-mutation rejection, follower mirroring, and final flat/order-free state.
+- Prove hidden-window continuity and crash recovery in bounded Sim.
+- Complete authoritative holiday/special-close coverage before unattended PA/live claims.
+- Accumulate a frozen, reconciled performance sample before changing cognition or claiming improvement.
+- Add LIMIT only through a separate place/cancel/replace/expiry/partial-fill/protection/replication/restart contract.
+
+## Do not build
+
+- a centralized recommendation service as a substitute for the distributed Hermes profile;
+- a second replication engine or follower logic in Hermes;
+- a deterministic strategy disguised as risk validation;
+- per-decision learning calls;
+- a pending LIMIT branch without its complete lifecycle;
+- code that lets health status silently veto a valid cognitive decision.
+
+Current work and acceptance live in `docs/ledger/now.md` and `docs/ledger/backlog.md`. Historical R01-R23 labels remain provenance, not current status authority.
