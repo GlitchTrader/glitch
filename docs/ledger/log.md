@@ -23,13 +23,21 @@ Append-only operator log. Newest first.
   envelopes with trading-intent envelopes. The existing single repair remains.
 - Verification passes 41 shared and 128 AI/Hermes contracts (169 total), tracked
   Python, PowerShell, and JSON parsing, localization, secret, and diff integrity
-  gates. The installed profile preserves auth, environment, memories, sessions,
-  job IDs, schedules, and prior enabled state; all 25 distribution hashes match.
+  gates. The installed public profile `0.0.2.3` preserves auth, environment,
+  memories, sessions, job IDs, schedules, and prior enabled state; all 26
+  distribution hashes match.
   The complete 87-file AddOn deployed once with exact source/live parity. The
   compiled `Glitch_AI_v0.0.2.1` export identifies assembly version `0.0.2.1`,
   omits the removed veto code, and retains structural-price and Apex survival
   failures. AI Auto, replication, the supervised gateway, and both preserved jobs
   were restored ON after export.
+- Public-origin verification exposed two Windows-specific Hermes distribution
+  defects: Git checkout converted text bytes after the manifest was generated,
+  and Hermes copied a read-only temporary `.git` pack into the installed profile.
+  The profile now ships `* -text`, normalizes generated files before hashing, and
+  removes only installer-owned Git metadata during setup. A real
+  `hermes profile update glitch` from GitHub then completed at `0.0.2.3`, setup
+  passed, `.git` was absent afterward, and AI Auto/jobs/gateway returned ON.
 
 ## 2026-07-21 - adaptive position building and staged learning candidate
 

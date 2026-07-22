@@ -152,9 +152,11 @@ Glitch Flatten All remain authoritative.
   `skipped/no_op_action`; all nine accounts remained flat with zero working
   orders before and after. AI Auto and both Hermes jobs were restored ON.
 - The installed Hermes SOUL, operator map, plugin, five runtime scripts, and 13
-  Glitch skill files match the `0.0.2.1` staged distribution; all 25 manifest
-  hashes reproduce. Authentication, environment, memory, and session digests
-  survived the native profile update unchanged. Exactly two no-agent jobs are enabled:
+  Glitch skill files match public distribution `0.0.2.3`; all 26 manifest hashes
+  reproduce. GitHub is the recorded update origin, the native repeat-update path
+  is proven, and installer-owned Git metadata is absent. Authentication,
+  environment, memory, and session digests survived unchanged. Exactly two
+  no-agent jobs are enabled:
   `glitch-direct-operator` at `* * * * *` and non-executing
   `glitch-learning-supervisor` at `*/15 * * * *`. The latter now launches its
   separately locked worker and returned in 145 ms during an installed no-model
