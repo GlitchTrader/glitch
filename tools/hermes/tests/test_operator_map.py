@@ -33,7 +33,9 @@ class OperatorMapTests(unittest.TestCase):
         setup = (profile / "setup.ps1").read_text(encoding="utf-8")
         builder = (ROOT / "tools/hermes/build-public-profile.ps1").read_text(encoding="utf-8")
 
-        self.assertIn("version: 0.0.2.1", distribution)
+        self.assertIn("version: 0.0.2.2", distribution)
+        self.assertEqual((profile / ".gitattributes").read_text(encoding="utf-8"), "* -text\n")
+        self.assertIn("'.gitattributes'", builder)
         self.assertIn('hermes_requires: \">=0.18.2\"', distribution)
         self.assertNotRegex(config, r"(?i)[a-z]:\\")
         self.assertIn("$preserveEnabled = $false", setup)

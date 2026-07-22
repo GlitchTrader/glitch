@@ -15,7 +15,7 @@ if (-not (Test-Path -LiteralPath $target -PathType Container)) {
 }
 
 $allowedTopLevel = @(
-    '.git', '.gitignore', 'distribution.yaml', 'SOUL.md', 'operator.json',
+    '.git', '.gitattributes', '.gitignore', 'distribution.yaml', 'SOUL.md', 'operator.json',
     'config.yaml', 'skills', 'plugins', 'scripts', 'setup.ps1', 'README.md', 'SHA256SUMS'
 )
 $unexpected = @(Get-ChildItem -LiteralPath $target -Force | Where-Object { $_.Name -notin $allowedTopLevel })
@@ -31,7 +31,7 @@ foreach ($directoryName in @('skills', 'plugins', 'scripts')) {
     New-Item -ItemType Directory -Path $directoryPath | Out-Null
 }
 
-foreach ($name in @('distribution.yaml', 'operator.json', 'config.yaml', 'setup.ps1', 'README.md', '.gitignore')) {
+foreach ($name in @('distribution.yaml', 'operator.json', 'config.yaml', 'setup.ps1', 'README.md', '.gitattributes', '.gitignore')) {
     Copy-Item -LiteralPath (Join-Path $sourceRoot $name) -Destination (Join-Path $target $name) -Force
 }
 Copy-Item -LiteralPath (Join-Path $sourceRoot 'profiles\glitch\SOUL.md') -Destination (Join-Path $target 'SOUL.md') -Force
@@ -57,8 +57,11 @@ if ($scriptCount -ne 5) { throw "Expected five worker scripts; found $scriptCoun
 $textFiles = @(Get-ChildItem -LiteralPath $target -Recurse -File -Force | Where-Object {
     $_.Name -ne 'SHA256SUMS' -and $_.FullName -notlike (Join-Path $target '.git\*')
 })
+$utf8NoBom = [Text.UTF8Encoding]::new($false)
 foreach ($file in $textFiles) {
     $content = [IO.File]::ReadAllText($file.FullName)
+    $content = $content.Replace("`r`n", "`n").Replace("`r", "`n")
+    [IO.File]::WriteAllText($file.FullName, $content, $utf8NoBom)
     foreach ($forbidden in @('(?i)[A-Z]:\\Users\\', '(?i)D:\\ab\\', '(?i)api[_-]?key\s*[:=]\s*\S+', '(?i)bearer\s+[A-Za-z0-9_-]{12,}')) {
         if ($content -match $forbidden) {
             throw "Public profile contains forbidden machine or credential material in $($file.FullName): $forbidden"
@@ -76,7 +79,7 @@ foreach ($file in $hashFiles | Sort-Object FullName) {
 [IO.File]::WriteAllText(
     (Join-Path $target 'SHA256SUMS'),
     (($manifestLines -join "`n") + "`n"),
-    [Text.UTF8Encoding]::new($false))
+    $utf8NoBom)
 
 $parseErrors = $null
 [System.Management.Automation.Language.Parser]::ParseFile(
@@ -97,7 +100,7 @@ if ($unexpectedAfter.Count -gt 0) { throw "Public profile gained unexpected path
 [ordered]@{
     schema_version = 'glitch.hermes.public_profile_build.v1'
     target = $target
-    version = '0.0.2.1'
+    version = '0.0.2.2'
     skills = $skillCount
     scripts = $scriptCount
     files = $textFiles.Count + 1
