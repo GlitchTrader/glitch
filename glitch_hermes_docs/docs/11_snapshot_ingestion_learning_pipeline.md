@@ -142,6 +142,8 @@ Mode: Hermes cron, preferably script-assisted with bounded LLM reasoning only wh
 
 Cadence: debrief new completed master outcomes every 15 minutes; review accumulated episodes every 1 hour.
 
+Each completed entry is joined by `cycle_id` to its immutable pre-decision packet. The debrief carries the selected and available quantities, pre-entry position and complete native protection, initial-entry or addition classification, every target leg and stop, planned downside by leg and in total, realized PnL, per-contract and planned-risk-normalized MAE/MFE, all management decisions, and the actual exit reason. Missing attribution remains unresolved evidence rather than becoming a lesson.
+
 Purpose:
 
 ```text
@@ -176,7 +178,7 @@ The plan guides later cognition; it is not an execution gate. Any authority-chan
 
 Mode: Hermes cron.
 
-Cadence: daily after the trading session.
+Cadence: catch up every completed Apex session that contains unjournaled episodes. A missed invocation is processed later exactly once rather than depending on an exact wall-clock minute.
 
 Purpose:
 
@@ -190,7 +192,7 @@ set evidence-backed targets and questions for tomorrow
 prepare candidate lessons for review
 ```
 
-The daily journal is how Hermes learns like a trader without rewriting Glitch policy silently. It preserves uncertainty and contradictory evidence instead of forcing every observation into a rule.
+The daily journal is how Hermes learns like a trader without rewriting Glitch policy silently. It preserves uncertainty and contradictory evidence instead of forcing every observation into a rule. Malformed or schema-invalid learning output receives one bounded repair attempt using the exact template and validation error; a second failure leaves the evidence unprocessed for a later cycle.
 
 ## Multi-instrument support
 
@@ -303,7 +305,7 @@ unreviewed auto-policy updates
 separate central/client schemas
 ```
 
-Activate the 15-minute debrief, hourly supervision, 300-minute planning, and daily learning only from attributable master outcomes. Hermes may test one versioned cognitive overlay at a time in paper mode; later episodes must promote, revise, or roll it back. The complete cognitive and authority map is `12_hermes_trading_skills_and_knowledge.md`.
+Activate the 15-minute debrief, hourly supervision, 300-minute planning, and daily learning only from attributable master outcomes. Plans and advisory guidance become usable immediately. A cognitive overlay is first staged as a proposal with no trading influence; a later independent supervisory decision may activate it only from later comparable evidence after contradiction review, and subsequent evidence must continue, promote, revise, or roll it back. The complete cognitive and authority map is `12_hermes_trading_skills_and_knowledge.md`.
 
 ## Optional Kanban learning layer (deferred)
 

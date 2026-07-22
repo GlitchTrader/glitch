@@ -171,6 +171,102 @@ namespace Glitch.Services
             return true;
         }
 
+        public static bool TryComputeOwnedProtectedDownsideUsdFromAccountBlock(
+            string accountJson,
+            string instrumentRoot,
+            double currentPrice,
+            double pointValue,
+            out double protectedDownsideUsd,
+            out string failure)
+        {
+            protectedDownsideUsd = 0;
+            failure = null;
+            if (string.IsNullOrWhiteSpace(accountJson)
+                || string.IsNullOrWhiteSpace(instrumentRoot)
+                || currentPrice <= 0
+                || pointValue <= 0)
+            {
+                failure = "protection_inputs_invalid";
+                return false;
+            }
+
+            if (!TryGetOpenPositionQuantityFromAccountBlock(accountJson, instrumentRoot, out int signedQuantity))
+            {
+                failure = "portfolio_positions_invalid";
+                return false;
+            }
+
+            if (!TryGetObjectBlocks(accountJson, "working_order_details", out List<string> orders))
+            {
+                failure = "working_order_details_missing";
+                return false;
+            }
+
+            int expectedCoverage = Math.Abs(signedQuantity);
+            int stopCoverage = 0;
+            int targetCoverage = 0;
+            string root = instrumentRoot.Trim().ToUpperInvariant();
+            foreach (string orderJson in orders)
+            {
+                string orderInstrument = GlitchAiJsonFields.ExtractString(orderJson, "instrument_root");
+                string name = GlitchAiJsonFields.ExtractString(orderJson, "name") ?? string.Empty;
+                if (!string.Equals(orderInstrument, root, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                bool isStop = name.StartsWith(GlitchAiOrderExecutor.SignalStop + "-", StringComparison.OrdinalIgnoreCase);
+                bool isTarget = name.StartsWith(GlitchAiOrderExecutor.SignalTarget + "-", StringComparison.OrdinalIgnoreCase);
+                if (!isStop && !isTarget)
+                    continue;
+
+                if (!GlitchAiJsonFields.TryExtractNumber(orderJson, "quantity", out double quantity)
+                    || !GlitchAiJsonFields.TryExtractNumber(orderJson, "filled", out double filled))
+                {
+                    failure = "owned_protection_quantity_invalid";
+                    return false;
+                }
+                double remaining = quantity - filled;
+                int remainingQuantity = (int)Math.Round(remaining, MidpointRounding.AwayFromZero);
+                if (remaining <= 0 || Math.Abs(remaining - remainingQuantity) > 0.0000001d)
+                {
+                    failure = "owned_protection_quantity_invalid";
+                    return false;
+                }
+
+                if (isTarget)
+                {
+                    targetCoverage += remainingQuantity;
+                    continue;
+                }
+
+                if (!GlitchAiJsonFields.TryExtractNumber(orderJson, "stop_price", out double stopPrice)
+                    || stopPrice <= 0)
+                {
+                    failure = "owned_stop_price_invalid";
+                    return false;
+                }
+                double points = signedQuantity > 0 ? currentPrice - stopPrice : stopPrice - currentPrice;
+                if (expectedCoverage > 0 && points <= 0)
+                {
+                    failure = "owned_stop_not_on_loss_side";
+                    return false;
+                }
+                stopCoverage += remainingQuantity;
+                protectedDownsideUsd += Math.Max(0, points) * pointValue * remainingQuantity;
+            }
+
+            if (stopCoverage != expectedCoverage || targetCoverage != expectedCoverage)
+            {
+                failure = "owned_protection_incomplete"
+                    + "|expected=" + expectedCoverage.ToString(CultureInfo.InvariantCulture)
+                    + "|stops=" + stopCoverage.ToString(CultureInfo.InvariantCulture)
+                    + "|targets=" + targetCoverage.ToString(CultureInfo.InvariantCulture);
+                protectedDownsideUsd = 0;
+                return false;
+            }
+
+            return true;
+        }
+
         private static bool TryGetAccountBlockFromJson(string json, string accountName, out string accountJson)
         {
             accountJson = null;
@@ -210,33 +306,38 @@ namespace Glitch.Services
 
         private static bool TryGetPositionBlocks(string accountJson, out List<string> positions)
         {
-            positions = new List<string>();
-            string positionsArray;
-            if (!TryExtractArray(accountJson, "positions", out positionsArray))
+            return TryGetObjectBlocks(accountJson, "positions", out positions);
+        }
+
+        private static bool TryGetObjectBlocks(string json, string key, out List<string> values)
+        {
+            values = new List<string>();
+            string array;
+            if (!TryExtractArray(json, key, out array))
                 return false;
 
             int index = 1;
-            int limit = positionsArray.Length - 1;
+            int limit = array.Length - 1;
             while (index < limit)
             {
-                while (index < limit && char.IsWhiteSpace(positionsArray[index]))
+                while (index < limit && char.IsWhiteSpace(array[index]))
                     index++;
                 if (index >= limit)
                     break;
-                if (positionsArray[index] != '{')
+                if (array[index] != '{')
                     return false;
 
-                int objectEnd = FindMatchingBrace(positionsArray, index);
+                int objectEnd = FindMatchingBrace(array, index);
                 if (objectEnd < 0)
                     return false;
-                positions.Add(positionsArray.Substring(index, objectEnd - index + 1));
+                values.Add(array.Substring(index, objectEnd - index + 1));
 
                 index = objectEnd + 1;
-                while (index < limit && char.IsWhiteSpace(positionsArray[index]))
+                while (index < limit && char.IsWhiteSpace(array[index]))
                     index++;
                 if (index >= limit)
                     break;
-                if (positionsArray[index] != ',')
+                if (array[index] != ',')
                     return false;
                 index++;
             }

@@ -26,7 +26,7 @@ All loops belong to the same `glitch` profile and share native Hermes memory, bo
 | Portfolio supervision | hourly | `gpt-5.6-sol`, high | Is exposure, performance, risk posture, or system health drifting? | Review, bounded self-heal, and plan recommendations; no order |
 | Trade debrief | every 15 minutes when new outcomes exist | `gpt-5.6-sol`, high | Why did each master trade enter and exit; what did geometry, quantity, and management teach? | Append-only master episode; no order authority |
 | Portfolio planning | every 300 minutes with new reviews | `gpt-5.6-sol`, high | Given today’s progress and prop rules, what hypotheses, sizing, geometry, and management posture should guide the next block? | Active Hermes plan inside Glitch’s hard limits; no Glitch-policy mutation |
-| Daily learning | after session | `gpt-5.6-sol`, high | What was learned, what should change tomorrow, and which hypotheses deserve testing? | Journal, memory updates, hypotheses, and tomorrow plan; no live-policy promotion |
+| Daily learning | catch up each completed Apex session containing unjournaled episodes | `gpt-5.6-sol`, high | What was learned, what should change tomorrow, and which hypotheses deserve testing? | Journal, memory updates, hypotheses, and tomorrow plan; no live-policy promotion |
 
 Model IDs are explicit defaults, not permanent doctrine. Each job records provider, model, reasoning effort, prompt version, skill versions, token use, and latency so model routing can later be optimized from evidence. The core loop must never silently downgrade to a weaker fallback model. A failed model call produces no new intent. Supervisory loops may defer until their assigned model is available.
 
@@ -41,6 +41,7 @@ Input:
 - one immutable five-frame Glitch packet;
 - latest portfolio, positions, working orders, group ratios, and hard risk state;
 - current prop-firm rules and account phase;
+- compact master-only position-building state: account size/equity, liquidation buffer and drawdown headroom, current quantity/average price, contract capacity and valid quantities, complete native protection, and MNQ point/tick value;
 - the active Hermes portfolio plan when that deferred loop exists;
 - only recent relevant Glitch outcomes and lessons;
 - native session and episodic memory.
@@ -50,8 +51,10 @@ Reasoning freedom:
 - independently evaluate bullish, bearish, stay-flat, stay-positioned, and exit cases;
 - use or reject known patterns;
 - create a falsifiable discretionary hypothesis;
-- choose risk and target geometry inside Glitch limits;
+- choose risk, quantity, native target legs, reserved capacity, later independently protected additions, and management geometry inside Glitch limits;
 - vary posture by regime and by configured group.
+
+For increasing exposure, Hermes compares a single protected tranche, TP1/TP2/TP3 native entry legs, reserving capacity, a later same-direction addition, and unchanged exposure. An addition may be at a favorable or adverse price when evidence supports the thesis, but price movement alone never creates a grid, martingale, or loss-recovery rule. Current acceptance, rejection, structure, and excursion override stale forecasts. Glitch independently rejects an Apex Legacy evaluation entry when complete protected downside is ambiguous or reaches the authoritative liquidation buffer; this is an account-survival boundary, not a preferred quantity, percentage budget, or strategy.
 
 Output: exactly one `glitch.intent.batch.v1`, containing one ordered `glitch.intent.v2` decision per route-bound group. Scheduled output is JSON only. Entries carry native protection. Glitch remains the only executor.
 
@@ -89,7 +92,7 @@ The newest valid plan becomes active Hermes context automatically. It may narrow
 
 ### Daily learning and tomorrow loop
 
-Input: the complete session ledger, closed outcomes, MAE/MFE/duration, rejected intents, missed or avoided opportunities when measurable, plan changes, market regimes, and system health.
+Input: the complete session ledger and immutable pre-decision packets, selected and available quantities, pre-entry exposure and protection, entry/add classification, every target leg and stop, planned downside by leg and in total, closed outcomes, per-contract and planned-risk-normalized MAE/MFE/PnL, management decisions, actual exits, rejected intents, missed or avoided opportunities when measurable, plan changes, market regimes, and system health.
 
 Output: `glitch.hermes.daily_journal.v1` containing:
 
@@ -100,7 +103,7 @@ Output: `glitch.hermes.daily_journal.v1` containing:
 - candidate knowledge updates;
 - tomorrow’s targets, risk posture, experiments, and invalidation conditions.
 
-Verified observations and episodic lessons may enter Hermes memory automatically with provenance. New strategy hypotheses may be tested on Sim. Hard Glitch policy, prop rules, account mappings, and any live/eval promotion remain outside automatic learning authority.
+Verified observations and episodic lessons may enter Hermes memory automatically with provenance. Hermes must assess whether quantity was evidence-based or habitual and whether native legs, reserved capacity, or a later addition were plausible, while preserving uncertainty instead of inventing hindsight rules. New strategy hypotheses may be tested on Sim. Hard Glitch policy, prop rules, account mappings, and any live/eval promotion remain outside automatic learning authority.
 
 ## 4. Skill architecture
 
@@ -260,7 +263,7 @@ one evidence-gated learning worker; they do not create additional executors.
 
 - Stage C: debrief completed master outcomes every 15 minutes and supervise new episodes hourly.
 - Stage D: replace the active 300-minute plan only when a new hourly review exists.
-- Stage E: journal daily, update native memory from repeated attributable evidence, and evaluate one reversible cognitive overlay.
+- Stage E: catch up every completed Apex session with unjournaled episodes, update native memory from repeated attributable evidence, and stage or evaluate one reversible cognitive overlay. A proposal has no trading influence until a later independent supervisory decision activates it from later comparable evidence after contradiction review.
 
 One 15-minute no-agent cron launches a separately locked learning process and
 returns immediately, keeping slow Sol work outside the serialized minute-operator

@@ -74,8 +74,32 @@ namespace Glitch.UI
             double profitTarget = rule?.ProfitTarget ?? row.ProfitTargetRaw;
             double maxDrawdown = rule?.MaxDrawdown ?? row.MaxDrawdownRaw;
             double dailyLossLimit = rule?.DailyLossLimit ?? row.DailyLossLimitRaw;
-            double headroomRatio = maxDrawdown > 0 && !double.IsNaN(row.BufferMarginRaw)
-                ? row.BufferMarginRaw / maxDrawdown
+            double liquidationThreshold = row.NetLiqRaw;
+            double bufferMargin = row.BufferMarginRaw;
+            if (simulateApexLegacyEval && ruleFirm != null && maxDrawdown > 0 && row.EquityRaw > 0)
+            {
+                string maxLossTracking = NormalizeMaxLossTracking(ruleFirm.MaxLossTracking, ruleFirm.DrawdownType);
+                double trailingPeak = GetOrUpdateTrailingPeak(
+                    BuildPeakStateKey(row.DisplayName, maxLossTracking),
+                    row.EquityRaw);
+                double? modeledThreshold = CalculateMinMargin(
+                    ruleStatus,
+                    ruleFirm,
+                    row.AccountSizeRaw,
+                    maxDrawdown,
+                    profitTarget,
+                    row.RealizedPnlRaw,
+                    row.EquityRaw,
+                    trailingPeak,
+                    GetExecutionProviderHint(account));
+                if (modeledThreshold.HasValue)
+                {
+                    liquidationThreshold = modeledThreshold.Value;
+                    bufferMargin = row.EquityRaw - liquidationThreshold;
+                }
+            }
+            double headroomRatio = maxDrawdown > 0 && !double.IsNaN(bufferMargin)
+                ? bufferMargin / maxDrawdown
                 : double.NaN;
             bool positionsAvailable = TryBuildPortfolioSnapshotPositions(
                 account,
@@ -99,8 +123,8 @@ namespace Glitch.UI
                 MaxDrawdown = maxDrawdown,
                 DailyLossLimit = dailyLossLimit,
                 Equity = row.EquityRaw,
-                LiquidationThreshold = row.NetLiqRaw,
-                BufferMargin = row.BufferMarginRaw,
+                LiquidationThreshold = liquidationThreshold,
+                BufferMargin = bufferMargin,
                 HeadroomRatio = headroomRatio,
                 RealizedPnl = row.RealizedPnlRaw,
                 UnrealizedPnl = liveUnrealizedPnl,

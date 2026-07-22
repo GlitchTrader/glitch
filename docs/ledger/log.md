@@ -2,6 +2,51 @@
 
 Append-only operator log. Newest first.
 
+## 2026-07-21 - adaptive position building and staged learning candidate
+
+- Preserved the authority boundary: Hermes owns thesis, master quantity,
+  geometry, timing, scaling, and management; Glitch supplies factual capacity
+  and independently enforces only the authoritative Apex Legacy account-survival
+  boundary. No quantity schedule, risk percentage, stop distance, grid,
+  martingale, partial-exit action, or strategy rule was added.
+- Each master book now carries compact position-building truth: account/equity,
+  liquidation buffer and drawdown headroom, current quantity/average price,
+  account-wide contract capacity and valid quantities, complete Glitch-owned
+  native protection, and MNQ point/tick value. Hermes compares a single tranche,
+  native TP1/TP2/TP3 legs, reserved capacity, a later independently protected
+  addition, and unchanged exposure. Favorable or adverse additions remain
+  evidence-based choices, never price-triggered recovery behavior.
+- Python and the C# firewall independently calculate actual per-leg stated-stop
+  downside and add complete current protected exposure. Apex Legacy entries fail
+  closed when rule identity, buffer, point value, or native coverage is ambiguous,
+  and reject at or beyond the observed liquidation buffer with
+  `apex_liquidation_buffer_exceeded`. The Sim packet producer now reuses Glitch's
+  existing Apex trailing-threshold model and persisted peak state so simulated
+  Apex accounts publish authoritative non-null survival state instead of being
+  unusable under the fail-closed rail.
+- Every debrief joins the completed entry by `cycle_id` to its immutable packet
+  and reconstructs pre-entry capacity/protection, entry versus addition, all
+  legs/stops, planned downside, normalized PnL/MAE/MFE, management, and actual
+  exit. Learning JSON gets one exact-shape repair attempt; a second failure leaves
+  evidence pending. Daily journals catch up completed Apex sessions exactly once.
+  A cognitive change is first an inert proposal; only later independent comparable
+  evidence with contradiction review can activate it, and later evidence can
+  continue, promote, revise, or roll it back.
+- Source verification passes 41 shared and 127 AI/Hermes tests (168 total), 30
+  Python compilations, 34 PowerShell parses, 34 JSON parses, localization and
+  changed-diff secret checks, and diff integrity. The public-profile candidate is
+  staged as `0.0.2.1`; all 25 manifest hashes reproduce independently. A temporary
+  native install/update preserved its config override, installed zero cron jobs,
+  and matched all distribution hashes. The complete 87-file AddOn was deployed
+  once with 87/87 hash parity and zero missing, extra, or mismatched files. F5
+  rebuilt `NinjaTrader.Custom.dll` at `00:48:33Z`; the next live packet proved the
+  new simulated Apex threshold and $6,217.50 buffer. The active Hermes profile is
+  `0.0.2.1`; auth, environment, memory, and session digests are unchanged, its two
+  existing jobs retained IDs/schedules/enabled state, and all 25 installed
+  distribution hashes match. A bounded `NOTHING` returned HTTP 202 and
+  `skipped/no_op_action` with all nine accounts flat and zero working orders
+  before and after; AI Auto and both jobs were restored ON.
+
 ## 2026-07-21 - AI feed packet attribution corrected
 
 - The latest-decision feed falsely showed `0/5` snapshots and `Packet Missing`

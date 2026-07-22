@@ -66,15 +66,16 @@ Glitch Flatten All remain authoritative.
   auditable replication `process_error` and never erases master cognition.
 - One 15-minute Hermes-native launcher starts a separately locked worker and
   returns immediately, so slow learning cannot delay the minute operator. The
-  worker debriefs new master outcomes, supervises
-  accumulated episodes hourly, replaces the active plan after 300 minutes with
-  new reviews, and journals daily. Every nested call is an isolated `trading`
-  session on Sol/high. Daily learning may update compact native memory and one
-  versioned prompt/SOUL/skill cognitive overlay in paper mode. Activation needs
-  two attributable episodes; hourly supervision may now propose the one compact
-  overlay as soon as two comparable episodes expose the same cognitive failure.
-  Evaluation needs two distinct later episodes and
-  appends promotion/continuation/rollback evidence.
+  worker debriefs new master outcomes, supervises accumulated episodes hourly,
+  replaces the active plan after 300 minutes with new reviews, and catches up
+  each completed Apex session containing unjournaled episodes. Every nested call
+  is an isolated `trading` session on Sol/high. Debriefs join immutable packets
+  by `cycle_id`, and malformed or schema-invalid learning output receives one
+  exact-template repair. Daily learning may update compact native memory. One
+  versioned prompt/SOUL/skill overlay may be proposed from attributable evidence,
+  but remains inert until a later independent review activates it from at least
+  two later comparable episodes after contradiction review. Subsequent evidence
+  appends continuation/promotion/revision/rollback evidence.
 - AI Auto is one truthful switch for the whole core apparatus. ON means the Glitch
   execution gate is open and the named Hermes core job is enabled; OFF closes the
   execution gate and pauses that job, so it cannot spend five-minute Luna calls.
@@ -101,6 +102,19 @@ Glitch Flatten All remain authoritative.
   and user-owned ratios never constrain cognition or master sizing; CopyEngine
   applies each follower route and follower-local cap independently. One-to-three native OCO legs support protected scale-out;
   repeated same-direction entries remain independently protected tranches.
+- Each book also carries master-only position-building truth: account/equity,
+  liquidation buffer and drawdown headroom, current quantity/average price,
+  contract capacity, valid quantities, complete native protection, and MNQ
+  point/tick value. Hermes compares a single protected tranche, native
+  TP1/TP2/TP3 legs, reserved capacity, a later independently protected addition,
+  and unchanged exposure. Favorable and adverse additions remain cognitive
+  choices supported by current evidence, never grid, martingale, or recovery rules.
+- Python and the C# firewall independently total actual per-leg stated-stop
+  downside plus complete current protected exposure for Apex Legacy evaluations.
+  Missing rule identity, buffer, instrument value, or native protection fails
+  closed; planned downside at or beyond the observed buffer is rejected as
+  `apex_liquidation_buffer_exceeded`. Sim packets reuse the existing Apex
+  trailing-threshold/peak model so this boundary remains testable on Sim.
 - `MOVE_TP` moves every remaining Glitch-owned master target and may atomically
   tighten every remaining master stop. CopyEngine mirrors both changes to the
   corresponding follower-native protection orders.
@@ -120,8 +134,8 @@ Glitch Flatten All remain authoritative.
 
 ## Verification and market-open acceptance
 
-- Shared source contracts: **38/38**.
-- AI/Hermes contracts: **113/113**; complete suite **151/151**.
+- Shared source contracts: **41/41**.
+- AI/Hermes contracts: **127/127**; complete suite **168/168**.
 - Five production web builds: pass.
 - Five web lint runs: pass.
 - Python compilation, tracked PowerShell parsing, tracked JSON parsing, secret
@@ -131,12 +145,15 @@ Glitch Flatten All remain authoritative.
   pass. This includes 18 older fallback-only labels closed during the AI UI pass.
 - The complete 87-file AddOn was deployed once for this correction with **87/87
   matching hashes, 0 missing, 0 mismatches, and 0 extra target files**. F5
-  rebuilt `NinjaTrader.Custom.dll` at `18:40:32Z` without an error surface. The
-  live feed then resolved decision `15:36:01` to packet `20260721T1835Z` with
-  **5/5** snapshots. AI Auto was restored ON; all nine accounts were flat and
-  order-free and the paper executor reported armed.
+  rebuilt `NinjaTrader.Custom.dll` at `00:48:33Z`. The next live packet published
+  the new simulated Apex liquidation threshold and a non-null $6,217.50 buffer.
+  A bounded full-path `NOTHING` returned HTTP 202 and
+  `skipped/no_op_action`; all nine accounts remained flat with zero working
+  orders before and after. AI Auto and both Hermes jobs were restored ON.
 - The installed Hermes SOUL, operator map, plugin, five runtime scripts, and 13
-  skill files match source. Exactly two no-agent jobs are enabled:
+  Glitch skill files match the `0.0.2.1` staged distribution; all 25 manifest
+  hashes reproduce. Authentication, environment, memory, and session digests
+  survived the native profile update unchanged. Exactly two no-agent jobs are enabled:
   `glitch-direct-operator` at `* * * * *` and non-executing
   `glitch-learning-supervisor` at `*/15 * * * *`. The latter now launches its
   separately locked worker and returned in 145 ms during an installed no-model

@@ -130,9 +130,9 @@ namespace Glitch.Services
                 return GlitchAiRiskDecision.Approve(trail);
             }
 
+            double tradeRiskUsd = 0;
             if (isEnter)
             {
-                double tradeRiskUsd;
                 if (!TryComputeTradeRiskUsd(rawJson, instrument, action, snapshotMarketPrice, out tradeRiskUsd))
                     return Reject(trail, 10, "risk_not_computable", instrument);
                 trail.Add("10_trade_risk_computable:pass_usd="
@@ -140,7 +140,6 @@ namespace Glitch.Services
             }
 
             trail.Add("10_risk_per_trade:pass");
-            trail.Add("11_prop_risk_state:deferred_to_authoritative_account_lock");
 
             if (isEnter)
             {
@@ -176,6 +175,49 @@ namespace Glitch.Services
             }
 
             trail.Add("13_position_conflict:pass");
+
+            string propFirmId = GlitchAiJsonFields.ExtractString(portfolioAccountJson, "prop_firm_id");
+            string ruleStatus = GlitchAiJsonFields.ExtractString(portfolioAccountJson, "rule_status");
+            if (string.IsNullOrWhiteSpace(propFirmId) || string.IsNullOrWhiteSpace(ruleStatus))
+                return Reject(trail, 11, "account_rule_state_missing", account);
+            bool isApexLegacyEval = string.Equals(propFirmId, "ApexTraderFunding", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(ruleStatus, "Eval", StringComparison.OrdinalIgnoreCase);
+            if (isApexLegacyEval)
+            {
+                if (!GlitchAiJsonFields.TryExtractNumber(portfolioAccountJson, "buffer_margin", out double bufferMargin)
+                    || bufferMargin <= 0)
+                    return Reject(trail, 11, "apex_liquidation_buffer_missing", account);
+
+                GlitchInstrumentMetadata metadata;
+                if (!GlitchInstrumentMetadataService.TryResolve(instrument, out metadata)
+                    || !metadata.IsResolved
+                    || metadata.PointValue <= 0)
+                    return Reject(trail, 11, "apex_protected_downside_unavailable", "instrument_metadata_unresolved");
+
+                if (!GlitchAiPortfolioSnapshotReader.TryComputeOwnedProtectedDownsideUsdFromAccountBlock(
+                    portfolioAccountJson,
+                    instrument,
+                    snapshotMarketPrice,
+                    metadata.PointValue,
+                    out double existingProtectedDownsideUsd,
+                    out string protectionFailure))
+                {
+                    return Reject(trail, 11, "apex_protected_downside_unavailable", protectionFailure);
+                }
+
+                double plannedProtectedDownsideUsd = existingProtectedDownsideUsd + tradeRiskUsd;
+                string observed = "planned_downside_usd="
+                    + plannedProtectedDownsideUsd.ToString("F2", CultureInfo.InvariantCulture)
+                    + "|buffer_margin_usd="
+                    + bufferMargin.ToString("F2", CultureInfo.InvariantCulture);
+                if (plannedProtectedDownsideUsd >= bufferMargin)
+                    return Reject(trail, 11, "apex_liquidation_buffer_exceeded", observed);
+                trail.Add("11_apex_liquidation_buffer:pass|" + observed);
+            }
+            else
+            {
+                trail.Add("11_apex_liquidation_buffer:not_applicable");
+            }
 
             if (tradingWindow == null || !tradingWindow.IsEntryAllowed)
                 return Reject(trail, 14, "trading_window_closed", "positions must be flat before 16:59 ET");
@@ -345,8 +387,8 @@ namespace Glitch.Services
             if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "quantity", out quantity) || quantity <= 0)
                 return false;
 
-            double stopLoss;
-            if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss", out stopLoss))
+            double stopLoss1;
+            if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss", out stopLoss1))
                 return false;
 
             double entry;
@@ -359,15 +401,69 @@ namespace Glitch.Services
             else
                 entry = snapshotMarketPrice;
 
-            double pointsAtRisk = string.Equals(action, "ENTER_LONG", StringComparison.Ordinal)
-                ? entry - stopLoss
-                : stopLoss - entry;
+            bool isLong = string.Equals(action, "ENTER_LONG", StringComparison.Ordinal);
+            bool hasSecondTarget = GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_2", out _);
+            bool hasThirdTarget = GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_3", out _);
+            double quantity1 = quantity;
+            double quantity2 = 0;
+            double quantity3 = 0;
+            if (hasSecondTarget)
+            {
+                if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "quantity_tp1", out quantity1)
+                    || quantity1 < 1
+                    || quantity1 >= quantity)
+                    return false;
+                quantity2 = quantity - quantity1;
+            }
+            if (hasThirdTarget)
+            {
+                if (!hasSecondTarget
+                    || !GlitchAiJsonFields.TryExtractNumber(rawJson, "quantity_tp2", out quantity2)
+                    || quantity2 < 1)
+                    return false;
+                quantity3 = quantity - quantity1 - quantity2;
+                if (quantity3 < 1)
+                    return false;
+            }
 
-            if (pointsAtRisk <= 0)
+            if (!TryAddLegRisk(entry, stopLoss1, quantity1, isLong, metadata.PointValue, ref riskUsd))
                 return false;
-
-            riskUsd = pointsAtRisk * metadata.PointValue * quantity;
+            if (hasSecondTarget)
+            {
+                double stopLoss2;
+                if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss_2", out stopLoss2))
+                    stopLoss2 = stopLoss1;
+                if (!TryAddLegRisk(entry, stopLoss2, quantity2, isLong, metadata.PointValue, ref riskUsd))
+                    return false;
+            }
+            if (hasThirdTarget)
+            {
+                double stopLoss3;
+                if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss_3", out stopLoss3))
+                {
+                    stopLoss3 = stopLoss1;
+                    if (GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss_2", out double stopLoss2))
+                        stopLoss3 = stopLoss2;
+                }
+                if (!TryAddLegRisk(entry, stopLoss3, quantity3, isLong, metadata.PointValue, ref riskUsd))
+                    return false;
+            }
             return riskUsd > 0;
+        }
+
+        private static bool TryAddLegRisk(
+            double entry,
+            double stopLoss,
+            double quantity,
+            bool isLong,
+            double pointValue,
+            ref double riskUsd)
+        {
+            double pointsAtRisk = isLong ? entry - stopLoss : stopLoss - entry;
+            if (pointsAtRisk <= 0 || quantity <= 0)
+                return false;
+            riskUsd += pointsAtRisk * pointValue * quantity;
+            return true;
         }
 
         private static bool IsBracketSane(string rawJson, string instrument, string action, double snapshotMarketPrice, out string failure)

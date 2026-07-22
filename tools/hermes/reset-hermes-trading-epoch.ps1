@@ -91,6 +91,7 @@ foreach ($relative in @(
     'hermes\supervisor\cognitive-changes.jsonl',
     'hermes\supervisor\current-guidance.json',
     'hermes\supervisor\current-plan.json',
+    'hermes\supervisor\proposed-cognitive-overlay.json',
     'hermes\supervisor\active-cognitive-overlay.json',
     'hermes\supervisor\active-trades.json',
     'hermes\supervisor\learning-state.json',

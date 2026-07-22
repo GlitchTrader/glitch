@@ -46,9 +46,9 @@ def packet():
                 "instruments": [{"instrument": "MNQ", "current_price": 20000.0}],
             },
             "portfolio_snapshot": {"is_replicating": True, "accounts": [
-                {"account": "Sim101", "account_status": "Sim", "max_contracts": 27, "positions": [], "working_orders": 0, "native_state_available": True, "is_risk_locked": False, "is_eval_target_locked": False, "entry_window_open": True},
-                {"account": "Sim102", "account_status": "Sim", "max_contracts": 27, "positions": [], "working_orders": 0, "native_state_available": True, "is_risk_locked": False, "is_eval_target_locked": False, "entry_window_open": True},
-                {"account": "Sim201", "account_status": "Sim", "max_contracts": 27, "positions": [], "working_orders": 0, "native_state_available": True, "is_risk_locked": False, "is_eval_target_locked": False, "entry_window_open": True},
+                {"account": "Sim101", "account_status": "Sim", "prop_firm_id": "ApexTraderFunding", "rule_status": "Eval", "account_size": 250000, "equity": 250000, "liquidation_threshold": 243500, "buffer_margin": 6500, "headroom_ratio": 1.0, "max_drawdown": 6500, "max_contracts": 27, "positions": [], "working_orders": 0, "working_order_details": [], "native_state_available": True, "is_risk_locked": False, "is_eval_target_locked": False, "entry_window_open": True},
+                {"account": "Sim102", "account_status": "Sim", "prop_firm_id": "ApexTraderFunding", "rule_status": "Eval", "account_size": 250000, "equity": 250000, "liquidation_threshold": 243500, "buffer_margin": 6500, "headroom_ratio": 1.0, "max_drawdown": 6500, "max_contracts": 27, "positions": [], "working_orders": 0, "working_order_details": [], "native_state_available": True, "is_risk_locked": False, "is_eval_target_locked": False, "entry_window_open": True},
+                {"account": "Sim201", "account_status": "Sim", "prop_firm_id": "ApexTraderFunding", "rule_status": "Eval", "account_size": 250000, "equity": 250000, "liquidation_threshold": 243500, "buffer_margin": 6500, "headroom_ratio": 1.0, "max_drawdown": 6500, "max_contracts": 27, "positions": [], "working_orders": 0, "working_order_details": [], "native_state_available": True, "is_risk_locked": False, "is_eval_target_locked": False, "entry_window_open": True},
             ]},
         })
     return {
@@ -364,6 +364,11 @@ class DirectCycleTests(unittest.TestCase):
         self.assertIn("do not silently move the threshold", value)
         self.assertIn("Do not inherit any fixed or provisional quantity baseline", value)
         self.assertIn("master-quantity calibration", value)
+        self.assertIn("compare one protected tranche, a multi-leg entry", value)
+        self.assertIn("reserving capacity for later evidence", value)
+        self.assertIn("do not mechanically maximize size or default to one contract", value)
+        self.assertIn("current acceptance, rejection, structure, excursion, and changed evidence outrank", value)
+        self.assertNotIn("1/2/4/10", value)
 
     def test_obsolete_supervisor_quantity_artifacts_are_not_sent_to_luna(self):
         with tempfile.TemporaryDirectory() as root:
@@ -398,6 +403,11 @@ class DirectCycleTests(unittest.TestCase):
             self.assertEqual(
                 current["current_guidance"]["schema_version"], MODULE.CURRENT_GUIDANCE_SCHEMA
             )
+
+            (supervisor / "proposed-cognitive-overlay.json").write_text(json.dumps({
+                "status": "proposed", "instruction": "This must remain inert."
+            }), encoding="utf-8")
+            self.assertIsNone(MODULE.learning_context(Path(root))["active_cognitive_overlay"])
 
     def test_invalid_content_gets_one_same_cycle_regeneration(self):
         value = packet()
@@ -464,6 +474,10 @@ class DirectCycleTests(unittest.TestCase):
         self.assertIn("take_profit_3", value)
         self.assertIn("quantity_tp2", value)
         self.assertIn("independent native OCO pair", value)
+        self.assertIn("current scale-out mechanism", value)
+        self.assertIn("there is no partial-reduction action", value)
+        self.assertIn("favorable or adverse prices", value)
+        self.assertIn("mechanical grid or martingale rule", value)
 
     def test_strict_batch_rejects_unknown_fields_and_incomplete_audit(self):
         value = packet()
@@ -532,6 +546,105 @@ class DirectCycleTests(unittest.TestCase):
         self.assertEqual(scenario["books"][0]["followers"][0]["ratio"], 2.0)
         self.assertEqual(scenario["books"][0]["effective_master_remaining_capacity"], 27)
         self.assertEqual(scenario["books"][0]["valid_entry_quantities"], list(range(1, 28)))
+        context = scenario["books"][0]["position_building_context"]
+        self.assertEqual(context["account_size"], 250000)
+        self.assertEqual(context["liquidation_buffer_usd"], 6500)
+        self.assertEqual(context["next_entry_role"], "initial_position")
+        self.assertTrue(context["native_protection"]["coverage_complete"])
+        self.assertTrue(context["apex_legacy_survival_applicable"])
+
+    def test_apex_survival_accepts_one_contract_and_a_larger_multi_leg_choice(self):
+        scenario = MODULE.build_scenario(packet())
+        for quantity in (1, 10):
+            entry = decision("glitch", "Sim101", quantity, "ENTER_LONG")
+            entry["quantity"] = quantity
+            if quantity > 1:
+                entry.update({
+                    "stop_loss": 19750.0,
+                    "take_profit_2": 20100.0,
+                    "quantity_tp1": 3,
+                    "stop_loss_2": 19800.0,
+                    "take_profit_3": 20150.0,
+                    "quantity_tp2": 3,
+                    "stop_loss_3": 19850.0,
+                })
+            batch = {
+                "schema_version": "glitch.intent.batch.v1",
+                "cycle_id": scenario["cycle_id"],
+                "decisions": [entry, decision("glitch-second", "Sim201", 100 + quantity)],
+            }
+            MODULE.validate_batch(batch, scenario)
+
+    def test_apex_survival_rejects_contract_valid_geometry_that_reaches_liquidation(self):
+        scenario = MODULE.build_scenario(packet())
+        entry = decision("glitch", "Sim101", 10, "ENTER_LONG")
+        entry.update({"quantity": 10, "stop_loss": 19600.0})
+        batch = {
+            "schema_version": "glitch.intent.batch.v1",
+            "cycle_id": scenario["cycle_id"],
+            "decisions": [entry, decision("glitch-second", "Sim201", 110)],
+        }
+        with self.assertRaisesRegex(ValueError, "apex_liquidation_buffer_exceeded"):
+            MODULE.validate_batch(batch, scenario)
+
+    def test_adverse_price_same_direction_add_is_not_a_strategy_gate_when_fully_protected(self):
+        value = packet()
+        master = value["frames"][-1]["portfolio_snapshot"]["accounts"][0]
+        master.update({
+            "positions": [{
+                "instrument_root": "MNQ", "market_position": "Long",
+                "quantity": 2, "average_price": 20050.0,
+            }],
+            "working_orders": 2,
+            "working_order_details": [
+                {"instrument_root": "MNQ", "name": "GLT-AI-S-a-0", "quantity": 2, "filled": 0, "stop_price": 19800.0, "limit_price": 0, "oco": "a"},
+                {"instrument_root": "MNQ", "name": "GLT-AI-T-a-0", "quantity": 2, "filled": 0, "stop_price": 0, "limit_price": 20200.0, "oco": "a"},
+            ],
+        })
+        scenario = MODULE.build_scenario(value)
+        context = scenario["books"][0]["position_building_context"]
+        self.assertEqual(context["next_entry_role"], "same_direction_addition")
+        self.assertEqual(context["current_average_price"], 20050.0)
+        self.assertEqual(context["native_protection"]["existing_protected_downside_usd"], 800.0)
+        entry = decision("glitch", "Sim101", 20, "ENTER_LONG")
+        entry.update({"quantity": 2, "stop_loss": 19750.0})
+        MODULE.validate_batch({
+            "schema_version": "glitch.intent.batch.v1",
+            "cycle_id": scenario["cycle_id"],
+            "decisions": [entry, decision("glitch-second", "Sim201", 21)],
+        }, scenario)
+
+    def test_same_direction_add_fails_closed_when_native_protection_is_incomplete(self):
+        value = packet()
+        master = value["frames"][-1]["portfolio_snapshot"]["accounts"][0]
+        master.update({
+            "positions": [{"instrument_root": "MNQ", "market_position": "Long", "quantity": 2, "average_price": 20050.0}],
+            "working_orders": 1,
+            "working_order_details": [
+                {"instrument_root": "MNQ", "name": "GLT-AI-S-a-0", "quantity": 2, "filled": 0, "stop_price": 19800.0, "limit_price": 0, "oco": "a"},
+            ],
+        })
+        scenario = MODULE.build_scenario(value)
+        entry = decision("glitch", "Sim101", 22, "ENTER_LONG")
+        with self.assertRaisesRegex(ValueError, "apex_existing_protection_incomplete"):
+            MODULE.validate_batch({
+                "schema_version": "glitch.intent.batch.v1",
+                "cycle_id": scenario["cycle_id"],
+                "decisions": [entry, decision("glitch-second", "Sim201", 23)],
+            }, scenario)
+
+    def test_entry_fails_closed_when_account_rule_state_is_unknown(self):
+        value = packet()
+        value["frames"][-1]["portfolio_snapshot"]["accounts"][0]["prop_firm_id"] = None
+        scenario = MODULE.build_scenario(value)
+        entry = decision("glitch", "Sim101", 24, "ENTER_LONG")
+
+        with self.assertRaisesRegex(ValueError, "account_rule_state_missing"):
+            MODULE.validate_batch({
+                "schema_version": "glitch.intent.batch.v1",
+                "cycle_id": scenario["cycle_id"],
+                "decisions": [entry, decision("glitch-second", "Sim201", 25)],
+            }, scenario)
 
     def test_capacity_has_no_ai_policy_fallback(self):
         value = packet()

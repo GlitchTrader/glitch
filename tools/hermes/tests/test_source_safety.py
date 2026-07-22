@@ -239,6 +239,25 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("TryGetTotalOpenContractsFromAccountBlock", firewall)
         self.assertIn('ExtractString(positionJson, "market_position")', portfolio_reader)
 
+    def test_apex_legacy_survival_uses_actual_buffer_and_complete_native_protection(self):
+        firewall = source(FIREWALL)
+        reader = source(PORTFOLIO_READER)
+        snapshot = source(ROOT / "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.PortfolioSnapshot.partial.cs")
+        self.assertIn('"ApexTraderFunding"', firewall)
+        self.assertIn('"buffer_margin"', firewall)
+        self.assertIn('"apex_liquidation_buffer_exceeded"', firewall)
+        self.assertIn('"account_rule_state_missing"', firewall)
+        self.assertIn("plannedProtectedDownsideUsd >= bufferMargin", firewall)
+        self.assertIn("TryComputeOwnedProtectedDownsideUsdFromAccountBlock", firewall)
+        self.assertIn("GlitchAiOrderExecutor.SignalStop", reader)
+        self.assertIn("GlitchAiOrderExecutor.SignalTarget", reader)
+        self.assertIn("stopCoverage != expectedCoverage || targetCoverage != expectedCoverage", reader)
+        self.assertNotIn("riskPercent", firewall)
+        self.assertNotIn("RiskPercent", firewall)
+        self.assertIn("simulateApexLegacyEval && ruleFirm != null", snapshot)
+        self.assertIn("CalculateMinMargin", snapshot)
+        self.assertIn("BuildPeakStateKey", snapshot)
+
     def test_ai_snapshot_expiry_matches_one_flat_decision_window(self):
         policy = source(POLICY)
         self.assertIn("SnapshotMaxAgeSeconds { get; set; } = 300", policy)
