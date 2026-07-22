@@ -164,7 +164,7 @@ Never:          Hermes edits its own archetype file. Promotion and retirement ar
 
 ## 9. Ledger integration
 
-Backlog sub-items added under R06 (see `docs/ledger/backlog.md`):
+Historical R06 sub-items were captured in the retired backlog; current work is selected only from `docs/ledger/ledger.json` on `main`:
 
 ```text
 R06a  ETL corpus → parquet + quality audit          (this session)

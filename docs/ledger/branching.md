@@ -10,6 +10,12 @@
 
 The old `cleanup/main-core`, `cleanup/ai-core`, and `glitch/ai-rail` names are historical.
 
+## Coordination authority
+
+- `docs/ledger/ledger.json` on `main` is the one work ledger for Standard, AI, web, and release work.
+- This branch does not maintain a local queue, now file, or status ledger.
+- Read current work with `git show origin/main:docs/ledger/ledger.json`; ask the Glitch PM to persist durable lifecycle changes on the default branch.
+
 - `/latest` and `/api/releases/latest` default to Standard.
 - `/latest/ai` and `?edition=ai` select Experimental AI.
 - Unregistered ZIPs are ignored; exact artifacts remain immutable and checksummed.

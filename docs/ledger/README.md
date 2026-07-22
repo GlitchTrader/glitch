@@ -1,11 +1,13 @@
-# Glitch Ledger
+# Glitch Work Ledger
 
-Current state lives in:
+`docs/ledger/ledger.json` on `main` is the project's one canonical current-work artifact. This AI source branch deliberately contains no second ledger, queue, backlog, now file, or status log.
 
-- `north-star.md` — permanent product and authority invariants;
-- `now.md` — current release, branch, runtime, and evidence snapshot;
-- `backlog.md` — active work and unresolved stop lines;
-- `branching.md` — maintained source lanes and promotion rules;
-- `log.md` — append-only operator history.
+Read current work with:
 
-`audits/`, `research/`, `lane-briefs.md`, and `lead-review-notes.md` are dated evidence, not present status unless promoted by `now.md` or `backlog.md`.
+```powershell
+git show origin/main:docs/ledger/ledger.json
+```
+
+Route durable lifecycle changes through the Glitch PM/default branch. `north-star.md` and the AI roadmap express intent; `branching.md` and the release catalog define source and publication truth; Git, releases, audits, research, and historical handoffs preserve evidence and history.
+
+Select one dependency-clear `ready` item, act inside its stop line, verify acceptance, and record evidence plus one lifecycle transition. If no eligible item exists, stop cleanly.

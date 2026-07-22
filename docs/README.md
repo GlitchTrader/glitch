@@ -32,6 +32,6 @@ glitch_hermes_docs/ private Glitch/Hermes runtime contracts
 - `standard/20` and `ai/22` are the maintained source lanes.
 - The release catalog, not filenames, chooses latest.
 - The current customer distribution is a local installable/updateable Hermes profile, not a required centralized VPS.
-- Historical audits remain immutable evidence; `docs/ledger/now.md` is the compact current handoff.
+- Historical audits remain immutable evidence; `docs/ledger/ledger.json` on `main` is the one current work handoff.
 
 Derived docs yield to current source and native runtime evidence.

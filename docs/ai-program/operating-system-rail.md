@@ -64,4 +64,4 @@ Health is observational and reports operating, packet, decision-worker, and lear
 - Freeze a reconciled performance sample before changing cognition or claiming improvement.
 - Add LIMIT only with place/cancel/replace, TIF/expiry, partial-fill protection, replication, identity, and restart recovery.
 
-Current acceptance lives in `docs/ledger/now.md` and `docs/ledger/backlog.md`. Historical R01–R23 labels are provenance only.
+Current acceptance lives only in `docs/ledger/ledger.json` on `main`. Historical R01–R23 labels are provenance only.

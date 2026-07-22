@@ -1,4 +1,6 @@
-# Lane Briefs — delegation prompts (relaunch-ready)
+# Lane Briefs — historical delegation prompts
+
+> Do not relaunch these prompts verbatim. Current work lives only in `docs/ledger/ledger.json` on `main`.
 
 Written 2026-07-07 after the first four lanes were killed mid-flight by a subscription session limit. Any lead agent can respawn a lane by giving the brief below verbatim to a subagent (models: LANE-1/2 = Opus, LANE-3/4 = Sonnet; run in background). Shared rules for ALL lanes at the bottom.
 

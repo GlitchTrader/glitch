@@ -24,4 +24,4 @@ Hermes decides; Glitch validates, executes, protects, replicates, reconciles, an
 - Decisions, receipts, outcomes, journals, episodes, memory, and supervisory review remain attributable through stable IDs.
 - Codex builds and verifies code; it is not a runtime trader.
 
-Tests and compiles prove software shape, not profitability or account authorization. Historical plans remain provenance and never override current source, `now.md`, the release catalog, or current operator direction.
+Tests and compiles prove software shape, not profitability or account authorization. Historical plans remain provenance and never override current source, `ledger.json` on `main`, the release catalog, or current operator direction.

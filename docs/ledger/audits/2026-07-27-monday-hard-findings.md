@@ -4,7 +4,7 @@
 **Source:** `cleanup/ai-core` at `9ec42b32de51ad694d16c144ad65c2684b2ec499`  
 **Role:** Sim/paper candidate only
 
-This note consolidates hard release blockers already supported by candidate evidence. It does not create a second queue; `docs/ledger/backlog.md` remains authoritative.
+This note consolidates hard release blockers already supported by candidate evidence. It does not create a second queue; `docs/ledger/ledger.json` on `main` remains authoritative.
 
 ## GL-AUD-001 — holiday and special-close authority is incomplete
 
