@@ -135,9 +135,20 @@ namespace Glitch.UI
             string decisionAge = latest?.DecisionUtc == null
                 ? L("ai.value.none", "none")
                 : Lf("ai.age.ago_format", "{0} ago", FormatAge(nowUtc - latest.DecisionUtc.Value));
+            GlitchAiHealthSnapshot health = GlitchAiHealthEvaluator.Evaluate(nowUtc);
+            string healthLabel = string.Equals(health.OverallStatus, "on", StringComparison.Ordinal)
+                ? L("ai.health.on", "On")
+                : string.Equals(health.OverallStatus, "off", StringComparison.Ordinal)
+                    ? L("ai.health.off", "Off")
+                    : L("ai.health.degraded", "Degraded");
+            string healthReason = health.ReasonCodes.Count > 0
+                ? health.ReasonCodes[0]
+                : L("ai.health.operating", "operating");
             _aiFeedStatusText.Text = Lf(
-                "ai.feed.latest_status_format",
-                "Latest snapshot {0}  |  Latest decision {1}",
+                "ai.feed.health_status_format",
+                "AI {0}: {1}  |  Latest snapshot {2}  |  Latest decision {3}",
+                healthLabel,
+                healthReason,
                 snapshotAge,
                 decisionAge);
 

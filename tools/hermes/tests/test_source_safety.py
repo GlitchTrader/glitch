@@ -16,6 +16,12 @@ JSON_FIELDS = ADDON / "Services/Ai/GlitchAiJsonFields.cs"
 TRADING_WINDOW = ADDON / "Services/Ai/GlitchAiTradingWindow.cs"
 TEMPORAL_CLOSE = ADDON / "UI/MainWindow/GlitchMainWindow.AiTemporalCompliance.partial.cs"
 PORTFOLIO_WRITER = ADDON / "Services/Persistence/GlitchPortfolioSnapshotWriter.cs"
+EXCHANGE_WRITER = ADDON / "Services/Persistence/GlitchHermesExchangeWriter.cs"
+HEALTH = ADDON / "Services/Persistence/GlitchAiHealthEvaluator.cs"
+STATE_STORE = ADDON / "Services/Ai/GlitchAiIntentStateStore.cs"
+INTENT_SERVER = ADDON / "Services/Ai/GlitchAiIntentServer.cs"
+MAIN_WINDOW = ADDON / "UI/MainWindow/GlitchMainWindow.cs"
+ADDON_SHELL = ADDON / "GlitchAddOn.cs"
 
 
 def source(path: Path) -> str:
@@ -27,6 +33,76 @@ def method_body(text: str, signature: str, next_signature: str) -> str:
 
 
 class AiSourceArchitectureContractTests(unittest.TestCase):
+    def test_intent_v3_is_exact_leg_and_v2_compatibility_is_bounded(self):
+        validator = source(INTENT_VALIDATOR)
+        executor = source(EXECUTOR)
+        self.assertIn('"glitch.intent.v2"', validator)
+        self.assertIn('"glitch.intent.v3"', validator)
+        self.assertIn("ValidateProtectionUpdates(parsed, false", validator)
+        self.assertIn("ValidateProtectionUpdates(parsed, true", validator)
+        self.assertIn("protection_update_duplicate_leg_id_", validator)
+        self.assertIn("legacy_move_tp_scope_ambiguous", executor)
+        self.assertIn("TryGetLegId", executor)
+        self.assertIn('legId = parts[0] + ":" + legIndex', executor)
+
+    def test_intent_state_claim_precedes_firewall_and_execution(self):
+        server = source(INTENT_SERVER)
+        store = source(STATE_STORE)
+        executor = source(EXECUTOR)
+        self.assertLess(server.index("GlitchAiIntentStateStore.TryClaim"), server.index("GlitchAiRiskFirewall.Validate"))
+        self.assertLess(server.index('"execution_started"'), server.index("TryExecuteApprovedIntent"))
+        for phase in ("received", "approved", "rejected", "execution_started", "executed", "failed"):
+            self.assertIn('"' + phase + '"', server + store)
+        self.assertIn("intent_id_content_conflict", server)
+        self.assertIn("TryReconstructLegacyState", store)
+        self.assertIn("TryReconcileStartedIntent", server)
+        self.assertIn("BuildIntentCorrelation", executor)
+
+    def test_one_minute_publisher_is_paired_gap_aware_and_not_modulo_gated(self):
+        exchange = source(EXCHANGE_WRITER)
+        market = source(ADDON / "Services/Persistence/GlitchMarketSnapshotWriter.cs")
+        portfolio = source(PORTFOLIO_WRITER)
+        main = source(MAIN_WINDOW)
+        self.assertIn("TryPublishMinute", exchange)
+        self.assertIn("TryWriteDecisionPacket", exchange)
+        self.assertIn('\\"is_contiguous\\"', exchange)
+        self.assertIn('\\"observed_span_minutes\\"', exchange)
+        self.assertIn('\\"missing_minute_ids\\"', exchange)
+        self.assertIn("Take(FramesPerPacket)", exchange)
+        self.assertIn("GlitchHermesExchangeWriter.TryPublishMinute", main)
+        self.assertNotIn("TryWriteLatestIfDue", market + portfolio)
+        self.assertNotIn("Minute %", exchange)
+
+    def test_hidden_window_preserves_runtime_and_true_addon_shutdown_stops_it(self):
+        main = source(MAIN_WINDOW)
+        shell = source(ADDON_SHELL)
+        refresh = source(ADDON / "UI/MainWindow/GlitchMainWindow.RefreshPipeline.partial.cs")
+        self.assertIn("e.Cancel = true", main)
+        self.assertIn("Hide();", main)
+        self.assertIn("ShutdownForAddOn", main)
+        self.assertIn("RefreshHiddenRuntimeSafetyIfDue", main)
+        self.assertIn("MaybeEnforceAiDailyClose", refresh)
+        self.assertIn("ProcessAccountStateUpdate", refresh)
+        self.assertIn("glitchWindow.ShutdownForAddOn()", shell)
+        self.assertIn("StopRailInfrastructure();", main)
+
+    def test_health_reports_components_and_server_restart_is_bounded(self):
+        health = source(HEALTH)
+        telemetry = source(TELEMETRY_UI)
+        for component in (
+            "PacketStatus", "DecisionWorkerStatus", "LearningWorkerStatus",
+            "TelemetryServerRunning", "IntentServerRunning", "ControlServerRunning",
+            "SelectedMasterNativeState", "SnapshotHash", "FeedAgeSeconds",
+        ):
+            self.assertIn(component, health)
+        self.assertIn("decision_worker_overdue", health)
+        self.assertIn("operator_job_disabled", health)
+        self.assertIn("EnsureRailInfrastructureIfDue", telemetry)
+        self.assertIn("TimeSpan.FromSeconds(30)", telemetry)
+        self.assertIn("TelemetryServerUnavailable", telemetry)
+        self.assertIn("IntentServerUnavailable", telemetry)
+        self.assertIn("ControlServerUnavailable", telemetry)
+
     def test_preflight_uses_single_trading_control_not_legacy_policy_gates(self):
         preflight = source(ROOT / "tools" / "hermes" / "preflight-open.ps1")
         self.assertIn("trading_enabled = -not [bool]$control.trading_paused", preflight)
@@ -111,7 +187,8 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
             "private static GlitchAiExecutionResult TryExecuteGroupMoveTarget",
         )
         self.assertIn("Account masterAccount = members[0].Account", move_stop)
-        self.assertIn("accountChanges.Key.Change", move_stop)
+        self.assertIn("masterAccount.Change", move_stop)
+        self.assertIn("ValidateProposedStopState", move_stop)
         self.assertNotIn("Follower", move_stop)
 
     def test_ai_move_target_changes_master_and_replication_mirrors_target_and_optional_stop(self):
@@ -130,15 +207,15 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
             "private void CleanupFlatFollowerOrders",
         )
 
-        self.assertIn("take_profit_1", move_target)
-        self.assertIn("LimitPriceChanged = targetPrice", move_target)
-        self.assertIn("StopPriceChanged = stopPrice", move_target)
+        self.assertIn("protection_updates", move_target)
+        self.assertIn("LimitPriceChanged = proposedTargets[target]", move_target)
+        self.assertIn("StopPriceChanged = proposedStops[stop]", move_target)
         self.assertEqual(move_target.count("masterAccount.Change"), 1)
         self.assertIn('isStop ? "-S-" : "-T-"', mirror)
         self.assertIn("followerOrder.LimitPriceChanged = masterPrice", mirror)
         self.assertIn("followerOrder.StopPriceChanged = masterPrice", mirror)
         self.assertIn('"MOVE_TP"', validator)
-        self.assertIn("move_tp_requires_take_profit_1", validator)
+        self.assertIn("move_tp_requires_protection_updates", validator)
         self.assertIn('string.Equals(action, "MOVE_TP"', firewall)
 
     def test_working_partial_master_fill_aggregates_before_protection(self):
@@ -273,7 +350,10 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn('"quantity_tp2"', executor)
         self.assertIn('"stop_loss_3"', executor)
         self.assertIn("quantityTp3 = masterQuantity - quantityTp1 - quantityTp2", executor)
-        self.assertIn("tp3_not_beyond_tp2", firewall)
+        self.assertNotIn("tp2_not_beyond_tp1", firewall)
+        self.assertNotIn("tp3_not_beyond_tp2", firewall)
+        self.assertNotIn("stop_loss_2_not_tighter", firewall)
+        self.assertNotIn("stop_loss_3_not_tighter", firewall)
 
     def test_intent_ingress_is_strict_json_and_market_only(self):
         validator = source(INTENT_VALIDATOR)

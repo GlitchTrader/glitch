@@ -7,34 +7,18 @@ namespace Glitch.UI
     {
         private bool _railIntentHandlerWired;
         private bool _railIntentRejectedHandlerWired;
+        private DateTime _lastRailEnsureUtc = DateTime.MinValue;
+        private bool _telemetryStartLogged;
+        private bool _intentStartLogged;
+        private bool _controlStartLogged;
 
         private void StartRailInfrastructure()
         {
             GlitchAiRailPolicyStore.EnsureDefaultExists();
-
-            if (GlitchExternalTelemetryServer.TryStart())
-            {
-                AppendJournal(
-                    "System",
-                    "Telemetry",
-                    "telemetry_started|bind=127.0.0.1:8787|token_file=GlitchData/telemetry.token");
-            }
-
-            if (GlitchAiIntentServer.TryStart())
-            {
-                WireIntentHandlers();
-                GlitchAiOrderExecutor.UiInvoke = InvokeOnUiThread;
-                GlitchAiOrderExecutor.RaiseCritical = (account, message, key) =>
-                    RaiseCriticalWarning(account, message, key, unlocksTrading: false);
-                GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
-                AppendJournal(
-                    "System",
-                    "Intent",
-                    "intent_server_started|bind=127.0.0.1:8788|policy="
-                        + (policy != null && policy.IsValid ? "valid" : "invalid")
-                        + "|executor=" + (GlitchAiOrderExecutor.IsExecutionEnabled(policy) ? "enabled" : "disabled")
-                        + "|token_file=GlitchData/telemetry.token");
-            }
+            WireIntentHandlers();
+            GlitchAiOrderExecutor.UiInvoke = InvokeOnUiThread;
+            GlitchAiOrderExecutor.RaiseCritical = (account, message, key) =>
+                RaiseCriticalWarning(account, message, key, unlocksTrading: false);
 
             GlitchHermesControlServer.SetReplication = enabled =>
                 (bool)Dispatcher.Invoke(new Func<bool>(() => SetReplicationFromExternalSurface(enabled, "hermes")));
@@ -51,13 +35,57 @@ namespace Glitch.UI
                     UpdateHermesModeUi(paused);
                     AppendJournal("System", "Glitch AI", paused ? "trading_off" : "trading_on");
                 }));
-            if (GlitchHermesControlServer.TryStart())
+            EnsureRailInfrastructureIfDue(DateTime.UtcNow, force: true);
+            GlitchRailSelfCheckWriter.TryWrite(System.DateTime.UtcNow);
+        }
+
+        private void EnsureRailInfrastructureIfDue(DateTime nowUtc, bool force = false)
+        {
+            if (!force && _lastRailEnsureUtc != DateTime.MinValue
+                && nowUtc - _lastRailEnsureUtc < TimeSpan.FromSeconds(30))
+                return;
+            _lastRailEnsureUtc = nowUtc;
+
+            if (GlitchExternalTelemetryServer.IsRunning || GlitchExternalTelemetryServer.TryStart())
+            {
+                if (!_telemetryStartLogged)
+                {
+                    AppendJournal("System", "Telemetry", "telemetry_started|bind=127.0.0.1:8787|token_file=GlitchData/telemetry.token");
+                    _telemetryStartLogged = true;
+                }
+            }
+            else
+                RaiseCriticalWarning("System", "Glitch telemetry server is unavailable; retrying.", "TelemetryServerUnavailable", unlocksTrading: false);
+
+            if (GlitchAiIntentServer.IsRunning || GlitchAiIntentServer.TryStart())
+            {
+                if (!_intentStartLogged)
+                {
+                    GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
+                    AppendJournal(
+                        "System",
+                        "Intent",
+                        "intent_server_started|bind=127.0.0.1:8788|policy="
+                            + (policy != null && policy.IsValid ? "valid" : "invalid")
+                            + "|executor=" + (GlitchAiOrderExecutor.IsExecutionEnabled(policy) ? "enabled" : "disabled")
+                            + "|token_file=GlitchData/telemetry.token");
+                    _intentStartLogged = true;
+                }
+            }
+            else
+                RaiseCriticalWarning("System", "Glitch intent server is unavailable; retrying.", "IntentServerUnavailable", unlocksTrading: false);
+
+            if (GlitchHermesControlServer.IsRunning || GlitchHermesControlServer.TryStart())
             {
                 UpdateHermesModeUi(GlitchHermesControlStateStore.Load().TradingPaused);
-                AppendJournal("System", "Glitch AI", "control_server_started|bind=127.0.0.1:8789");
+                if (!_controlStartLogged)
+                {
+                    AppendJournal("System", "Glitch AI", "control_server_started|bind=127.0.0.1:8789");
+                    _controlStartLogged = true;
+                }
             }
-
-            GlitchRailSelfCheckWriter.TryWrite(System.DateTime.UtcNow);
+            else
+                RaiseCriticalWarning("System", "Glitch control server is unavailable; retrying.", "ControlServerUnavailable", unlocksTrading: false);
         }
 
         private void StopRailInfrastructure()
@@ -71,6 +99,9 @@ namespace Glitch.UI
             GlitchHermesControlServer.TradingModeChanged = null;
             GlitchAiOrderExecutor.UiInvoke = null;
             GlitchAiOrderExecutor.RaiseCritical = null;
+            _telemetryStartLogged = false;
+            _intentStartLogged = false;
+            _controlStartLogged = false;
             GlitchRailSelfCheckWriter.TryWrite(System.DateTime.UtcNow);
         }
 

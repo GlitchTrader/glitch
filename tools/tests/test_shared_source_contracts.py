@@ -81,7 +81,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn('startsWith("addon-ai-")', update)
         self.assertIn('searchParams.set("edition", "ai")', update)
         self.assertIn("DEFAULT_AI_ADDON_DOWNLOAD_URL", update)
-        self.assertRegex(client, r'CurrentClientVersion = "addon(?:-ai)?-0\.0\.2\.[01]"')
+        self.assertRegex(client, r'CurrentClientVersion = "addon(?:-ai)?-0\.0\.2\.[012]"')
 
     def test_follower_recovery_never_accepts_unscoped_instrument_protection(self):
         copy_engine = source(COPY_ENGINE)

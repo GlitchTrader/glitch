@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Glitch Trade Intent v3",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "intent_id",
+    "created_utc",
+    "instrument",
+    "account",
+    "operator_profile",
+    "action",
+    "confidence",
+    "snapshot_hash",
+    "model_version",
+    "prompt_version",
+    "reason",
+    "decision_audit"
+  ],
+  "properties": {
+    "schema_version": { "const": "glitch.intent.v3" },
+    "intent_id": { "type": "string", "format": "uuid" },
+    "created_utc": { "type": "string", "format": "date-time" },
+    "instrument": { "type": "string", "minLength": 1 },
+    "account": { "type": "string", "minLength": 1 },
+    "operator_profile": { "type": "string", "minLength": 1 },
+    "action": {
+      "enum": ["ENTER_LONG", "ENTER_SHORT", "HOLD", "MOVE_STOP", "MOVE_TP", "EXIT", "NOTHING"]
+    },
+    "quantity": { "type": "integer", "minimum": 1 },
+    "order_type": { "const": "MARKET" },
+    "stop_loss": { "type": "number" },
+    "take_profit_1": { "type": "number" },
+    "take_profit_2": { "type": "number" },
+    "stop_loss_2": { "type": "number" },
+    "quantity_tp1": { "type": "integer", "minimum": 1 },
+    "take_profit_3": { "type": "number" },
+    "stop_loss_3": { "type": "number" },
+    "quantity_tp2": { "type": "integer", "minimum": 1 },
+    "protection_updates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "leg_id": { "type": "string", "minLength": 1 },
+          "stop_loss": { "type": "number" },
+          "take_profit": { "type": "number" }
+        }
+      }
+    },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "snapshot_hash": { "type": "string", "minLength": 1 },
+    "model_version": { "type": "string", "minLength": 1 },
+    "prompt_version": { "type": "string", "minLength": 1 },
+    "reason": { "type": "string", "minLength": 1 },
+    "decision_audit": {
+      "type": "object",
+      "required": [
+        "bull_case",
+        "bear_case",
+        "flat_case",
+        "aggressive_case",
+        "conservative_case",
+        "decisive_evidence",
+        "disconfirming_evidence",
+        "change_condition",
+        "final_choice"
+      ],
+      "properties": {
+        "bull_case": { "type": "string", "minLength": 1 },
+        "bear_case": { "type": "string", "minLength": 1 },
+        "flat_case": { "type": "string", "minLength": 1 },
+        "aggressive_case": { "type": "string", "minLength": 1 },
+        "conservative_case": { "type": "string", "minLength": 1 },
+        "decisive_evidence": { "type": "string", "minLength": 1 },
+        "disconfirming_evidence": { "type": "string", "minLength": 1 },
+        "change_condition": { "type": "string", "minLength": 1 },
+        "final_choice": {
+          "enum": ["ENTER_LONG", "ENTER_SHORT", "HOLD", "MOVE_STOP", "MOVE_TP", "EXIT", "NOTHING"]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {
+      "properties": { "action": { "enum": ["ENTER_LONG", "ENTER_SHORT"] } },
+      "required": ["quantity", "order_type", "stop_loss", "take_profit_1"],
+      "not": { "required": ["protection_updates"] }
+    },
+    {
+      "properties": { "action": { "const": "MOVE_STOP" } },
+      "required": ["protection_updates"],
+      "allOf": [
+        {
+          "properties": {
+            "protection_updates": {
+              "items": {
+                "type": "object",
+                "required": ["leg_id", "stop_loss"],
+                "properties": {
+                  "leg_id": { "type": "string", "minLength": 1 },
+                  "stop_loss": { "type": "number" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "not": {
+            "anyOf": [
+              { "required": ["quantity"] },
+              { "required": ["order_type"] },
+              { "required": ["stop_loss"] },
+              { "required": ["take_profit_1"] },
+              { "required": ["take_profit_2"] },
+              { "required": ["take_profit_3"] }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "properties": { "action": { "const": "MOVE_TP" } },
+      "required": ["protection_updates"],
+      "allOf": [
+        {
+          "properties": {
+            "protection_updates": {
+              "items": {
+                "type": "object",
+                "required": ["leg_id", "take_profit"],
+                "properties": {
+                  "leg_id": { "type": "string", "minLength": 1 },
+                  "take_profit": { "type": "number" },
+                  "stop_loss": { "type": "number" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "not": {
+            "anyOf": [
+              { "required": ["quantity"] },
+              { "required": ["order_type"] },
+              { "required": ["stop_loss"] },
+              { "required": ["take_profit_1"] },
+              { "required": ["take_profit_2"] },
+              { "required": ["take_profit_3"] }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "properties": { "action": { "enum": ["HOLD", "EXIT", "NOTHING"] } },
+      "not": {
+        "anyOf": [
+          { "required": ["quantity"] },
+          { "required": ["order_type"] },
+          { "required": ["stop_loss"] },
+          { "required": ["take_profit_1"] },
+          { "required": ["take_profit_2"] },
+          { "required": ["stop_loss_2"] },
+          { "required": ["quantity_tp1"] },
+          { "required": ["take_profit_3"] },
+          { "required": ["stop_loss_3"] },
+          { "required": ["quantity_tp2"] },
+          { "required": ["protection_updates"] }
+        ]
+      }
+    }
+  ],
+  "additionalProperties": false
+}

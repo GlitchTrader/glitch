@@ -272,6 +272,11 @@ ai.scope.title	AI Trading Scope	Escopo de Negociação por IA	Ámbito de Trading
 ai.scope.description	Enable existing group masters. Glitch AI trades the master; Replication owns its followers and ratios.	Habilite mestres de grupos existentes. A IA da Glitch negocia no mestre; a Replicação controla seguidores e proporções.	Habilite maestros de grupos existentes. La IA de Glitch opera el maestro; la Replicación controla seguidores y proporciones.	启用现有组的主账户。Glitch AI 在主账户交易；复制功能管理跟随账户及比例。	Activez les maîtres des groupes existants. L'IA Glitch négocie sur le maître ; la Réplication gère ses suiveurs et ratios.	Включите мастеров существующих групп. ИИ Glitch торгует на мастере; Репликация управляет последователями и коэффициентами.
 ai.feed.title	Glitch AI Feed	Feed da IA Glitch	Feed de IA Glitch	Glitch AI 动态	Flux IA Glitch	Лента ИИ Glitch
 ai.feed.latest_status_format	Latest snapshot {0}  |  Latest decision {1}	Snapshot mais recente {0}  |  Decisão mais recente {1}	Snapshot más reciente {0}  |  Decisión más reciente {1}	最新快照 {0}  |  最新决策 {1}	Dernier snapshot {0}  |  Dernière décision {1}	Последний снимок {0}  |  Последнее решение {1}
+ai.feed.health_status_format	AI {0}: {1}  |  Latest snapshot {2}  |  Latest decision {3}	IA {0}: {1}  |  Snapshot mais recente {2}  |  Decisão mais recente {3}	IA {0}: {1}  |  Snapshot más reciente {2}  |  Decisión más reciente {3}	AI {0}: {1}  |  最新快照 {2}  |  最新决策 {3}	IA {0} : {1}  |  Dernier snapshot {2}  |  Dernière décision {3}	ИИ {0}: {1}  |  Последний снимок {2}  |  Последнее решение {3}
+ai.health.on	On	Ligada	Activa	开启	Activée	Включен
+ai.health.degraded	Degraded	Degradada	Degradada	已降级	Dégradée	Снижена
+ai.health.off	Off	Desligada	Desactivada	关闭	Désactivée	Выключен
+ai.health.operating	operating	operando	operando	运行中	opérationnelle	работает
 ai.value.none	none	nenhum	ninguno	无	aucun	нет
 ai.value.waiting	Waiting	Aguardando	Esperando	等待中	En attente	Ожидание
 ai.value.missing	Missing	Ausente	Falta	缺失	Manquant	Отсутствует

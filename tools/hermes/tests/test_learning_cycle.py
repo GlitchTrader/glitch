@@ -20,6 +20,115 @@ LAUNCHER_SPEC.loader.exec_module(LAUNCHER)
 
 
 class LearningCycleTests(unittest.TestCase):
+    def test_flat_decision_episode_waits_for_five_frames_and_deduplicates(self):
+        with tempfile.TemporaryDirectory() as root:
+            glitch_data = Path(root)
+            exchange = glitch_data / "hermes" / "exchange"
+            supervisor = exchange / "hermes" / "supervisor"
+            for relative in (
+                "glitch/decision-packets", "glitch/minute-frames",
+                "hermes/outbox", "hermes/receipts", "hermes/supervisor",
+            ):
+                (exchange / relative).mkdir(parents=True, exist_ok=True)
+            account = {
+                "account": "Sim101", "account_status": "Sim",
+                "prop_firm_id": "ApexTraderFunding", "rule_status": "Eval",
+                "account_size": 250000, "equity": 250000,
+                "liquidation_threshold": 243500, "buffer_margin": 6500,
+                "headroom_ratio": 1.0, "max_drawdown": 6500,
+                "max_contracts": 27, "positions": [], "working_orders": 0,
+                "working_order_details": [], "native_state_available": True,
+                "is_risk_locked": False, "is_eval_target_locked": False,
+                "entry_window_open": True,
+            }
+            frames = []
+            for minute in range(1, 6):
+                frames.append({
+                    "minute_id": f"20990101T140{minute}Z",
+                    "market_snapshot": {
+                        "snapshot_hash": "12345",
+                        "instruments": [{"instrument": "MNQ", "current_price": 20000.0}],
+                    },
+                    "portfolio_snapshot": {"accounts": [account]},
+                })
+            cycle_id = "20990101T1405Z"
+            packet = {
+                "schema_version": "glitch.hermes.decision_packet.v2",
+                "packet_id": cycle_id,
+                "window_close_utc": "2099-01-01T14:05:00Z",
+                "frames": frames,
+                "policy": {"profile_account_bindings": ["glitch=Sim101"]},
+                "account_groups_tsv": "G\tg1\tSim101\t250000\n",
+            }
+            intent_id = "00000000-0000-4000-8000-000000000001"
+            intent = {
+                "schema_version": "glitch.intent.v3", "intent_id": intent_id,
+                "created_utc": "2099-01-01T14:05:01Z", "instrument": "MNQ",
+                "account": "Sim101", "operator_profile": "glitch",
+                "action": "NOTHING", "reason": "No supported edge.",
+            }
+            (exchange / "glitch" / "decision-packets" / f"{cycle_id}.json").write_text(
+                json.dumps(packet), encoding="utf-8"
+            )
+            (exchange / "hermes" / "outbox" / f"{cycle_id}.json").write_text(
+                json.dumps({"cycle_id": cycle_id, "decisions": [intent]}), encoding="utf-8"
+            )
+            (exchange / "hermes" / "receipts" / f"{cycle_id}.json").write_text(
+                json.dumps({
+                    "complete": True,
+                    "results": [{
+                        "intent_id": intent_id,
+                        "result": {"http_status": 202, "body": {
+                            "executor": "skipped", "executor_code": "no_op_action",
+                        }},
+                    }],
+                }),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(MODULE.collect_decision_episodes(glitch_data, exchange, supervisor), [])
+            for minute in range(6, 11):
+                frame_id = f"20990101T14{minute:02d}Z"
+                (exchange / "glitch" / "minute-frames" / f"{frame_id}.json").write_text(
+                    json.dumps({
+                        "minute_id": frame_id,
+                        "market_snapshot": {
+                            "instruments": [{"instrument": "MNQ", "current_price": 20000.0 + minute}],
+                        },
+                    }),
+                    encoding="utf-8",
+                )
+
+            first = MODULE.collect_decision_episodes(glitch_data, exchange, supervisor)
+            second = MODULE.collect_decision_episodes(glitch_data, exchange, supervisor)
+
+            self.assertEqual(len(first), 1)
+            self.assertEqual(len(second), 1)
+            self.assertEqual(first[0]["intent_id"], intent_id)
+            self.assertEqual(first[0]["forward_observation_count"], 5)
+            self.assertIsNone(first[0]["counterfactual_pnl"])
+
+    def test_infrastructure_failures_never_become_cognitive_evidence(self):
+        infrastructure = {
+            "http_status": 422,
+            "body": {"failed_check_code": "portfolio_snapshot_invalid"},
+        }
+        geometry = {
+            "http_status": 422,
+            "body": {"failed_check_code": "bracket_invalid"},
+        }
+        unsafe_widening = {
+            "http_status": 202,
+            "body": {
+                "executor": "failed",
+                "executor_code": "apex_liquidation_buffer_exceeded",
+            },
+        }
+
+        self.assertFalse(MODULE.is_cognitive_rejection(infrastructure))
+        self.assertTrue(MODULE.is_cognitive_rejection(geometry))
+        self.assertTrue(MODULE.is_cognitive_rejection(unsafe_widening))
+
     def test_learning_parser_accepts_one_scoped_envelope_amid_transport_chatter(self):
         value = {
             "schema_version": "glitch.hermes.learning_output.v1",
@@ -404,12 +513,19 @@ class LearningCycleTests(unittest.TestCase):
         episodes = [{"intent_id": "intent-1", "episode_id": "episode-1"}]
         after_missed_window = datetime(2026, 7, 21, 14, 0, tzinfo=timezone.utc)
 
-        due = MODULE.unjournaled_completed_sessions(outcomes, episodes, [], after_missed_window)
+        due = MODULE.unjournaled_completed_sessions(outcomes, episodes, [], [], after_missed_window)
 
-        self.assertEqual(due, [("2026-07-20", episodes)])
+        self.assertEqual(due, [("2026-07-20", {
+            "trade_episodes": episodes,
+            "decision_episodes": [],
+        })])
         self.assertEqual(
             MODULE.unjournaled_completed_sessions(
-                outcomes, episodes, [{"session_date_et": "2026-07-20"}], after_missed_window
+                outcomes,
+                episodes,
+                [],
+                [{"session_date_et": "2026-07-20"}],
+                after_missed_window,
             ),
             [],
         )

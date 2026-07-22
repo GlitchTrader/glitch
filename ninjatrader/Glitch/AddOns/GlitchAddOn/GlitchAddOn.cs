@@ -425,7 +425,11 @@ namespace NinjaTrader.NinjaScript.AddOns
         {
             try
             {
-                window?.Close();
+                GlitchMainWindow glitchWindow = window as GlitchMainWindow;
+                if (glitchWindow != null)
+                    glitchWindow.ShutdownForAddOn();
+                else
+                    window?.Close();
             }
             catch
             {

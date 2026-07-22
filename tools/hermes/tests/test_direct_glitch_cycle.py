@@ -67,7 +67,7 @@ def packet():
 
 def decision(route, account, suffix, action="NOTHING"):
     value = {
-        "schema_version": "glitch.intent.v2",
+        "schema_version": "glitch.intent.v3",
         "intent_id": f"00000000-0000-4000-8000-{suffix:012d}",
         "created_utc": "2099-01-01T14:05:01Z",
         "instrument": "MNQ",
@@ -124,12 +124,12 @@ class DirectCycleTests(unittest.TestCase):
         )
         return glitch_data, exchange
 
-    def test_luna_cadence_is_five_minutes_when_flat_and_not_watching(self):
+    def test_first_available_flat_packet_invokes_without_wall_clock_modulo(self):
         value = packet()
         value["packet_id"] = "20990101T1406Z"
         value["window_close_utc"] = "2099-01-01T14:06:00Z"
         with tempfile.TemporaryDirectory() as root:
-            self.assertFalse(MODULE.should_invoke_luna(
+            self.assertTrue(MODULE.should_invoke_luna(
                 value, MODULE.build_scenario(value), Path(root), None
             ))
 
@@ -152,10 +152,10 @@ class DirectCycleTests(unittest.TestCase):
         value["window_close_utc"] = "2099-01-01T14:06:00Z"
         with tempfile.TemporaryDirectory() as root:
             exchange = Path(root)
-            outbox = exchange / "hermes" / "outbox"
-            outbox.mkdir(parents=True)
-            (outbox / "20990101T1405Z.json").write_text(
-                json.dumps({"next_review_seconds": 60}), encoding="utf-8"
+            attempts = exchange / "hermes" / "model-attempts"
+            attempts.mkdir(parents=True)
+            (attempts / "20990101T1405Z.json").write_text(
+                json.dumps({"status": "completed"}), encoding="utf-8"
             )
             self.assertFalse(MODULE.should_invoke_luna(
                 value, MODULE.build_scenario(value), exchange, None
@@ -456,16 +456,26 @@ class DirectCycleTests(unittest.TestCase):
         self.assertTrue(MODULE.receipt_requires_new_packet_retry(failed))
         self.assertFalse(MODULE.receipt_requires_new_packet_retry(submitted))
 
-    def test_runtime_error_gets_one_native_next_packet_fallback(self):
-        args = SimpleNamespace(error_retry_wait_seconds=75)
-        with tempfile.TemporaryDirectory() as root, mock.patch.object(
-            MODULE, "run_once", side_effect=[RuntimeError("first"), 0]
-        ) as run, mock.patch.object(MODULE, "wait_for_newer_packet", return_value=True) as wait:
-            result = MODULE.run_with_next_packet_fallback(args, Path(root), Path(root))
+    def test_non_noop_executor_skip_requests_a_new_packet_decision(self):
+        trading_off = {
+            "complete": True,
+            "results": [{"result": {"http_status": 202, "body": {
+                "executor": "skipped", "executor_code": "trading_off"
+            }}}],
+        }
+        nothing = {
+            "complete": True,
+            "results": [{"result": {"http_status": 202, "body": {
+                "executor": "skipped", "executor_code": "no_op_action"
+            }}}],
+        }
 
-        self.assertEqual(result, 0)
-        self.assertEqual(run.call_count, 2)
-        wait.assert_called_once()
+        self.assertEqual(MODULE.receipt_classification(trading_off), "terminal_rejection")
+        self.assertEqual(MODULE.receipt_classification(nothing), "successful")
+
+    def test_worker_has_no_in_process_polling_fallback(self):
+        self.assertFalse(hasattr(MODULE, "wait_for_newer_packet"))
+        self.assertFalse(hasattr(MODULE, "run_with_next_packet_fallback"))
 
     def test_prompt_exposes_optional_three_leg_native_scale_out(self):
         value = MODULE.build_prompt(packet(), MODULE.build_scenario(packet()), {})
@@ -924,15 +934,21 @@ class DirectCycleTests(unittest.TestCase):
         self.assertEqual(normalized["decisions"][0]["take_profit_3"], 20120.0)
         MODULE.validate_batch(normalized, scenario)
 
-    def test_move_stop_keeps_only_management_price(self):
+    def test_move_stop_keeps_only_exact_leg_updates(self):
         value = decision("glitch", "Sim101", 1, "MOVE_STOP")
-        value.update({"quantity": 2, "order_type": "MARKET", "stop_loss": 19990.0, "take_profit_1": 20060.0})
+        value.update({
+            "quantity": 2,
+            "order_type": "MARKET",
+            "stop_loss": 19990.0,
+            "take_profit_1": 20060.0,
+            "protection_updates": [{"leg_id": "abc:0", "stop_loss": 19990.0}],
+        })
         normalized = MODULE.normalize_batch({"decisions": [value]})["decisions"][0]
-        self.assertEqual(normalized["stop_loss"], 19990.0)
+        self.assertEqual(normalized["protection_updates"][0]["stop_loss"], 19990.0)
         self.assertNotIn("quantity", normalized)
         self.assertNotIn("take_profit_1", normalized)
 
-    def test_move_tp_accepts_target_with_optional_tighter_stop_only(self):
+    def test_move_tp_accepts_exact_leg_target_with_optional_stop(self):
         scenario = MODULE.build_scenario(packet())
         value = decision("glitch", "Sim101", 1, "MOVE_TP")
         value.update({
@@ -941,6 +957,9 @@ class DirectCycleTests(unittest.TestCase):
             "take_profit_1": 20080.0,
             "take_profit_2": 20100.0,
             "stop_loss": 19995.0,
+            "protection_updates": [{
+                "leg_id": "abc:0", "take_profit": 20080.0, "stop_loss": 19995.0,
+            }],
         })
         batch = {
             "schema_version": "glitch.intent.batch.v1",
@@ -950,8 +969,8 @@ class DirectCycleTests(unittest.TestCase):
 
         normalized = MODULE.normalize_batch(batch, scenario)
 
-        self.assertEqual(normalized["decisions"][0]["take_profit_1"], 20080.0)
-        self.assertEqual(normalized["decisions"][0]["stop_loss"], 19995.0)
+        self.assertEqual(normalized["decisions"][0]["protection_updates"][0]["take_profit"], 20080.0)
+        self.assertEqual(normalized["decisions"][0]["protection_updates"][0]["stop_loss"], 19995.0)
         self.assertNotIn("quantity", normalized["decisions"][0])
         self.assertNotIn("take_profit_2", normalized["decisions"][0])
         MODULE.validate_batch(normalized, scenario)
@@ -964,7 +983,7 @@ class DirectCycleTests(unittest.TestCase):
             "cycle_id": scenario["cycle_id"],
             "decisions": [value, decision("glitch-second", "Sim201", 2)],
         }
-        with self.assertRaisesRegex(ValueError, "move_tp_price_required"):
+        with self.assertRaisesRegex(ValueError, "protection_updates_required"):
             MODULE.validate_batch(batch, scenario)
 
     def test_stale_packet_spends_no_model_call(self):
@@ -1074,6 +1093,88 @@ class DirectCycleTests(unittest.TestCase):
                 [item["intent_id"] for item in submitted["decisions"]],
                 [item["intent_id"] for item in batch["decisions"]],
             )
+
+    def test_transport_uncertain_old_outbox_reuses_ids_on_a_newer_packet(self):
+        with tempfile.TemporaryDirectory() as root:
+            glitch_data, exchange = self.prepare_runtime(root)
+            original = packet()
+            scenario = MODULE.build_scenario(original)
+            batch = {
+                "schema_version": "glitch.intent.batch.v1",
+                "cycle_id": scenario["cycle_id"],
+                "decisions": [
+                    decision("glitch", "Sim101", 1),
+                    decision("glitch-second", "Sim201", 2),
+                ],
+            }
+            MODULE.write_json_atomic(
+                exchange / "glitch" / "decision-packets" / f"{scenario['cycle_id']}.json",
+                original,
+            )
+            MODULE.write_json_atomic(
+                exchange / "hermes" / "outbox" / f"{scenario['cycle_id']}.json",
+                batch,
+            )
+            MODULE.write_json_atomic(
+                exchange / "hermes" / "receipts" / f"{scenario['cycle_id']}.json",
+                {"complete": False, "results": [{"result": {"transport_error": "timeout"}}]},
+            )
+            newer = packet()
+            newer["packet_id"] = "20990101T1406Z"
+            newer["window_close_utc"] = "2099-01-01T14:06:00Z"
+            MODULE.write_json_atomic(exchange / "glitch" / "latest-decision-packet.json", newer)
+            args = SimpleNamespace(profile="glitch", timeout_seconds=30, dry_run=False)
+
+            with mock.patch.object(MODULE, "packet_is_current", return_value=True), mock.patch.object(
+                MODULE, "invoke_hermes"
+            ) as invoke, mock.patch.object(
+                MODULE, "submit_batch", return_value={"complete": True, "results": []}
+            ) as submit:
+                result = MODULE.run_once(args, glitch_data, exchange)
+
+            self.assertEqual(result, 0)
+            invoke.assert_not_called()
+            self.assertEqual(submit.call_args.args[0]["cycle_id"], scenario["cycle_id"])
+            self.assertEqual(
+                [row["intent_id"] for row in submit.call_args.args[0]["decisions"]],
+                [row["intent_id"] for row in batch["decisions"]],
+            )
+
+    def test_gap_metadata_reaches_luna_without_becoming_a_veto(self):
+        value = packet()
+        value.update({
+            "schema_version": "glitch.hermes.decision_packet.v2",
+            "is_contiguous": False,
+            "observed_span_minutes": 6,
+            "missing_minute_ids": ["20990101T1403Z"],
+        })
+
+        model_packet = MODULE.packet_for_model(value, MODULE.build_scenario(value))
+        prompt = MODULE.build_prompt(value, MODULE.build_scenario(value), {})
+
+        self.assertFalse(model_packet["is_contiguous"])
+        self.assertEqual(model_packet["observed_span_minutes"], 6)
+        self.assertEqual(model_packet["missing_minute_ids"], ["20990101T1403Z"])
+        self.assertIn("uncertainty evidence", prompt)
+
+    def test_dead_and_reused_pid_locks_are_replaced_immediately(self):
+        with tempfile.TemporaryDirectory() as root:
+            dead = Path(root) / "dead.lock"
+            dead.write_text(json.dumps({
+                "pid": 2147483647,
+                "started_utc": "2099-01-01T00:00:00Z",
+            }), encoding="utf-8")
+            self.assertTrue(MODULE.acquire_owner_lock(dead))
+            owner = MODULE.read_json(dead)
+            self.assertEqual(owner["pid"], __import__("os").getpid())
+
+            live = Path(root) / "live.lock"
+            started = MODULE.process_start_utc(__import__("os").getpid())
+            live.write_text(json.dumps({
+                "pid": __import__("os").getpid(),
+                "started_utc": (started or datetime.now(timezone.utc)).isoformat(),
+            }), encoding="utf-8")
+            self.assertFalse(MODULE.acquire_owner_lock(live))
 
     def test_failed_model_attempt_is_not_repeated_for_same_packet(self):
         with tempfile.TemporaryDirectory() as root:

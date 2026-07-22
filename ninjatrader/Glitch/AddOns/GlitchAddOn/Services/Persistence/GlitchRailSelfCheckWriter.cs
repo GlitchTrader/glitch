@@ -58,6 +58,7 @@ namespace Glitch.Services
 
         private static string BuildJson(DateTime nowUtc)
         {
+            GlitchAiHealthSnapshot health = GlitchAiHealthEvaluator.Evaluate(nowUtc);
             GlitchAnalyticsFeedBus.EnsurePersistenceLoaded();
             IReadOnlyList<string> roots = GlitchAnalyticsFeedBus.GetKnownInstrumentRoots() ?? Array.Empty<string>();
 
@@ -121,10 +122,10 @@ namespace Glitch.Services
             sb.Append("},");
             sb.Append("\"executor\":{");
             GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
-            sb.Append("\"policy_valid\":").Append(GlitchSnapshotJson.Bool(policy.IsValid)).Append(',');
-            sb.Append("\"policy_error\":").Append(GlitchSnapshotJson.String(policy.ValidationError ?? string.Empty)).Append(',');
+            sb.Append("\"policy_valid\":").Append(GlitchSnapshotJson.Bool(policy != null && policy.IsValid)).Append(',');
+            sb.Append("\"policy_error\":").Append(GlitchSnapshotJson.String(policy?.ValidationError ?? "policy_unavailable")).Append(',');
             sb.Append("\"enabled\":").Append(GlitchSnapshotJson.Bool(GlitchAiOrderExecutor.IsExecutionEnabled(policy))).Append(',');
-            sb.Append("\"account\":").Append(GlitchSnapshotJson.String(policy.ExecutorAccount ?? string.Empty));
+            sb.Append("\"account\":").Append(GlitchSnapshotJson.String(policy?.ExecutorAccount ?? string.Empty));
             sb.Append("},");
             string sanityPath = GlitchSnapshotSanityWriter.GetLatestPath();
             string harnessPath = GlitchAiReplayHarnessWriter.GetLatestPath();
@@ -141,6 +142,7 @@ namespace Glitch.Services
             sb.Append("\"r13_replay_harness\":").Append(GlitchSnapshotJson.String(File.Exists(harnessPath) ? "done" : "starting")).Append(',');
             sb.Append("\"r11_hermes_stub\":").Append(GlitchSnapshotJson.String("ready"));
             sb.Append('}');
+            sb.Append(",\"health\":").Append(health.ToJson());
             sb.Append('}');
             return sb.ToString();
         }

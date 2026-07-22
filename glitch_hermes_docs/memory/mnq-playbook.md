@@ -12,7 +12,7 @@ touched once.** Supersedes playbook v1 (2026-07-11).
 **Machine twin:** `archetypes.v2.json` — historical research output, not executable truth.
 `archetypes.v1.json` is retained for provenance: **its entire set is retired/candidate**
 after the multi-era re-test (see §2 lesson 1).
-**Contract:** `docs/10_hermes_operator_contract.md` · Intent v2 (`docs/09_intent_contract_v2_brackets.md`).
+**Contract:** `docs/10_hermes_operator_contract.md` · Intent v3 (`docs/14_intent_v3_reliability.md`).
 
 ```text
 No archetype match is required. Current probabilistic judgment decides whether either side has positive expectancy.

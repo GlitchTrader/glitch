@@ -55,6 +55,7 @@ namespace Glitch.Services
 
         private static string BuildJson(DateTime nowUtc)
         {
+            GlitchAiHealthSnapshot health = GlitchAiHealthEvaluator.Evaluate(nowUtc);
             string marketPath = GlitchMarketSnapshotWriter.GetLatestSnapshotPath();
             string portfolioPath = GlitchPortfolioSnapshotWriter.GetLatestSnapshotPath();
             string replayPath = GlitchHistoricalSnapshotExporter.GetReplayLatestPath();
@@ -75,20 +76,11 @@ namespace Glitch.Services
             bool telemetryUp = GlitchExternalTelemetryServer.IsRunning;
             bool tokenOk = GlitchRailBearerAuth.HasToken;
 
-            bool healthy = marketExists
-                && portfolioExists
-                && marketAgeSec >= 0 && marketAgeSec <= 180
-                && portfolioAgeSec >= 0 && portfolioAgeSec <= 180
-                && instrumentCount > 0
-                && intentUp
-                && telemetryUp
-                && tokenOk;
-
             var sb = new StringBuilder(768);
             sb.Append('{');
             sb.Append("\"schema_version\":").Append(GlitchSnapshotJson.String(SchemaVersion)).Append(',');
             sb.Append("\"created_utc\":").Append(GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(nowUtc))).Append(',');
-            sb.Append("\"status\":").Append(GlitchSnapshotJson.String(healthy ? "ok" : "degraded")).Append(',');
+            sb.Append("\"status\":").Append(GlitchSnapshotJson.String(health.OverallStatus)).Append(',');
             sb.Append("\"market\":{");
             sb.Append("\"exists\":").Append(GlitchSnapshotJson.Bool(marketExists)).Append(',');
             sb.Append("\"age_seconds\":").Append(FormatAge(marketAgeSec)).Append(',');
@@ -108,7 +100,8 @@ namespace Glitch.Services
             sb.Append("\"intent_running\":").Append(GlitchSnapshotJson.Bool(intentUp)).Append(',');
             sb.Append("\"token_configured\":").Append(GlitchSnapshotJson.Bool(tokenOk));
             sb.Append("},");
-            sb.Append("\"rail_selfcheck_exists\":").Append(GlitchSnapshotJson.Bool(railExists));
+            sb.Append("\"rail_selfcheck_exists\":").Append(GlitchSnapshotJson.Bool(railExists)).Append(',');
+            sb.Append("\"health\":").Append(health.ToJson());
             sb.Append('}');
             return sb.ToString();
         }

@@ -2,6 +2,12 @@
 
 **Status:** normative amendment to `02_contracts.md` · **Origin:** operator dictation 2026-07-08 · **Schema:** `schemas/intent.v2.schema.json`
 
+> Compatibility note (v0.0.2.2): new cognition emits `glitch.intent.v3`.
+> v2 remains accepted for entries, no-ops, holds, exits, and global
+> `MOVE_STOP`. v2 `MOVE_TP` is accepted only when exactly one native target
+> remains; multi-target scope is rejected rather than collapsed. See
+> `14_intent_v3_reliability.md` for the current contract.
+
 ## Why v2
 
 v1 allowed `stop_loss` and `take_profit_1` to be null. The operator has closed that door:
@@ -60,4 +66,4 @@ There is no AI-only one-contract cap. Current account/group state and prop-firm 
 
 ## Versioning
 
-`schema_version: "glitch.intent.v2"`. Glitch rejects any other version. v1 was never implemented in code; v2 is the first implemented contract. Schema changes require a new version const and a ledger entry.
+`schema_version: "glitch.intent.v2"`. v2 was the first implemented contract and remains the bounded compatibility contract described above. Current cognition emits v3. Schema changes require a new version const and a ledger entry.

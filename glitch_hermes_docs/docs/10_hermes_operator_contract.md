@@ -91,7 +91,7 @@ Group composition and ratios are dynamic Glitch state. Results must therefore be
 Cadence:
 
 ```text
-Glitch publishes a rolling five-frame packet each minute. The lightweight worker wakes on Hermes's native one-minute tick, but invokes Hermes only on five-minute boundaries while flat, each minute while a scoped master is positioned, once for an explicit operator directive, or on the next newer packet after any failed model/contract attempt.
+Glitch publishes a rolling packet from the five latest observed paired frames each minute and reports missing-minute continuity explicitly. The lightweight worker wakes on Hermes's native one-minute tick, but invokes Hermes only after five elapsed minutes while flat, for every new packet while a scoped master is positioned, once for an explicit operator directive, or on the next packet after any model, validation, delivery, firewall, or executor failure.
 ```
 
 Nominal loop:
@@ -183,8 +183,8 @@ Allowed M0-style actions:
 ENTER_LONG   // Buy
 ENTER_SHORT  // Sell
 HOLD         // keep existing position, no change
-MOVE_STOP    // tighten native master protection
-MOVE_TP      // move every remaining native target; optionally tighten stops
+MOVE_STOP    // amend selected native stop legs; tightening or safe widening
+MOVE_TP      // amend selected native target legs; optional same-leg stop change
 EXIT         // request flat/reduce risk now
 NOTHING      // stay flat / no action
 ```
@@ -355,10 +355,10 @@ Read in order:
 1. AGENTS.md
 2. docs/ai-program/roadmap.md
 3. glitch_hermes_docs/README.md
-4. glitch_hermes_docs/docs/09_intent_contract_v2_brackets.md
+4. glitch_hermes_docs/docs/14_intent_v3_reliability.md
 5. glitch_hermes_docs/docs/10_hermes_operator_contract.md
 6. glitch_hermes_docs/docs/11_snapshot_ingestion_learning_pipeline.md
-7. glitch_hermes_docs/schemas/intent.v2.schema.json
+7. glitch_hermes_docs/schemas/intent.v3.schema.json
 8. relevant AddOn source files
 ```
 

@@ -72,17 +72,7 @@ namespace Glitch.Services
     internal static class GlitchPortfolioSnapshotWriter
     {
         public const string SchemaVersion = "glitch.portfolio.snapshot.v1";
-        private static readonly TimeSpan WriteThrottle = TimeSpan.FromMinutes(1);
-        private static DateTime _lastWriteUtc = DateTime.MinValue;
         private static string _lastSnapshotHash;
-
-        public static bool TryWriteLatestIfDue(DateTime nowUtc, GlitchPortfolioSnapshotCapture capture, string snapshotId = null)
-        {
-            if (_lastWriteUtc != DateTime.MinValue && (nowUtc - _lastWriteUtc) < WriteThrottle)
-                return false;
-
-            return TryWriteLatest(nowUtc, capture, snapshotId);
-        }
 
         public static bool TryWriteLatest(DateTime nowUtc, GlitchPortfolioSnapshotCapture capture, string snapshotId = null)
         {
@@ -98,7 +88,6 @@ namespace Glitch.Services
                 string hash = GlitchSnapshotJson.ComputeStableHash(json);
                 if (string.Equals(hash, _lastSnapshotHash, StringComparison.Ordinal))
                 {
-                    _lastWriteUtc = nowUtc;
                     return true;
                 }
 
@@ -107,16 +96,11 @@ namespace Glitch.Services
                 if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
                     Directory.CreateDirectory(directory);
 
-                string tempPath = path + ".tmp";
-                File.WriteAllText(tempPath, json, new UTF8Encoding(false));
-                if (File.Exists(path))
-                    File.Delete(path);
-                File.Move(tempPath, path);
+                WriteAtomic(path, json);
 
                 GlitchHistoricalSnapshotExporter.TryArchivePortfolioSnapshot(json, nowUtc);
 
                 _lastSnapshotHash = hash;
-                _lastWriteUtc = nowUtc;
                 return true;
             }
             catch
@@ -128,6 +112,29 @@ namespace Glitch.Services
         public static string GetLatestSnapshotPath()
         {
             return GlitchStateStore.GetDefaultPath(Path.Combine("snapshots", "portfolio", "latest.json"));
+        }
+
+        private static void WriteAtomic(string path, string json)
+        {
+            string tempPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
+                using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
+                {
+                    writer.Write(json);
+                    writer.Flush();
+                    stream.Flush(true);
+                }
+                if (File.Exists(path))
+                    File.Replace(tempPath, path, null);
+                else
+                    File.Move(tempPath, path);
+            }
+            finally
+            {
+                try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
+            }
         }
 
         public static void TryResolvePropFirmRulesVersion(out string schemaVersion, out string updatedAtUtc)

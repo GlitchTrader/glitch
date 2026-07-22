@@ -20,6 +20,7 @@ namespace Glitch.UI
         private int _accountRefreshBuildInFlight;
         private bool _accountRefreshCoalesceRequested;
         private bool _accountRefreshCoalesceHeavy;
+        private DateTime _lastHiddenRuntimeRefreshUtc = DateTime.MinValue;
 
         private void RefreshAccountData(bool heavyTabWork = true, bool preferSynchronous = false)
         {
@@ -56,6 +57,20 @@ namespace Glitch.UI
 
             MaybeEnforceAiDailyClose(activeAccounts);
             PublishGlitchShellState();
+        }
+
+        private void RefreshHiddenRuntimeSafetyIfDue(DateTime nowUtc)
+        {
+            if (_isWindowClosed
+                || (_lastHiddenRuntimeRefreshUtc != DateTime.MinValue
+                    && nowUtc - _lastHiddenRuntimeRefreshUtc < TimeSpan.FromSeconds(5)))
+                return;
+            List<Account> activeAccounts = GetActiveAccountsSnapshot();
+            AccountRefreshBuildResult result = BuildAccountRowsOnWorker(
+                activeAccounts,
+                SnapshotSelectionOverridesForRefresh(activeAccounts));
+            ApplyFullAccountRefreshResult(result.Rows, result.DeferredAutoOverrides, heavyTabWork: false);
+            _lastHiddenRuntimeRefreshUtc = nowUtc;
         }
 
         private Dictionary<string, AccountSelectionOverride> SnapshotSelectionOverridesForRefresh(IEnumerable<Account> accounts)

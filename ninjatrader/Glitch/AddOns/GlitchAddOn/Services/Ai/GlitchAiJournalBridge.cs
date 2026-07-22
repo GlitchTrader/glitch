@@ -17,25 +17,28 @@ namespace Glitch.Services
             string intentId,
             string rawJson,
             GlitchAiRiskDecision decision,
-            DateTime recordedUtc,
-            out bool isDuplicate)
+            DateTime recordedUtc)
         {
-            isDuplicate = false;
             if (string.IsNullOrWhiteSpace(intentId) || string.IsNullOrWhiteSpace(rawJson) || decision == null)
                 return false;
 
             lock (SyncRoot)
             {
-                if (GlitchAiIntentJournalWriter.HasIntentId(intentId))
-                {
-                    isDuplicate = true;
-                    return false;
-                }
-
                 string path = GetDecisionsJsonlPath();
                 string directory = Path.GetDirectoryName(path);
                 if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
                     Directory.CreateDirectory(directory);
+
+                string intentToken = "\"intent_id\":" + GlitchSnapshotJson.String(intentId);
+                if (File.Exists(path))
+                {
+                    foreach (string existingLine in File.ReadLines(path))
+                    {
+                        if (!string.IsNullOrWhiteSpace(existingLine)
+                            && existingLine.IndexOf(intentToken, StringComparison.Ordinal) >= 0)
+                            return true;
+                    }
+                }
 
                 string status = decision.IsApproved ? "approved" : "rejected";
                 string line = "{"
@@ -51,8 +54,6 @@ namespace Glitch.Services
                     + "}";
 
                 File.AppendAllText(path, line + Environment.NewLine, new UTF8Encoding(false));
-                GlitchAiIntentJournalWriter.RegisterIntentId(intentId);
-
                 if (decision.IsApproved)
                     GlitchAiIntentJournalWriter.AppendAcceptedMirror(intentId, rawJson, recordedUtc);
 

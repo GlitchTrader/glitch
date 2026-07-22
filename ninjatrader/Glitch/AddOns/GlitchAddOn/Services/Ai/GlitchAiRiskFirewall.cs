@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -18,7 +19,6 @@ namespace Glitch.Services
             string instrument = GlitchAiJsonFields.ExtractString(rawJson, "instrument");
             string account = GlitchAiJsonFields.ExtractString(rawJson, "account");
             string operatorProfile = GlitchAiJsonFields.ExtractString(rawJson, "operator_profile");
-            string intentId = GlitchAiJsonFields.ExtractString(rawJson, "intent_id");
             string snapshotHash = GlitchAiJsonFields.ExtractString(rawJson, "snapshot_hash");
             bool isEnter = IsEnterAction(action);
 
@@ -114,10 +114,8 @@ namespace Glitch.Services
                 trail.Add("06_portfolio_snapshot:not_required_for_non_entry");
             }
 
-            if (GlitchAiIntentJournalWriter.HasIntentId(intentId))
-                return Reject(trail, 7, "intent_id_duplicate", intentId);
-
-            trail.Add("07_intent_id_unique:pass");
+            // The server owns atomic intent claiming and duplicate replay.
+            trail.Add("07_intent_claim:delegated_to_server");
 
             if (!isEnter)
             {
@@ -283,6 +281,45 @@ namespace Glitch.Services
             }
 
             double tick = metadata.TickSize;
+            bool isV3 = string.Equals(
+                GlitchAiJsonFields.ExtractString(rawJson, "schema_version"),
+                "glitch.intent.v3",
+                StringComparison.Ordinal);
+            if (isV3 && (string.Equals(action, "MOVE_STOP", StringComparison.Ordinal)
+                || string.Equals(action, "MOVE_TP", StringComparison.Ordinal)))
+            {
+                if (!GlitchAiJsonFields.TryParseObject(rawJson, out IDictionary parsed)
+                    || !(parsed["protection_updates"] is IList updates))
+                {
+                    failure = "protection_updates";
+                    return false;
+                }
+                for (int i = 0; i < updates.Count; i++)
+                {
+                    IDictionary update = updates[i] as IDictionary;
+                    if (update == null)
+                    {
+                        failure = "protection_update";
+                        return false;
+                    }
+                    if (update.Contains("stop_loss")
+                        && (!TryGetNumber(update, "stop_loss", out double updateStop)
+                            || !IsTickRounded(updateStop, tick)))
+                    {
+                        failure = "protection_update_stop_loss";
+                        return false;
+                    }
+                    if (update.Contains("take_profit")
+                        && (!TryGetNumber(update, "take_profit", out double updateTarget)
+                            || !IsTickRounded(updateTarget, tick)))
+                    {
+                        failure = "protection_update_take_profit";
+                        return false;
+                    }
+                }
+                return true;
+            }
+
             if (string.Equals(action, "MOVE_STOP", StringComparison.Ordinal))
             {
                 double movedStop;
@@ -309,17 +346,6 @@ namespace Glitch.Services
                     return false;
                 }
                 return true;
-            }
-
-            string orderType = GlitchAiJsonFields.ExtractString(rawJson, "order_type");
-            if (string.Equals(orderType, "LIMIT", StringComparison.OrdinalIgnoreCase))
-            {
-                double limitPrice;
-                if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "limit_price", out limitPrice) || !IsTickRounded(limitPrice, tick))
-                {
-                    failure = "limit_price";
-                    return false;
-                }
             }
 
             double stopLoss;
@@ -391,15 +417,7 @@ namespace Glitch.Services
             if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss", out stopLoss1))
                 return false;
 
-            double entry;
-            string orderType = GlitchAiJsonFields.ExtractString(rawJson, "order_type");
-            if (string.Equals(orderType, "LIMIT", StringComparison.OrdinalIgnoreCase))
-            {
-                if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "limit_price", out entry))
-                    return false;
-            }
-            else
-                entry = snapshotMarketPrice;
+            double entry = snapshotMarketPrice;
 
             bool isLong = string.Equals(action, "ENTER_LONG", StringComparison.Ordinal);
             bool hasSecondTarget = GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_2", out _);
@@ -466,21 +484,28 @@ namespace Glitch.Services
             return true;
         }
 
+        private static bool TryGetNumber(IDictionary parsed, string key, out double value)
+        {
+            value = 0;
+            if (parsed == null || !parsed.Contains(key) || parsed[key] == null
+                || parsed[key] is bool || parsed[key] is string)
+                return false;
+            try
+            {
+                value = Convert.ToDouble(parsed[key], CultureInfo.InvariantCulture);
+                return !double.IsNaN(value) && !double.IsInfinity(value);
+            }
+            catch
+            {
+                value = 0;
+                return false;
+            }
+        }
+
         private static bool IsBracketSane(string rawJson, string instrument, string action, double snapshotMarketPrice, out string failure)
         {
             failure = null;
-            double entry;
-            string orderType = GlitchAiJsonFields.ExtractString(rawJson, "order_type");
-            if (string.Equals(orderType, "LIMIT", StringComparison.OrdinalIgnoreCase))
-            {
-                if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "limit_price", out entry))
-                {
-                    failure = "missing_limit_price";
-                    return false;
-                }
-            }
-            else
-                entry = snapshotMarketPrice;
+            double entry = snapshotMarketPrice;
 
             double stopLoss;
             double takeProfit1;
@@ -532,9 +557,9 @@ namespace Glitch.Services
                     return false;
                 }
 
-                if (isLong ? takeProfit2 <= takeProfit1 : takeProfit2 >= takeProfit1)
+                if (isLong ? takeProfit2 <= entry : takeProfit2 >= entry)
                 {
-                    failure = "tp2_not_beyond_tp1";
+                    failure = "tp2_market_side_invalid";
                     return false;
                 }
             }
@@ -548,17 +573,9 @@ namespace Glitch.Services
                     return false;
                 }
 
-                if (isLong)
+                if (isLong ? stopLoss2 >= entry : stopLoss2 <= entry)
                 {
-                    if (stopLoss2 <= stopLoss || stopLoss2 >= entry)
-                    {
-                        failure = "stop_loss_2_not_tighter_loss_side";
-                        return false;
-                    }
-                }
-                else if (stopLoss2 >= stopLoss || stopLoss2 <= entry)
-                {
-                    failure = "stop_loss_2_not_tighter_loss_side";
+                    failure = "stop_loss_2_market_side_invalid";
                     return false;
                 }
             }
@@ -582,9 +599,9 @@ namespace Glitch.Services
                     failure = "tp3_quantity_split_invalid";
                     return false;
                 }
-                if (isLong ? takeProfit3 <= takeProfit2 : takeProfit3 >= takeProfit2)
+                if (isLong ? takeProfit3 <= entry : takeProfit3 >= entry)
                 {
-                    failure = "tp3_not_beyond_tp2";
+                    failure = "tp3_market_side_invalid";
                     return false;
                 }
             }
@@ -597,14 +614,9 @@ namespace Glitch.Services
                     failure = "stop_loss_3_requires_tp3";
                     return false;
                 }
-                double precedingStop = GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss_2", out stopLoss2)
-                    ? stopLoss2
-                    : stopLoss;
-                if (isLong
-                    ? stopLoss3 <= precedingStop || stopLoss3 >= entry
-                    : stopLoss3 >= precedingStop || stopLoss3 <= entry)
+                if (isLong ? stopLoss3 >= entry : stopLoss3 <= entry)
                 {
-                    failure = "stop_loss_3_not_tighter_loss_side";
+                    failure = "stop_loss_3_market_side_invalid";
                     return false;
                 }
             }

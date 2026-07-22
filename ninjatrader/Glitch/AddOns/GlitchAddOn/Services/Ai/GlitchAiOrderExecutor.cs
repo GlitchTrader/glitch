@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -100,6 +101,121 @@ namespace Glitch.Services
                 ReconcileEntryProtection(group, entryAccountIndex, order, "order_update");
 
             TryCompleteGroup(group);
+        }
+
+        public static GlitchAiExecutionResult TryReconcileStartedIntent(string rawJson, DateTime nowUtc)
+        {
+            GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
+            if (policy == null || !policy.IsValid)
+                return GlitchAiExecutionResult.Failed("reconcile_policy_invalid", policy?.ValidationError);
+            if (UiInvoke == null)
+                return GlitchAiExecutionResult.Failed("reconcile_ui_dispatcher_missing");
+            try
+            {
+                return UiInvoke(() => ReconcileStartedIntentOnUiThread(rawJson, policy));
+            }
+            catch (Exception ex)
+            {
+                return GlitchAiExecutionResult.Failed("reconcile_exception", ex.Message);
+            }
+        }
+
+        private static GlitchAiExecutionResult ReconcileStartedIntentOnUiThread(string rawJson, GlitchAiRailPolicy policy)
+        {
+            string accountName = GlitchAiJsonFields.ExtractString(rawJson, "account");
+            string operatorProfile = GlitchAiJsonFields.ExtractString(rawJson, "operator_profile");
+            if (!policy.TryResolveProfileAccount(operatorProfile, out string boundAccount)
+                || !string.Equals(accountName, boundAccount, StringComparison.OrdinalIgnoreCase))
+                return GlitchAiExecutionResult.Failed("reconcile_account_binding_invalid");
+            if (!TryResolveExecutionGroup(policy, boundAccount, out List<ExecutionGroupMember> members, out _, out string groupFailure))
+                return GlitchAiExecutionResult.Failed("reconcile_execution_group_invalid", groupFailure);
+
+            string instrumentRoot = GlitchAiJsonFields.ExtractString(rawJson, "instrument");
+            string snapshotHash = GlitchAiJsonFields.ExtractString(rawJson, "snapshot_hash");
+            if (!GlitchInstrumentMetadataService.TryResolveTradeInstrument(instrumentRoot, out Instrument instrument)
+                && GlitchAiSnapshotRegistry.TryGetInstrumentFullName(snapshotHash, instrumentRoot, out string snapshotFullName))
+                GlitchInstrumentMetadataService.RegisterTradeInstrument(snapshotFullName);
+            if (!GlitchInstrumentMetadataService.TryResolveTradeInstrument(instrumentRoot, out instrument))
+                return GlitchAiExecutionResult.Failed("reconcile_instrument_unresolved", instrumentRoot);
+
+            Account master = members[0].Account;
+            string action = GlitchAiJsonFields.ExtractString(rawJson, "action");
+            if (string.Equals(action, "EXIT", StringComparison.Ordinal))
+            {
+                if (!TryGetNetPosition(master, instrument, out int exitNet))
+                    return GlitchAiExecutionResult.Failed("reconcile_exit_position_unknown");
+                return exitNet == 0
+                    ? GlitchAiExecutionResult.Succeeded("reconciled_exit_flat")
+                    : GlitchAiExecutionResult.Failed("reconcile_exit_outcome_ambiguous");
+            }
+
+            if (string.Equals(action, "ENTER_LONG", StringComparison.Ordinal)
+                || string.Equals(action, "ENTER_SHORT", StringComparison.Ordinal))
+            {
+                string correlation = BuildIntentCorrelation(GlitchAiJsonFields.ExtractString(rawJson, "intent_id"));
+                Order entry = FindNamedOrder(master, BuildSignalName(SignalEntry, correlation, 0), instrument);
+                if (entry == null)
+                    return GlitchAiExecutionResult.Failed("reconcile_entry_outcome_ambiguous");
+                if (entry.OrderState == OrderState.Rejected || entry.OrderState == OrderState.Cancelled)
+                    return GlitchAiExecutionResult.Failed("reconciled_entry_terminal_" + entry.OrderState);
+                if (entry.Filled > 0 && !HasCompleteAiProtection(master, instrument, out _))
+                    return GlitchAiExecutionResult.Failed("reconciled_entry_protection_ambiguous");
+                return GlitchAiExecutionResult.Succeeded("reconciled_entry_native_signal", entry.OrderState.ToString());
+            }
+
+            if (!HasCompleteAiProtection(master, instrument, out List<Order> stops, out List<Order> targets))
+                return GlitchAiExecutionResult.Failed("reconcile_protection_incomplete");
+            if (!TryParseProtectionAmendments(
+                rawJson,
+                string.Equals(action, "MOVE_TP", StringComparison.Ordinal),
+                out List<ProtectionAmendment> amendments,
+                out string parseFailure))
+                return GlitchAiExecutionResult.Failed("reconcile_updates_invalid", parseFailure);
+
+            if (string.Equals(action, "MOVE_STOP", StringComparison.Ordinal))
+            {
+                if (!IsIntentV3(rawJson))
+                    return stops.All(stop => PricesEqual(stop.StopPrice, amendments[0].StopPrice.Value))
+                        ? GlitchAiExecutionResult.Succeeded("reconciled_move_stop_native_state")
+                        : GlitchAiExecutionResult.Failed("reconcile_move_stop_outcome_ambiguous");
+                if (!TryIndexProtectionOrders(stops, SignalStop, out Dictionary<string, Order> stopsByLeg, out string stopFailure))
+                    return GlitchAiExecutionResult.Failed("reconcile_move_stop_leg_state_invalid", stopFailure);
+                bool stopsMatch = amendments.All(amendment => stopsByLeg.TryGetValue(amendment.LegId, out Order stop)
+                    && PricesEqual(stop.StopPrice, amendment.StopPrice.Value));
+                return stopsMatch
+                    ? GlitchAiExecutionResult.Succeeded("reconciled_move_stop_native_state")
+                    : GlitchAiExecutionResult.Failed("reconcile_move_stop_outcome_ambiguous");
+            }
+
+            if (string.Equals(action, "MOVE_TP", StringComparison.Ordinal))
+            {
+                if (!IsIntentV3(rawJson))
+                {
+                    if (targets.Count != 1 || !PricesEqual(targets[0].LimitPrice, amendments[0].TargetPrice.Value))
+                        return GlitchAiExecutionResult.Failed("reconcile_move_tp_outcome_ambiguous");
+                    if (amendments[0].StopPrice.HasValue)
+                    {
+                        Order matchingStop = stops.SingleOrDefault(stop => string.Equals(stop.Oco, targets[0].Oco, StringComparison.Ordinal));
+                        if (matchingStop == null || !PricesEqual(matchingStop.StopPrice, amendments[0].StopPrice.Value))
+                            return GlitchAiExecutionResult.Failed("reconcile_move_tp_stop_outcome_ambiguous");
+                    }
+                    return GlitchAiExecutionResult.Succeeded("reconciled_move_tp_native_state");
+                }
+                if (!TryIndexProtectionOrders(targets, SignalTarget, out Dictionary<string, Order> targetsByLeg, out string targetFailure))
+                    return GlitchAiExecutionResult.Failed("reconcile_move_tp_leg_state_invalid", targetFailure);
+                if (!TryIndexProtectionOrders(stops, SignalStop, out Dictionary<string, Order> stopsByTargetLeg, out string stopsFailure))
+                    return GlitchAiExecutionResult.Failed("reconcile_move_tp_leg_state_invalid", stopsFailure);
+                bool targetsMatch = amendments.All(amendment => targetsByLeg.TryGetValue(amendment.LegId, out Order target)
+                    && PricesEqual(target.LimitPrice, amendment.TargetPrice.Value)
+                    && (!amendment.StopPrice.HasValue
+                        || (stopsByTargetLeg.TryGetValue(amendment.LegId, out Order stop)
+                            && PricesEqual(stop.StopPrice, amendment.StopPrice.Value))));
+                return targetsMatch
+                    ? GlitchAiExecutionResult.Succeeded("reconciled_move_tp_native_state")
+                    : GlitchAiExecutionResult.Failed("reconcile_move_tp_outcome_ambiguous");
+            }
+
+            return GlitchAiExecutionResult.Failed("reconcile_action_unsupported", action);
         }
 
         public static void ProcessAccountStateUpdate(Account account)
@@ -512,7 +628,7 @@ namespace Glitch.Services
             if (!finalTradingWindow.IsEntryAllowed)
                 return GlitchAiExecutionResult.Failed("trading_window_closed_at_execution");
 
-            string correlation = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture).Substring(0, 10);
+            string correlation = BuildIntentCorrelation(intentId);
             ExecutionGroupMember masterMember = members[0];
             var protectionLegs = new List<StructuralProtectionLeg>
             {
@@ -935,56 +1051,76 @@ namespace Glitch.Services
             string groupId,
             string intentId)
         {
-            if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss", out double requestedStop))
-                return GlitchAiExecutionResult.Failed("move_stop_price_missing");
-            GlitchInstrumentMetadata metadata;
-            if (!GlitchInstrumentMetadataService.TryResolve(instrument, out metadata)
-                || metadata == null || !metadata.IsResolved || metadata.TickSize <= 0)
-                return GlitchAiExecutionResult.Failed("move_stop_metadata_unavailable");
-            double stopPrice = RoundToTick(requestedStop, metadata.TickSize);
-            double livePrice;
-            string liveFailure;
-            if (!TryGetFreshExecutionPrice(instrument, DateTime.UtcNow, out livePrice, out liveFailure))
-                return GlitchAiExecutionResult.Failed("move_stop_live_price_invalid", liveFailure);
-
-            if (!TryGetNetPosition(members[0].Account, instrument, out int masterNet))
-                return GlitchAiExecutionResult.Failed("move_stop_position_state_unavailable", members[0].Account.Name);
-            if (masterNet == 0)
-                return GlitchAiExecutionResult.Failed("move_stop_position_flat");
-            bool isLong = masterNet > 0;
-            if ((isLong && stopPrice >= livePrice) || (!isLong && stopPrice <= livePrice))
-                return GlitchAiExecutionResult.Failed("move_stop_market_side_invalid");
-
             Account masterAccount = members[0].Account;
             if (!HasCompleteAiProtection(masterAccount, instrument, out List<Order> masterStops))
                 return GlitchAiExecutionResult.Failed("move_stop_protection_incomplete", masterAccount.Name);
-            var changes = masterStops
-                .Where(stop => isLong ? stopPrice > stop.StopPrice : stopPrice < stop.StopPrice)
-                .Select(stop => Tuple.Create(masterAccount, stop))
-                .ToList();
+            if (!TryGetNetPosition(masterAccount, instrument, out int masterNet))
+                return GlitchAiExecutionResult.Failed("move_stop_position_state_unavailable", masterAccount.Name);
+            if (masterNet == 0)
+                return GlitchAiExecutionResult.Failed("move_stop_position_flat");
+            bool isLong = masterNet > 0;
+            if (!TryGetFreshExecutionPrice(instrument, DateTime.UtcNow, out double livePrice, out string liveFailure))
+                return GlitchAiExecutionResult.Failed("move_stop_live_price_invalid", liveFailure);
+            if (!TryParseProtectionAmendments(rawJson, false, out List<ProtectionAmendment> amendments, out string parseFailure))
+                return GlitchAiExecutionResult.Failed("move_stop_updates_invalid", parseFailure);
 
-            var failures = new List<string>();
-            foreach (IGrouping<Account, Tuple<Account, Order>> accountChanges in changes.GroupBy(item => item.Item1))
+            var proposedStops = new Dictionary<Order, double>();
+            bool isV3 = IsIntentV3(rawJson);
+            if (isV3)
+            {
+                if (!TryIndexProtectionOrders(masterStops, SignalStop, out Dictionary<string, Order> stopsByLeg, out string indexFailure))
+                    return GlitchAiExecutionResult.Failed("move_stop_leg_state_invalid", indexFailure);
+                foreach (ProtectionAmendment amendment in amendments)
+                {
+                    if (!stopsByLeg.TryGetValue(amendment.LegId, out Order stop))
+                        return GlitchAiExecutionResult.Failed("move_stop_leg_not_found", amendment.LegId);
+                    proposedStops[stop] = amendment.StopPrice.Value;
+                }
+            }
+            else
+            {
+                double stopPrice = amendments[0].StopPrice.Value;
+                foreach (Order stop in masterStops)
+                    proposedStops[stop] = stopPrice;
+            }
+
+            foreach (double stopPrice in proposedStops.Values)
+            {
+                if ((isLong && stopPrice >= livePrice) || (!isLong && stopPrice <= livePrice))
+                    return GlitchAiExecutionResult.Failed("move_stop_market_side_invalid");
+            }
+            GlitchAiExecutionResult wideningDecision = ValidateProposedStopState(
+                masterAccount,
+                instrument,
+                masterNet,
+                livePrice,
+                masterStops,
+                proposedStops);
+            if (wideningDecision != null)
+                return wideningDecision;
+
+            List<Order> changes = proposedStops
+                .Where(item => !PricesEqual(item.Key.StopPrice, item.Value))
+                .Select(item => item.Key)
+                .ToList();
+            if (changes.Count > 0)
             {
                 try
                 {
-                    List<Order> orders = accountChanges.Select(item => item.Item2).ToList();
-                    foreach (Order order in orders)
-                        order.StopPriceChanged = stopPrice;
-                    accountChanges.Key.Change(orders.ToArray());
+                    foreach (Order stop in changes)
+                        stop.StopPriceChanged = proposedStops[stop];
+                    masterAccount.Change(changes.ToArray());
                 }
                 catch (Exception ex)
                 {
-                    failures.Add(accountChanges.Key.Name + ":" + ex.GetType().Name);
+                    return GlitchAiExecutionResult.Failed("move_stop_change_failed", masterAccount.Name + ":" + ex.GetType().Name);
                 }
             }
-            if (failures.Count > 0)
-                return GlitchAiExecutionResult.Failed("move_stop_partial_failure", string.Join(",", failures));
             return GlitchAiExecutionResult.Succeeded(
-                changes.Count == 0 ? "move_stop_already_tighter" : "move_stop_submitted",
+                changes.Count == 0 ? "move_stop_already_set" : "move_stop_submitted",
                 "group=" + CleanToken(groupId)
-                    + "|stop_price=" + stopPrice.ToString(CultureInfo.InvariantCulture)
                     + "|master_orders=" + changes.Count.ToString(CultureInfo.InvariantCulture)
+                    + "|requested_legs=" + amendments.Count.ToString(CultureInfo.InvariantCulture)
                     + "|followers=replication_engine");
         }
 
@@ -995,14 +1131,6 @@ namespace Glitch.Services
             string groupId,
             string intentId)
         {
-            if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_1", out double requestedTarget))
-                return GlitchAiExecutionResult.Failed("move_tp_price_missing");
-            bool hasRequestedStop = GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss", out double requestedStop);
-            if (!GlitchInstrumentMetadataService.TryResolve(instrument, out GlitchInstrumentMetadata metadata)
-                || metadata == null || !metadata.IsResolved || metadata.TickSize <= 0)
-                return GlitchAiExecutionResult.Failed("move_tp_metadata_unavailable");
-            double targetPrice = RoundToTick(requestedTarget, metadata.TickSize);
-            double stopPrice = hasRequestedStop ? RoundToTick(requestedStop, metadata.TickSize) : 0;
             if (!TryGetFreshExecutionPrice(instrument, DateTime.UtcNow, out double livePrice, out string liveFailure))
                 return GlitchAiExecutionResult.Failed("move_tp_live_price_invalid", liveFailure);
 
@@ -1012,35 +1140,91 @@ namespace Glitch.Services
             if (masterNet == 0)
                 return GlitchAiExecutionResult.Failed("move_tp_position_flat");
             bool isLong = masterNet > 0;
-            if ((isLong && targetPrice <= livePrice) || (!isLong && targetPrice >= livePrice))
-                return GlitchAiExecutionResult.Failed("move_tp_market_side_invalid");
-            if (hasRequestedStop && ((isLong && stopPrice >= livePrice) || (!isLong && stopPrice <= livePrice)))
-                return GlitchAiExecutionResult.Failed("move_tp_stop_market_side_invalid");
             if (!HasCompleteAiProtection(masterAccount, instrument, out List<Order> masterStops, out List<Order> masterTargets))
                 return GlitchAiExecutionResult.Failed("move_tp_protection_incomplete", masterAccount.Name);
+            if (!TryParseProtectionAmendments(rawJson, true, out List<ProtectionAmendment> amendments, out string parseFailure))
+                return GlitchAiExecutionResult.Failed("move_tp_updates_invalid", parseFailure);
 
-            List<Order> targetChanges = masterTargets
-                .Where(target => Math.Abs(target.LimitPrice - targetPrice) > 0.0000001d)
+            var proposedTargets = new Dictionary<Order, double>();
+            var proposedStops = new Dictionary<Order, double>();
+            if (IsIntentV3(rawJson))
+            {
+                if (!TryIndexProtectionOrders(masterTargets, SignalTarget, out Dictionary<string, Order> targetsByLeg, out string targetIndexFailure))
+                    return GlitchAiExecutionResult.Failed("move_tp_leg_state_invalid", targetIndexFailure);
+                if (!TryIndexProtectionOrders(masterStops, SignalStop, out Dictionary<string, Order> stopsByLeg, out string stopIndexFailure))
+                    return GlitchAiExecutionResult.Failed("move_tp_leg_state_invalid", stopIndexFailure);
+                foreach (ProtectionAmendment amendment in amendments)
+                {
+                    if (!targetsByLeg.TryGetValue(amendment.LegId, out Order target))
+                        return GlitchAiExecutionResult.Failed("move_tp_leg_not_found", amendment.LegId);
+                    proposedTargets[target] = amendment.TargetPrice.Value;
+                    if (amendment.StopPrice.HasValue)
+                    {
+                        if (!stopsByLeg.TryGetValue(amendment.LegId, out Order stop))
+                            return GlitchAiExecutionResult.Failed("move_tp_stop_leg_not_found", amendment.LegId);
+                        proposedStops[stop] = amendment.StopPrice.Value;
+                    }
+                }
+            }
+            else
+            {
+                if (masterTargets.Count != 1)
+                    return GlitchAiExecutionResult.Failed("legacy_move_tp_scope_ambiguous", "remaining_targets=" + masterTargets.Count.ToString(CultureInfo.InvariantCulture));
+                ProtectionAmendment amendment = amendments[0];
+                proposedTargets[masterTargets[0]] = amendment.TargetPrice.Value;
+                if (amendment.StopPrice.HasValue)
+                {
+                    Order matchingStop = masterStops.SingleOrDefault(stop => string.Equals(stop.Oco, masterTargets[0].Oco, StringComparison.Ordinal));
+                    if (matchingStop == null)
+                        return GlitchAiExecutionResult.Failed("legacy_move_tp_stop_scope_unavailable");
+                    proposedStops[matchingStop] = amendment.StopPrice.Value;
+                }
+            }
+
+            foreach (double targetPrice in proposedTargets.Values)
+            {
+                if ((isLong && targetPrice <= livePrice) || (!isLong && targetPrice >= livePrice))
+                    return GlitchAiExecutionResult.Failed("move_tp_market_side_invalid");
+            }
+            foreach (double stopPrice in proposedStops.Values)
+            {
+                if ((isLong && stopPrice >= livePrice) || (!isLong && stopPrice <= livePrice))
+                    return GlitchAiExecutionResult.Failed("move_tp_stop_market_side_invalid");
+            }
+            GlitchAiExecutionResult wideningDecision = ValidateProposedStopState(
+                masterAccount,
+                instrument,
+                masterNet,
+                livePrice,
+                masterStops,
+                proposedStops);
+            if (wideningDecision != null)
+                return wideningDecision;
+
+            List<Order> targetChanges = proposedTargets
+                .Where(item => !PricesEqual(item.Key.LimitPrice, item.Value))
+                .Select(item => item.Key)
                 .ToList();
-            List<Order> stopChanges = hasRequestedStop
-                ? masterStops.Where(stop => isLong ? stopPrice > stop.StopPrice : stopPrice < stop.StopPrice).ToList()
-                : new List<Order>();
+            List<Order> stopChanges = proposedStops
+                .Where(item => !PricesEqual(item.Key.StopPrice, item.Value))
+                .Select(item => item.Key)
+                .ToList();
             List<Order> changes = targetChanges.Concat(stopChanges).ToList();
             if (changes.Count == 0)
             {
                 return GlitchAiExecutionResult.Succeeded(
                     "move_tp_already_set",
                     "group=" + CleanToken(groupId)
-                        + "|target_price=" + targetPrice.ToString(CultureInfo.InvariantCulture)
+                        + "|requested_legs=" + amendments.Count.ToString(CultureInfo.InvariantCulture)
                         + "|followers=replication_engine");
             }
 
             try
             {
                 foreach (Order target in targetChanges)
-                    target.LimitPriceChanged = targetPrice;
+                    target.LimitPriceChanged = proposedTargets[target];
                 foreach (Order stop in stopChanges)
-                    stop.StopPriceChanged = stopPrice;
+                    stop.StopPriceChanged = proposedStops[stop];
                 masterAccount.Change(changes.ToArray());
             }
             catch (Exception ex)
@@ -1051,11 +1235,249 @@ namespace Glitch.Services
             return GlitchAiExecutionResult.Succeeded(
                 stopChanges.Count > 0 ? "move_tp_and_stop_submitted" : "move_tp_submitted",
                 "group=" + CleanToken(groupId)
-                    + "|target_price=" + targetPrice.ToString(CultureInfo.InvariantCulture)
-                    + "|stop_price=" + (stopChanges.Count > 0 ? stopPrice.ToString(CultureInfo.InvariantCulture) : "unchanged")
                     + "|master_target_orders=" + targetChanges.Count.ToString(CultureInfo.InvariantCulture)
                     + "|master_stop_orders=" + stopChanges.Count.ToString(CultureInfo.InvariantCulture)
+                    + "|requested_legs=" + amendments.Count.ToString(CultureInfo.InvariantCulture)
                     + "|followers=replication_engine");
+        }
+
+        private static bool IsIntentV3(string rawJson)
+        {
+            return string.Equals(
+                GlitchAiJsonFields.ExtractString(rawJson, "schema_version"),
+                "glitch.intent.v3",
+                StringComparison.Ordinal);
+        }
+
+        private static bool TryParseProtectionAmendments(
+            string rawJson,
+            bool requireTarget,
+            out List<ProtectionAmendment> amendments,
+            out string failure)
+        {
+            amendments = new List<ProtectionAmendment>();
+            failure = null;
+            if (!IsIntentV3(rawJson))
+            {
+                var legacy = new ProtectionAmendment();
+                if (requireTarget)
+                {
+                    if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_1", out double target))
+                    {
+                        failure = "take_profit_1_missing";
+                        return false;
+                    }
+                    legacy.TargetPrice = target;
+                    if (GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss", out double targetStop))
+                        legacy.StopPrice = targetStop;
+                }
+                else
+                {
+                    if (!GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss", out double stop))
+                    {
+                        failure = "stop_loss_missing";
+                        return false;
+                    }
+                    legacy.StopPrice = stop;
+                }
+                amendments.Add(legacy);
+                return true;
+            }
+
+            if (!GlitchAiJsonFields.TryParseObject(rawJson, out IDictionary parsed)
+                || !(parsed["protection_updates"] is IList updates)
+                || updates.Count == 0)
+            {
+                failure = "protection_updates_missing";
+                return false;
+            }
+            var legIds = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; i < updates.Count; i++)
+            {
+                IDictionary update = updates[i] as IDictionary;
+                string legId = update != null && update.Contains("leg_id") ? update["leg_id"] as string : null;
+                if (string.IsNullOrWhiteSpace(legId) || !legIds.Add(legId.Trim()))
+                {
+                    failure = "leg_id_missing_or_duplicate";
+                    return false;
+                }
+                var amendment = new ProtectionAmendment { LegId = legId.Trim() };
+                if (requireTarget)
+                {
+                    if (!TryGetParsedNumber(update, "take_profit", out double target))
+                    {
+                        failure = "take_profit_missing";
+                        return false;
+                    }
+                    amendment.TargetPrice = target;
+                    if (update.Contains("stop_loss"))
+                    {
+                        if (!TryGetParsedNumber(update, "stop_loss", out double targetStop))
+                        {
+                            failure = "stop_loss_invalid";
+                            return false;
+                        }
+                        amendment.StopPrice = targetStop;
+                    }
+                }
+                else
+                {
+                    if (!TryGetParsedNumber(update, "stop_loss", out double stop))
+                    {
+                        failure = "stop_loss_missing";
+                        return false;
+                    }
+                    amendment.StopPrice = stop;
+                }
+                amendments.Add(amendment);
+            }
+            return true;
+        }
+
+        private static bool TryGetParsedNumber(IDictionary parsed, string key, out double value)
+        {
+            value = 0;
+            if (parsed == null || !parsed.Contains(key) || parsed[key] == null
+                || parsed[key] is bool || parsed[key] is string)
+                return false;
+            try
+            {
+                value = Convert.ToDouble(parsed[key], CultureInfo.InvariantCulture);
+                return !double.IsNaN(value) && !double.IsInfinity(value);
+            }
+            catch
+            {
+                value = 0;
+                return false;
+            }
+        }
+
+        private static bool TryIndexProtectionOrders(
+            IEnumerable<Order> orders,
+            string signalPrefix,
+            out Dictionary<string, Order> byLeg,
+            out string failure)
+        {
+            byLeg = new Dictionary<string, Order>(StringComparer.Ordinal);
+            failure = null;
+            foreach (Order order in orders)
+            {
+                if (!TryGetLegId(order?.Name, signalPrefix, out string legId))
+                {
+                    failure = "native_leg_id_unavailable";
+                    return false;
+                }
+                if (byLeg.ContainsKey(legId))
+                {
+                    failure = "native_leg_id_duplicate_" + legId;
+                    return false;
+                }
+                byLeg[legId] = order;
+            }
+            return true;
+        }
+
+        internal static bool TryGetLegId(string signalName, string signalPrefix, out string legId)
+        {
+            legId = null;
+            string prefix = signalPrefix + "-";
+            if (string.IsNullOrWhiteSpace(signalName)
+                || !signalName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return false;
+            string[] parts = signalName.Substring(prefix.Length).Split('-');
+            if (parts.Length < 2 || string.IsNullOrWhiteSpace(parts[0])
+                || !int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
+                return false;
+            int legIndex = 0;
+            if (parts.Length > 2
+                && !int.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out legIndex))
+                return false;
+            legId = parts[0] + ":" + legIndex.ToString(CultureInfo.InvariantCulture);
+            return true;
+        }
+
+        private static GlitchAiExecutionResult ValidateProposedStopState(
+            Account masterAccount,
+            Instrument instrument,
+            int masterNet,
+            double livePrice,
+            IReadOnlyList<Order> allStops,
+            IDictionary<Order, double> proposedStops)
+        {
+            if (proposedStops == null || proposedStops.Count == 0)
+                return null;
+            bool isLong = masterNet > 0;
+            bool widens = proposedStops.Any(item => isLong
+                ? item.Value < item.Key.StopPrice && !PricesEqual(item.Value, item.Key.StopPrice)
+                : item.Value > item.Key.StopPrice && !PricesEqual(item.Value, item.Key.StopPrice));
+            if (!widens)
+                return null;
+
+            GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
+            if (policy == null || !policy.IsValid)
+                return GlitchAiExecutionResult.Failed("move_stop_policy_invalid", policy?.ValidationError);
+            if (!GlitchAiPortfolioSnapshotReader.TryGetFreshRiskState(
+                masterAccount.Name,
+                DateTime.UtcNow,
+                policy.SnapshotMaxAgeSeconds,
+                out bool riskLocked,
+                out _,
+                out _,
+                out string accountJson,
+                out string portfolioFailure))
+                return GlitchAiExecutionResult.Failed("move_stop_portfolio_snapshot_invalid", portfolioFailure);
+            if (riskLocked)
+                return GlitchAiExecutionResult.Failed("move_stop_account_risk_locked", masterAccount.Name);
+            string propFirmId = GlitchAiJsonFields.ExtractString(accountJson, "prop_firm_id");
+            string ruleStatus = GlitchAiJsonFields.ExtractString(accountJson, "rule_status");
+            if (!string.Equals(propFirmId, "ApexTraderFunding", StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(ruleStatus, "Eval", StringComparison.OrdinalIgnoreCase))
+                return GlitchAiExecutionResult.Failed("move_stop_apex_state_missing", masterAccount.Name);
+            if (!GlitchAiJsonFields.TryExtractNumber(accountJson, "buffer_margin", out double bufferMargin)
+                || bufferMargin <= 0)
+                return GlitchAiExecutionResult.Failed("apex_liquidation_buffer_missing", masterAccount.Name);
+            if (!GlitchInstrumentMetadataService.TryResolve(instrument, out GlitchInstrumentMetadata metadata)
+                || metadata == null || !metadata.IsResolved || metadata.PointValue <= 0)
+                return GlitchAiExecutionResult.Failed("move_stop_metadata_unavailable");
+
+            int coverage = 0;
+            double plannedDownside = 0;
+            foreach (Order stop in allStops)
+            {
+                int remaining = Math.Max(0, stop.Quantity - stop.Filled);
+                if (remaining == 0)
+                    continue;
+                double price = proposedStops.TryGetValue(stop, out double proposed) ? proposed : stop.StopPrice;
+                double points = isLong ? livePrice - price : price - livePrice;
+                if (points <= 0)
+                    return GlitchAiExecutionResult.Failed("move_stop_market_side_invalid");
+                coverage += remaining;
+                plannedDownside += points * metadata.PointValue * remaining;
+            }
+            if (coverage != Math.Abs(masterNet))
+                return GlitchAiExecutionResult.Failed("move_stop_protection_coverage_ambiguous", "coverage=" + coverage.ToString(CultureInfo.InvariantCulture));
+            if (plannedDownside >= bufferMargin)
+            {
+                return GlitchAiExecutionResult.Failed(
+                    "apex_liquidation_buffer_exceeded",
+                    "phase=stop_widen|planned_downside_usd="
+                        + plannedDownside.ToString("F2", CultureInfo.InvariantCulture)
+                        + "|buffer_margin_usd="
+                        + bufferMargin.ToString("F2", CultureInfo.InvariantCulture));
+            }
+            return null;
+        }
+
+        private static bool PricesEqual(double left, double right)
+        {
+            return Math.Abs(left - right) <= 0.0000001d;
+        }
+
+        private sealed class ProtectionAmendment
+        {
+            public string LegId { get; set; }
+            public double? StopPrice { get; set; }
+            public double? TargetPrice { get; set; }
         }
 
         private static Order FindNamedOrder(Account account, string name, Instrument instrument)
@@ -1566,12 +1988,12 @@ namespace Glitch.Services
                 if (IsOwnedStopSignal(order.Name))
                 {
                     stops.Add(order);
-                    stopCoverage += order.Quantity;
+                    stopCoverage += Math.Max(0, order.Quantity - order.Filled);
                 }
                 else if (IsOwnedTargetSignal(order.Name))
                 {
                     targets.Add(order);
-                    targetCoverage += order.Quantity;
+                    targetCoverage += Math.Max(0, order.Quantity - order.Filled);
                 }
             }
             return stopCoverage == Math.Abs(net) && targetCoverage == Math.Abs(net);
@@ -1645,6 +2067,13 @@ namespace Glitch.Services
         private static string BuildSignalName(string prefix, string correlation, int accountIndex)
         {
             return prefix + "-" + correlation + "-" + accountIndex.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private static string BuildIntentCorrelation(string intentId)
+        {
+            if (!Guid.TryParse(intentId, out Guid parsed))
+                return "invalidintent";
+            return parsed.ToString("N", CultureInfo.InvariantCulture).Substring(0, 16);
         }
 
         private static string BuildSignalName(string prefix, string correlation, int accountIndex, int legIndex)

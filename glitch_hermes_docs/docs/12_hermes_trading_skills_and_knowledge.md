@@ -56,7 +56,7 @@ Reasoning freedom:
 
 For increasing exposure, Hermes compares a single protected tranche, TP1/TP2/TP3 native entry legs, reserving capacity, a later same-direction addition, and unchanged exposure. An addition may be at a favorable or adverse price when evidence supports the thesis, but price movement alone never creates a grid, martingale, or loss-recovery rule. Current acceptance, rejection, structure, and excursion override stale forecasts. Glitch independently rejects an Apex Legacy evaluation entry when complete protected downside is ambiguous or reaches the authoritative liquidation buffer; this is an account-survival boundary, not a preferred quantity, percentage budget, or strategy.
 
-Output: exactly one `glitch.intent.batch.v1`, containing one ordered `glitch.intent.v2` decision per route-bound group. Scheduled output is JSON only. Entries carry native protection. Glitch remains the only executor.
+Output: exactly one `glitch.intent.batch.v1`, containing one ordered `glitch.intent.v3` decision per route-bound group. Scheduled output is JSON only. Entries carry independent native protection; management names selected stable Glitch leg IDs. Glitch remains the only executor.
 
 ### Hourly portfolio supervision loop
 
@@ -254,9 +254,9 @@ one evidence-gated learning worker; they do not create additional executors.
 ### Stage B — core paper loop only
 
 1. Deploy and compile the Glitch packet writer.
-2. Confirm five consecutive minute frames and one rolling packet with truthful in-progress timeframe semantics.
+2. Confirm five observed paired minute frames and one rolling packet with truthful continuity and in-progress timeframe semantics.
 3. Enable only the Hermes core decision job.
-4. Validate: zero flat-book model calls between five-minute boundaries, minute calls only while positioned or explicitly directed, one batch per invoked group set, no duplicate delivery, and receipts/Glitch decisions joined by ID.
+4. Validate: zero flat-book model calls before five elapsed minutes, every-packet calls only while positioned or explicitly directed, next-packet recovery after any failure, one batch per invoked group set, no duplicate delivery, and receipts/Glitch decisions joined by ID.
 5. Observe paper cycles and journal quality. Validate a complete protected open-to-close trade when Hermes chooses one; do not force an entry merely to satisfy infrastructure testing.
 
 ### Active learning stages

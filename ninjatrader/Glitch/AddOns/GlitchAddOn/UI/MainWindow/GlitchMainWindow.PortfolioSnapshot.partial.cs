@@ -12,15 +12,6 @@ namespace Glitch.UI
 {
     public partial class GlitchMainWindow
     {
-        private bool MaybeWritePortfolioSnapshot(DateTime nowUtc, string snapshotId = null)
-        {
-            GlitchPortfolioSnapshotCapture capture = BuildPortfolioSnapshotCapture();
-            if (capture == null)
-                return false;
-
-            return GlitchPortfolioSnapshotWriter.TryWriteLatestIfDue(nowUtc, capture, snapshotId);
-        }
-
         private GlitchPortfolioSnapshotCapture BuildPortfolioSnapshotCapture()
         {
             if (_accountRows == null || _accountRows.Count == 0)

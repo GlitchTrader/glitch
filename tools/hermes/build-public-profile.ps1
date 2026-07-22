@@ -100,7 +100,7 @@ if ($unexpectedAfter.Count -gt 0) { throw "Public profile gained unexpected path
 [ordered]@{
     schema_version = 'glitch.hermes.public_profile_build.v1'
     target = $target
-    version = '0.0.2.3'
+    version = '0.0.2.4'
     skills = $skillCount
     scripts = $scriptCount
     files = $textFiles.Count + 1

@@ -11,19 +11,9 @@ namespace Glitch.Services
 {
     internal static class GlitchMarketSnapshotWriter
     {
-        private static readonly TimeSpan WriteThrottle = TimeSpan.FromMinutes(1);
-        private static DateTime _lastWriteUtc = DateTime.MinValue;
         private static string _lastSnapshotHash;
 
         public static string SchemaVersion => GlitchMarketSnapshotRawJson.SchemaVersion;
-
-        public static bool TryWriteLatestIfDue(DateTime nowUtc, string snapshotId = null)
-        {
-            if (_lastWriteUtc != DateTime.MinValue && (nowUtc - _lastWriteUtc) < WriteThrottle)
-                return false;
-
-            return TryWriteLatest(nowUtc, snapshotId);
-        }
 
         public static bool TryWriteLatest(DateTime nowUtc, string snapshotId = null)
         {
@@ -39,7 +29,6 @@ namespace Glitch.Services
                 json = GlitchMarketSnapshotJson.InjectSnapshotHash(json, hash);
                 if (string.Equals(hash, _lastSnapshotHash, StringComparison.Ordinal))
                 {
-                    _lastWriteUtc = nowUtc;
                     return true;
                 }
 
@@ -48,18 +37,13 @@ namespace Glitch.Services
                 if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
                     Directory.CreateDirectory(directory);
 
-                string tempPath = path + ".tmp";
-                File.WriteAllText(tempPath, json, new UTF8Encoding(false));
-                if (File.Exists(path))
-                    File.Delete(path);
-                File.Move(tempPath, path);
+                WriteAtomic(path, json);
 
                 WriteRecentSnapshot(hash, json);
 
                 GlitchHistoricalSnapshotExporter.TryArchiveMarketSnapshot(json, nowUtc);
 
                 _lastSnapshotHash = hash;
-                _lastWriteUtc = nowUtc;
                 return true;
             }
             catch
@@ -95,11 +79,7 @@ namespace Glitch.Services
             string recentDirectory = Path.GetDirectoryName(recentPath);
             if (!Directory.Exists(recentDirectory))
                 Directory.CreateDirectory(recentDirectory);
-            string tempPath = recentPath + ".tmp";
-            File.WriteAllText(tempPath, json, new UTF8Encoding(false));
-            if (File.Exists(recentPath))
-                File.Delete(recentPath);
-            File.Move(tempPath, recentPath);
+            WriteAtomic(recentPath, json);
 
             FileInfo[] recent = new DirectoryInfo(recentDirectory)
                 .GetFiles("*.json")
@@ -109,6 +89,29 @@ namespace Glitch.Services
             {
                 try { recent[i].Delete(); }
                 catch { }
+            }
+        }
+
+        private static void WriteAtomic(string path, string json)
+        {
+            string tempPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
+                using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
+                {
+                    writer.Write(json);
+                    writer.Flush();
+                    stream.Flush(true);
+                }
+                if (File.Exists(path))
+                    File.Replace(tempPath, path, null);
+                else
+                    File.Move(tempPath, path);
+            }
+            finally
+            {
+                try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
             }
         }
 

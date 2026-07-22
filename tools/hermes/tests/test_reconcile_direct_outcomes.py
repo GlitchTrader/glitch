@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -31,6 +32,54 @@ def ledger_row(account, entry_utc, exit_utc, entry_price, exit_price, correlatio
 
 
 class DirectOutcomeReconcileTests(unittest.TestCase):
+    def test_incomplete_trailing_jsonl_is_preserved_and_fails_visibly(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "events.jsonl"
+            original = b'{"intent_id":"complete"}\n{"intent_id":"partial"'
+            path.write_bytes(original)
+
+            with self.assertRaisesRegex(RuntimeError, "jsonl_incomplete_trailing_record"):
+                MODULE.read_jsonl(path)
+
+            self.assertEqual(path.read_bytes(), original)
+
+    def test_malformed_completed_input_never_overwrites_good_outcomes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            glitch_data = root / "GlitchData"
+            decisions = root / "outbox"
+            decisions.mkdir(parents=True)
+            (glitch_data / "intents").mkdir(parents=True)
+            executions = glitch_data / "intents" / "executions.jsonl"
+            executions.write_text('{"intent_id":}\n', encoding="utf-8")
+            output = glitch_data / "intents" / "hermes-trade-outcomes.jsonl"
+            original = b'{"intent_id":"known-good"}\n'
+            output.write_bytes(original)
+
+            with self.assertRaisesRegex(RuntimeError, "jsonl_malformed_completed_line"):
+                MODULE.reconcile(glitch_data, None, output, decisions)
+
+            self.assertEqual(output.read_bytes(), original)
+
+    def test_reconcile_lock_keeps_live_owner_and_replaces_dead_owner(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            live = root / "live.lock"
+            started = MODULE.process_start_utc(os.getpid())
+            live.write_text(json.dumps({
+                "pid": os.getpid(),
+                "started_utc": (started or datetime.now(timezone.utc)).isoformat(),
+            }), encoding="utf-8")
+            self.assertFalse(MODULE.acquire_lock(live))
+
+            dead = root / "dead.lock"
+            dead.write_text(json.dumps({
+                "pid": 2147483647,
+                "started_utc": "2099-01-01T00:00:00Z",
+            }), encoding="utf-8")
+            self.assertTrue(MODULE.acquire_lock(dead))
+            self.assertEqual(json.loads(dead.read_text(encoding="utf-8"))["pid"], os.getpid())
+
     def test_excursion_bounds_include_entry_and_terminal_fill(self):
         now = datetime.now(timezone.utc)
         loss = MODULE.excursion([], "Sim101", now, now, "MNQ", -15.1)

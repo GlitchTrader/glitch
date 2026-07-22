@@ -72,7 +72,7 @@ namespace Glitch.UI
         private const string ReplicationSignalName = "GLT-SYNC";
         private const string ProtectiveStopSignalName = "GLT-PROT-STP";
         private const string ProtectiveTargetSignalName = "GLT-PROT-TGT";
-        private const string CurrentClientVersion = "addon-ai-0.0.2.1";
+        private const string CurrentClientVersion = "addon-ai-0.0.2.2";
         private const string DefaultLatestDownloadUrl = "https://download.glitchtrader.com/latest";
         private const double UnrealizedLossFlattenThresholdRatio = 0.80;
         private const double BufferCriticalLockThresholdRatio = 0.15;
@@ -186,6 +186,7 @@ namespace Glitch.UI
         private DateTime _lastUiRefreshUtc;
         private bool _hasLoggedStartupRuntimeSettings;
         private bool _isWindowClosed;
+        private bool _allowPermanentClose;
         private TextBlock _totalPnlValueText;
         private TextBlock _evalPnlValueText;
         private TextBlock _paPnlValueText;
@@ -321,6 +322,7 @@ namespace Glitch.UI
             GlitchShellBridge.RegisterMainWindow(this);
 
             Loaded += OnWindowLoaded;
+            Closing += OnWindowClosing;
             Closed += OnWindowClosed;
 
             Content = CreateMainLayout();
@@ -3747,6 +3749,21 @@ namespace Glitch.UI
             _ = RefreshLicenseStateAsync(useValidateEndpoint: true, force: true);
         }
 
+        private void OnWindowClosing(object sender, CancelEventArgs e)
+        {
+            if (_allowPermanentClose)
+                return;
+            e.Cancel = true;
+            SaveWindowPlacementToDisk();
+            Hide();
+        }
+
+        internal void ShutdownForAddOn()
+        {
+            _allowPermanentClose = true;
+            Close();
+        }
+
         private void BootstrapAnalyticsBridgeOnStartup()
         {
             try
@@ -3893,6 +3910,7 @@ namespace Glitch.UI
             _mainTabControl = null;
 
             Loaded -= OnWindowLoaded;
+            Closing -= OnWindowClosing;
             Closed -= OnWindowClosed;
         }
 
@@ -3921,11 +3939,6 @@ namespace Glitch.UI
             UpdateRefreshTimerCadenceIfNeeded();
 
             DateTime nowUtc = DateTime.UtcNow;
-            string snapshotId = nowUtc.ToString("yyyyMMdd'T'HHmmss'Z'", System.Globalization.CultureInfo.InvariantCulture);
-            bool marketSnapshotReady = GlitchMarketSnapshotWriter.TryWriteLatestIfDue(nowUtc, snapshotId);
-            bool portfolioSnapshotReady = MaybeWritePortfolioSnapshot(nowUtc, snapshotId);
-            if (marketSnapshotReady && portfolioSnapshotReady)
-                GlitchHermesExchangeWriter.TryCaptureMinute(nowUtc, snapshotId);
             GlitchHistoricalSnapshotExporter.TryWriteReplayBundleIfDue(
                 nowUtc,
                 TimeSpan.FromMinutes(15),
@@ -3938,6 +3951,15 @@ namespace Glitch.UI
             PruneAccountItemUpdateThrottle(nowUtc);
             PruneActiveAccountCache(nowUtc);
             MaybeRunLicenseHeartbeat(nowUtc);
+            EnsureRailInfrastructureIfDue(nowUtc);
+
+            bool uiActive = IsGlitchShellUiActive();
+            if (!uiActive && !_isEditingAccountsGrid && !_isCommittingAccountsGridEdit)
+                RefreshHiddenRuntimeSafetyIfDue(nowUtc);
+
+            // One publisher owns the minute. It retries this minute until both
+            // snapshots and the paired immutable frame exist.
+            GlitchHermesExchangeWriter.TryPublishMinute(nowUtc, BuildPortfolioSnapshotCapture());
 
             if (_isEditingAccountsGrid || _isCommittingAccountsGridEdit)
             {
@@ -3946,10 +3968,8 @@ namespace Glitch.UI
                 return;
             }
 
-            bool uiActive = IsGlitchShellUiActive();
             if (!uiActive)
             {
-                // ponytail: replication is event-driven; skip Account.All scans while minimized
                 SavePeakStatesToDisk(force: false);
                 SaveAuditFeedsToDisk(force: false);
                 FlushPendingJournalEntries();

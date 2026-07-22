@@ -156,47 +156,92 @@ namespace Glitch.Services
                     return;
                 }
 
-                if (GlitchAiIntentJournalWriter.HasIntentId(validation.IntentId))
+                if (!GlitchAiIntentStateStore.TryClaim(
+                    validation.IntentId,
+                    body,
+                    out GlitchAiIntentState intentState,
+                    out bool isNewClaim,
+                    out bool contentConflict,
+                    out string claimFailure))
                 {
-                    WriteResponse(context, 409, BuildDuplicateJson(validation.IntentId));
+                    int claimStatus = string.Equals(claimFailure, "legacy_duplicate_outcome_unavailable", StringComparison.Ordinal)
+                        ? 409
+                        : 500;
+                    WriteResponse(context, claimStatus, BuildErrorJson(claimFailure ?? "intent_claim_failed", validation.IntentId));
+                    return;
+                }
+                if (contentConflict)
+                {
+                    WriteResponse(context, 409, BuildConflictJson(validation.IntentId));
+                    return;
+                }
+                if (!isNewClaim && intentState.IsTerminal && !string.IsNullOrWhiteSpace(intentState.ResponseJson))
+                {
+                    WriteResponse(context, intentState.HttpStatus > 0 ? intentState.HttpStatus : 200, intentState.ResponseJson);
+                    return;
+                }
+                if (!isNewClaim && string.Equals(intentState.Phase, "execution_started", StringComparison.Ordinal))
+                {
+                    GlitchAiExecutionResult reconciled = GlitchAiOrderExecutor.TryReconcileStartedIntent(body, DateTime.UtcNow);
+                    GlitchAiExecutionJournalWriter.TryAppend(validation.IntentId, reconciled, DateTime.UtcNow);
+                    string reconciledJson = BuildAcceptedJson(validation.IntentId, reconciled);
+                    string reconciledPhase = string.Equals(reconciled.Status, "failed", StringComparison.Ordinal)
+                        ? "failed"
+                        : "executed";
+                    if (!GlitchAiIntentStateStore.TrySavePhase(intentState, reconciledPhase, 202, reconciledJson, out string reconcileStateFailure))
+                    {
+                        WriteResponse(context, 500, BuildErrorJson("intent_state_failed", reconcileStateFailure));
+                        return;
+                    }
+                    WriteResponse(context, 202, reconciledJson);
                     return;
                 }
 
-                GlitchAiRiskDecision decision = GlitchAiRiskFirewall.Validate(body, DateTime.UtcNow);
-                bool isDuplicate;
-                if (!GlitchAiJournalBridge.TryRecord(validation.IntentId, body, decision, DateTime.UtcNow, out isDuplicate))
+                bool resumeApproved = !isNewClaim
+                    && string.Equals(intentState.Phase, "approved", StringComparison.Ordinal);
+                if (!resumeApproved)
                 {
-                    if (isDuplicate)
+                    GlitchAiRiskDecision decision = GlitchAiRiskFirewall.Validate(body, DateTime.UtcNow);
+                    if (!GlitchAiJournalBridge.TryRecord(validation.IntentId, body, decision, DateTime.UtcNow))
                     {
-                        WriteResponse(context, 409, BuildDuplicateJson(validation.IntentId));
+                        WriteResponse(context, 500, BuildErrorJson("journal_failed", "could not persist intent decision"));
                         return;
                     }
 
-                    WriteResponse(context, 500, BuildErrorJson("journal_failed", "could not persist intent decision"));
-                    return;
-                }
-
-                if (!decision.IsApproved)
-                {
-                    Action<string, string, string, int, string> rejectedHandler = IntentRejected;
-                    if (rejectedHandler != null)
+                    if (!decision.IsApproved)
                     {
-                        try
+                        Action<string, string, string, int, string> rejectedHandler = IntentRejected;
+                        if (rejectedHandler != null)
                         {
-                            rejectedHandler(
-                                validation.IntentId,
-                                validation.Instrument,
-                                validation.Action,
-                                decision.FailedCheckNumber,
-                                decision.FailedCheckCode);
+                            try
+                            {
+                                rejectedHandler(
+                                    validation.IntentId,
+                                    validation.Instrument,
+                                    validation.Action,
+                                    decision.FailedCheckNumber,
+                                    decision.FailedCheckCode);
+                            }
+                            catch
+                            {
+                            }
                         }
-                        catch
+
+                        string rejectedJson = BuildFirewallRejectedJson(validation.IntentId, decision);
+                        if (!GlitchAiIntentStateStore.TrySavePhase(intentState, "rejected", 422, rejectedJson, out string rejectedStateFailure))
                         {
+                            WriteResponse(context, 500, BuildErrorJson("intent_state_failed", rejectedStateFailure));
+                            return;
                         }
+                        WriteResponse(context, 422, rejectedJson);
+                        return;
                     }
 
-                    WriteResponse(context, 422, BuildFirewallRejectedJson(validation.IntentId, decision));
-                    return;
+                    if (!GlitchAiIntentStateStore.TrySavePhase(intentState, "approved", 0, null, out string approvedStateFailure))
+                    {
+                        WriteResponse(context, 500, BuildErrorJson("intent_state_failed", approvedStateFailure));
+                        return;
+                    }
                 }
 
                 Action<string, string, string> handler = IntentAccepted;
@@ -211,10 +256,25 @@ namespace Glitch.Services
                     }
                 }
 
+                if (!GlitchAiIntentStateStore.TrySavePhase(intentState, "execution_started", 0, null, out string startedStateFailure))
+                {
+                    WriteResponse(context, 500, BuildErrorJson("intent_state_failed", startedStateFailure));
+                    return;
+                }
+
                 GlitchAiExecutionResult execution = GlitchAiOrderExecutor.TryExecuteApprovedIntent(body, DateTime.UtcNow);
                 GlitchAiExecutionJournalWriter.TryAppend(validation.IntentId, execution, DateTime.UtcNow);
+                string acceptedJson = BuildAcceptedJson(validation.IntentId, execution);
+                string terminalPhase = string.Equals(execution?.Status, "failed", StringComparison.Ordinal)
+                    ? "failed"
+                    : "executed";
+                if (!GlitchAiIntentStateStore.TrySavePhase(intentState, terminalPhase, 202, acceptedJson, out string terminalStateFailure))
+                {
+                    WriteResponse(context, 500, BuildErrorJson("intent_state_failed", terminalStateFailure));
+                    return;
+                }
 
-                WriteResponse(context, 202, BuildAcceptedJson(validation.IntentId, execution));
+                WriteResponse(context, 202, acceptedJson);
             }
             catch
             {
@@ -299,6 +359,17 @@ namespace Glitch.Services
             return "{"
                 + "\"schema_version\":" + GlitchSnapshotJson.String("glitch.intent.response.v1") + ","
                 + "\"status\":" + GlitchSnapshotJson.String("duplicate") + ","
+                + "\"intent_id\":" + GlitchSnapshotJson.String(intentId) + ","
+                + "\"created_utc\":" + GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(DateTime.UtcNow))
+                + "}";
+        }
+
+        private static string BuildConflictJson(string intentId)
+        {
+            return "{"
+                + "\"schema_version\":" + GlitchSnapshotJson.String("glitch.intent.response.v1") + ","
+                + "\"status\":" + GlitchSnapshotJson.String("conflict") + ","
+                + "\"error\":" + GlitchSnapshotJson.String("intent_id_content_conflict") + ","
                 + "\"intent_id\":" + GlitchSnapshotJson.String(intentId) + ","
                 + "\"created_utc\":" + GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(DateTime.UtcNow))
                 + "}";
