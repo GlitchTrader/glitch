@@ -35,6 +35,8 @@ Current behavior follows explicit ownership:
 - a native master execution is copied immediately at the configured ratio; if a complete master bracket exists then follower stops and targets are native OCO orders, and late-arriving master protection is attached when it becomes available;
 - manual master partial and full closes are copied, while manual follower divergence is preserved;
 - **Sync** is the only catch-up action and runs only when the user clicks it;
+- Sync, close reconciliation, and protection sizing use the exact native instrument contract, including expiry;
+- if native position truth diverges while a Glitch-owned close remains working, only that owned remainder is cancelled; no replacement trade or silent catch-up is created;
 - ambiguous submissions are not blindly retried;
 - a follower protection failure triggers one bounded native cleanup and no submission loop.
 
