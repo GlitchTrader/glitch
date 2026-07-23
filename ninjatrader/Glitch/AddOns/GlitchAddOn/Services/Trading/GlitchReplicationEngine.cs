@@ -46,6 +46,27 @@ namespace Glitch.Services
             return true;
         }
 
+        public static bool TryGetNetQuantityForInstrument(
+            Account account,
+            Instrument instrument,
+            out int netQuantity)
+        {
+            netQuantity = 0;
+            if (account == null || instrument == null || string.IsNullOrWhiteSpace(instrument.FullName)
+                || !TrySnapshotPositions(account, out Position[] positions))
+                return false;
+
+            foreach (Position position in positions)
+            {
+                if (position?.Instrument == null)
+                    continue;
+                if (!string.Equals(position.Instrument.FullName, instrument.FullName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                netQuantity += GetSignedQuantity(position);
+            }
+            return true;
+        }
+
         public static Instrument FindInstrumentForInstrumentRoot(Account account, string instrumentRoot)
         {
             if (account == null || string.IsNullOrWhiteSpace(instrumentRoot))
