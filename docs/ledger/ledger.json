@@ -220,6 +220,7 @@
         "Public Hermes v0.0.2.9 commit glitch-hermes-profile@744eb30 and tag v0.0.2.9 are pushed; installed profile passes 28/28 distribution-owned hash parity with plugin and supervised gateway present.",
         "AI profile source ai/22@4c13209 now reproduces the public v0.0.2.9 tree exactly and removes the stale embedded deterministic capacity/session language that the drift check exposed.",
         "AI and both preserved Hermes jobs remained paused through profile update and AddOn deployment.",
+        "Fresh epoch eb99193e-8a85-4908-ab37-75f3e8937a35 reset without backup after all nine accounts were proven flat/order-free; post-reset memory, request dumps, intents, trade ledger, risk locks, and learning streams are empty; AddOn reload established fresh 250k account-peak baselines.",
         "Native Hermes and human-interleave Sim proof remains pending because the existing follower positions were preserved rather than commandeered for a test."
       ],
       "sources": [

@@ -159,6 +159,12 @@ test authority.
   `ai/22@ae51406`; live hashes match 91/91; NinjaScript F5 compile exposed no
   error row or modal; the deployed UI exposes Sync and the unchecked
   account-scoped daily-close control.
+- Fresh Hermes epoch: `eb99193e-8a85-4908-ab37-75f3e8937a35` reset without
+  backup after a fresh snapshot proved all nine accounts flat and order-free.
+  Post-reset checks found zero retained memory files, request dumps, intent
+  files, trade-ledger entries, risk locks, or nonempty learning streams; AI
+  and both recreated jobs remain paused. The AddOn reload established only
+  new-epoch runtime evidence and fresh 250k account-peak baselines.
 - Standard, AI, durable-main, and public-profile `git diff --check`: clean
   apart from Git's CRLF conversion warnings.
 
