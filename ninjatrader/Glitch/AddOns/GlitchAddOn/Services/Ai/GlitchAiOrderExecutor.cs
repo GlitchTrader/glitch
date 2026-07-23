@@ -234,16 +234,16 @@ namespace Glitch.Services
             {
                 if (!IsIntentV3(rawJson))
                 {
-                    bool targetsMatch = targets.Count == 1
+                    bool legacyTargetsMatch = targets.Count == 1
                         && PricesEqual(targets[0].LimitPrice, amendments[0].TargetPrice.Value);
                     if (amendments[0].StopPrice.HasValue)
                     {
                         Order matchingStop = stops.SingleOrDefault(stop => string.Equals(stop.Oco, targets[0].Oco, StringComparison.Ordinal));
-                        targetsMatch = targetsMatch
+                        legacyTargetsMatch = legacyTargetsMatch
                             && matchingStop != null
                             && PricesEqual(matchingStop.StopPrice, amendments[0].StopPrice.Value);
                     }
-                    if (targetsMatch)
+                    if (legacyTargetsMatch)
                         return GlitchAiExecutionResult.Succeeded("reconciled_move_tp_native_state");
                     if (targets.Any(target => GlitchReplicationEngine.IsWorkingOrderState(target.OrderState))
                         || stops.Any(stop => GlitchReplicationEngine.IsWorkingOrderState(stop.OrderState)))
