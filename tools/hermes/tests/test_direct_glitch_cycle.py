@@ -306,7 +306,7 @@ class DirectCycleTests(unittest.TestCase):
 
             outcomes = MODULE.journal_tail(Path(root))["outcomes"]
 
-        self.assertEqual([json.loads(row)["intent_id"] for row in outcomes], ["eligible", "legacy"])
+        self.assertEqual([row["intent_id"] for row in outcomes], ["eligible", "legacy"])
 
     def test_recent_ledger_is_bounded_for_persistent_session(self):
         with tempfile.TemporaryDirectory() as root:
@@ -326,7 +326,7 @@ class DirectCycleTests(unittest.TestCase):
 
             ledger = MODULE.journal_tail(Path(root))
 
-        self.assertEqual([json.loads(row)["intent_id"] for row in ledger["outcomes"]], list(map(str, range(3, 9))))
+        self.assertEqual([row["intent_id"] for row in ledger["outcomes"]], list(map(str, range(3, 9))))
 
     def test_isolated_session_receives_bounded_recent_decisions(self):
         today = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -343,7 +343,7 @@ class DirectCycleTests(unittest.TestCase):
 
             decisions = MODULE.journal_tail(Path(root))["decisions"]
 
-        self.assertEqual([json.loads(row)["intent_id"] for row in decisions], list(map(str, range(3, 9))))
+        self.assertEqual([row["intent_id"] for row in decisions], list(map(str, range(3, 9))))
 
     def test_prompt_uses_probabilistic_confirmation_and_short_decision_horizons(self):
         value = MODULE.build_prompt(packet(), MODULE.build_scenario(packet()), {})
@@ -398,6 +398,17 @@ class DirectCycleTests(unittest.TestCase):
                 "guidance": {"summary": "keep quantity adaptive"},
             }), encoding="utf-8")
 
+            observational = MODULE.learning_context(Path(root))
+            self.assertIsNone(observational["current_plan"])
+            self.assertIsNone(observational["current_guidance"])
+
+            plan = json.loads(plan_path.read_text(encoding="utf-8"))
+            guidance = json.loads(guidance_path.read_text(encoding="utf-8"))
+            plan["trading_influence"] = "outcome_backed"
+            guidance["trading_influence"] = "outcome_backed"
+            plan_path.write_text(json.dumps(plan), encoding="utf-8")
+            guidance_path.write_text(json.dumps(guidance), encoding="utf-8")
+
             current = MODULE.learning_context(Path(root))
             self.assertEqual(current["current_plan"]["schema_version"], MODULE.CURRENT_PLAN_SCHEMA)
             self.assertEqual(
@@ -408,6 +419,55 @@ class DirectCycleTests(unittest.TestCase):
                 "status": "proposed", "instruction": "This must remain inert."
             }), encoding="utf-8")
             self.assertIsNone(MODULE.learning_context(Path(root))["active_cognitive_overlay"])
+
+            (supervisor / "active-cognitive-overlay.json").write_text(json.dumps({
+                "status": "active",
+                "instruction": "Decision-only evidence must remain inert.",
+                "activation_evidence_kind": "decision_episodes",
+            }), encoding="utf-8")
+            self.assertIsNone(MODULE.learning_context(Path(root))["active_cognitive_overlay"])
+
+            (supervisor / "active-cognitive-overlay.json").write_text(json.dumps({
+                "status": "active",
+                "instruction": "Outcome-backed evidence may influence cognition.",
+                "activation_evidence_kind": "completed_master_outcomes",
+            }), encoding="utf-8")
+            self.assertEqual(
+                MODULE.learning_context(Path(root))["active_cognitive_overlay"]["instruction"],
+                "Outcome-backed evidence may influence cognition.",
+            )
+
+    def test_direct_prompt_uses_compact_structured_outcome_context(self):
+        with tempfile.TemporaryDirectory() as root:
+            glitch_data = Path(root)
+            intents = glitch_data / "intents"
+            intents.mkdir()
+            large_audit = {"field": "x" * 20000}
+            (intents / "hermes-trade-outcomes.jsonl").write_text(json.dumps({
+                "intent_id": "trade-1",
+                "cycle_id": "cycle-1",
+                "master_account": "Sim101",
+                "master_learning_eligible": True,
+                "master_realized_pnl_usd": 125.0,
+                "decision_audit": large_audit,
+                "replication_diagnostics": [large_audit],
+                "account_outcomes": [{
+                    "account": "Sim101",
+                    "quantity": 2,
+                    "entry_price": 20000.0,
+                    "exit_price": 20025.0,
+                    "observed_mfe_usd": 140.0,
+                    "observed_mae_usd": -30.0,
+                }],
+            }) + "\n", encoding="utf-8")
+
+            ledger = MODULE.journal_tail(glitch_data)
+            encoded = json.dumps(ledger)
+
+        self.assertLess(len(encoded), 2000)
+        self.assertNotIn("decision_audit", encoded)
+        self.assertNotIn("replication_diagnostics", encoded)
+        self.assertEqual(ledger["outcomes"][0]["master_result"]["quantity"], 2)
 
     def test_invalid_content_gets_one_same_cycle_regeneration(self):
         value = packet()

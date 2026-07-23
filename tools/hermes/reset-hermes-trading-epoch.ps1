@@ -1,246 +1,259 @@
+[CmdletBinding()]
 param(
     [string]$Profile = 'glitch',
     [string]$GlitchData = (Join-Path $env:USERPROFILE 'Documents\NinjaTrader 8\GlitchData'),
-    [string]$Capsule = (Join-Path (Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent) 'Glitch-Hermes-Data'),
     [switch]$Apply
 )
 
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-if ($Profile -ne 'glitch') { throw 'Only the Glitch Hermes profile may be reset by this script.' }
 
-$profileRoot = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA "hermes\profiles\$Profile"))
+if ($Profile -ne 'glitch') {
+    throw 'Only the installed glitch Hermes profile may be reset by this script.'
+}
+
+$profileRoot = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'hermes\profiles\glitch'))
 $glitchRoot = [IO.Path]::GetFullPath($GlitchData)
-$capsuleRoot = [IO.Path]::GetFullPath($Capsule)
-$exchangeRoot = [IO.Path]::GetFullPath((Join-Path $glitchRoot 'hermes\exchange'))
+$snapshotPath = Join-Path $glitchRoot 'snapshots\portfolio\latest.json'
+$controlStatePath = Join-Path $glitchRoot 'hermes\control-state.json'
 $jobsPath = Join-Path $profileRoot 'cron\jobs.json'
-$sessionReset = Join-Path $PSScriptRoot 'reset-named-hermes-session.py'
-$hermesCommand = Get-Command hermes -ErrorAction Stop
-$hermesPython = Join-Path (Split-Path $hermesCommand.Source -Parent) 'python.exe'
+$setupPath = Join-Path $profileRoot 'setup.ps1'
 
-foreach ($required in @($profileRoot, $glitchRoot, $exchangeRoot)) {
-    if (-not (Test-Path -LiteralPath $required -PathType Container)) {
-        throw "Required reset root is missing: $required"
+foreach ($requiredRoot in @($profileRoot, $glitchRoot)) {
+    if (-not (Test-Path -LiteralPath $requiredRoot -PathType Container)) {
+        throw "Required reset root is missing: $requiredRoot"
     }
 }
-foreach ($required in @($jobsPath, $sessionReset)) {
-    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
-        throw "Required reset helper is missing: $required"
-    }
-}
-if (-not (Test-Path -LiteralPath $hermesPython -PathType Leaf)) {
-    throw "Hermes Python runtime is missing: $hermesPython"
-}
-
-function Assert-UnderRoot([string]$Path, [string]$Root) {
-    $full = [IO.Path]::GetFullPath($Path)
-    $prefix = $Root.TrimEnd('\') + '\'
-    if (-not $full.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Refusing path outside reset root: $full"
-    }
-    return $full
-}
-
-function Add-ExistingFile([Collections.Generic.List[string]]$List, [string]$Path, [string]$Root) {
-    if (Test-Path -LiteralPath $Path -PathType Leaf) {
-        $List.Add((Assert-UnderRoot $Path $Root))
+foreach ($requiredFile in @($snapshotPath, $controlStatePath, $setupPath)) {
+    if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
+        throw "Required reset precondition file is missing: $requiredFile"
     }
 }
 
-function Add-FilesUnder([Collections.Generic.List[string]]$List, [string]$Path, [string]$Root) {
-    if (Test-Path -LiteralPath $Path -PathType Container) {
-        foreach ($item in Get-ChildItem -LiteralPath $Path -File -Recurse) {
-            $List.Add((Assert-UnderRoot $item.FullName $Root))
-        }
+function Assert-ChildPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Root
+    )
+
+    $fullPath = [IO.Path]::GetFullPath($Path)
+    $fullRoot = [IO.Path]::GetFullPath($Root).TrimEnd('\')
+    if (-not $fullPath.StartsWith($fullRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing reset target outside the expected root: $fullPath"
     }
+    return $fullPath
 }
 
-$jobs = @((Get-Content -LiteralPath $jobsPath -Raw | ConvertFrom-Json).jobs)
-$enabledJobs = @($jobs | Where-Object { $_.enabled -or $_.state -eq 'active' })
+function Remove-ResetTarget {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Root
+    )
 
-$files = [Collections.Generic.List[string]]::new()
-foreach ($name in @(
-    'received.jsonl', 'decisions.jsonl', 'executions.jsonl', 'hermes-trade-outcomes.jsonl',
-    'intent_ids.txt', 'hermes-cycles.jsonl', 'hermes-cycles.glitch-aggressive.jsonl',
-    'hermes-cycles.glitch-conservative.jsonl', 'hermes-cycles.glitch-stay-revert.jsonl',
-    'hermes-portfolio-cycles.jsonl', 'hermes-sim-guard-ticks.jsonl',
-    'hermes-opportunity-guard-state.json'
-)) {
-    Add-ExistingFile $files (Join-Path $glitchRoot "intents\$name") $glitchRoot
-}
-
-foreach ($relative in @(
-    'glitch\decision-packets', 'glitch\minute-frames', 'glitch\events',
-    'hermes\model-attempts', 'hermes\outbox', 'hermes\outbox-context', 'hermes\receipts', 'hermes\events'
-)) {
-    Add-FilesUnder $files (Join-Path $exchangeRoot $relative) $exchangeRoot
-}
-foreach ($relative in @(
-    'glitch\latest-decision-packet.json', 'glitch\operator-directive.json',
-    'hermes\latest-decision-packet.json', 'hermes\operator-directive.json',
-    'hermes\operator-directives.jsonl', 'hermes\direct-cycle.lock'
-)) {
-    Add-ExistingFile $files (Join-Path $exchangeRoot $relative) $exchangeRoot
-}
-foreach ($relative in @(
-    'hermes\supervisor\trade-episodes.jsonl',
-    'hermes\supervisor\observations.jsonl',
-    'hermes\supervisor\lessons.jsonl',
-    'hermes\supervisor\trading-guidance.jsonl',
-    'hermes\supervisor\plans.jsonl',
-    'hermes\supervisor\daily-journal.jsonl',
-    'hermes\supervisor\cognitive-changes.jsonl',
-    'hermes\supervisor\current-guidance.json',
-    'hermes\supervisor\current-plan.json',
-    'hermes\supervisor\proposed-cognitive-overlay.json',
-    'hermes\supervisor\active-cognitive-overlay.json',
-    'hermes\supervisor\active-trades.json',
-    'hermes\supervisor\learning-state.json',
-    'hermes\supervisor\learning-worker-status.json',
-    'hermes\supervisor\learning-worker.log',
-    'hermes\learning-cycle.lock'
-)) {
-    Add-ExistingFile $files (Join-Path $exchangeRoot $relative) $exchangeRoot
-}
-foreach ($name in @('control-commands.jsonl', 'cycles.jsonl')) {
-    Add-ExistingFile $files (Join-Path $glitchRoot "hermes\$name") $glitchRoot
+    $target = Assert-ChildPath -Path $Path -Root $Root
+    if (-not (Test-Path -LiteralPath $target)) { return $false }
+    Remove-Item -LiteralPath $target -Recurse -Force
+    if (Test-Path -LiteralPath $target) {
+        throw "Reset target could not be removed: $target"
+    }
+    return $true
 }
 
-Add-FilesUnder $files (Join-Path $profileRoot 'cron\output') $profileRoot
-Add-ExistingFile $files (Join-Path $profileRoot 'memories\USER.md') $profileRoot
-Add-FilesUnder $files (Join-Path $capsuleRoot 'journal\nt') $capsuleRoot
+function Get-HermesJobs {
+    if (-not (Test-Path -LiteralPath $jobsPath -PathType Leaf)) { return @() }
+    return @((Get-Content -LiteralPath $jobsPath -Raw | ConvertFrom-Json).jobs)
+}
 
-$uniqueFiles = @($files | Sort-Object -Unique)
-$previousHermesHome = $env:HERMES_HOME
-try {
-    $env:HERMES_HOME = $profileRoot
-    $sessionState = (& $hermesPython $sessionReset --title trading --preserve-title chat | Out-String | ConvertFrom-Json)
-    if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the named Hermes sessions.' }
+$controlState = Get-Content -LiteralPath $controlStatePath -Raw | ConvertFrom-Json
+if (-not [bool]$controlState.trading_paused) {
+    throw 'AI trading must be paused before resetting the epoch.'
 }
-finally {
-    $env:HERMES_HOME = $previousHermesHome
+
+$jobs = @(Get-HermesJobs)
+$enabledJobs = @($jobs | Where-Object {
+    [bool]$_.enabled -or [string]$_.state -eq 'active'
+})
+if ($enabledJobs.Count -gt 0) {
+    throw ('Every Hermes job must be paused before reset: ' + (($enabledJobs | ForEach-Object name) -join ', '))
 }
+
+$portfolio = Get-Content -LiteralPath $snapshotPath -Raw | ConvertFrom-Json
+$snapshotUtc = [datetime]::Parse([string]$portfolio.created_utc).ToUniversalTime()
+if (([datetime]::UtcNow - $snapshotUtc).TotalMinutes -gt 3) {
+    throw "Portfolio snapshot is stale: $($portfolio.created_utc)"
+}
+$accounts = @($portfolio.accounts)
+if ($accounts.Count -eq 0) {
+    throw 'Portfolio snapshot contains no accounts.'
+}
+$unsafeAccounts = @($accounts | Where-Object {
+    @($_.positions).Count -gt 0 -or [int]$_.working_orders -gt 0
+})
+if ($unsafeAccounts.Count -gt 0) {
+    throw ('Every observed account must be flat and order-free: ' + (($unsafeAccounts | ForEach-Object account) -join ', '))
+}
+
+$profileTargets = @(
+    'audio_cache',
+    'cache',
+    'cron',
+    'image_cache',
+    'logs',
+    'memories',
+    'plans',
+    'sandboxes',
+    'sessions',
+    'state',
+    'workspace',
+    'state.db',
+    'state.db-shm',
+    'state.db-wal',
+    'verification_evidence.db',
+    '.hermes_history',
+    'gateway-starts.log'
+)
+$profileBackupTargets = @(
+    Get-ChildItem -LiteralPath $profileRoot -Force |
+        Where-Object { $_.Name -match '^(memories|skills)\.pre-' -or $_.Name -match '^(SOUL|\.env)\.pre-' } |
+        ForEach-Object FullName
+)
+$glitchTargets = @(
+    'intents',
+    'hermes\exchange',
+    'snapshots',
+    'selfcheck',
+    'hermes-archives',
+    'replay',
+    'Telemetry',
+    'Journal.tsv',
+    'TradeLedger.tsv',
+    'CriticalWarnings.tsv',
+    'RiskLocks.tsv',
+    'AccountPeaks.tsv',
+    'AnalyticsBridgeCache.json',
+    'hermes\control-commands.jsonl',
+    'hermes\cycles.jsonl',
+    'hermes\epoch.json'
+)
 
 $preview = [ordered]@{
-    schema_version = 'glitch.hermes.trading_epoch_reset.v2'
+    schema_version = 'glitch.hermes.trading_epoch_reset.v3'
     mode = if ($Apply) { 'apply' } else { 'preview' }
     profile = $Profile
-    cron_jobs_paused = ($enabledJobs.Count -eq 0)
-    enabled_cron_jobs = @($enabledJobs | ForEach-Object name)
-    files_to_clear = $uniqueFiles.Count
-    trading_session_id = $sessionState.old_session_id
-    trading_session_messages = $sessionState.old_message_count
-    chat_session_id_preserved = $sessionState.preserved_session_id
-    native_memory_file_cleared = (Test-Path -LiteralPath (Join-Path $profileRoot 'memories\USER.md'))
+    portfolio_snapshot_utc = $portfolio.created_utc
+    observed_accounts = $accounts.Count
+    all_accounts_flat_and_order_free = $true
+    all_jobs_paused = $true
+    profile_targets = $profileTargets.Count + $profileBackupTargets.Count
+    glitch_targets = $glitchTargets.Count
     preserved = @(
-        'SOUL.md', 'skills', 'plugins', 'config', 'chat named session',
-        'native memory infrastructure', 'Glitch runtime policy', 'account groups',
-        'supervisor build requests and Codex events', 'NinjaTrader accounts',
-        'Journal.tsv', 'TradeLedger.tsv'
+        'Hermes authentication and profile configuration',
+        'distributed SOUL, skills, plugin, scripts, and setup',
+        'Glitch AI policy, account groups, ratios, runtime policy, licensing, and UI settings',
+        'NinjaTrader native accounts and credentials'
     )
-    nt_reset = 'Use Glitch UI Reset Data, then NinjaTrader Reset for each Sim account.'
+    destroyed = @(
+        'all Hermes sessions and native memories',
+        'all Hermes cron jobs and cron execution history',
+        'all Glitch decision, intent, execution, outcome, learning, prompt, packet, and snapshot history',
+        'Glitch Journal, TradeLedger, warnings, locks, analytics cache, and AccountPeaks'
+    )
+    backup_created = $false
 }
 
 if (-not $Apply) {
     $preview | ConvertTo-Json -Depth 5
     return
 }
-if ($enabledJobs.Count -gt 0) {
-    throw ('All Glitch Hermes cron jobs must be paused before reset: ' + (($enabledJobs | ForEach-Object name) -join ','))
+
+& hermes -p $Profile gateway stop | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    throw 'Could not stop the Glitch Hermes gateway before reset.'
 }
 
-$archiveRoot = Join-Path $glitchRoot 'hermes-archives'
-New-Item -ItemType Directory -Force -Path $archiveRoot | Out-Null
-$stamp = [datetime]::UtcNow.ToString('yyyyMMddTHHmmssZ')
-$staging = Join-Path $archiveRoot "trading-epoch-$stamp"
-$archive = "$staging.zip"
-New-Item -ItemType Directory -Force -Path $staging | Out-Null
-
-try {
-    $previousHermesHome = $env:HERMES_HOME
-    try {
-        $env:HERMES_HOME = $profileRoot
-        & hermes sessions export (Join-Path $staging 'named-trading-session.jsonl') `
-            --session-id $sessionState.old_session_id --redact --yes | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'Could not archive the named trading session.' }
-
-        & hermes sessions export (Join-Path $staging 'one-shot-trading-sessions.jsonl') `
-            --source trading --cwd $exchangeRoot --min-messages 2 --redact --yes | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'Could not archive one-shot trading sessions.' }
-
-        & hermes sessions export (Join-Path $staging 'hourly-review-sessions.jsonl') `
-            --title glitch-hourly-review --redact --yes | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'Could not archive hourly review sessions.' }
-    }
-    finally {
-        $env:HERMES_HOME = $previousHermesHome
-    }
-
-    Add-Type -AssemblyName System.IO.Compression
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $zip = [IO.Compression.ZipFile]::Open($archive, [IO.Compression.ZipArchiveMode]::Create)
-    try {
-        foreach ($path in $uniqueFiles) {
-            $entry = if ($path.StartsWith($glitchRoot, [StringComparison]::OrdinalIgnoreCase)) {
-                'GlitchData/' + $path.Substring($glitchRoot.Length).TrimStart('\').Replace('\', '/')
-            } elseif ($path.StartsWith($profileRoot, [StringComparison]::OrdinalIgnoreCase)) {
-                'HermesProfile/' + $path.Substring($profileRoot.Length).TrimStart('\').Replace('\', '/')
-            } else {
-                'HermesCapsule/' + $path.Substring($capsuleRoot.Length).TrimStart('\').Replace('\', '/')
-            }
-            [IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
-                $zip, $path, $entry, [IO.Compression.CompressionLevel]::Optimal) | Out-Null
-        }
-        foreach ($item in Get-ChildItem -LiteralPath $staging -File) {
-            [IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
-                $zip, $item.FullName, ('HermesSessions/' + $item.Name),
-                [IO.Compression.CompressionLevel]::Optimal) | Out-Null
-        }
-    }
-    finally {
-        $zip.Dispose()
-    }
-
-    foreach ($path in $uniqueFiles) {
-        if ($path.Equals((Join-Path $profileRoot 'memories\USER.md'), [StringComparison]::OrdinalIgnoreCase)) {
-            Set-Content -LiteralPath $path -Value '' -NoNewline
-        } else {
-            Remove-Item -LiteralPath $path -Force
-        }
-    }
-
-    $previousHermesHome = $env:HERMES_HOME
-    try {
-        $env:HERMES_HOME = $profileRoot
-        $resetState = (& $hermesPython $sessionReset --title trading --preserve-title chat --apply | Out-String | ConvertFrom-Json)
-        if ($LASTEXITCODE -ne 0) { throw 'Could not replace the named trading session.' }
-
-        & hermes sessions prune --source trading --cwd $exchangeRoot `
-            --min-messages 2 --include-archived --yes | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'Could not delete one-shot trading sessions.' }
-
-        & hermes sessions prune --title glitch-hourly-review --include-archived --yes | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'Could not delete hourly review sessions.' }
-    }
-    finally {
-        $env:HERMES_HOME = $previousHermesHome
+$removed = [Collections.Generic.List[string]]::new()
+foreach ($relative in $profileTargets) {
+    $target = Join-Path $profileRoot $relative
+    if (Remove-ResetTarget -Path $target -Root $profileRoot) {
+        $removed.Add($target)
     }
 }
-finally {
-    if (Test-Path -LiteralPath $staging -PathType Container) {
-        Remove-Item -LiteralPath $staging -Recurse -Force
+foreach ($target in $profileBackupTargets) {
+    if (Remove-ResetTarget -Path $target -Root $profileRoot) {
+        $removed.Add($target)
     }
+}
+foreach ($relative in $glitchTargets) {
+    $target = Join-Path $glitchRoot $relative
+    if (Remove-ResetTarget -Path $target -Root $glitchRoot) {
+        $removed.Add($target)
+    }
+}
+
+$epochId = [guid]::NewGuid().ToString()
+$epochPath = Join-Path $glitchRoot 'hermes\epoch.json'
+New-Item -ItemType Directory -Force -Path (Split-Path $epochPath -Parent) | Out-Null
+[ordered]@{
+    schema_version = 'glitch.hermes.epoch.v1'
+    epoch_id = $epochId
+    reset_utc = [datetime]::UtcNow.ToString('o')
+    profile_distribution = '0.0.2.6'
+    prior_state_preserved = $false
+} | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $epochPath -Encoding utf8
+
+& powershell -NoProfile -ExecutionPolicy Bypass -File $setupPath -Profile $Profile -GlitchData $glitchRoot | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    throw 'Clean profile setup failed after reset; AI remains paused.'
+}
+
+$freshJobs = @(Get-HermesJobs)
+$expectedJobs = @('glitch-direct-operator', 'glitch-learning-supervisor')
+if ($freshJobs.Count -ne 2) {
+    throw "Reset setup created $($freshJobs.Count) jobs instead of exactly two."
+}
+foreach ($expected in $expectedJobs) {
+    $match = @($freshJobs | Where-Object name -eq $expected)
+    if ($match.Count -ne 1 -or [bool]$match[0].enabled -or [string]$match[0].state -ne 'paused') {
+        throw "Reset setup did not leave $expected exactly once and paused."
+    }
+}
+$direct = @($freshJobs | Where-Object name -eq 'glitch-direct-operator')[0]
+$learning = @($freshJobs | Where-Object name -eq 'glitch-learning-supervisor')[0]
+if ([string]$direct.schedule.expr -ne '* * * * *' -or [string]$learning.schedule.expr -ne '*/30 * * * *') {
+    throw 'Reset setup created an unexpected cron schedule.'
+}
+
+$memoryFiles = @(
+    Get-ChildItem -LiteralPath (Join-Path $profileRoot 'memories') -File -ErrorAction SilentlyContinue |
+        Where-Object Length -gt 0
+)
+$requestDumps = @(
+    Get-ChildItem -LiteralPath (Join-Path $profileRoot 'sessions') -Filter 'request_dump_*.json' `
+        -File -Recurse -ErrorAction SilentlyContinue
+)
+if ($memoryFiles.Count -gt 0 -or $requestDumps.Count -gt 0) {
+    throw 'Fresh setup unexpectedly recreated non-empty memory or prompt dumps; AI remains paused.'
 }
 
 [ordered]@{
-    schema_version = 'glitch.hermes.trading_epoch_reset.v2'
+    schema_version = 'glitch.hermes.trading_epoch_reset.v3'
     mode = 'applied'
     reset_utc = [datetime]::UtcNow.ToString('o')
+    epoch_id = $epochId
     profile = $Profile
-    archived_to = $archive
-    cleared_files = $uniqueFiles.Count
-    old_trading_session_id = $resetState.old_session_id
-    new_trading_session_id = $resetState.new_session_id
-    chat_session_id_preserved = $resetState.preserved_session_id
-    cron_jobs_remain_paused = $true
-    nt_reset = 'manual_required'
+    distribution_version = '0.0.2.6'
+    removed_targets = $removed.Count
+    backup_created = $false
+    all_accounts_were_flat_and_order_free = $true
+    memory_files_with_content = $memoryFiles.Count
+    request_dumps = $requestDumps.Count
+    cron_jobs = @($freshJobs | ForEach-Object {
+        [ordered]@{
+            name = $_.name
+            schedule = $_.schedule.expr
+            enabled = [bool]$_.enabled
+        }
+    })
+    ai_remains_paused = $true
+    addon_reload_required_for_account_peak_memory = $true
 } | ConvertTo-Json -Depth 5

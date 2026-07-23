@@ -33,7 +33,7 @@ class OperatorMapTests(unittest.TestCase):
         setup = (profile / "setup.ps1").read_text(encoding="utf-8")
         builder = (ROOT / "tools/hermes/build-public-profile.ps1").read_text(encoding="utf-8")
 
-        self.assertIn("version: 0.0.2.4", distribution)
+        self.assertIn("version: 0.0.2.6", distribution)
         self.assertEqual((profile / ".gitattributes").read_text(encoding="utf-8"), "* -text\n")
         self.assertIn("'.gitattributes'", builder)
         self.assertIn('hermes_requires: \">=0.18.2\"', distribution)
@@ -50,8 +50,11 @@ class OperatorMapTests(unittest.TestCase):
             "run-hermes-learning-cycle.py",
             "launch-hermes-learning-cycle.py",
             "ensure-named-sessions.py",
+            "reset-hermes-trading-epoch.ps1",
         ):
             self.assertIn(worker, builder)
+        self.assertIn("-Schedule '*/30 * * * *'", setup)
+        self.assertIn("Remove-ObsoleteCronJobs", setup)
 
     def test_trade_command_controls_operator_and_learning_together(self):
         plugin = (ROOT / "hermes-profile/plugins/glitch-control/__init__.py").read_text(encoding="utf-8")
@@ -67,7 +70,8 @@ class OperatorMapTests(unittest.TestCase):
         for loop_id in loops:
             self.assertEqual(loops[loop_id]["initial_activation"], "managed_by_ai_auto")
         for loop_id in ("trade_debrief", "portfolio_supervision", "portfolio_planning", "daily_learning"):
-            self.assertEqual(loops[loop_id]["model"], "gpt-5.6-sol")
+            self.assertEqual(loops[loop_id]["model"], "gpt-5.6-luna")
+            self.assertEqual(loops[loop_id]["reasoning_effort"], "medium")
         self.assertEqual(set(self.operator["activation"]["enable_now"]), {
             "trade_debrief", "portfolio_supervision", "portfolio_planning", "daily_learning",
         })
@@ -78,11 +82,27 @@ class OperatorMapTests(unittest.TestCase):
         self.assertIn("config set model.default gpt-5.6-luna", installer)
         self.assertIn("config set model.provider openai-codex", installer)
         self.assertIn("config set agent.reasoning_effort medium", installer)
-        self.assertIn("['gpt-5.6-sol']='high'", installer)
+        self.assertNotIn("gpt-5.6-sol", installer)
         self.assertIn("_write_chain; c=load_config(); _write_chain(c, [])", installer)
         self.assertIn('CORE_MODEL = "gpt-5.6-luna"', runner)
         self.assertIn('CORE_PROVIDER = "openai-codex"', runner)
         self.assertIn('"--max-turns", "4"', runner)
+
+    def test_clean_epoch_reset_discards_runtime_state_without_archive(self):
+        reset = (ROOT / "tools/hermes/reset-hermes-trading-epoch.ps1").read_text(encoding="utf-8")
+        self.assertIn("all_accounts_flat_and_order_free", reset)
+        self.assertIn("'state.db'", reset)
+        self.assertIn("'sessions'", reset)
+        self.assertIn("'memories'", reset)
+        self.assertIn("'cron'", reset)
+        self.assertIn("'Journal.tsv'", reset)
+        self.assertIn("'TradeLedger.tsv'", reset)
+        self.assertIn("'AccountPeaks.tsv'", reset)
+        self.assertIn("backup_created = $false", reset)
+        self.assertIn("Remove-Item -LiteralPath $target -Recurse -Force", reset)
+        self.assertNotIn("Compress-Archive", reset)
+        self.assertNotIn("ZipFile", reset)
+        self.assertNotIn("hermes-archives\\trading-epoch", reset)
 
     def test_patterns_are_evidence_not_deterministic_gates(self):
         lowered = self.cognitive_map.lower()

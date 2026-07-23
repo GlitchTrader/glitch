@@ -23,10 +23,10 @@ All loops belong to the same `glitch` profile and share native Hermes memory, bo
 | Loop | Cadence | Model baseline | Primary question | Output authority |
 |---|---:|---|---|---|
 | Core decision | 5m while flat; 1m while a scoped master is positioned; one-cycle directives | `gpt-5.6-luna`, medium | What should each configured group do now? | Strict intent batch; Glitch may reject or execute |
-| Portfolio supervision | hourly | `gpt-5.6-sol`, high | Is exposure, performance, risk posture, or system health drifting? | Review, bounded self-heal, and plan recommendations; no order |
-| Trade debrief | every 15 minutes when new outcomes exist | `gpt-5.6-sol`, high | Why did each master trade enter and exit; what did geometry, quantity, and management teach? | Append-only master episode; no order authority |
-| Portfolio planning | every 300 minutes with new reviews | `gpt-5.6-sol`, high | Given today’s progress and prop rules, what hypotheses, sizing, geometry, and management posture should guide the next block? | Active Hermes plan inside Glitch’s hard limits; no Glitch-policy mutation |
-| Daily learning | catch up each completed Apex session containing unjournaled episodes | `gpt-5.6-sol`, high | What was learned, what should change tomorrow, and which hypotheses deserve testing? | Journal, memory updates, hypotheses, and tomorrow plan; no live-policy promotion |
+| Portfolio supervision | hourly | `gpt-5.6-luna`, medium | Is exposure, performance, risk posture, or system health drifting? | Review, bounded self-heal, and plan recommendations; no order |
+| Trade debrief | every 30 minutes when new outcomes exist | `gpt-5.6-luna`, medium | Why did each master trade enter and exit; what did geometry, quantity, and management teach? | Append-only master episode; no order authority |
+| Portfolio planning | every 300 minutes with new reviews | `gpt-5.6-luna`, medium | Given today’s progress and prop rules, what hypotheses, sizing, geometry, and management posture should guide the next block? | Active Hermes plan inside Glitch’s hard limits; no Glitch-policy mutation |
+| Daily learning | catch up each completed Apex session containing unjournaled episodes | `gpt-5.6-luna`, medium | What was learned, what should change tomorrow, and which hypotheses deserve testing? | Journal, memory updates, hypotheses, and tomorrow plan; no live-policy promotion |
 
 Model IDs are explicit defaults, not permanent doctrine. Each job records provider, model, reasoning effort, prompt version, skill versions, token use, and latency so model routing can later be optimized from evidence. The core loop must never silently downgrade to a weaker fallback model. A failed model call produces no new intent. Supervisory loops may defer until their assigned model is available.
 
@@ -261,13 +261,13 @@ one evidence-gated learning worker; they do not create additional executors.
 
 ### Active learning stages
 
-- Stage C: debrief completed master outcomes every 15 minutes and supervise new episodes hourly.
+- Stage C: debrief completed master outcomes every 30 minutes and supervise new episodes hourly.
 - Stage D: replace the active 300-minute plan only when a new hourly review exists.
 - Stage E: catch up every completed Apex session with unjournaled episodes, update native memory from repeated attributable evidence, and stage or evaluate one reversible cognitive overlay. A proposal has no trading influence until a later independent supervisory decision activates it from later comparable evidence after contradiction review.
 
-One 15-minute no-agent cron launches a separately locked learning process and
-returns immediately, keeping slow Sol work outside the serialized minute-operator
-lane. That process hosts all three learning stages and calls Sol only when their
+One 30-minute no-agent cron launches a separately locked learning process and
+returns immediately, keeping slow Luna work outside the serialized minute-operator
+lane. That process hosts all three learning stages and calls Luna only when their
 evidence and cadence gates are due. Every nested call is tagged `trading`; the
 worker has no execution authority.
 

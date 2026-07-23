@@ -20,7 +20,7 @@ One persistent `glitch` profile owns durable memory. Every eligible model call u
 The profile is installed and updated locally from `GlitchTrader/glitch-hermes-profile`. Setup creates exactly:
 
 - minute `glitch-direct-operator`;
-- 15-minute `glitch-learning-supervisor`.
+- 30-minute `glitch-learning-supervisor`.
 
 Fresh setup leaves trading inactive. The user selects the master/group in Glitch and activates through AI Auto or `/trade`. `/trade_mode paper|live` is a deprecated alias that only activates the same selected scope; it does not create a second authority mode. Profile updates preserve authentication, overrides, sessions, memories, ledgers, and enabled/paused job state.
 
@@ -69,7 +69,7 @@ Transport uncertainty reuses the same durable idempotent outbox. Terminal reject
 
 ## Learning
 
-The single 15-minute learning supervisor processes completed outcomes, NOTHING, rejected/non-executed actions, and five-frame forward decision episodes. It runs hourly supervision, 300-minute planning, and completed-session journals when due. Evidence joins the immutable packet through `cycle_id`; malformed output receives one bounded repair; unprocessed evidence remains pending.
+The single 30-minute learning supervisor processes completed outcomes, NOTHING, rejected/non-executed actions, and five-frame forward decision episodes. It runs hourly supervision, 300-minute planning, and completed-session journals when due. Evidence joins the immutable packet through `cycle_id`; malformed output receives one bounded repair; unprocessed evidence remains pending. Decision-only evidence stays observational; trading guidance, memory, plans, and overlays require repeated attributable completed master outcomes.
 
 Guidance follows propose → later independent confirmation/contradiction → activate/revise/rollback. Hermes cannot rewrite installed SOUL, skills, Glitch policy, groups, or execution code.
 

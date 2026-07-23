@@ -76,7 +76,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not pin the Glitch core reasoning effort
 $previousHermesHome = $env:HERMES_HOME
 try {
     $env:HERMES_HOME = $destination
-    & $python -c "from hermes_cli.config import load_config, save_config; from hermes_cli.fallback_cmd import _write_chain; c=load_config(); _write_chain(c, []); c.setdefault('agent', {}).setdefault('reasoning_overrides', {})['gpt-5.6-sol']='high'; save_config(c)"
+    & $python -c "from hermes_cli.config import load_config, save_config; from hermes_cli.fallback_cmd import _write_chain; c=load_config(); _write_chain(c, []); c.setdefault('agent', {})['reasoning_effort']='medium'; c.setdefault('agent', {}).pop('reasoning_overrides', None); save_config(c)"
     if ($LASTEXITCODE -ne 0) { throw 'Could not clear silent model fallbacks for Glitch.' }
 }
 finally {

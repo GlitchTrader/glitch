@@ -131,6 +131,20 @@ function Ensure-CronJob {
     return [ordered]@{ name = $Name; id = $jobId; enabled = $preserveEnabled; schedule = $Schedule }
 }
 
+function Remove-ObsoleteCronJobs {
+    $supported = @('glitch-direct-operator', 'glitch-learning-supervisor')
+    foreach ($job in @(Get-HermesJobs | Where-Object {
+        ([string]$_.name).StartsWith('glitch-', [StringComparison]::OrdinalIgnoreCase) `
+            -and $supported -notcontains [string]$_.name
+    })) {
+        if ([bool]$job.enabled -or [string]$job.state -eq 'active') {
+            throw "Obsolete Glitch job $($job.name) is enabled; pause it before profile setup."
+        }
+        & hermes cron remove ([string]$job.id) | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Could not remove obsolete Glitch job $($job.name)." }
+    }
+}
+
 Remove-InstallerGitMetadata
 Assert-DistributionIntegrity
 $hermesCommand = Get-Command hermes -ErrorAction Stop
@@ -145,6 +159,7 @@ $requiredFiles = @(
     'scripts\run-hermes-learning-cycle.py',
     'scripts\launch-hermes-learning-cycle.py',
     'scripts\ensure-named-sessions.py',
+    'scripts\reset-hermes-trading-epoch.ps1',
     'plugins\glitch-control\plugin.yaml',
     'plugins\glitch-control\__init__.py'
 )
@@ -183,6 +198,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not install the supervised Glitch Hermes
 $previousHermesHome = $env:HERMES_HOME
 try {
     $env:HERMES_HOME = $profileRoot
+    Remove-ObsoleteCronJobs
     & $python (Join-Path $profileRoot 'scripts\ensure-named-sessions.py') | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Could not seed the named chat and trading sessions.' }
 
@@ -193,7 +209,7 @@ try {
         -Workdir $exchange
     $learningJob = Ensure-CronJob `
         -Name 'glitch-learning-supervisor' `
-        -Schedule '*/15 * * * *' `
+        -Schedule '*/30 * * * *' `
         -Script 'launch-hermes-learning-cycle.py' `
         -Workdir $exchange
 }
@@ -204,7 +220,7 @@ finally {
 [ordered]@{
     schema_version = 'glitch.hermes.setup.v1'
     profile = $Profile
-    distribution_version = '0.0.2.4'
+    distribution_version = '0.0.2.6'
     gateway_supervised = $true
     plugin_enabled = $true
     jobs = @($directJob, $learningJob)

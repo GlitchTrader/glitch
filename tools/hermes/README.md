@@ -16,11 +16,11 @@ Installation and activation are separate:
 .\tools\hermes\enable-hermes-learning-cron.ps1
 ```
 
-The installer changes only the host `glitch` profile to a local backend, pins the fast operator, clears silent fallbacks, enables native memory/session persistence, reconciles the source-controlled skills/plugin exactly, installs both workers, and preserves named sessions. It creates no cron job. The two enable scripts reconcile one native one-minute core worker and one native 15-minute learning launcher. The launcher exits immediately after starting a separately locked learning process, so a slow Sol review cannot occupy Hermes native cron's serialized lane or delay the next Luna decision. Every model call uses a fresh session tagged `trading`; durable packets, episodes, plans, guidance, native memory, and a versioned cognitive overlay provide continuity. Neither touches the Workframe dogfood Docker stack.
+The installer changes only the host `glitch` profile to a local backend, pins the operator, clears silent fallbacks, enables native memory/session persistence, reconciles the source-controlled skills/plugin exactly, installs both workers, and preserves named sessions. It creates no cron job. The two enable scripts reconcile one native one-minute core worker and one native 30-minute learning launcher. The launcher exits immediately after starting a separately locked learning process, so a slow review cannot occupy Hermes native cron's serialized lane or delay the next Luna decision. Every cognitive loop uses `gpt-5.6-luna` with medium reasoning and a fresh session tagged `trading`; durable packets, completed-outcome episodes, bounded plans/guidance, native memory, and one versioned cognitive overlay provide continuity. Neither touches the Workframe dogfood Docker stack.
 
 `run-direct-glitch-cycle.py` spends zero model calls until a new complete packet exists. It invokes Luna in an isolated `trading` session with current market/portfolio truth, master-only valid quantities, stable Glitch leg IDs and native working-order geometry, recent outcomes, the active plan/guidance/cognitive overlay, native memory, and a literal valid JSON template. Flat books use elapsed five-minute cadence; positioned books use every new packet. Any model, validation, delivery, firewall, or executor failure makes the next packet immediately eligible. A bounded rollover check prevents the cron from selecting the prior packet when publication is milliseconds behind the wake-up; the chosen immutable packet remains the decision identity and Glitch revalidates current execution truth. Transport-uncertain delivery reuses the same durable outbox and intent UUIDs. There is no in-process polling retry.
 
-`launch-hermes-learning-cycle.py` is the fast cron boundary. `run-hermes-learning-cycle.py` is the detached, single-instance worker and invokes Sol only when evidence makes a loop due. It writes append-only master trade episodes, hourly observations/guidance, 300-minute plans, and daily journals under the Hermes supervisor exchange. Daily learning may update compact native memory and activate one versioned prompt/SOUL/skill cognitive overlay; later episodes must promote, revise, or roll it back. `learning-worker-status.json` and `learning-worker.log` expose the real worker result independently of the launcher. Neither process has intent, order, policy, group, ratio, or execution authority.
+`launch-hermes-learning-cycle.py` is the fast cron boundary. `run-hermes-learning-cycle.py` is the detached, single-instance worker and invokes Luna only when evidence makes a loop due. It writes append-only master trade episodes, observational decision episodes, hourly observations/guidance, 300-minute plans, and daily journals under the Hermes supervisor exchange. Decision-only reviews can improve questions and attention but cannot pressure entries or quantity. Plan, guidance, memory, or overlay influence on trading requires repeated attributable completed master outcomes; later completed outcomes must promote, revise, or roll an overlay back. `learning-worker-status.json` and `learning-worker.log` expose the real worker result independently of the launcher. Neither process has intent, order, policy, group, ratio, or execution authority.
 
 Start the human-facing session with:
 
@@ -56,26 +56,29 @@ Entry decisions have a 300-second analytical window matching the canonical five-
 
 ## Clean trading epoch reset
 
-`reset-hermes-trading-epoch.ps1` previews by default. It inventories the exact
-Hermes/Glitch trading artifacts that would be archived and cleared, but makes no
-changes until `-Apply` is supplied. Apply mode refuses to run while any Glitch
-Hermes cron job is enabled.
+`reset-hermes-trading-epoch.ps1` previews by default and makes no changes until
+`-Apply` is supplied. Apply mode refuses to run unless AI and every Hermes job
+are paused and the latest observed NinjaTrader portfolio shows every account
+flat and order-free.
 
 ```powershell
 # Preview only
 .\tools\hermes\reset-hermes-trading-epoch.ps1
 
-# After /pause_trading and the manual Glitch/NT resets
+# After /pause_trading and native account reset
 .\tools\hermes\reset-hermes-trading-epoch.ps1 -Apply
 ```
 
-The reset archives redacted session transcripts and file evidence, replaces only
-the named `trading` session, deletes accidental one-shot trading/review sessions,
-clears native `USER.md` memory content while preserving the memory subsystem, and
-clears decisions, receipts, outcomes, directives, cron output, trading lessons,
-observations/guidance, and the stale synced capsule journal. It preserves
-`SOUL.md`, skills, plugins, configuration, the named `chat` session, approved
-build-request/Codex evidence, Glitch policy, and account groups.
+The reset permanently clears all Hermes sessions, memories, prompt dumps, state
+database, cron jobs/history, logs, and old profile backups plus all Glitch
+decisions, intents, executions, outcomes, learning artifacts, packets,
+snapshots, Journal, TradeLedger, warnings, locks, analytics cache, and
+AccountPeaks. It creates no archive. Authentication, profile configuration,
+distributed cognition/scripts, Glitch policy, account groups, ratios, runtime
+policy, licensing, and NinjaTrader accounts remain intact. Setup then creates
+exactly two paused jobs and a fresh state database. Reload the AddOn once after
+the reset so its in-memory trailing peaks are reconstructed from the clean file
+state before AI is enabled.
 
 Glitch `Journal.tsv` and `TradeLedger.tsv` are intentionally not deleted by the
 script. Use the existing Glitch **Reset Data** button so NinjaTrader's in-memory

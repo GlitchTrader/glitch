@@ -146,7 +146,7 @@ class LearningCycleTests(unittest.TestCase):
     def test_all_learning_calls_are_isolated_trading_sessions(self):
         source = SCRIPT.read_text(encoding="utf-8")
         self.assertIn('SOURCE = "trading"', source)
-        self.assertIn('MODEL = "gpt-5.6-sol"', source)
+        self.assertIn('MODEL = "gpt-5.6-luna"', source)
         self.assertIn('"--source", SOURCE', source)
         self.assertIn('"--toolsets", "memory"', source)
 
@@ -378,7 +378,7 @@ class LearningCycleTests(unittest.TestCase):
         self.assertEqual(candidate["target"], "core_prompt")
         hourly = MODULE.build_prompt("hourly", [], template, {})
         planning = MODULE.build_prompt("planning", [], MODULE.output_template("planning", ["plan-1"]), {})
-        self.assertIn("at least two later comparable episodes", hourly)
+        self.assertIn("at least two later completed master trade episodes", hourly)
         self.assertIn("rather than waiting for the daily loop", hourly)
         self.assertIn("Do not create a fixed or provisional quantity baseline", planning)
         self.assertIn("master-quantity calibration", planning)
@@ -392,6 +392,7 @@ class LearningCycleTests(unittest.TestCase):
             MODULE.persist_hourly(review, supervisor, [])
             guidance = json.loads((supervisor / "current-guidance.json").read_text(encoding="utf-8"))
         self.assertEqual(guidance["schema_version"], MODULE.DIRECT.CURRENT_GUIDANCE_SCHEMA)
+        self.assertEqual(guidance["trading_influence"], "observational")
 
     def test_candidate_is_staged_and_does_not_affect_trading_until_later_activation(self):
         with tempfile.TemporaryDirectory() as root:
@@ -487,6 +488,11 @@ class LearningCycleTests(unittest.TestCase):
             self.assertEqual(active["status"], "active")
 
             later_ids = ["episode-5", "episode-6"]
+            for episode_id in later_ids:
+                MODULE.DIRECT.append_event(
+                    supervisor / "trade-episodes.jsonl",
+                    {"schema_version": "glitch.hermes.trade_episode.v1", "episode_id": episode_id},
+                )
             MODULE.apply_cognitive_decision(
                 {
                     "cognitive_change_decision": {
@@ -504,6 +510,45 @@ class LearningCycleTests(unittest.TestCase):
             self.assertNotIn("instruction", active)
             history = MODULE.read_jsonl(supervisor / "cognitive-changes.jsonl")
             self.assertEqual([row["event"] for row in history], ["proposed", "activated", "evaluated"])
+
+    def test_decision_episodes_alone_can_never_activate_trading_cognition(self):
+        with tempfile.TemporaryDirectory() as root:
+            supervisor = Path(root)
+            for episode_id in ("decision-1", "decision-2"):
+                MODULE.DIRECT.append_event(
+                    supervisor / "decision-episodes.jsonl",
+                    {"schema_version": "glitch.hermes.decision_episode.v1", "episode_id": episode_id},
+                )
+            MODULE.activate_cognitive_candidate(
+                {
+                    "cognitive_change_candidate": {
+                        "propose": True,
+                        "candidate_id": "decision-only",
+                        "target": "core_prompt",
+                        "instruction": "Do not turn abstention reviews into trade pressure.",
+                        "evidence_episode_ids": ["decision-1"],
+                        "expected_effect": "Observation remains observational.",
+                        "evaluation_metric": "Completed master outcomes.",
+                        "rollback_condition": "Any decision-only trading influence.",
+                    }
+                },
+                supervisor,
+            )
+            MODULE.apply_cognitive_decision(
+                {
+                    "cognitive_change_decision": {
+                        "candidate_id": "decision-only",
+                        "action": "activate",
+                        "evidence_episode_ids": ["decision-2"],
+                        "contradiction_review": "No completed master outcome supports activation.",
+                    }
+                },
+                supervisor,
+                ["decision-1", "decision-2"],
+            )
+
+            self.assertTrue((supervisor / "proposed-cognitive-overlay.json").exists())
+            self.assertFalse((supervisor / "active-cognitive-overlay.json").exists())
 
     def test_daily_journal_catches_up_after_missing_the_exact_close_hour(self):
         outcomes = [{

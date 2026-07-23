@@ -1,6 +1,6 @@
 param(
     [string]$Profile = 'glitch',
-    [string]$Schedule = '*/15 * * * *',
+    [string]$Schedule = '*/30 * * * *',
     [string]$GlitchData = (Join-Path $env:USERPROFILE 'Documents\NinjaTrader 8\GlitchData')
 )
 
@@ -66,7 +66,7 @@ if ($wrongContract) {
     job_id = [string]$job.id
     schedule = $persistedSchedule
     nested_session_source = 'trading'
-    model = 'gpt-5.6-sol'
+    model = 'gpt-5.6-luna'
     worker_process = 'detached'
     execution_authority = $false
     scheduler_owner = 'Hermes native cron'

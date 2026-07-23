@@ -14,7 +14,7 @@ native market/account events
   -> strict intent v3
   -> Glitch firewall and native execution
   -> receipt/outcome/decision episode
-  -> 15-minute learning supervisor
+  -> 30-minute learning supervisor
 ```
 
 Codex is absent from publication, scheduling, inference, delivery, execution, journaling, and learning.
@@ -52,7 +52,7 @@ Only newline-complete JSONL is consumed. Reconciliation is cross-process locked 
 
 ## Learning supervisor
 
-One 15-minute no-agent job starts the separately locked learning worker. The worker performs due stages without creating separate cron jobs:
+One 30-minute no-agent job starts the separately locked learning worker. The worker performs due stages without creating separate cron jobs:
 
 - completed-trade/decision-episode debrief as evidence becomes sufficient;
 - hourly supervision;
