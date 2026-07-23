@@ -369,7 +369,10 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         bundle = source(PROP_RULE_BUNDLE)
         encoded_block = bundle.split("const string base64 =", 1)[1].split(";", 1)[0]
         encoded = "".join(re.findall(r'\"([A-Za-z0-9+/=]+)\"', encoded_block))
-        self.assertEqual(base64.b64decode(encoded), PROP_RULES.read_bytes())
+        self.assertEqual(
+            json.loads(base64.b64decode(encoded).decode("utf-8")),
+            json.loads(PROP_RULES.read_text(encoding="utf-8")),
+        )
 
     def test_all_apex_programs_surface_current_copy_policy_information(self):
         rules = {firm["firmId"]: firm for firm in json.loads(source(PROP_RULES))["firms"]}

@@ -82,7 +82,7 @@ Before trading:
 - review account limits and compliance controls;
 - confirm the selected group before enabling Replication or AI Auto.
 
-A follower ratio changes the follower order **quantity**. It does not create extra independent orders. A `2x` follower receives twice the master quantity in one follower-native order flow, subject to Glitch capacity and risk validation.
+A follower ratio changes the follower order **quantity**. It does not create extra independent orders. A `2x` follower receives twice the master quantity in one follower-native order flow, subject only to NinjaTrader native acceptance and any visible compliance control the user enabled.
 
 Turn **Replication** on only when enabled followers should copy the master. Native follower brackets and OCO protection are created and managed on each follower account.
 
@@ -203,7 +203,7 @@ glitch cron list --all
 The supported jobs are exactly:
 
 - `glitch-direct-operator` — checked every minute;
-- `glitch-learning-supervisor` — checked every 15 minutes.
+- `glitch-learning-supervisor` — checked every 30 minutes.
 
 Setup reconciles these two jobs but does not guess whether unknown legacy jobs are safe to delete. Keep obsolete hourly, review, or paper-mode jobs paused; remove them only after confirming they are no longer required.
 
@@ -215,11 +215,11 @@ The two jobs form one operating and learning system:
 
 - The direct operator wakes every minute. While flat it normally requests a new Luna decision every five minutes; while positioned it can request a decision every minute so HOLD, move stop, move target, reduce, or exit decisions can react to the trade.
 - If a decision fails because of malformed JSON, timeout, compaction, or another recognized error, the next new packet can retry on the next minute instead of waiting for the normal flat cadence.
-- The learning supervisor wakes every 15 minutes and runs trade debriefs, hourly supervision, 300-minute planning, and daily journaling when each layer is due.
+- The learning supervisor wakes every 30 minutes and runs trade debriefs, hourly supervision, 300-minute planning, and daily journaling when each layer is due.
 
 Learning uses the NinjaTrader trade record, Glitch Journal and ledger, Hermes sessions/memory, decisions, receipts, and outcomes. Distribution updates replace owned cognition and scripts while preserving authentication, configuration overrides, sessions, memories, ledgers, and existing cron enabled/paused state.
 
-Hermes owns cognition, strategy, and master quantity proposals. Glitch validates the configured account/group scope, available capacity, risk, geometry, execution, brackets, replication, and receipts. No paper/live switch changes account authority.
+Hermes owns cognition, strategy, and master quantity proposals. Glitch validates factual account/group binding, native state, geometry, execution, brackets, replication, and receipts. Capacity, risk, session, and compliance evidence informs Hermes and the UI; it does not silently veto AI intent unless the user enabled a specific Settings action. Human intent overrides Hermes, Hermes overrides deterministic inference, and NinjaTrader remains authoritative about native outcomes. No paper/live switch changes account authority.
 
 ---
 

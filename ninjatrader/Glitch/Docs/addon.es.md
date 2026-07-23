@@ -26,15 +26,19 @@ El widget ofrece las mismas acciones de Replication y flatten. `GlitchShellBridg
 Los ratios escalan la cantidad copiada. `GlitchCopyEngine` escucha ejecuciones nativas del master y procesa cada una una sola vez.
 
 - Inicio y recompilación no hacen catch-up automático.
+- Activar Replication, habilitar un follower, cambiar el ratio o cambiar el master configura ejecuciones futuras y nunca modifica una posición existente.
 - Replication apagado detiene copias nuevas y conserva protección nativa.
-- Stops y targets de followers son OCO nativos.
-- La divergencia manual permanece hasta un resync solicitado.
+- La ejecución nativa del master se copia de inmediato con el ratio configurado; si existe un bracket completo, stops y targets de followers son OCO nativos, y la protección tardía se conecta cuando aparece.
+- Los cierres manuales parciales y totales del master se copian, mientras se conserva la divergencia manual del follower.
+- **Sync** es la única acción de catch-up y solo se ejecuta cuando el usuario hace clic.
 - Los envíos ambiguos no se repiten a ciegas.
 - Un fallo de protección provoca una limpieza nativa limitada, no un bucle.
 
 ## Riesgo y compliance
 
 Glitch usa metadatos de reglas incluidos y campos nativos cuando existen. Mostrar y revisar es el comportamiento por defecto. Las acciones automáticas son opt-in y registran la configuración que las autorizó.
+
+La autoridad es explícita: la intención humana prevalece sobre AI Experimental; la intención de AI prevalece sobre la política determinista inferida. Los hechos nativos de NinjaTrader siguen determinando qué existe y qué aceptó el broker. Reglas de prop firm, capacidad, sesiones y buffers son observacionales salvo que el usuario habilite una acción específica, visible, persistida, limitada al ámbito y apagada por defecto.
 
 `Flatten All` sigue disponible para el operador y comunica cualquier cuenta sin resolver.
 

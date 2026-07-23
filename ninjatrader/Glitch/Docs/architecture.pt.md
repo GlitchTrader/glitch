@@ -34,7 +34,7 @@ O AddOn trata o estado nativo de contas, ordens, execuções e posições do Nin
 
 Um grupo configurado tem um master e zero ou mais followers habilitados. O ratio do follower escala a quantidade; ele não cria outra estratégia nem uma cadeia de masters sintéticos.
 
-O copy engine reage às execuções nativas do master, elimina duplicatas, recusa rotas para a mesma conta e fechamentos que cruzariam zero, e instala proteção OCO nativa nos followers. Inicialização e recompilação apenas observam. Desligar Replication interrompe novas cópias, mas mantém a proteção já ativa no NinjaTrader. Uma alteração manual no follower continua sob controle do usuário até um resync explícito.
+O copy engine reage às execuções nativas do master, elimina duplicatas, recusa rotas para a mesma conta e fechamentos que cruzariam zero, e copia imediatamente no ratio configurado. Quando existe um bracket completo no master, o follower recebe proteção OCO nativa; um bracket que chega depois atualiza o mesmo ciclo sem atrasar ou abandonar a cópia. Inicialização e recompilação apenas observam. Replication, follower, ratio e master configuram apenas execuções futuras. Desligar Replication interrompe novas cópias, mas mantém a proteção já ativa no NinjaTrader. Uma alteração manual no follower continua sob controle do usuário; somente um **Sync** visível e clicado pelo usuário executa catch-up.
 
 ## Fluxos de dados
 
@@ -50,6 +50,6 @@ Separar esses fluxos impede que a renderização de dados de mercado se torne um
 
 ## Segurança e autoridade
 
-Glitch controla a mecânica determinística da execução; o usuário controla contas, membros do grupo, ratios e ações de risco habilitadas. `Flatten All` usa o flatten nativo no escopo configurado e informa qualquer limpeza incompleta.
+Glitch controla a mecânica factual da execução; o usuário controla contas, membros do grupo, ratios e ações de risco habilitadas. Na edição AI Experimental, a ordem é humano, Hermes e então inferência determinística. O estado nativo do NinjaTrader continua autoritativo. Política de compliance inferida é observacional, salvo quando uma ação específica, visível, persistida, limitada ao escopo e desligada por padrão é habilitada em Settings. `Flatten All` usa o flatten nativo no escopo configurado e informa qualquer limpeza incompleta.
 
 Glitch reduz erros operacionais; não garante conexão, elegibilidade em prop firms nem resultados de trading.

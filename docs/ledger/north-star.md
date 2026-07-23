@@ -11,17 +11,18 @@ Hermes decides; Glitch validates, executes, protects, replicates, reconciles, an
 ## Current product lines
 
 - **Standard v0.0.2.0** is the official default download for manual trading, analytics, account management, risk controls, journal, and replication.
-- **Experimental AI v0.0.2.2** is a separate package and update channel. It uses the public Hermes profile **v0.0.2.4** and is not a profitability, unattended-operation, or live-readiness claim.
+- **Experimental AI v0.0.2.2** is a separate package and update channel. It uses the public Hermes profile **v0.0.2.8** and is not a profitability, unattended-operation, or live-readiness claim.
 - `main` owns the explicit release catalog. A ZIP is not a release until the catalog and checksum register it.
 
 ## Invariants
 
 - **PnL truth:** display the native NinjaTrader value for the same account and session. Unknown native data stays unknown.
-- **Replication integrity:** one producer-neutral `GlitchCopyEngine` owns followers, ratios, follower-native OCO protection, close propagation, and explicit resync.
-- **User sovereignty:** the user selects accounts, groups, ratios, and enabled risk actions. Startup and recompile are observe-only.
+- **Replication integrity:** one producer-neutral `GlitchCopyEngine` copies each accepted native master execution delta at the configured ratio, owns follower-native protection and close propagation, preserves manual follower divergence, and catches up only after the user invokes **Sync**.
+- **User sovereignty:** the user selects accounts, groups, ratios, and every automated compliance action. Compliance actions are visible, specific, persisted, and off by default. Startup and recompile are observe-only.
 - **Bounded mutation:** ambiguous order state is never blindly retried. Flatten and protection recovery report unresolved state.
-- **Cognitive authority:** Hermes owns thesis, direction, master quantity, geometry, timing, scaling, and management. Code does not hard-code a trading strategy.
-- **Survival boundary:** Glitch may reject only factual invalidity, missing native truth, ownership violations, incomplete protection, contract capacity, and authoritative account-survival limits.
+- **Intent hierarchy:** explicit human intent overrides Hermes; Hermes intent overrides deterministic inference; NinjaTrader native facts remain the execution truth.
+- **Cognitive authority:** Hermes owns thesis, direction, master quantity, geometry, timing, scaling, and management. Operational facts remain visible but do not suppress a due cognitive decision.
+- **Factual boundary:** Glitch rejects structurally invalid or unprovable native mutations and reports broker-native rejection. Inferred prop-firm limits, sessions, buffers, or strategy policy are observational unless the user enabled the corresponding Settings compliance action.
 - **Learning continuity:** decisions, receipts, outcomes, journals, episodes, memory, and supervisory reviews remain attributable through stable IDs.
 - **Builder boundary:** Codex changes and verifies code. It is not a runtime trader or a substitute for Hermes cognition.
 - **Localization:** authored product, Docs, Guide, Website, and Download copy supports English, Brazilian Portuguese, Spanish, Simplified Chinese, French, and Russian. Broker/model text remains verbatim.

@@ -1,9 +1,518 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "project": "glitch",
-  "updated": "2026-07-22",
+  "updated": "2026-07-23",
   "roadmap_ref": "docs/ai-program/roadmap.md",
   "items": [
+    {
+      "id": "GL-REP-01",
+      "title": "Make replication execution-first, producer-neutral, and explicit about catch-up.",
+      "status": "in_progress",
+      "priority": "P0",
+      "owner_role": "coder",
+      "reviewer_role": "code-reviewer",
+      "acceptance": [
+        "Every accepted native master opening, partial-close, and full-close execution is copied once per enabled route at the user-configured ratio in Standard and AI, without waiting for a complete bracket or abandoning the copy on a wall-clock timeout.",
+        "Turning replication on, enabling a follower, changing a ratio, or changing a master changes configuration only and submits no catch-up, flatten, or re-entry order.",
+                       "One affirmative UI Sync action is the only owner of catch-up alignment and journals its origin and result.",
+                       "Manual follower divergence remains intact and never vetoes later master execution deltas.",
+                       "Replication, Sync, and protection recovery submit only attributable position deltas and cancel or trim only Glitch-owned protection; they never use whole-instrument Flatten to cancel unrelated human orders.",
+                       "CopyEngine does not infer a follower contract ceiling or apply a non-opt-in compliance gate; separately enabled Settings compliance remains independent and observable.",
+        "Both editions pass source contracts and bounded Sim scenarios return every configured account flat and order-free."
+      ],
+      "depends_on": [],
+      "evidence": [
+        "Intent-first rail audit: docs/ledger/audits/2026-07-23-intent-first-rail-audit.md.",
+        "Standard source commit standard/20@b1b94f8; npm.cmd test 61/61.",
+        "AI source commit ai/22@ae51406; shared npm.cmd test 54/54.",
+        "GlitchCopyEngine.cs and GlitchReplicationProtection.cs are byte-identical across Standard and AI; Replication UI drift is limited to named AI executor hooks.",
+        "Independent gpt-5.6-sol high review: APPROVE after replication ownership, recovery, and terminal-state corrections.",
+        "Native bounded Sim scenario and final flat/order-free proof remain pending coupled AI deployment authority."
+      ],
+      "sources": [
+        "branch:standard/20/ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Trading/GlitchCopyEngine.cs",
+        "branch:standard/20/ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.Replication.partial.cs",
+        "branch:ai/22/ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Trading/GlitchCopyEngine.cs",
+        "projects/abkb/projects/glitch/ontology.md"
+      ],
+      "stop_line": "Bounded Sim only. No release, evaluation, PA, live-capital, or external order authority without explicit operator approval.",
+      "spec_kit": {
+        "user_story": "As an operator, I want Glitch to mirror the native master actions and UI configuration I chose, while preserving manual follower changes until I explicitly request catch-up.",
+        "scenarios": [
+          "Given an unprotected or not-yet-protected manual master fill, when the native execution arrives, then the configured follower delta is submitted once without a bracket readiness veto.",
+          "Given a valid AI master fill whose bracket callback is delayed, when replication is enabled, then the follower copy is not permanently lost to a timeout.",
+          "Given existing master/follower divergence, when replication, follower enable, ratio, or master configuration changes, then existing exposure is unchanged.",
+                                       "Given existing divergence, when the operator invokes Sync, then alignment runs once and is journaled.",
+                                       "Given a manual partial master close, when the execution arrives, then each follower closes only the ratio-scaled closable delta.",
+                                       "Given unrelated human exposure or working orders on a follower, when replication closes, syncs, or recovers a failed copied bracket, then only the attributable copied delta and Glitch-owned orders are mutated; ambiguous ownership is journaled and left unchanged."
+        ],
+        "functional_requirements": [
+          "Delete pending-copy bracket and TTL gates from the live execution path.",
+          "Treat native execution identity and configured route/ratio as the copy authority.",
+          "Apply protection when native protection truth is available without making protection discovery a copy veto.",
+                                                     "Delete implicit Align call sites and inferred route-cap admission.",
+                                                     "Expose one explicit Sync control and observable journal evidence.",
+                                                     "Reserve whole-account or whole-instrument Flatten for the explicit fleet Flatten All command; use exact named deltas in replication-owned paths.",
+                                                     "Keep Standard and AI shared behavior parity-proven."
+        ],
+        "success_criteria": [
+          "Zero implicit alignment orders across four configuration paths.",
+          "Exactly one follower mutation per unique master execution and route.",
+          "No PendingMasterCopyTtl, FollowerFinalAdmissionUnavailable, or FollowerFinalMaxContracts gate remains in CopyEngine.",
+          "All bounded fixtures finish flat and order-free."
+        ],
+        "assumptions": [
+          "Manual follower divergence is intentional until explicit Sync.",
+          "Ratio changes apply to future execution deltas until explicit Sync.",
+          "Factual native order rejection is evidence, not permission to invent a different trade."
+        ],
+        "tasks": [
+          "Add failing source-contract tests for bracketless copy, no timeout, no inferred route cap, and config-only UI changes.",
+          "Implement the smallest shared CopyEngine change in Standard.",
+          "Add the explicit Sync UI action and localization.",
+          "Apply the shared fix to AI and prove intended parity.",
+          "Run bounded manual and AI Sim callback fixtures."
+        ]
+      }
+    },
+    {
+      "id": "GL-AI-06",
+      "title": "Guarantee one execution owner per intent UUID and body.",
+      "status": "in_progress",
+      "priority": "P0",
+      "owner_role": "coder",
+      "reviewer_role": "code-reviewer",
+      "acceptance": [
+        "One hundred or more simultaneous identical intent POSTs cause exactly one executor invocation; all other callers receive in-progress or immutable replay state.",
+        "The same UUID with different content returns conflict and causes zero additional mutation.",
+        "A restart from received, approved, or execution-started state reconciles native truth without duplicate submission.",
+        "Execution ownership and state transitions are atomic and durable on the local single-machine authority."
+      ],
+      "depends_on": [],
+      "evidence": [
+        "AI source commit ai/22@ae51406.",
+        "AI shared suite 54/54 and Hermes suite 186/186.",
+        "Atomic UUID plus body ownership, immutable terminal replay, and same-body concurrency/restart source fixtures pass.",
+        "Independent gpt-5.6-sol high review: APPROVE after terminal callback/server race was consolidated through one locked durable transition.",
+        "Native restart fault-injection remains pending coupled AI deployment authority."
+      ],
+      "sources": [
+        "branch:ai/22/ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Ai/GlitchAiIntentServer.cs",
+        "branch:ai/22/ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Ai/GlitchAiIntentStateStore.cs",
+        "branch:ai/22/tools/tests/test_source_safety.py"
+      ],
+      "stop_line": "Bounded local and Sim verification only. No external or live intent authority.",
+      "spec_kit": {
+        "user_story": "As an operator, I need retries and concurrent delivery of one intent to create at most one native mutation.",
+        "scenarios": [
+          "Given simultaneous identical UUID/body requests, when ownership is claimed, then one request executes and all others observe in-progress or replay.",
+          "Given the same UUID with different content, when claimed, then conflict is terminal and no order is created.",
+          "Given a crash at each nonterminal phase, when the service restarts, then native state is reconciled without resubmission."
+        ],
+        "functional_requirements": [
+          "Use one atomic ownership transition under the state-store lock.",
+          "Bind ownership to the durable body hash.",
+          "Make terminal replay immutable.",
+          "Remove resume-approved and unconditional execution-started races."
+        ],
+        "success_criteria": [
+          "Exactly one executor call under a barrier-synchronized 100-request fixture.",
+          "Zero duplicate journal terminal records.",
+          "Restart fixtures never create a second native signal."
+        ],
+        "assumptions": [
+          "The localhost server and local state directory are the single-machine intent authority.",
+          "NinjaTrader native orders and positions resolve crash ambiguity."
+        ],
+        "tasks": [
+          "Freeze the intent transition table.",
+          "Add a concurrent duplicate fixture.",
+          "Implement the atomic ownership API and remove the old branching.",
+          "Add received, approved, and execution-started fault-injection tests.",
+          "Run bounded restart reconciliation."
+        ]
+      }
+    },
+    {
+      "id": "GL-AI-07",
+      "title": "Keep submitted intents nonterminal until native outcome is proven.",
+      "status": "in_progress",
+      "priority": "P0",
+      "owner_role": "coder",
+      "reviewer_role": "code-reviewer",
+      "acceptance": [
+        "A synchronous Submit return records pending execution, not terminal executed.",
+        "An entry becomes executed exactly once only after exact native master exposure and working native protection are proven.",
+        "A pending duplicate POST reconciles the same UUID and never starts a second execution.",
+        "The direct worker preserves the same outbox while native outcome is pending and does not mark the model attempt completed.",
+        "Reject, terminal partial fill, late fill, protection failure, and crash-after-submit fixtures produce truthful failed, recovered, or executed evidence and final flat/order-free state."
+      ],
+      "depends_on": [
+        "GL-AI-06"
+      ],
+      "evidence": [
+        "AI source commit ai/22@ae51406.",
+        "AI shared suite 54/54 and Hermes suite 186/186.",
+        "ENTRY and EXIT durable ownership/recovery fixtures cover pending submit, delayed callbacks, partial or rejected outcomes, crash-before-plan, crash-after-plan, and human interleave.",
+        "Independent gpt-5.6-sol high review: APPROVE; safely unwound protection failure remains truthful failed state rather than executed.",
+        "Native bounded Sim callback and restart lifecycle proof remains pending coupled AI deployment authority."
+      ],
+      "sources": [
+        "branch:ai/22/ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Ai/GlitchAiOrderExecutor.cs",
+        "branch:ai/22/ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Ai/GlitchAiIntentServer.cs",
+        "branch:ai/22/tools/hermes/run-direct-glitch-cycle.py"
+      ],
+      "stop_line": "No unattended, evaluation, PA, or live-readiness claim until callback and restart fixtures pass.",
+      "spec_kit": {
+        "user_story": "As an operator, I want receipts and retries to report native protected truth rather than treating order submission as execution.",
+        "scenarios": [
+          "Given Submit returns before callbacks, when the server responds, then state remains pending.",
+          "Given the entry fills and exact native brackets work, when callbacks reconcile, then executed commits once.",
+          "Given reject, terminal partial fill, late fill, or protection failure, when recovery completes, then no stale executed result remains.",
+          "Given a crash after submit, when the same UUID is retried, then native state is reconciled without another submit."
+        ],
+        "functional_requirements": [
+          "Reuse execution_started as durable pending state.",
+          "Give one callback/reconciliation path ownership of terminal execution.",
+          "Represent pending in the HTTP receipt and direct-worker classification.",
+          "Require native exact exposure plus working protection for terminal entry success."
+        ],
+        "success_criteria": [
+          "No terminal executed record exists without group_entry_open_protected evidence.",
+          "Pending delivery reuses the same intent UUID and outbox.",
+          "Every failure fixture ends flat and order-free."
+        ],
+        "assumptions": [
+          "HTTP 202 may truthfully mean pending.",
+          "Polling or same-UUID reconciliation must not block the NinjaTrader UI thread."
+        ],
+        "tasks": [
+          "Define pending receipt semantics.",
+          "Connect native callback completion to durable state.",
+          "Change direct-worker pending classification.",
+          "Add delayed fill, rejection, partial, late-fill, and crash fixtures.",
+          "Run bounded Sim lifecycle proof."
+        ]
+      }
+    },
+    {
+      "id": "GL-AI-08",
+      "title": "Restore human and Hermes authority over deterministic policy.",
+      "status": "in_progress",
+      "priority": "P0",
+      "owner_role": "coder",
+      "reviewer_role": "code-reviewer",
+      "acceptance": [
+        "A complete due packet invokes Luna according to cadence even when operational facts make a new entry currently ineligible.",
+        "Operational, health, and compliance facts remain visible in the packet and may produce a factual executor rejection, but they do not suppress cognition.",
+                       "Inferred prop-firm contract ceilings, Apex buffers, sessions, or time windows do not override a valid AI or human intent unless the user enabled the corresponding Settings compliance action.",
+                       "AI recovery and EXIT mutate only correlation-attributable AI exposure and orders; a same-instrument human add, partial close, full close, opposite trade, or unrelated working order supersedes ambiguous AI mutation.",
+                       "NOTHING, rejection, and non-executed decisions remain attributable learning evidence."
+      ],
+      "depends_on": [],
+      "evidence": [
+        "AI source commit ai/22@ae51406.",
+        "AI shared suite 54/54 and Hermes suite 186/186.",
+        "Pre-model eligibility suppression and inferred quantity, Apex, session, time-window, and stop-widening gates were removed from non-opt-in authority paths.",
+        "AI recovery and EXIT use UUID/correlation-attributable deltas and preserve ambiguous human changes.",
+        "Public Hermes v0.0.2.9 candidate commit glitch-hermes-profile@744eb30 passes manifest, PowerShell parse, runner help, and normalized runner parity; it is not pushed or installed.",
+        "Native Hermes and human-interleave Sim proof remains pending coupled AI deployment authority."
+      ],
+      "sources": [
+        "branch:ai/22/tools/hermes/run-direct-glitch-cycle.py",
+        "branch:ai/22/ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Ai/GlitchAiRiskFirewall.cs",
+        "branch:ai/22/ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Ai/GlitchAiOrderExecutor.cs",
+        "docs/ai-program/operating-system-rail.md"
+      ],
+      "stop_line": "No cognition-policy promotion or performance claim from synthetic evidence.",
+      "spec_kit": {
+        "user_story": "As the human operator, I want Hermes to own trading decisions while Glitch enforces only factual executability and compliance actions I explicitly enabled.",
+        "scenarios": [
+          "Given a due flat packet and a closed window, risk lock, unavailable native state, or working order, when cadence is due, then Luna still produces an attributable decision.",
+                                       "Given Hermes emits a factually invalid action, when posted, then the executor rejects it with zero mutation.",
+                                       "Given an inferred prop-firm limit but no matching Settings opt-in, when a valid intent is submitted, then the inference is observational and does not veto it.",
+                                       "Given human same-instrument activity after an AI entry, when AI recovery or EXIT runs, then only provably AI-attributable exposure and orders are mutated; ambiguity produces a visible superseded outcome and no mutation."
+        ],
+        "functional_requirements": [
+          "Delete deterministic flat-book eligibility suppression from model cadence.",
+                                                     "Separate factual invalidity from inferred or optional compliance policy.",
+                                                     "Bind every automated compliance veto or action to a visible default-off Settings control.",
+                                                     "Replace whole-instrument AI recovery and EXIT flattening with correlation-owned cancellation and exact attributable close deltas.",
+                                                     "Preserve decision and rejection learning evidence."
+        ],
+        "success_criteria": [
+          "All former pre-model eligibility cases invoke Luna when cadence is due.",
+          "Invalid actions still create zero native order.",
+          "No non-opt-in prop-firm inference blocks replication or AI master execution."
+        ],
+        "assumptions": [
+          "Model spend does not outrank the explicit human > AI > determinism hierarchy.",
+          "Broker-native rejection remains authoritative factual evidence."
+        ],
+        "tasks": [
+          "Freeze the cognition versus execution truth table.",
+          "Delete the flat-book eligibility veto and update tests.",
+          "Inventory firewall and executor gates as factual, observational, or user-opt-in.",
+          "Remove or bind non-factual gates to visible Settings consent.",
+          "Prove NOTHING and rejection learning continuity."
+        ]
+      }
+    },
+    {
+      "id": "GL-COMP-01",
+      "title": "Require visible persisted opt-in before automated compliance flatten.",
+      "status": "in_progress",
+      "priority": "P0",
+      "owner_role": "coder",
+      "reviewer_role": "code-reviewer",
+      "acceptance": [
+        "AI enable and account allowlisting do not imply consent to forced daily-close orders.",
+        "The daily-close compliance setting is visible, specific, persisted, audited, and false by default.",
+        "With the setting off, daily close causes zero order mutation; with it on, only the visibly scoped configured accounts are acted on once.",
+        "Restart preserves consent without expanding scope, and unresolved accounts produce observable warnings."
+      ],
+      "depends_on": [],
+      "evidence": [
+        "AI source commit ai/22@ae51406.",
+        "Default-off daily-close setting is visible, persisted, independently scoped, and localized in all six authored locales.",
+        "AI shared suite 54/54 and Hermes suite 186/186 include off, on, persistence, scope, and unresolved-account source contracts.",
+        "Native enabled bounded Sim proof remains pending coupled AI deployment authority."
+      ],
+      "sources": [
+        "branch:ai/22/ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.AiTemporalCompliance.partial.cs",
+        "branch:ai/22/ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.SettingsTab.partial.cs",
+        "branch:ai/22/ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Persistence/GlitchRuntimePolicyStore.cs"
+      ],
+      "stop_line": "No automated compliance flatten outside bounded Sim until the explicit setting and scope are verified.",
+      "spec_kit": {
+        "user_story": "As an operator, I want compliance automation to act only after I separately opt in through Settings.",
+        "scenarios": [
+          "Given default settings or AI-only enablement, when daily close arrives, then no account is flattened.",
+          "Given explicit daily-close opt-in and exposed selected accounts, when the boundary arrives, then scoped flatten runs once.",
+          "Given restart or a disconnected account, when enforcement runs, then consent scope is preserved and unresolved state is visible."
+        ],
+        "functional_requirements": [
+          "Add a specific default-false persisted setting.",
+          "Expose it in Settings with clear action text.",
+          "Guard the daily-close path before account expansion.",
+          "Journal enable, disable, action, and unresolved outcomes."
+        ],
+        "success_criteria": [
+          "Zero forced order with the setting off.",
+          "No non-selected account mutation with the setting on.",
+          "Enabled bounded Sim fixture ends flat and order-free."
+        ],
+        "assumptions": [
+          "AI enable and allowlisting are not compliance consent.",
+          "Existing entry-window facts may remain observational unless separately enabled as enforcement."
+        ],
+        "tasks": [
+          "Add persistence and migration for the specific setting.",
+          "Add localized Settings UI.",
+          "Guard and journal daily-close enforcement.",
+          "Add off, on, restart, disconnected, and scope tests.",
+          "Run bounded Sim proof."
+        ]
+      }
+    },
+    {
+      "id": "GL-PERF-01",
+      "title": "Make the AI minute publisher scale with minutes instead of timer ticks.",
+      "status": "in_progress",
+      "priority": "P1",
+      "owner_role": "coder",
+      "reviewer_role": "code-reviewer",
+      "acceptance": [
+        "After the current minute frame and packet exist, later one-second ticks perform zero portfolio captures, snapshot reads, frame reads, or packet hashes for that minute.",
+        "An incomplete current minute remains retriable until one coherent immutable frame and packet exist.",
+        "Under the 25-account bounded fixture, publisher dispatcher time is p95 below 10 ms, p99 below 25 ms, and maximum below 50 ms; native collection lock p99 is below 5 ms.",
+        "Thirty-minute allocation and IO counts scale with minutes rather than timer ticks without changing packet contents or cadence."
+      ],
+      "depends_on": [
+        "GL-AI-06",
+        "GL-AI-07",
+        "GL-AI-08",
+        "GL-COMP-01"
+      ],
+      "evidence": [
+        "AI source commit ai/22@ae51406.",
+        "Publisher preflight, cache-hit early exit, lease release, background IO/hash/serialization, and dispatcher/native-lock timing instrumentation pass source fixtures.",
+        "AI shared suite 54/54 and Hermes suite 186/186.",
+        "The observed NinjaTrader environment exposes nine accounts; the required 25-account, 30-minute native measurement is not yet proven and this ticket remains in progress."
+      ],
+      "sources": [
+        "branch:ai/22/ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.cs",
+        "branch:ai/22/ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Persistence/GlitchHermesExchangeWriter.cs",
+        "branch:ai/22/ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.PortfolioSnapshot.partial.cs"
+      ],
+      "stop_line": "Performance work must not alter native order behavior, evidence contents, or decision cadence.",
+      "spec_kit": {
+        "user_story": "As a NinjaTrader operator, I need AI evidence publication to stay out of the UI and order-callback hot path.",
+        "scenarios": [
+          "Given the minute is already published, when another timer tick fires, then publication returns before capture or file IO.",
+          "Given the current minute is incomplete, when later coherent data appears, then publication retries and creates exactly one frame and packet.",
+          "Given rollover or restart, when publication resumes, then immutable packet identity and contents remain correct."
+        ],
+        "functional_requirements": [
+          "Make portfolio capture lazy.",
+          "Check current minute and packet existence before native locks or frame IO.",
+          "Keep retry state thread-safe and atomic-write aware.",
+          "Add timing and operation counters for bounded verification."
+        ],
+        "success_criteria": [
+          "Zero redundant post-publish work.",
+          "At most one successful frame and packet build per minute.",
+          "Publisher ready within two seconds of complete coherent input.",
+          "Measured dispatcher and lock targets pass."
+        ],
+        "assumptions": [
+          "Atomic final file existence proves a completed immutable artifact.",
+          "Incomplete or failed writes remain eligible for retry."
+        ],
+        "tasks": [
+          "Instrument a before baseline.",
+          "Add lazy capture and early-exit ownership.",
+          "Add rollover, incomplete, and write-failure tests.",
+          "Run 10, 25, and 50-account bounded load fixtures.",
+          "Record before and after evidence."
+        ]
+      }
+    },
+    {
+      "id": "GL-DOC-01",
+      "title": "Reconcile internal, public, and ABKB Glitch authority documentation.",
+      "status": "in_progress",
+      "priority": "P1",
+      "owner_role": "pm-glitch",
+      "reviewer_role": "code-reviewer",
+      "acceptance": [
+        "Internal rail, public AddOn documentation, public Hermes profile facts, and ABKB all state the same human > AI > determinism hierarchy and explicit catch-up/compliance semantics.",
+        "The AI rail states Hermes profile v0.0.2.8 and the 30-minute learning cadence proven by distribution source.",
+        "A drift check detects synthetic version, cadence, or shared replication-contract mismatch.",
+        "No documentation claims release, profitability, unattended operation, or live readiness without named evidence and approval."
+      ],
+      "depends_on": [
+        "GL-REP-01",
+        "GL-AI-06",
+        "GL-AI-07",
+        "GL-AI-08",
+        "GL-COMP-01",
+        "GL-PERF-01"
+      ],
+      "evidence": [
+        "Durable authority audit: docs/ledger/audits/2026-07-23-intent-first-rail-audit.md.",
+        "Durable internal/public contracts and all six authored public locales pass npm.cmd test 46/46.",
+        "ABKB authority update commit projects/abkb@9801289.",
+        "Standard source commit standard/20@b1b94f8 and AI source commit ai/22@ae51406.",
+        "Public Hermes v0.0.2.9 candidate commit glitch-hermes-profile@744eb30 is local only; published and installed profile facts remain v0.0.2.8 until explicit promotion authority.",
+        "Independent gpt-5.6-sol high review: APPROVE."
+      ],
+      "sources": [
+        "docs/ledger/north-star.md",
+        "docs/ai-program/operating-system-rail.md",
+        "branch:standard/20/ninjatrader/Glitch/Docs",
+        "branch:ai/22/ninjatrader/Glitch/Docs",
+        "projects/abkb/projects/glitch/project_profile.md",
+        "projects/abkb/projects/glitch/ontology.md",
+        "branch:glitch-hermes-profile/main/distribution.yaml"
+      ],
+      "stop_line": "Documentation and checks only; no release or publication without explicit operator approval.",
+      "spec_kit": {
+        "user_story": "As an operator and maintainer, I need one current explanation of what Glitch may do and which component owns each decision.",
+        "scenarios": [
+          "Given public profile v0.0.2.8, when docs are checked, then version and 30-minute cadence agree everywhere.",
+          "Given a replication or compliance behavior change, when docs are reconciled, then internal, public, and ABKB authority text agrees.",
+          "Given a synthetic mismatch, when the drift check runs, then it fails before merge."
+        ],
+        "functional_requirements": [
+          "Update stale release and cadence facts.",
+          "Document explicit Sync and default-off compliance.",
+          "Document human > AI > deterministic hierarchy without weakening native factual truth.",
+          "Automate drift detection for durable facts."
+        ],
+        "success_criteria": [
+          "No known authority or release-fact drift remains.",
+          "Synthetic drift is detected by an automated check.",
+          "Every operational claim links to source or bounded evidence."
+        ],
+        "assumptions": [
+          "Public profile commit 38a9292 is current profile source truth.",
+          "This task changes source and documentation, not release artifacts."
+        ],
+        "tasks": [
+          "Update durable north star and AI rail.",
+          "Update Standard and AI public documentation in all authored languages.",
+          "Update ABKB profile and ontology.",
+          "Add a durable drift check.",
+          "Record exact branch and test evidence."
+        ]
+      }
+    },
+    {
+      "id": "GL-ARCH-01",
+      "title": "Reduce Standard and AI lane drift only along touched ownership seams.",
+      "status": "in_progress",
+      "priority": "P2",
+      "owner_role": "architect",
+      "reviewer_role": "code-reviewer",
+      "acceptance": [
+        "All shared AddOn paths are classified as identical or intentional edition delta.",
+        "Touched shared fixes are applied Standard-first and parity-proven in AI.",
+        "Any extraction deletes duplicate branching or parsing and does not become a speculative shared-package rewrite.",
+        "No unexplained drift remains in a touched ownership seam."
+      ],
+      "depends_on": [
+        "GL-REP-01",
+        "GL-AI-06",
+        "GL-AI-07",
+        "GL-AI-08",
+        "GL-COMP-01",
+        "GL-STD-01"
+      ],
+      "evidence": [
+        "Standard source commit standard/20@b1b94f8; npm.cmd test 61/61.",
+        "AI source commit ai/22@ae51406; shared npm.cmd test 54/54 and Hermes npm.cmd test 186/186.",
+        "Shared GlitchCopyEngine.cs and GlitchReplicationProtection.cs are byte-identical across editions; the Replication UI difference is the named AI executor hook only.",
+        "CopyEngine net growth versus lane HEAD is 701 lines after consolidating route lookup, signal parsing, submission results, and observational recovery construction.",
+        "Independent gpt-5.6-sol high review: APPROVE and final simplification re-review: Lean already. Ship.",
+        "Native compile and bounded Sim parity remain pending coupled AI deployment authority."
+      ],
+      "sources": [
+        "docs/ledger/branching.md",
+        "branch:standard/20/ninjatrader/Glitch/AddOns/GlitchAddOn",
+        "branch:ai/22/ninjatrader/Glitch/AddOns/GlitchAddOn"
+      ],
+      "stop_line": "No behavior-neutral mega-refactor before the bounded P0 safety fixtures pass.",
+      "spec_kit": {
+        "user_story": "As a maintainer, I want shared fixes to remain identical across editions without risking a speculative rewrite.",
+        "scenarios": [
+          "Given a touched shared file, when parity is checked, then any difference is intentional and named.",
+          "Given a proposed extraction, when reviewed, then it removes existing duplicate ownership and preserves behavior."
+        ],
+        "functional_requirements": [
+          "Maintain a shared-path parity report.",
+          "Use Standard as the shared-source donor.",
+          "Extract only proven ownership seams.",
+          "Reject unexplained touched-file drift."
+        ],
+        "success_criteria": [
+          "Every touched shared path is identical or documented.",
+          "No safety behavior changes solely to reduce file size.",
+          "Both edition suites remain green."
+        ],
+        "assumptions": [
+          "Standard and AI remain separate release lanes.",
+          "A shared binary/package is not required for the current safety repair."
+        ],
+        "tasks": [
+          "Create a parity manifest/check.",
+          "Classify current shared deltas.",
+          "Apply fixes Standard-first.",
+          "Extract only when a touched seam becomes simpler.",
+          "Run independent review in both lanes."
+        ]
+      }
+    },
     {
       "id": "GL-STD-01",
       "title": "Keep Standard v0.0.2.0 no-regression evidence tied to its exact inspected artifact.",
@@ -205,6 +714,35 @@
       "standard/20",
       "ai/22"
     ],
-    "selection_rule": "Select the highest-priority dependency-clear ready item allowed by its branch and stop line. No eligible item means a clean stop without a write."
+    "selection_rule": "Select the highest-priority dependency-clear ready item allowed by its branch and stop line. No eligible item means a clean stop without a write.",
+    "spec_kit_fields": [
+      "user_story",
+      "scenarios",
+      "functional_requirements",
+      "success_criteria",
+      "assumptions",
+      "tasks"
+    ],
+    "role_cycle": [
+      "architect",
+      "backlog",
+      "coder",
+      "ledger",
+      "code-reviewer",
+      "tests",
+      "architect"
+    ],
+    "model_policy": {
+      "architect": "gpt-5.6-sol high",
+      "coder": "gpt-5.6-terra high",
+      "code-reviewer": "gpt-5.6-sol high",
+      "tests": "gpt-5.6-terra medium",
+      "runtime_cognition": "gpt-5.6-luna medium",
+      "rule": "Use Sol for bounded architecture and adversarial review, Terra for implementation and verification, and Luna only for Hermes runtime cognition; do not spend Sol extra-high on the whole rail."
+    },
+    "resolved_ambiguities": [
+      "AI enable or account allowlisting is not consent to forced compliance orders; each compliance action requires a visible default-off Settings opt-in.",
+      "Model-cost suppression does not outrank human > AI > determinism; due cognition is not skipped by hidden deterministic eligibility gates."
+    ]
   }
 }

@@ -33,7 +33,7 @@ L’AddOn considère l’état natif NinjaTrader des comptes, ordres, exécution
 
 Un groupe comporte un master et des followers activés. Le ratio multiplie la quantité ; il ne crée ni autre stratégie ni masters synthétiques.
 
-Le moteur réagit aux exécutions natives, déduplique, refuse l’auto-copie et les clôtures traversant zéro, puis installe une protection OCO native. Démarrage et recompilation restent en observation. Désactiver Replication arrête les nouvelles copies sans retirer la protection existante. Une modification manuelle du follower reste sous contrôle de l’utilisateur jusqu’à un resync explicite.
+Le moteur réagit aux exécutions natives, déduplique, refuse l’auto-copie et les clôtures traversant zéro, puis copie immédiatement selon le ratio configuré. Quand le master possède un bracket complet, le follower reçoit une protection OCO native ; un bracket arrivé plus tard met à niveau le même cycle sans retarder ni abandonner la copie. Démarrage et recompilation restent en observation. Replication, follower, ratio et master ne configurent que les exécutions futures. Désactiver Replication arrête les nouvelles copies sans retirer la protection existante. Une modification manuelle du follower appartient à l’utilisateur ; seul un **Sync** visible et cliqué par l’utilisateur effectue le catch-up.
 
 ## Flux
 
@@ -45,6 +45,6 @@ Chart Trader <-> GlitchShellBridge <-> fenêtre principale
 
 ## Sécurité et autorité
 
-Glitch contrôle la mécanique déterministe ; l’utilisateur contrôle comptes, membres, ratios et actions de risque. `Flatten All` utilise le flatten natif et signale toute clôture incomplète.
+Glitch contrôle la mécanique factuelle ; l’utilisateur contrôle comptes, membres, ratios et actions de risque. Dans AI Expérimentale, l’ordre d’autorité est humain, Hermes, puis inférence déterministe. L’état natif NinjaTrader reste autoritaire. Une politique de conformité inférée reste observationnelle sauf si une action précise, visible, persistée, limitée au périmètre et désactivée par défaut est activée dans Settings. `Flatten All` utilise le flatten natif et signale toute clôture incomplète.
 
 Glitch réduit les erreurs opérationnelles sans garantir connexion, éligibilité ou résultats.

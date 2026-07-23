@@ -27,18 +27,22 @@ The compact widget exposes the same Replication and flatten actions as the main 
 
 Each group defines a master, enabled followers, and follower ratios. Ratios scale the quantity copied from the master. `GlitchCopyEngine` listens to native master executions and submits follower work once per execution.
 
-Current behavior is deliberately conservative about ownership:
+Current behavior follows explicit ownership:
 
 - startup and recompile observe existing state instead of catching up automatically;
+- enabling Replication, enabling a follower, changing a ratio, or changing a master configures future executions and never changes an existing position;
 - Replication off stops new copies while existing native protection remains working;
-- follower stops and targets are native OCO orders;
-- manual follower divergence is preserved until the user requests resync;
+- a native master execution is copied immediately at the configured ratio; if a complete master bracket exists then follower stops and targets are native OCO orders, and late-arriving master protection is attached when it becomes available;
+- manual master partial and full closes are copied, while manual follower divergence is preserved;
+- **Sync** is the only catch-up action and runs only when the user clicks it;
 - ambiguous submissions are not blindly retried;
 - a follower protection failure triggers one bounded native cleanup and no submission loop.
 
 ## Risk and compliance
 
 Glitch classifies accounts, reads bundled rule metadata, and uses native account fields where available. Display and review are the default posture. Automatic actions are individually enabled in Settings and journal the setting that authorized them.
+
+Authority is explicit: human intent overrides Experimental AI intent; AI intent overrides inferred deterministic policy. Native NinjaTrader facts still decide what exists and what the broker accepted. Prop-firm metadata, capacity, sessions, and buffers remain observational unless the user enables a specific Settings action, which is visible, persisted, scoped, and off by default.
 
 `Flatten All` is always an operator control. It targets the configured scope through NinjaTrader's native flatten operation, waits for flat and order-free state, and reports any unresolved account.
 

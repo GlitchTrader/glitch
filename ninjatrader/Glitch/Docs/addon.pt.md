@@ -28,15 +28,19 @@ O widget oferece as mesmas ações de Replication e flatten da janela principal.
 Cada grupo define um master, followers habilitados e ratios. Os ratios escalam a quantidade copiada. `GlitchCopyEngine` escuta as execuções nativas do master e envia o trabalho do follower uma vez por execução.
 
 - Inicialização e recompilação observam o estado existente, sem catch-up automático.
+- Ativar Replication, habilitar um follower, alterar o ratio ou trocar o master configura execuções futuras e nunca modifica uma posição existente.
 - Replication desligado interrompe novas cópias e preserva a proteção nativa existente.
-- Stops e targets dos followers usam OCO nativo.
-- Divergência manual permanece até um resync solicitado pelo usuário.
+- A execução nativa do master é copiada imediatamente no ratio configurado; se houver um bracket completo, stops e targets dos followers usam OCO nativo, e uma proteção tardia é anexada quando ficar disponível.
+- Fechamentos parciais e totais manuais do master são copiados, enquanto divergência manual do follower é preservada.
+- **Sync** é a única ação de catch-up e só executa quando o usuário clica nela.
 - Envios ambíguos não são repetidos às cegas.
 - Falha de proteção gera uma limpeza nativa limitada, sem loop de envio.
 
 ## Risco e compliance
 
 Glitch classifica contas, lê os metadados de regras incluídos e usa campos nativos quando disponíveis. Exibição e revisão são o padrão. Ações automáticas são habilitadas individualmente em Settings e registram a configuração que as autorizou.
+
+A autoridade é explícita: intenção humana prevalece sobre a AI Experimental; intenção da AI prevalece sobre política determinística inferida. Os fatos nativos do NinjaTrader continuam determinando o que existe e o que a corretora aceitou. Regras de prop firm, capacidade, sessões e buffers são observacionais, salvo quando o usuário habilita uma ação específica, visível, persistida, limitada ao escopo e desligada por padrão.
 
 `Flatten All` continua disponível ao operador, usa o flatten nativo no escopo configurado e informa contas não resolvidas.
 

@@ -36,7 +36,7 @@ The AddOn separates operational concerns into focused services:
 
 A configured group has one master and zero or more enabled followers. A follower ratio scales quantity; it does not create a second strategy or a chain of synthetic masters.
 
-The copy engine reacts to native master executions. It deduplicates executions, refuses self-copy routes and cross-zero closes, and installs follower-native OCO protection. Startup and recompile are observe-only. Turning Replication off stops new copying but does not remove protection already working at NinjaTrader. A manual follower change remains owned by the user until an explicit resync.
+The copy engine reacts to native master executions. It deduplicates executions, refuses self-copy routes and cross-zero closes, and copies the execution immediately at the configured ratio. When the master has a complete native bracket, the follower receives native OCO protection; a bracket that arrives after the execution upgrades the same follower lifecycle without delaying or abandoning the copy. Startup and recompile are observe-only. Replication, follower, ratio, and master controls configure future executions only. Turning Replication off stops new copying but does not remove protection already working at NinjaTrader. A manual follower change remains owned by the user; only a visible user-clicked **Sync** catches it up.
 
 ## Data paths
 
@@ -54,6 +54,6 @@ Keeping these paths separate prevents market-data rendering from becoming an ord
 
 ## Safety and authority
 
-Glitch owns deterministic execution mechanics, but the user owns account selection, group membership, ratios, and enabled risk actions. Risk features are individually configurable. `Flatten All` uses native account flattening across the configured scope and reports incomplete cleanup instead of pretending it succeeded.
+Glitch owns factual execution mechanics, but the user owns account selection, group membership, ratios, and enabled risk actions. In the Experimental AI edition the authority order is human, then Hermes, then deterministic inference. Native NinjaTrader state remains authoritative about actual positions, orders, executions, and broker rejection. Inferred compliance policy is observational unless a specific visible action is enabled in Settings; such actions are persisted, scoped, journaled, and off by default. `Flatten All` uses native account flattening across the configured scope and reports incomplete cleanup instead of pretending it succeeded.
 
 Glitch reduces operational error; it does not guarantee connectivity, prop-firm eligibility, or trading results.

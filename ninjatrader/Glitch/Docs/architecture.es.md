@@ -33,7 +33,7 @@ El AddOn considera autoritativo el estado nativo de cuentas, órdenes, ejecucion
 
 Un grupo tiene un master y followers habilitados. El ratio escala la cantidad; no crea otra estrategia ni masters sintéticos.
 
-El motor reacciona a ejecuciones nativas, deduplica, rechaza rutas a la misma cuenta y cierres que crucen cero, e instala protección OCO nativa. Inicio y recompilación solo observan. Al apagar Replication cesan las nuevas copias, pero la protección existente sigue activa. Un cambio manual del follower permanece hasta un resync explícito.
+El motor reacciona a ejecuciones nativas, deduplica, rechaza rutas a la misma cuenta y cierres que crucen cero, y copia de inmediato con el ratio configurado. Cuando el master tiene un bracket completo, el follower recibe protección OCO nativa; un bracket que llega después actualiza el mismo ciclo sin retrasar ni abandonar la copia. Inicio y recompilación solo observan. Replication, follower, ratio y master configuran únicamente ejecuciones futuras. Al apagar Replication cesan las nuevas copias, pero la protección existente sigue activa. Un cambio manual del follower pertenece al usuario; solo un **Sync** visible y pulsado por el usuario ejecuta catch-up.
 
 ## Flujos
 
@@ -45,6 +45,6 @@ Chart Trader <-> GlitchShellBridge <-> ventana principal
 
 ## Seguridad y autoridad
 
-Glitch controla la mecánica determinista; el usuario controla cuentas, miembros, ratios y acciones de riesgo. `Flatten All` usa el flatten nativo y comunica una limpieza incompleta.
+Glitch controla la mecánica factual; el usuario controla cuentas, miembros, ratios y acciones de riesgo. En AI Experimental el orden es humano, Hermes y después inferencia determinista. El estado nativo de NinjaTrader sigue siendo autoritativo. La política de compliance inferida es observacional salvo que una acción específica, visible, persistida, limitada al ámbito y apagada por defecto se habilite en Settings. `Flatten All` usa el flatten nativo y comunica una limpieza incompleta.
 
 Glitch reduce errores operativos; no garantiza conexión, elegibilidad ni resultados.

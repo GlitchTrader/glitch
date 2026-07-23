@@ -1,7 +1,7 @@
 # Glitch AI Operating Rail
 
 **Audience:** private maintainers and agents
-**Reconciled:** 2026-07-22
+**Reconciled:** 2026-07-23
 
 ## Prime invariant
 
@@ -12,14 +12,16 @@ NinjaTrader owns native account, order, execution, OCO, and position truth.
 Codex builds and verifies code; it is not in the trading loop.
 ```
 
-The goal is an adaptive cognitive operator inside a deterministic operational harness. The harness must not become a hidden strategy engine.
+The authority order is **human > Hermes > deterministic inference**. Explicit human configuration or intervention wins. Hermes owns cognition for the configured master. Glitch must carry those intents into native execution without inventing strategy or silent policy. NinjaTrader native facts remain authoritative about what actually exists and what the broker accepted.
+
+The goal is an adaptive cognitive operator inside a factual operational rail. The rail must not become a hidden strategy engine, a model supervisor, or an unrequested compliance operator.
 
 ## Shipped experimental state
 
 - AI AddOn: **v0.0.2.2**, source `2975b2e4070af118d7e752ca7566aa2353647ccf`.
-- Public Hermes profile: **v0.0.2.4**.
+- Public Hermes profile: **v0.0.2.8**, source `38a9292db5e593482ca878693d2f0203770c9381d`.
 - Distribution: local customer profile installed and updated from `GlitchTrader/glitch-hermes-profile`.
-- Exactly two jobs: minute `glitch-direct-operator` and 15-minute `glitch-learning-supervisor`.
+- Exactly two jobs: minute `glitch-direct-operator` and 30-minute `glitch-learning-supervisor`.
 - Entry type: MARKET only. A safe pending LIMIT lifecycle is deferred.
 - AI authority: configured Glitch group master only. CopyEngine owns followers and ratios.
 - Status: Experimental. No profitability, unattended-operation, or PA/live-readiness claim.
@@ -36,21 +38,20 @@ Hermes owns:
 
 Glitch must not encode fixed quantities, stop distances, risk percentages, target formulas, setup archetypes, trade quotas, winners-only additions, grid, or martingale behavior.
 
-## Deterministic boundary
+## Factual boundary and optional compliance
 
-Glitch may reject an intent only for evidence-backed operational reasons:
+Glitch may reject a requested mutation only when the mutation itself is structurally invalid or native truth cannot establish what can be changed:
 
-- AI Auto/policy/account/group authority is invalid;
-- schema, identity, idempotency, ownership, or native state is invalid or ambiguous;
-- requested quantity exceeds the authoritative master contract ceiling;
-- an entry or addition lacks complete native protection;
-- prices are not tick-valid or are on the wrong protective/profit side of live price;
-- complete stated-stop downside reaches or exceeds the authoritative Apex Legacy liquidation buffer;
-- execution, replication, or session state cannot be proven safe.
+- AI Auto, schema, identity, idempotency, account/group ownership, or intent binding is invalid;
+- current native account, order, execution, position, tick, side, or instrument truth is missing, contradictory, or makes the requested native mutation impossible;
+- NinjaTrader or the broker rejects the submitted native order;
+- an AI fill cannot be protected as requested, in which case Glitch owns observable recovery rather than reporting a false success.
 
-Ordinary movement between snapshot and live price is not a thesis veto. Followers and user ratios never constrain Hermes’s master sizing decision; follower-local validation applies when CopyEngine executes each route.
+Inferred prop-firm ceilings, liquidation buffers, sessions, time windows, health, and strategy-policy heuristics are evidence for Hermes and the UI. They do not suppress cognition, veto a valid human/AI intent, cap replication, or flatten an account unless the user enabled a specific visible Settings compliance action. Such settings are off by default and every action is journaled.
 
-Risk-reducing actions remain available when entry-grade data is unavailable. A stop-widening request requires fresh authoritative Apex state and a recomputation of downside across all remaining protected quantity. Unsafe widening changes no order.
+Ordinary movement between snapshot and live price is not a thesis veto. Followers and ratios never constrain Hermes's master sizing decision. `GlitchCopyEngine` responds to every accepted native master execution delta at the user ratio. Protection discovery may lag the execution callback, but it is not permission to abandon the copy after an arbitrary timeout.
+
+Risk-reducing actions remain available when entry-grade data is unavailable. A human may override Hermes through native orders at any time; Glitch observes and responds to the resulting native master execution.
 
 ## Intent contract
 
@@ -80,13 +81,16 @@ Decision cadence:
 - after model, contract, transport, delivery, firewall, or executor failure: next available packet;
 - transport uncertainty reuses the idempotent outbox; terminal rejection requests a new decision.
 
+Operational ineligibility never prevents a due Hermes call. It remains packet evidence; if Hermes requests a factually impossible mutation, Glitch rejects that mutation with zero fabricated order and durable evidence.
+
 Every model call uses the trading session and exact output template. One bounded repair is allowed for malformed learning output; repeated failure remains unprocessed evidence for a later cycle.
 
 ## Crash and window continuity
 
 - Direct and learning locks store PID and start time. Dead owners are replaced immediately; unreadable locks get only bounded grace.
-- Per-intent state advances atomically: `received -> approved/rejected -> execution_started -> executed/failed`.
-- The UUID is claimed before firewall/execution. Same UUID/same content returns the stored result; same UUID/different content conflicts.
+- Per-intent state advances atomically: `received -> approved/rejected -> execution_started -> pending -> executed/failed`.
+- One atomic owner holds a UUID/body through execution. Same UUID/same content returns pending or the stored result; same UUID/different content conflicts.
+- `Submit` is nonterminal. Entry success is durable only after exact native exposure and working native protection are proven; pending delivery reuses the same UUID and outbox.
 - Restart recovery reconciles native signal identity and journals. Ambiguous entries are never blindly resubmitted.
 - Closing the Glitch window hides the retained runtime instance. Snapshot publication, account refresh, risk mitigation, reconciliation, daily-close enforcement, and local servers continue until AddOn replacement or NinjaTrader termination.
 
@@ -110,6 +114,15 @@ Health is observational, not a strategy veto. It reports operating, packet, deci
 
 Outcome reconciliation is cross-process locked and atomically replaced. Only newline-complete JSONL records are consumed; malformed completed records fail visibly and never overwrite good evidence.
 
+## Replication and user intervention
+
+- Manual and AI master trades share the same execution-driven replication baseline.
+- Replication on/off, follower enable, ratio changes, and master changes configure future copying; they do not mutate existing follower exposure.
+- Manual follower changes are preserved and do not block later master execution deltas.
+- **Sync** is the only user-authorized catch-up operation.
+- Manual partial and full master closes propagate at the configured ratio.
+- Replication off stops new copies while follower-native protection and recovery callbacks continue.
+
 ## Open stop lines
 
 - Runtime-prove per-leg amendments, distinct additions, safe widening, unsafe zero-mutation rejection, follower mirroring, and final flat/order-free state.
@@ -123,6 +136,8 @@ Outcome reconciliation is cross-process locked and atomically replaced. Only new
 - a centralized recommendation service as a substitute for the distributed Hermes profile;
 - a second replication engine or follower logic in Hermes;
 - a deterministic strategy disguised as risk validation;
+- a deterministic eligibility gate that prevents Hermes from observing and deciding on a due packet;
+- inferred prop-firm rules that act without a specific default-off Settings opt-in;
 - per-decision learning calls;
 - a pending LIMIT branch without its complete lifecycle;
 - code that lets health status silently veto a valid cognitive decision.
