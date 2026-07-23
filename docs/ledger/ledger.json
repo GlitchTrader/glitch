@@ -227,8 +227,8 @@
         "AI shared suite 54/54 and Hermes suite 186/186.",
         "Pre-model eligibility suppression and inferred quantity, Apex, session, time-window, and stop-widening gates were removed from non-opt-in authority paths.",
         "AI recovery and EXIT use UUID/correlation-attributable deltas and preserve ambiguous human changes.",
-        "Public Hermes v0.0.2.9 commit glitch-hermes-profile@744eb30 and tag v0.0.2.9 are pushed; installed profile passes 28/28 distribution-owned hash parity with plugin and supervised gateway present.",
-        "AI profile source ai/22@4c13209 now reproduces the public v0.0.2.9 tree exactly and removes the stale embedded deterministic capacity/session language that the drift check exposed.",
+        "Public Hermes v0.0.2.10 commit glitch-hermes-profile@4e3a12a and tag v0.0.2.10 are pushed; installed profile passes 28/28 distribution-owned hash parity with plugin present and gateway stopped.",
+        "AI profile source ai/22@5e9a279 reproduces the public v0.0.2.10 tree exactly; epoch reset is backend-only, preserves operator-owned Glitch data and native account state, and returns explicit account/Reset Data handoff.",
         "AI and both preserved Hermes jobs remained paused through profile update and AddOn deployment.",
         "Fresh epoch eb99193e-8a85-4908-ab37-75f3e8937a35 reset without backup after all nine accounts were proven flat/order-free; post-reset memory, request dumps, intents, trade ledger, risk locks, and learning streams are empty; AddOn reload established fresh 250k account-peak baselines.",
         "Native Hermes and human-interleave Sim proof remains pending because the existing follower positions were preserved rather than commandeered for a test."
@@ -403,7 +403,7 @@
       "reviewer_role": "code-reviewer",
       "acceptance": [
         "Internal rail, public AddOn documentation, public Hermes profile facts, and ABKB all state the same human > AI > determinism hierarchy and explicit catch-up/compliance semantics.",
-        "The AI rail states Hermes profile v0.0.2.9 and the 30-minute learning cadence proven by distribution source.",
+        "The AI rail states Hermes profile v0.0.2.10 and the 30-minute learning cadence proven by distribution source.",
         "A drift check detects synthetic version, cadence, or shared replication-contract mismatch.",
         "No documentation claims release, profitability, unattended operation, or live readiness without named evidence and approval."
       ],
@@ -420,8 +420,8 @@
         "Durable internal/public contracts and all six authored public locales pass npm.cmd test 46/46.",
         "ABKB authority update commit projects/abkb@9801289.",
         "Standard source commit standard/20@b1b94f8 and AI source commit ai/22@ae51406.",
-        "AI profile source reconciliation commit ai/22@4c13209; public-profile rebuild is byte-clean against glitch-hermes-profile@744eb30.",
-        "Public Hermes v0.0.2.9 commit glitch-hermes-profile@744eb30 and tag v0.0.2.9 are pushed; installed profile passes 28/28 distribution-owned hash parity.",
+        "AI profile source reconciliation commit ai/22@5e9a279; public-profile rebuild is byte-clean against glitch-hermes-profile@4e3a12a.",
+        "Public Hermes v0.0.2.10 commit glitch-hermes-profile@4e3a12a and tag v0.0.2.10 are pushed; installed profile passes 28/28 distribution-owned hash parity.",
         "Hermes plugin and supervised gateway are present; both persisted jobs and Glitch AI remain paused.",
         "Independent gpt-5.6-sol high review: APPROVE."
       ],
@@ -438,7 +438,7 @@
       "spec_kit": {
         "user_story": "As an operator and maintainer, I need one current explanation of what Glitch may do and which component owns each decision.",
         "scenarios": [
-          "Given public profile v0.0.2.9, when docs are checked, then version and 30-minute cadence agree everywhere.",
+          "Given public profile v0.0.2.10, when docs are checked, then version and 30-minute cadence agree everywhere.",
           "Given a replication or compliance behavior change, when docs are reconciled, then internal, public, and ABKB authority text agrees.",
           "Given a synthetic mismatch, when the drift check runs, then it fails before merge."
         ],
