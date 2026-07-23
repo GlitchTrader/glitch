@@ -14,7 +14,7 @@ Documents `00` through `08`, `09_intent_contract_v2_brackets.md`, `99_original_e
 
 ## Current shipped boundary
 
-- AI AddOn v0.0.2.2 and public Hermes profile v0.0.2.8.
+- AI AddOn v0.0.2.2 and public Hermes profile v0.0.2.9.
 - Customer-installable local profile from `GlitchTrader/glitch-hermes-profile`; no required centralized recommendation service.
 - Exactly two profile jobs: minute direct operator and 30-minute learning supervisor.
 - Every LLM trading call uses an isolated session tagged `trading` with bounded continuity.
