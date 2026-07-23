@@ -40,6 +40,7 @@ Copy-Item -Path (Join-Path $sourceRoot 'plugins\glitch-control') -Destination (J
 
 $workerNames = @(
     'run-direct-glitch-cycle.py',
+    'launch-direct-glitch-cycle.py',
     'reconcile-hermes-outcomes.py',
     'run-hermes-learning-cycle.py',
     'launch-hermes-learning-cycle.py',
@@ -53,7 +54,7 @@ foreach ($name in $workerNames) {
 $skillCount = @(Get-ChildItem -LiteralPath (Join-Path $target 'skills') -Directory).Count
 if ($skillCount -ne 11) { throw "Expected 11 Glitch skills; found $skillCount." }
 $scriptCount = @(Get-ChildItem -LiteralPath (Join-Path $target 'scripts') -File).Count
-if ($scriptCount -ne 6) { throw "Expected six runtime scripts; found $scriptCount." }
+if ($scriptCount -ne 7) { throw "Expected seven runtime scripts; found $scriptCount." }
 
 $textFiles = @(Get-ChildItem -LiteralPath $target -Recurse -File -Force | Where-Object {
     $_.Name -ne 'SHA256SUMS' -and $_.FullName -notlike (Join-Path $target '.git\*')
@@ -101,7 +102,7 @@ if ($unexpectedAfter.Count -gt 0) { throw "Public profile gained unexpected path
 [ordered]@{
     schema_version = 'glitch.hermes.public_profile_build.v1'
     target = $target
-    version = '0.0.2.7'
+    version = '0.0.2.8'
     skills = $skillCount
     scripts = $scriptCount
     files = $textFiles.Count + 1

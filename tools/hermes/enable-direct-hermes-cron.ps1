@@ -11,7 +11,7 @@ $ErrorActionPreference = 'Stop'
 if ($Profile -ne 'glitch') { throw 'The direct operator profile must be glitch.' }
 $profileRoot = Join-Path $env:LOCALAPPDATA "hermes\profiles\$Profile"
 $env:HERMES_HOME = $profileRoot
-$scriptPath = Join-Path $profileRoot 'scripts\run-direct-glitch-cycle.py'
+$scriptPath = Join-Path $profileRoot 'scripts\launch-direct-glitch-cycle.py'
 if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
     throw 'Install the direct Hermes bridge before enabling its cron job.'
 }
@@ -52,7 +52,7 @@ if ($coreJobs.Count -eq 1) {
     $core = $coreJobs[0]
     & hermes cron edit ([string]$core.id) `
         --schedule $Schedule `
-        --script 'run-direct-glitch-cycle.py' `
+        --script 'launch-direct-glitch-cycle.py' `
         --no-agent `
         --workdir $workdir | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Hermes did not reconcile the direct operator cron job.' }
@@ -65,7 +65,7 @@ if ($coreJobs.Count -eq 1) {
 else {
     & hermes cron create $Schedule `
         --name 'glitch-direct-operator' `
-        --script 'run-direct-glitch-cycle.py' `
+        --script 'launch-direct-glitch-cycle.py' `
         --no-agent `
         --deliver local `
         --workdir $workdir | Out-Null
@@ -93,7 +93,7 @@ if ($installedSchedule -ne $Schedule) {
     throw "Hermes cron schedule did not persist: expected '$Schedule', found '$installedSchedule'."
 }
 if (-not $installedJob.enabled -or -not $installedJob.no_agent -or
-    [string]$installedJob.script -ne 'run-direct-glitch-cycle.py' -or
+    [string]$installedJob.script -ne 'launch-direct-glitch-cycle.py' -or
     [IO.Path]::GetFullPath([string]$installedJob.workdir) -ne [IO.Path]::GetFullPath($workdir)) {
     throw 'Hermes cron job persisted with the wrong execution contract.'
 }

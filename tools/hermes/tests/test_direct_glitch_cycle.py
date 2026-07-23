@@ -14,6 +14,11 @@ SPEC = importlib.util.spec_from_file_location("direct_glitch_cycle", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
+LAUNCHER_SCRIPT = ROOT / "tools" / "hermes" / "launch-direct-glitch-cycle.py"
+LAUNCHER_SPEC = importlib.util.spec_from_file_location("direct_glitch_launcher", LAUNCHER_SCRIPT)
+LAUNCHER = importlib.util.module_from_spec(LAUNCHER_SPEC)
+assert LAUNCHER_SPEC.loader is not None
+LAUNCHER_SPEC.loader.exec_module(LAUNCHER)
 
 
 GROUPS = """# type\tgroupId\taccount\tfollowerSize\tratio\tmasterSize\tenabled
@@ -102,6 +107,24 @@ def decision(route, account, suffix, action="NOTHING"):
 
 
 class DirectCycleTests(unittest.TestCase):
+    def test_minute_cron_launcher_detaches_the_slow_direct_worker(self):
+        source = LAUNCHER_SCRIPT.read_text(encoding="utf-8")
+        setup = (ROOT / "hermes-profile" / "setup.ps1").read_text(encoding="utf-8")
+        args = SimpleNamespace(
+            glitch_data=Path("C:/GlitchData"),
+            profile="glitch",
+            timeout_seconds=240,
+            packet_rollover_wait_seconds=5,
+            dry_run=False,
+        )
+
+        self.assertIn("subprocess.Popen", source)
+        self.assertIn("DETACHED_PROCESS", source)
+        self.assertIn("CREATE_NO_WINDOW", source)
+        self.assertIn("run-direct-glitch-cycle.py", LAUNCHER.worker_command(args)[1])
+        self.assertIn("--packet-rollover-wait-seconds", LAUNCHER.worker_command(args))
+        self.assertIn("-Script 'launch-direct-glitch-cycle.py'", setup)
+
     def test_json_parser_accepts_only_redundant_closing_delimiters(self):
         self.assertEqual(MODULE.extract_json('{"ok":true}]}'), {"ok": True})
         with self.assertRaises(json.JSONDecodeError):

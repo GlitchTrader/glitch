@@ -33,7 +33,7 @@ class OperatorMapTests(unittest.TestCase):
         setup = (profile / "setup.ps1").read_text(encoding="utf-8")
         builder = (ROOT / "tools/hermes/build-public-profile.ps1").read_text(encoding="utf-8")
 
-        self.assertIn("version: 0.0.2.7", distribution)
+        self.assertIn("version: 0.0.2.8", distribution)
         self.assertEqual((profile / ".gitattributes").read_text(encoding="utf-8"), "* -text\n")
         self.assertIn("'.gitattributes'", builder)
         self.assertIn('hermes_requires: \">=0.18.2\"', distribution)
@@ -46,6 +46,7 @@ class OperatorMapTests(unittest.TestCase):
         self.assertNotIn("hermes chat", setup.lower())
         for worker in (
             "run-direct-glitch-cycle.py",
+            "launch-direct-glitch-cycle.py",
             "reconcile-hermes-outcomes.py",
             "run-hermes-learning-cycle.py",
             "launch-hermes-learning-cycle.py",

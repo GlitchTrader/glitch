@@ -43,6 +43,8 @@ $scriptsDestination = Join-Path $destination 'scripts'
 New-Item -ItemType Directory -Force -Path $scriptsDestination | Out-Null
 Copy-Item -LiteralPath (Join-Path $repo 'tools\hermes\run-direct-glitch-cycle.py') `
     -Destination (Join-Path $scriptsDestination 'run-direct-glitch-cycle.py') -Force
+Copy-Item -LiteralPath (Join-Path $repo 'tools\hermes\launch-direct-glitch-cycle.py') `
+    -Destination (Join-Path $scriptsDestination 'launch-direct-glitch-cycle.py') -Force
 Copy-Item -LiteralPath (Join-Path $repo 'tools\hermes\reconcile-hermes-outcomes.py') `
     -Destination (Join-Path $scriptsDestination 'reconcile-hermes-outcomes.py') -Force
 Copy-Item -LiteralPath (Join-Path $repo 'tools\hermes\run-hermes-learning-cycle.py') `
