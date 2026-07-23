@@ -24,27 +24,7 @@ namespace Glitch.Services
                 string json = BuildSnapshotJson(nowUtc, snapshotId);
                 if (string.IsNullOrWhiteSpace(json))
                     return false;
-
-                string hash = GlitchSnapshotJson.ComputeStableHash(json);
-                json = GlitchMarketSnapshotJson.InjectSnapshotHash(json, hash);
-                if (string.Equals(hash, _lastSnapshotHash, StringComparison.Ordinal))
-                {
-                    return true;
-                }
-
-                string path = GetLatestSnapshotPath();
-                string directory = Path.GetDirectoryName(path);
-                if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
-                    Directory.CreateDirectory(directory);
-
-                WriteAtomic(path, json);
-
-                WriteRecentSnapshot(hash, json);
-
-                GlitchHistoricalSnapshotExporter.TryArchiveMarketSnapshot(json, nowUtc);
-
-                _lastSnapshotHash = hash;
-                return true;
+                return TryWriteCapturedSnapshot(nowUtc, json);
             }
             catch
             {
@@ -89,6 +69,52 @@ namespace Glitch.Services
             {
                 try { recent[i].Delete(); }
                 catch { }
+            }
+        }
+
+        // The AddOn dispatcher captures the synchronized analytics-bus view into
+        // this immutable string. Background publication must never query the bus.
+        public static bool TryCaptureSnapshotJson(DateTime nowUtc, string snapshotId, out string json)
+        {
+            json = null;
+            try
+            {
+                IReadOnlyList<GlitchIndicatorInstrumentSnapshot> snapshots =
+                    GlitchAnalyticsFeedBus.CaptureSnapshotsForPublication();
+                json = BuildSnapshotJson(nowUtc, snapshotId, snapshots);
+                return !string.IsNullOrWhiteSpace(json);
+            }
+            catch
+            {
+                json = null;
+                return false;
+            }
+        }
+
+        public static bool TryWriteCapturedSnapshot(DateTime nowUtc, string json)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(json))
+                    return false;
+                string hash = GlitchSnapshotJson.ComputeStableHash(json);
+                json = GlitchMarketSnapshotJson.InjectSnapshotHash(json, hash);
+                if (string.Equals(hash, _lastSnapshotHash, StringComparison.Ordinal))
+                    return true;
+
+                string path = GetLatestSnapshotPath();
+                string directory = Path.GetDirectoryName(path);
+                if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
+                    Directory.CreateDirectory(directory);
+                WriteAtomic(path, json);
+                WriteRecentSnapshot(hash, json);
+                GlitchHistoricalSnapshotExporter.TryArchiveMarketSnapshot(json, nowUtc);
+                _lastSnapshotHash = hash;
+                return true;
+            }
+            catch
+            {
+                return false;
             }
         }
 
@@ -139,7 +165,7 @@ namespace Glitch.Services
             if (roots == null || roots.Count == 0)
                 return null;
 
-            var instruments = new List<GlitchMarketSnapshotRawJson.RawInstrumentPayload>();
+            var snapshots = new List<GlitchIndicatorInstrumentSnapshot>();
 
             for (int i = 0; i < roots.Count; i++)
             {
@@ -149,6 +175,22 @@ namespace Glitch.Services
 
                 GlitchIndicatorInstrumentSnapshot snapshot;
                 if (!GlitchAnalyticsFeedBus.TryGetSnapshot(root, out snapshot) || snapshot == null)
+                    continue;
+
+                snapshots.Add(snapshot);
+            }
+            return BuildSnapshotJson(nowUtc, snapshotId, snapshots);
+        }
+
+        private static string BuildSnapshotJson(
+            DateTime nowUtc,
+            string snapshotId,
+            IEnumerable<GlitchIndicatorInstrumentSnapshot> snapshots)
+        {
+            var instruments = new List<GlitchMarketSnapshotRawJson.RawInstrumentPayload>();
+            foreach (GlitchIndicatorInstrumentSnapshot snapshot in snapshots ?? Enumerable.Empty<GlitchIndicatorInstrumentSnapshot>())
+            {
+                if (snapshot == null)
                     continue;
 
                 instruments.Add(ToRawInstrumentPayload(snapshot));

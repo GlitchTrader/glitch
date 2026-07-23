@@ -107,14 +107,13 @@ Wrapper around existing risk/compliance primitives plus AI-specific rules:
 ```text
 instrument allowlist
 account allowlist
-max loss per trade
-max daily loss
-max contracts
-cooldown
-trade count
-stale data checks
+explicit human-enabled compliance locks
+stale native-state checks
 duplicate intent checks
-authoritative session-open, entry-cutoff, and must-flat checks
+factual account/group binding and native position/order/protection checks
+
+Prop-firm capacity, account buffers, sessions, time windows, cooldowns, and
+trade counts are packet evidence rather than inferred AI vetoes.
 ```
 
 ### GlitchAiOrderExecutor

@@ -26,7 +26,7 @@ Documents `00` through `08`, `09_intent_contract_v2_brackets.md`, `99_original_e
 ## Current behavior
 
 - Intent v3 manages named stable Glitch legs independently.
-- Stops may tighten or safely fall back while remaining protective and within authoritative Apex capacity.
+- Stops may tighten or safely fall back while remaining on the protective side of live price; Apex capacity remains observational packet evidence rather than an amendment veto.
 - One publisher creates gap-aware five-frame packets from paired complete minutes.
 - Flat cadence is five elapsed minutes; positioned cadence is every new complete packet; recognized failures retry on the next packet.
 - Atomic intent state and native reconciliation prevent blind duplicate entry after crashes.

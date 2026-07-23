@@ -10,7 +10,7 @@
 Protect the machine. Enable the brain.
 ```
 
-Glitch enforces hard execution facts: identity, account/group scope, prop-firm limits, current positions and orders, intent schema, idempotency, bracket protection, kill switches, and order execution.
+Glitch enforces hard execution facts: identity, account/group scope, current positions and orders, intent schema, idempotency, bracket protection, explicit human-enabled compliance locks, and order execution. Prop-firm limits remain observational evidence.
 
 Hermes remains free to interpret context probabilistically: direction, regime, opportunity, trade frequency, risk posture inside the allowed envelope, target selection, portfolio allocation, novel patterns, and whether prior lessons still apply.
 
@@ -51,10 +51,10 @@ Reasoning freedom:
 - independently evaluate bullish, bearish, stay-flat, stay-positioned, and exit cases;
 - use or reject known patterns;
 - create a falsifiable discretionary hypothesis;
-- choose risk, quantity, native target legs, reserved capacity, later independently protected additions, and management geometry inside Glitch limits;
+- choose risk, quantity, native target legs, reserved capacity, later independently protected additions, and management geometry from current evidence;
 - vary posture by regime and by configured group.
 
-For increasing exposure, Hermes compares a single protected tranche, TP1/TP2/TP3 native entry legs, reserving capacity, a later same-direction addition, and unchanged exposure. An addition may be at a favorable or adverse price when evidence supports the thesis, but price movement alone never creates a grid, martingale, or loss-recovery rule. Current acceptance, rejection, structure, and excursion override stale forecasts. Glitch independently rejects an Apex Legacy evaluation entry when complete protected downside is ambiguous or reaches the authoritative liquidation buffer; this is an account-survival boundary, not a preferred quantity, percentage budget, or strategy.
+For increasing exposure, Hermes compares a single protected tranche, TP1/TP2/TP3 native entry legs, reserving capacity, a later same-direction addition, and unchanged exposure. An addition may be at a favorable or adverse price when evidence supports the thesis, but price movement alone never creates a grid, martingale, or loss-recovery rule. Current acceptance, rejection, structure, and excursion override stale forecasts. Apex Legacy evaluation capacity and liquidation data remain packet evidence for Hermes; Glitch does not turn them into a strategy or admission veto.
 
 Output: exactly one `glitch.intent.batch.v1`, containing one ordered `glitch.intent.v3` decision per route-bound group. Scheduled output is JSON only. Entries carry independent native protection; management names selected stable Glitch leg IDs. Glitch remains the only executor.
 

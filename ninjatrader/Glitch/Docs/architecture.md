@@ -94,9 +94,18 @@ That architecture matters for real use. It lets the chart layer stay responsive,
 ## Replication contract
 
 The CopyEngine responds to native master execution deltas and deduplicates each
-execution identity. It applies the configured follower ratio without using
-follower alignment as an admission gate. Manual follower changes remain under
-user control while later master executions continue copying normally. Manual
-partial and full master closes propagate at the configured ratio. Catch-up is
-position alignment and runs only after an explicit user resync action. Startup
-and recompile remain observe-only.
+execution identity. It applies the configured follower ratio immediately without
+using bracket discovery, follower alignment, or inferred capacity as an admission
+gate. A complete linked master bracket creates follower-native OCO protection; a
+bracket that arrives later upgrades the same follower lifecycle exactly once.
+Manual follower changes remain under user control while later master executions
+continue copying normally. Manual partial and full master closes propagate at the
+configured ratio. Replication, follower, ratio, and master controls configure
+future executions only. **Sync** is the only catch-up action and runs only after
+an explicit user click. Startup and recompile remain observe-only.
+
+The authority order is human, Hermes, then deterministic inference. Glitch
+enforces factual native executability and user-enabled Settings actions; inferred
+capacity, prop-firm, session, and buffer policy remains observational. NinjaTrader
+is authoritative about the positions, orders, executions, and broker outcomes
+that actually exist.

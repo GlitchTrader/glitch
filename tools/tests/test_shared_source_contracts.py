@@ -15,6 +15,7 @@ COPY_ENGINE = ADDON / "Services/Trading/GlitchCopyEngine.cs"
 PROTECTION = ADDON / "Services/Trading/GlitchReplicationProtection.cs"
 MAIN_WINDOW = ADDON / "UI/MainWindow/GlitchMainWindow.cs"
 REPLICATION_UI = ADDON / "UI/MainWindow/GlitchMainWindow.Replication.partial.cs"
+LOCALIZATION = ADDON / "Resources/Localization.tsv"
 POLICY_STORE = ADDON / "Services/Persistence/GlitchRuntimePolicyStore.cs"
 TRADE_INSIGHTS = ADDON / "Services/Insights/GlitchTradeInsightsService.cs"
 SUMMARY_TAB = ADDON / "UI/MainWindow/GlitchMainWindow.SummaryTab.partial.cs"
@@ -126,13 +127,13 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("TryGetNetQuantityForInstrumentRoot", text)
         self.assertIn("TryGetOpenPositionInstruments", text)
 
-    def test_live_replication_copies_each_execution_delta_without_position_alignment(self):
+    def test_live_replication_copies_each_execution_delta_without_position_repair(self):
         copy = source(COPY_ENGINE)
         opening = method_body(copy, "private void FanOutOpening", "private void FanOutCompleteClose")
         scale = method_body(copy, "private static int ScaleExecution", "private static bool TrySnapshotOrders")
         self.assertIn("ScaleExecution(context, route.Ratio)", opening)
-        self.assertIn("filled * ratio", scale)
-        self.assertIn("before * ratio", scale)
+        self.assertIn("ScaleFollowerQuantity(filled, ratio)", scale)
+        self.assertIn("ScaleFollowerQuantity(before, ratio)", scale)
         self.assertNotIn("ResolveContextMasterQuantity(context)", opening)
         self.assertNotIn("expected", opening)
         self.assertNotIn("actual", opening)
@@ -140,15 +141,17 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertNotIn("GetEntryDenialReason", copy)
         self.assertNotIn("TryGetInFlightOpeningQuantity", copy)
 
-    def test_explicit_resync_and_final_submit_use_the_configured_route_cap(self):
+    def test_user_sync_uses_the_configured_route_without_a_route_cap_admission(self):
         copy = source(COPY_ENGINE)
-        align = method_body(copy, "public void AlignFollowerToMaster", "private void FanOutOpening")
-        submit = method_body(copy, "private void SubmitProtectedFollowerEntry", "private bool SubmitProtectionUnits")
-        self.assertIn("FindConfiguredRoute(masterAccount, followerAccount)", align)
-        self.assertIn("SubmitProtectedFollowerEntry(\n                    configuredRoute", align)
-        self.assertIn("TryResolveRouteContractCap(route, instrumentRoot", submit)
-        self.assertIn("totalOpen + totalInFlight + quantity", submit)
-        self.assertIn("FollowerFinalMaxContracts", submit)
+        sync = method_body(copy, "public void SyncFollower", "private void FanOutOpening")
+        submit = method_body(copy, "private FollowerOrderSubmission SubmitFollowerEntry", "private bool SubmitProtectionUnits")
+        self.assertIn("FindConfiguredRoute(masterAccount, followerAccount)", sync)
+        self.assertIn("BeginSyncTail(sync, configuredRoute", sync)
+        self.assertIn("FollowerOrderSubmission submission = SubmitFollowerEntry(", sync)
+        self.assertNotIn("TryResolveRouteContractCap", copy)
+        self.assertNotIn("TryGetTotalOpenContracts", copy)
+        self.assertNotIn("TryGetTotalInFlightOpeningQuantity", copy)
+        self.assertNotIn("FollowerFinalMaxContracts", copy)
 
     def test_replication_requires_a_connected_master_and_truthful_active_route(self):
         copy = source(COPY_ENGINE)
@@ -158,30 +161,23 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("MasterAccountInstance = masterAccount", replication)
         self.assertIn("_copyEngine.Configure(_isReplicatingUi, routes)", replication)
 
-    def test_replication_route_uses_current_rule_projection_when_grid_cap_is_absent(self):
+    def test_replication_route_does_not_admit_copies_from_projected_contract_caps(self):
         replication = source(REPLICATION_UI)
-        resolver = method_body(
-            replication,
-            "private int ResolveFollowerRouteContractCap",
-            "private void AlignAllEnabledFollowersToMaster",
-        )
-        self.assertIn("BuildPortfolioSnapshotAccountRecord(row, account).MaxContracts", resolver)
-        self.assertIn("double.IsNaN(contractCap)", resolver)
-        self.assertIn("double.IsInfinity(contractCap)", resolver)
-        self.assertIn("MaxContracts = followerMaxContracts", replication)
-        self.assertNotIn("MaxContracts = followerRow?.MaxContractsRaw > 0", replication)
+        self.assertNotIn("ResolveFollowerRouteContractCap", replication)
+        self.assertNotIn("BuildPortfolioSnapshotAccountRecord(row, account).MaxContracts", replication)
+        self.assertNotIn("MaxContracts =", replication)
 
     def test_manual_follower_divergence_never_blocks_later_execution_deltas(self):
         copy = source(COPY_ENGINE)
         opening = method_body(copy, "private void FanOutOpening", "private void FanOutCompleteClose")
-        align = method_body(copy, "public void AlignFollowerToMaster", "private void FanOutOpening")
+        sync = method_body(copy, "public void SyncFollower", "private void FanOutOpening")
         self.assertIn("ScaleExecution(context, route.Ratio)", opening)
-        self.assertIn("int expected =", align)
-        self.assertIn("SubmitProtectedFollowerEntry", align)
+        self.assertIn("int expected =", sync)
+        self.assertIn("SubmitFollowerEntry", sync)
         for forbidden in (
             "_suppressedFollowerRoots",
             "SuppressFollowerRoot",
-            "explicit_resync_required",
+            "automatic_sync_required",
             "manual_or_external_divergence",
         ):
             self.assertNotIn(forbidden, copy)
@@ -189,14 +185,18 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
     def test_partial_master_close_is_copied_and_excess_protection_is_trimmed(self):
         copy = source(COPY_ENGINE)
         replication = source(REPLICATION_UI)
-        close = method_body(copy, "private void FanOutCompleteClose", "private string SubmitFollowerClose")
-        submit = method_body(copy, "private string SubmitFollowerClose", "private void SubmitProtectedFollowerEntry")
+        close = method_body(copy, "private void FanOutCompleteClose", "private FollowerOrderSubmission SubmitFollowerClose")
+        submit = method_body(
+            copy,
+            "private FollowerOrderSubmission SubmitFollowerClose",
+            "private void TrySubmitAttributedRecoveryClose",
+        )
         trim = method_body(copy, "private void TrimFollowerProtection", "private void CleanupFlatFollowerOrders")
         state = method_body(copy, "public void ProcessAccountStateUpdate", "public void ProcessFollowerExecution")
         self.assertIn("ScaleExecution(context, route.Ratio)", close)
         self.assertIn("Math.Min(requested, closable)", close)
         self.assertIn("SubmitFollowerClose", close)
-        self.assertIn('CopySignalName + "-X-"', submit)
+        self.assertIn('signalPrefix + "-X-"', submit)
         self.assertIn("units.Sum(unit => unit.Quantity) - Math.Abs(netQuantity)", trim)
         self.assertIn("account.Cancel(cancellations.ToArray())", trim)
         self.assertIn("_copyEngine.ProcessFollowerExecution(account)", replication)
@@ -204,34 +204,198 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertNotIn("PartialFollowerExitUnsupported", copy)
         self.assertNotIn("partial_manual_exit", copy)
 
-    def test_follower_flatten_latch_releases_per_instrument_root(self):
+    def test_copy_engine_never_uses_account_flatten_or_human_orders_for_cleanup(self):
         copy = source(COPY_ENGINE)
-        cleanup = method_body(copy, "private void CleanupFlatFollowerOrders", "private void RequestFollowerFlattenOnce")
-        self.assertIn("submittedRoots", cleanup)
-        self.assertIn("_flattenSubmitted.Remove(accountPrefix + root)", cleanup)
-        self.assertNotIn("if (GlitchReplicationEngine.IsAccountFlat(account))", cleanup)
+        cleanup = method_body(copy, "private void CleanupFlatFollowerOrders", "private bool TryGetRouteSnapshot")
+        self.assertNotIn("account.Flatten", copy)
+        self.assertNotIn("_flattenSubmitted", copy)
+        self.assertIn("ParseFollowerSignalKind(order.Name) != FollowerSignalKind.None", cleanup)
 
-    def test_copy_entries_require_complete_native_master_brackets(self):
+    def test_copy_entries_follow_native_master_execution_without_a_pending_bracket_veto(self):
         text = source(COPY_ENGINE)
-        self.assertIn("TryResolveMasterPlan", text)
-        self.assertIn("PendingMasterCopyTtl", text)
+        opening = method_body(text, "public void ProcessMasterExecution", "public void ProcessMasterOrderUpdate")
+        submit = method_body(text, "private FollowerOrderSubmission SubmitFollowerEntry", "private bool SubmitProtectionUnits")
+        self.assertIn("FanOutOpening(masterAccount, context, routes, plan, masterEntryQuantity)", opening)
+        self.assertIn("TryResolveMasterPlan", opening)
+        self.assertNotIn("TryGetNetQuantityForInstrumentRoot", opening)
+        self.assertNotIn("PendingMasterCopy", text)
+        self.assertNotIn("copy_wait|reason=master_bracket_not_working", text)
+        self.assertNotIn("|| plan == null", submit)
+        self.assertIn("ProtectionAvailable = protectionAvailable", submit)
+        self.assertIn('"|protection=" + (protectionAvailable ? "mirrored" : "not_available")', submit)
         self.assertIn("SubmitProtectionUnits", text)
         self.assertIn("OrderType.StopMarket", text)
         self.assertIn("OrderType.Limit", text)
         self.assertIn("OrderEntry.Automated", text)
 
-    def test_partial_master_fills_wait_for_cumulative_position_and_are_not_order_id_deduped(self):
+    def test_execution_before_bracket_retains_late_protection_identity_without_gating_the_copy(self):
+        copy = source(COPY_ENGINE)
+        opening = method_body(copy, "private void FanOutOpening", "private void FanOutCompleteClose")
+        submit = method_body(copy, "private FollowerOrderSubmission SubmitFollowerEntry", "private bool SubmitProtectionUnits")
+        self.assertIn("SubmitFollowerEntry(", opening)
+        self.assertIn("context.OrderSignalName", opening)
+        self.assertIn("MasterAccountName = masterAccount?.Name?.Trim()", submit)
+        self.assertIn("MasterEntrySignal = masterEntrySignal?.Trim()", submit)
+        self.assertIn("MasterEntryQuantity = Math.Max(0, masterEntryQuantity)", submit)
+        self.assertIn("MasterEntryOrder = masterEntryOrder", submit)
+        self.assertNotIn("return;\n            }\n\n            FanOutOpening", opening)
+
+    def test_late_complete_master_plan_attaches_follower_protection_once(self):
+        copy = source(COPY_ENGINE)
+        master_update = method_body(copy, "public void ProcessMasterOrderUpdate", "public void ProcessFollowerOrderUpdate")
+        attach = method_body(copy, "private void TryAttachLateFollowerProtection", "private void MirrorMasterProtection")
+        self.assertIn("TryAttachLateFollowerProtection(masterAccount, order)", master_update)
+        self.assertIn("lifecycle.MasterEntrySignal", attach)
+        self.assertIn("lifecycle.MasterEntryQuantity", attach)
+        self.assertIn("lifecycle.MasterEntryOrder?.Filled", attach)
+        self.assertIn("!lifecycle.ProtectionAvailable", attach)
+        self.assertIn("lifecycle.ProtectionAvailable = true", attach)
+        self.assertIn("ProcessFollowerOrderUpdate(lifecycle.Account, entryOrder)", attach)
+        self.assertIn("result=late_plan_attached", attach)
+
+    def test_duplicate_master_order_callbacks_do_not_repeat_late_attachment(self):
+        attach = method_body(
+            source(COPY_ENGINE),
+            "private void TryAttachLateFollowerProtection",
+            "private void MirrorMasterProtection",
+        )
+        self.assertIn("!lifecycle.ProtectionAvailable", attach)
+        self.assertIn("if (lifecycle.ProtectionAvailable)\n                        continue;", attach)
+        self.assertEqual(attach.count("ProcessFollowerOrderUpdate(lifecycle.Account, entryOrder)"), 1)
+
+    def test_truly_unprotected_master_stays_copied_without_a_late_protection_failure(self):
+        copy = source(COPY_ENGINE)
+        attach = method_body(copy, "private void TryAttachLateFollowerProtection", "private void MirrorMasterProtection")
+        submit = method_body(copy, "private FollowerOrderSubmission SubmitFollowerEntry", "private bool SubmitProtectionUnits")
+        self.assertNotIn("RaiseCritical", attach)
+        self.assertNotIn("RequestFollowerFlattenOnce", attach)
+        self.assertIn('"not_available"', submit)
+
+    def test_master_stop_and_target_changes_mirror_to_follower_protection(self):
+        mirror = method_body(
+            source(COPY_ENGINE),
+            "private void MirrorMasterProtection",
+            "private void TrimFollowerProtection",
+        )
+        self.assertIn("GlitchReplicationEngine.IsStopLikeOrder(masterOrder)", mirror)
+        self.assertIn("masterOrder.OrderType == OrderType.Limit", mirror)
+        self.assertIn('CopySignalName + (isStop ? "-S-" : "-T-")', mirror)
+        self.assertIn("followerOrder.StopPriceChanged = masterPrice", mirror)
+        self.assertIn("followerOrder.LimitPriceChanged = masterPrice", mirror)
+        self.assertIn("route.FollowerAccount.Change(changes.ToArray())", mirror)
+
+    def test_late_protection_never_uses_an_unlinked_master_plan(self):
+        protection = source(PROTECTION)
+        self.assertIn("candidates = linked;", protection)
+
+    def test_unprotected_recent_copy_recovery_is_observational_not_critical(self):
+        copy = source(COPY_ENGINE)
+        recovery = method_body(
+            copy,
+            "private bool TryRecoverRecentFollowerLifecycle",
+            "private GlitchCopyFollowerRoute FindUniqueConfiguredRouteForFollower",
+        )
+        self.assertIn("ProtectionAvailable = false", recovery)
+        self.assertIn('"not_available_recovered"', recovery)
+        self.assertIn('"|result=" + CleanToken(result)', recovery)
+        self.assertIn("return true;", recovery)
+
+    def test_recent_recovery_requires_persisted_ratio_and_allocation_offset(self):
+        copy = source(COPY_ENGINE)
+        recovery = method_body(
+            copy,
+            "private bool TryRecoverRecentFollowerLifecycle",
+            "private GlitchCopyFollowerRoute FindUniqueConfiguredRouteForFollower",
+        )
+        submit = method_body(
+            copy,
+            "private FollowerOrderSubmission SubmitFollowerEntry",
+            "private bool SubmitProtectionUnits",
+        )
+        self.assertIn("BuildFollowerEntrySignal(", submit)
+        self.assertIn("TryReadFollowerAllocationMetadata(", recovery)
+        self.assertIn("BitConverter.DoubleToInt64Bits(route.Ratio)", recovery)
+        self.assertIn("TryScalePlanSlice(", recovery)
+        self.assertIn("followerAllocationOffset", recovery)
+        self.assertIn("ambiguous_allocation_metadata_recovered", recovery)
+        self.assertIn("ambiguous_route_recovered", recovery)
+        self.assertIn("ambiguous_route_ratio_changed_recovered", recovery)
+        self.assertIn("ambiguous_allocation_slice_recovered", recovery)
+        self.assertNotIn("TryScalePlan(plan, requestedQuantity", recovery)
+
+    def test_partial_master_fills_copy_execution_deltas_and_are_not_order_id_deduped(self):
         copy = source(COPY_ENGINE)
         replication = source(REPLICATION_UI)
         self.assertIn("EntryOrderFilledQuantity", copy)
-        self.assertIn("ResolveContextMasterQuantity(context)", copy)
         self.assertIn("context.EntryOrder?.Filled", copy)
-        self.assertIn("Math.Abs(currentMasterNet) < copyMasterQuantity", copy)
-        self.assertIn("Math.Abs(masterNet) < copyMasterQuantity", copy)
+        self.assertIn("ScaleFollowerQuantity(filled, ratio)", copy)
+        self.assertIn("ResolveFollowerAllocationOffset(context, route.Ratio)", copy)
+        self.assertNotIn("Math.Abs(currentMasterNet) < copyMasterQuantity", copy)
+        self.assertNotIn("Math.Abs(masterNet) < copyMasterQuantity", copy)
         self.assertIn('TryGetNestedPropertyValueAsString(executionObject, "ExecutionId")', replication)
         self.assertNotIn('TryGetNestedPropertyValueAsString(executionObject, "ExecutionId", "Id")', replication)
         self.assertIn("Math.Max(quantity, Math.Max(0, order.Filled))", replication)
         self.assertIn("EntryOrder = order", replication)
+
+    def test_multi_fill_protection_slices_one_aggregate_follower_plan(self):
+        copy = source(COPY_ENGINE)
+        protection = source(PROTECTION)
+        opening = method_body(copy, "private void FanOutOpening", "private void FanOutCompleteClose")
+        sync = method_body(copy, "public void SyncFollower", "private void FanOutOpening")
+        attach = method_body(copy, "private void TryAttachLateFollowerProtection", "private void MirrorMaster")
+        slicing = method_body(
+            protection,
+            "public static bool TryScalePlanSlice",
+            "public static bool IsMasterProtectionExecution",
+        )
+        self.assertIn("FollowerAllocationOffset", copy)
+        self.assertIn("RouteRatio", copy)
+        self.assertIn("ResolveFollowerAllocationOffset(context, route.Ratio)", opening)
+        self.assertIn("Math.Abs(actual)", sync)
+        self.assertIn("TryScalePlanSlice(", attach)
+        self.assertIn("lifecycle.FollowerAllocationOffset", attach)
+        self.assertIn("ScaleFollowerQuantity(plan.MasterQuantity, ratio)", slicing)
+        self.assertIn("TryScalePlan(plan, aggregateFollowerQuantity", slicing)
+        self.assertIn("Math.Min(sliceEnd, sourceEnd)", slicing)
+
+    def test_user_sync_is_two_phase_owned_delta_and_detects_manual_interference(self):
+        copy = source(COPY_ENGINE)
+        replication = source(REPLICATION_UI)
+        sync = method_body(copy, "public void SyncFollower", "private void FanOutOpening")
+        state_update = method_body(
+            copy,
+            "public void ProcessAccountStateUpdate",
+            "public void ProcessFollowerExecution",
+        )
+        group_sync = method_body(
+            replication,
+            "private void SyncGroupFollowers",
+            "private void HandleFollowerEnableUserToggle",
+        )
+        self.assertIn("BeginSyncFlatten", sync)
+        self.assertIn("ProcessSyncLifecycle(sync)", sync)
+        self.assertIn("CatchUpSignalName", sync)
+        self.assertIn("sync.FlattenOrder?.Filled", sync)
+        self.assertIn("sync.TailOrder?.Filled", sync)
+        self.assertIn("CancelSyncOwnedRemainder", sync)
+        self.assertIn("manual_override", sync)
+        self.assertIn("ProcessSyncAccountStateUpdate(account)", state_update)
+        self.assertNotIn("account.Flatten", copy)
+        self.assertNotIn("|group=", group_sync)
+        self.assertIn("|phase=validation|result=", group_sync)
+
+    def test_protection_failure_recovery_is_lifecycle_attributed_and_same_side_capped(self):
+        copy = source(COPY_ENGINE)
+        recovery = method_body(
+            copy,
+            "private void TrySubmitAttributedRecoveryClose",
+            "private FollowerOrderSubmission SubmitFollowerEntry",
+        )
+        self.assertIn("RecoveryCloseSubmitted", recovery)
+        self.assertIn("(followerNet > 0) != lifecycle.IsLong", recovery)
+        self.assertIn("Math.Min(attributableQuantity, Math.Abs(followerNet))", recovery)
+        self.assertIn("manual_override", recovery)
+        self.assertIn("SubmitFollowerClose(", recovery)
 
     def test_each_follower_unit_has_an_independent_native_oco_pair(self):
         body = method_body(
@@ -302,8 +466,9 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("OrderState.Rejected", body)
         self.assertNotIn("OrderState.Cancelled", body)
         self.assertIn("lifecycle.ProtectionFailed = true", body)
-        self.assertIn("RequestFollowerFlattenOnce", body)
-        self.assertIn("no order was retried", body)
+        self.assertIn("TrySubmitAttributedRecoveryClose", body)
+        self.assertIn("manual_override_unattributed", body)
+        self.assertIn("attributableQuantity", body)
 
     def test_replication_off_preserves_existing_protection(self):
         toggle = method_body(
@@ -357,8 +522,9 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             '"FollowerProtectionRejected|" + root + "|" + CleanToken(lifecycle?.EntrySignal ?? signal)',
             copy_engine,
         )
-        self.assertIn("|result=flatten_requested", copy_engine)
-        self.assertNotIn("submitted_pending_confirmation", copy_engine)
+        self.assertIn("|attributable_qty=", copy_engine)
+        self.assertIn("|result=manual_override_unattributed", copy_engine)
+        self.assertNotIn("account.Flatten", copy_engine)
 
     def test_replication_state_is_truthful_and_reload_is_observe_only(self):
         window = source(MAIN_WINDOW)
@@ -369,8 +535,39 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("IsReplicating = IsReplicationEnabledFromExternalSurface()", performance)
         self.assertIn("GlitchShellBridge.ToggleReplication()", chart_trader)
         self.assertNotIn("UseLegacyReplicationEngine", window + source(POLICY_STORE))
-        self.assertNotIn('AlignAllEnabledFollowersToMaster("startup")', window)
+        self.assertNotIn('SyncGroupFollowers("startup")', window)
         self.assertIn("replication_restored|origin=startup|catchup=skipped", window)
+
+    def test_sync_is_only_available_from_the_visible_user_sync_action(self):
+        window = source(MAIN_WINDOW)
+        replication = source(REPLICATION_UI)
+        toggle = method_body(
+            window,
+            "internal bool SetReplicationFromExternalSurface",
+            "internal void ToggleReplicationFromExternalSurface",
+        )
+        enable = method_body(replication, "private void HandleFollowerEnableUserToggle", "private void HandleFollowerRatioUserChange")
+        ratio = method_body(replication, "private void HandleFollowerRatioUserChange", "private void WireReplicationMemberHandlers")
+        master = method_body(window, "private void UpdateGroupMasterSelection", "private void AddFollowerToGroup")
+        self.assertIn('L("dashboard.group.sync", "Sync")', window)
+        self.assertIn("SyncGroupFollowers(group)", window)
+        self.assertIn("replication_sync|origin=user_sync", replication)
+        self.assertIn("_copyEngine.SyncFollower(masterAccount, followerAccount, member.Ratio)", replication)
+        self.assertNotIn("Sync", toggle)
+        self.assertNotIn("Sync", enable)
+        self.assertNotIn("Sync", ratio)
+        self.assertNotIn("Sync", master)
+
+    def test_sync_action_is_localized_for_all_supported_languages(self):
+        rows = {
+            row.split("\t", 1)[0]: row.split("\t")
+            for row in source(LOCALIZATION).splitlines()
+            if row
+        }
+        self.assertEqual(
+            rows["dashboard.group.sync"],
+            ["dashboard.group.sync", "Sync", "Sincronizar", "Sincronizar", "同步", "Synchroniser", "Синхронизировать"],
+        )
 
     def test_addon_and_chart_trader_flatten_all_share_one_fleet_command(self):
         chart_trader = source(ADDON / "GlitchAddOn.ChartTrader.partial.cs")
@@ -381,9 +578,11 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
 
     def test_follower_cleanup_is_narrowly_owned(self):
         text = source(COPY_ENGINE)
-        self.assertIn('StartsWith(CopySignalName + "-E-"', text)
-        self.assertIn('StartsWith(CatchUpSignalName + "-E-"', text)
-        self.assertIn('StartsWith(CopySignalName + "-X-"', text)
+        self.assertIn("ParseFollowerSignalKind", text)
+        self.assertIn('suffix.StartsWith("-E-"', text)
+        self.assertIn('suffix.StartsWith("-X-"', text)
+        self.assertIn("isCopy", text)
+        self.assertIn("isCatchUp", text)
         self.assertNotRegex(text, r"StartsWith\(\s*\"GLT-\"")
         self.assertNotRegex(text, r"Cancel.*Unknown|Flatten.*Unknown")
 
@@ -440,7 +639,10 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         bundle = source(PROP_RULE_BUNDLE)
         encoded_block = bundle.split("const string base64 =", 1)[1].split(";", 1)[0]
         encoded = "".join(re.findall(r'\"([A-Za-z0-9+/=]+)\"', encoded_block))
-        self.assertEqual(base64.b64decode(encoded), PROP_RULES.read_bytes())
+        self.assertEqual(
+            json.loads(base64.b64decode(encoded).decode("utf-8")),
+            json.loads(PROP_RULES.read_text(encoding="utf-8")),
+        )
 
     def test_all_apex_programs_surface_current_copy_policy_information(self):
         rules = {firm["firmId"]: firm for firm in json.loads(source(PROP_RULES))["firms"]}

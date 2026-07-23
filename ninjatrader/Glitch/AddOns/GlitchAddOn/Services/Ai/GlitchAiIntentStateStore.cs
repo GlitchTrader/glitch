@@ -315,20 +315,99 @@ namespace Glitch.Services
                 failure = "intent_state_invalid";
                 return false;
             }
+            bool saved = TryTransition(
+                parsed,
+                state.IntentId,
+                state.BodyHash,
+                current =>
+                {
+                    current.Phase = phase;
+                    current.HttpStatus = httpStatus;
+                    current.ResponseJson = responseJson;
+                    current.UpdatedUtc = DateTime.UtcNow;
+                    return null;
+                },
+                "intent_state",
+                out GlitchAiIntentState authoritative,
+                out failure);
+            if (saved)
+                CopyState(authoritative, state);
+            return saved;
+        }
+
+        public static bool TryFinalizeNonterminal(string intentId, GlitchAiExecutionResult result, out string failure)
+        {
+            failure = null;
+            if (!Guid.TryParse(intentId, out Guid parsed) || result == null)
+            {
+                failure = "intent_finalize_invalid";
+                return false;
+            }
+            return TryTransition(
+                parsed,
+                intentId,
+                null,
+                current =>
+                {
+                    if (!string.Equals(current.Phase, "pending", StringComparison.Ordinal)
+                        && !string.Equals(current.Phase, "execution_started", StringComparison.Ordinal)
+                        && !string.Equals(current.Phase, "execution_visibility_pending", StringComparison.Ordinal))
+                        return "intent_finalize_phase_invalid";
+                    current.Phase = GlitchAiIntentResultContract.GetPhase(result);
+                    if (!current.IsTerminal)
+                        return "intent_finalize_nonterminal_result";
+                    current.HttpStatus = 202;
+                    current.ResponseJson = GlitchAiIntentResultContract.BuildAcceptedJson(intentId, result);
+                    current.UpdatedUtc = DateTime.UtcNow;
+                    return null;
+                },
+                "intent_finalize",
+                out _,
+                out failure);
+        }
+
+        private static bool TryTransition(
+            Guid parsed,
+            string expectedIntentId,
+            string expectedBodyHash,
+            Func<GlitchAiIntentState, string> apply,
+            string failurePrefix,
+            out GlitchAiIntentState authoritative,
+            out string failure)
+        {
+            authoritative = null;
+            failure = null;
             lock (SyncRoot)
             {
-                state.Phase = phase;
-                state.HttpStatus = httpStatus;
-                state.ResponseJson = responseJson;
-                state.UpdatedUtc = DateTime.UtcNow;
                 string path = GetStatePath(parsed);
+                if (!TryLoadPath(path, out GlitchAiIntentState current)
+                    || !string.Equals(current.IntentId, expectedIntentId, StringComparison.OrdinalIgnoreCase)
+                    || (!string.IsNullOrWhiteSpace(expectedBodyHash)
+                        && !string.Equals(current.BodyHash, expectedBodyHash, StringComparison.OrdinalIgnoreCase)))
+                {
+                    failure = failurePrefix + "_identity_changed";
+                    return false;
+                }
+                if (current.IsTerminal)
+                {
+                    authoritative = current;
+                    return true;
+                }
+
+                string transitionFailure = apply == null ? failurePrefix + "_transition_invalid" : apply(current);
+                if (!string.IsNullOrWhiteSpace(transitionFailure))
+                {
+                    failure = transitionFailure;
+                    return false;
+                }
+
                 string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
                 try
                 {
                     using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
                     using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
                     {
-                        writer.Write(Serialize(state));
+                        writer.Write(Serialize(current));
                         writer.Flush();
                         stream.Flush(true);
                     }
@@ -336,11 +415,12 @@ namespace Glitch.Services
                         File.Replace(temporary, path, null);
                     else
                         File.Move(temporary, path);
+                    authoritative = current;
                     return true;
                 }
                 catch (Exception ex)
                 {
-                    failure = "intent_state_write_failed_" + ex.GetType().Name;
+                    failure = failurePrefix + "_write_failed_" + ex.GetType().Name;
                     return false;
                 }
                 finally
@@ -348,6 +428,13 @@ namespace Glitch.Services
                     try { if (File.Exists(temporary)) File.Delete(temporary); } catch { }
                 }
             }
+        }
+
+        private static void CopyState(GlitchAiIntentState source, GlitchAiIntentState target)
+        {
+            target.IntentId = source.IntentId; target.BodyHash = source.BodyHash; target.RawJson = source.RawJson;
+            target.Phase = source.Phase; target.HttpStatus = source.HttpStatus;
+            target.ResponseJson = source.ResponseJson; target.UpdatedUtc = source.UpdatedUtc;
         }
 
         private static string GetStatePath(Guid intentId)

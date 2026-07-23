@@ -198,7 +198,8 @@ Check that Glitch correctly reflects:
 
 Glitch may infer that an account is something like an Apex 25k account.
 
-That can be helpful, but you should still confirm:
+That can be helpful context, but inference alone does not authorize an order, a
+flatten, a quantity change, or an execution veto. You should still confirm:
 
 - the firm is correct
 - the account size is correct
@@ -206,7 +207,9 @@ That can be helpful, but you should still confirm:
 
 ### Why this matters
 
-Risk-management and compliance logic depend on correct account classification.
+Only the specific compliance actions you visibly enable in `Settings` may use
+that classification to mutate an account. Those actions are persisted,
+journaled, scoped, and off by default.
 
 If the imported account profile is wrong, controls may not behave the way you expect.
 
@@ -261,6 +264,12 @@ This is useful when:
 
 The ratio layer is one of the main controls that makes replication safer and more practical across different account types.
 
+A ratio scales each future native master execution delta. It does not create
+extra independent follower entries, and changing a ratio does not repair,
+flatten, or re-enter an existing follower position. Use the visible `Sync`
+action only when you affirmatively want the current follower position aligned
+to the current master position and ratio.
+
 ### Best practice
 
 Start with one small test group first.
@@ -279,17 +288,32 @@ Glitch gives you direct control over when replication is active and how to exit 
 
 The `Replicate` button enables replication from the selected master account to the enabled follower accounts in the group.
 
+Enabling replication, enabling a follower, changing a ratio, or choosing a new
+master changes future routing only. Glitch does not silently catch up existing
+exposure. A manual partial or full close on the master is itself a native master
+execution and is replicated at the configured ratio.
+
 Typical use cases:
 
 - you trade manually on the master account
 - your strategy runs on the master account
 - you want followers to mirror the master according to configured ratios and controls
 
+### Sync
+
+`Sync` is the only catch-up action. One click authorizes one alignment of the
+selected follower to the current master position and ratio. It reports each
+follower outcome. Later manual follower changes remain authoritative and do not
+block the next real master execution.
+
 ### Flatten All
 
 The `Flatten All` button is the emergency/control action for exiting active replicated positions across the group.
 
-Use it when you need to quickly flatten the active workflow.
+Use it when you need to quickly flatten the active workflow. This is the broad
+user-authorized command: it may cancel working orders and flatten the selected
+group. Ordinary replication, Sync, and recovery use exact Glitch-owned deltas
+instead of treating `Flatten All` as implicit permission.
 
 ### Before using either button
 
@@ -317,7 +341,8 @@ These settings live in the `Settings` tab.
 
 ### What these settings are for
 
-The risk/compliance layer helps reduce preventable account damage by enforcing operating rules around risk conditions.
+The risk/compliance layer offers specific optional operating rules. Glitch does
+not enable them merely because AI, replication, or account detection is active.
 
 Examples visible in the current workflow include:
 
@@ -325,16 +350,14 @@ Examples visible in the current workflow include:
 - forcing reduced replication when risk gets tighter
 - flattening an account when unrealized loss exceeds a configured portion of maximum intraday loss
 - locking evaluation accounts when a target equity threshold is reached
+- at 16:59 Eastern, broadly flattening only the exact persisted AI accounts
+  listed beside the separate daily-close checkbox
 
 ### Why this matters
 
-These rules are part of the core Glitch philosophy:
-
-- risk-first before convenience
-
-The goal is not just to replicate trades.
-
-The goal is to replicate with guardrails.
+The core rule is intent-first: human intent overrides Hermes; Hermes intent
+overrides deterministic inference. Optional compliance actions assist only
+after you explicitly enable the corresponding visible control.
 
 ### Important
 
@@ -343,6 +366,10 @@ Review these settings carefully and match them to:
 - your prop firm rules
 - your account type
 - your actual risk tolerance
+
+Leaving a control off means it performs no account mutation. AI enable and
+account allowlisting are not consent to daily close or any other compliance
+action.
 - your group structure
 
 Do not enable rules blindly.

@@ -25,7 +25,7 @@ The goal is an adaptive cognitive operator inside a deterministic operational ha
 
 Hermes owns direction, thesis, timing, master quantity, protected leg geometry, capacity reservation, additions, HOLD, NOTHING, EXIT, MOVE_STOP, MOVE_TP, debriefs, hypotheses, and reversible guidance.
 
-Glitch may reject only invalid or ambiguous policy/account/group/native state, schema/identity/idempotency/ownership violations, contract ceilings, incomplete native protection, invalid tick/market-side geometry, and authoritative Apex liquidation-buffer violations. Ordinary snapshot-to-live movement is not a thesis veto. Followers never constrain Hermes's master sizing decision.
+Glitch may reject only invalid or ambiguous explicit policy/account/group/native state, schema/identity/idempotency/ownership violations, incomplete native protection, invalid tick/market-side geometry, and explicit human-enabled compliance locks. Contract ceilings, Apex liquidation buffers, sessions, and time windows remain observational packet evidence. Ordinary snapshot-to-live movement is not a thesis veto. Followers never constrain Hermes's master sizing decision.
 
 Code must not encode quantities, stop distances, risk percentages, target formulas, setup archetypes, quotas, winners-only additions, grid, or martingale behavior.
 
@@ -34,7 +34,7 @@ Code must not encode quantities, stop distances, risk percentages, target formul
 - Entry legs are independently valid; there is no target ordering or progressively tighter-stop rule.
 - Stable `leg_id` values identify Glitch-owned native protection without exposing broker IDs.
 - Per-leg `protection_updates` change only selected legs. Ambiguous multi-target v2 MOVE_TP fails safely.
-- Stops may tighten or fall back while remaining protective. Widening requires fresh authoritative Apex state and total-downside recomputation; unsafe widening changes nothing.
+- Stops may tighten or fall back when Hermes requests it while remaining on the protective market side. Apex capacity and liquidation-buffer fields remain decision evidence, not a hidden amendment veto.
 
 ## Cadence, delivery, and continuity
 
@@ -59,7 +59,7 @@ Health is observational and reports operating, packet, decision-worker, and lear
 
 ## Stop lines
 
-- Runtime-proof per-leg amendments, safe/unsafe widening, follower mirroring, hidden-window continuity, crash recovery, and final flat/order-free state.
+- Runtime-proof per-leg amendments, protective-side stop/target changes, follower mirroring, hidden-window continuity, crash recovery, and final flat/order-free state.
 - Complete authoritative holiday/special-close and dependency recovery before unattended PA/live claims.
 - Freeze a reconciled performance sample before changing cognition or claiming improvement.
 - Add LIMIT only with place/cancel/replace, TIF/expiry, partial-fill protection, replication, identity, and restart recovery.

@@ -84,6 +84,8 @@ These services are responsible for:
 
 The public docs describe the workflow surface and data model, not the private rule heuristics or enforcement thresholds.
 
+Authority is explicit: human intent overrides Hermes; Hermes intent overrides deterministic inference. Native NinjaTrader facts remain authoritative about positions, orders, executions, and broker rejection. Prop-firm metadata, capacity, sessions, and buffers are observational unless the user enables a specific visible, persisted, scoped Settings action that is off by default.
+
 ### Licensing and localization
 
 The AddOn validates entitlements, keeps a local runtime policy, and loads authored
@@ -132,16 +134,19 @@ Glitch separates operator signals by severity:
 
 Dashboard equity coloring uses neutral text unless net-liq or intratrade drawdown warnings are active. Small negative unrealized PnL stays neutral until it reaches the intratrade drawdown warning threshold.
 
-Replication protectives are account-local native OCO orders. Glitch derives each
-follower's stop/target geometry from the corresponding master leg and follower
-fill, preserves route ratios, and records protection only after submission
-succeeds. Invalid or rejected protection enters the bounded native recovery path;
-it is never treated as a protected position.
+Each native master execution is copied immediately at the configured follower
+ratio without waiting for a bracket. When a complete linked master bracket is
+available, Glitch derives account-local native OCO protection from the
+corresponding master leg and follower fill. A bracket that arrives after the
+execution upgrades the same follower lifecycle exactly once. Invalid or rejected
+protection enters the bounded native recovery path; it is never treated as a
+protected position and never becomes permission to abandon the copy.
 
 Each native master execution, including a manual partial or full close, is copied
 once at the configured follower ratio. Manual follower changes are preserved and
-do not block later master executions. Catch-up is a separate action performed only
-when the user explicitly requests resync.
+do not block later master executions. Replication, follower, ratio, and master
+controls configure future executions only. **Sync** is the only catch-up action
+and runs only when the user clicks it.
 
 ## Summary
 

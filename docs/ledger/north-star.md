@@ -20,7 +20,7 @@ Hermes decides; Glitch validates, executes, protects, replicates, reconciles, an
 - One producer-neutral CopyEngine copies each master execution delta at the configured ratio, owns follower-native OCO protection and close propagation, preserves manual follower changes without blocking later copies, and performs catch-up only on explicit user resync.
 - Hermes owns thesis, direction, master quantity, geometry, timing, scaling, management, and self-review.
 - Inferred policy does not override Hermes intent or an already accepted native master execution.
-- Glitch may reject only factual invalidity, ambiguous native state, ownership, incomplete protection, contract capacity, and authoritative account-survival violations.
+- Glitch may reject only factual invalidity, ambiguous native state, ownership, incomplete protection, explicit human-enabled compliance locks, and structurally unprovable native mutations. Prop-firm capacity, liquidation buffers, sessions, and time windows remain packet evidence unless a visible default-off Settings compliance action is enabled.
 - Code never chooses a strategy, quantity schedule, stop formula, risk percentage, target formula, quota, grid, or martingale behavior.
 - Decisions, receipts, outcomes, journals, episodes, memory, and supervisory review remain attributable through stable IDs.
 - Codex builds and verifies code; it is not a runtime trader.

@@ -224,21 +224,22 @@ class DirectCycleTests(unittest.TestCase):
 
             self.assertEqual(selected["packet_id"], "new")
 
-    def test_unavailable_native_account_state_spends_no_model_call(self):
+    def test_operational_ineligibility_remains_packet_evidence_not_a_model_call_veto(self):
         value = packet()
         for account in value["frames"][-1]["portfolio_snapshot"]["accounts"]:
             account["native_state_available"] = False
+            account["entry_window_open"] = False
+            account["is_risk_locked"] = True
+            account["is_eval_target_locked"] = True
 
         scenario = MODULE.build_scenario(value)
 
-        self.assertFalse(MODULE.any_flat_book_is_entry_eligible(value, scenario))
-        self.assertFalse(MODULE.should_invoke_luna(value, scenario, Path("."), None))
-        value["frames"][-1]["portfolio_snapshot"]["is_replicating"] = True
-        for account in value["frames"][-1]["portfolio_snapshot"]["accounts"]:
-            account["entry_window_open"] = False
-        self.assertFalse(MODULE.should_invoke_luna(
-            value, MODULE.build_scenario(value), Path("."), None
-        ))
+        self.assertTrue(MODULE.should_invoke_luna(value, scenario, Path("."), None))
+        master = scenario["books"][0]["exposure"][0]
+        self.assertFalse(master["native_state_available"])
+        self.assertFalse(master["entry_window_open"])
+        self.assertTrue(master["is_risk_locked"])
+        self.assertTrue(master["is_eval_target_locked"])
 
     def test_read_json_accepts_windows_utf8_bom(self):
         with tempfile.TemporaryDirectory() as root:
@@ -378,7 +379,8 @@ class DirectCycleTests(unittest.TestCase):
         self.assertIn("Avoid staying idle for too long", value)
         self.assertIn("recent pivot or swing", value)
         self.assertIn("live in-progress observations", value)
-        self.assertIn("historical infrastructure or capacity rejection is not a continuing veto", value)
+        self.assertIn("Packet evidence may inform an explicit NOTHING", value)
+        self.assertIn("deterministic policy does not replace Hermes's decision with an inferred veto", value)
 
     def test_prompt_makes_hold_accountable_and_keeps_quantity_adaptive(self):
         value = MODULE.build_prompt(packet(), MODULE.build_scenario(packet()), {})
@@ -668,7 +670,7 @@ class DirectCycleTests(unittest.TestCase):
             }
             MODULE.validate_batch(batch, scenario)
 
-    def test_apex_survival_rejects_contract_valid_geometry_that_reaches_liquidation(self):
+    def test_apex_capacity_evidence_does_not_veto_a_structurally_valid_intent(self):
         scenario = MODULE.build_scenario(packet())
         entry = decision("glitch", "Sim101", 10, "ENTER_LONG")
         entry.update({"quantity": 10, "stop_loss": 19600.0})
@@ -677,8 +679,7 @@ class DirectCycleTests(unittest.TestCase):
             "cycle_id": scenario["cycle_id"],
             "decisions": [entry, decision("glitch-second", "Sim201", 110)],
         }
-        with self.assertRaisesRegex(ValueError, "apex_liquidation_buffer_exceeded"):
-            MODULE.validate_batch(batch, scenario)
+        MODULE.validate_batch(batch, scenario)
 
     def test_adverse_price_same_direction_add_is_not_a_strategy_gate_when_fully_protected(self):
         value = packet()
@@ -719,25 +720,24 @@ class DirectCycleTests(unittest.TestCase):
         })
         scenario = MODULE.build_scenario(value)
         entry = decision("glitch", "Sim101", 22, "ENTER_LONG")
-        with self.assertRaisesRegex(ValueError, "apex_existing_protection_incomplete"):
+        with self.assertRaisesRegex(ValueError, "entry_existing_protection_incomplete"):
             MODULE.validate_batch({
                 "schema_version": "glitch.intent.batch.v1",
                 "cycle_id": scenario["cycle_id"],
                 "decisions": [entry, decision("glitch-second", "Sim201", 23)],
             }, scenario)
 
-    def test_entry_fails_closed_when_account_rule_state_is_unknown(self):
+    def test_missing_account_rule_state_remains_observational(self):
         value = packet()
         value["frames"][-1]["portfolio_snapshot"]["accounts"][0]["prop_firm_id"] = None
         scenario = MODULE.build_scenario(value)
         entry = decision("glitch", "Sim101", 24, "ENTER_LONG")
 
-        with self.assertRaisesRegex(ValueError, "account_rule_state_missing"):
-            MODULE.validate_batch({
-                "schema_version": "glitch.intent.batch.v1",
-                "cycle_id": scenario["cycle_id"],
-                "decisions": [entry, decision("glitch-second", "Sim201", 25)],
-            }, scenario)
+        MODULE.validate_batch({
+            "schema_version": "glitch.intent.batch.v1",
+            "cycle_id": scenario["cycle_id"],
+            "decisions": [entry, decision("glitch-second", "Sim201", 25)],
+        }, scenario)
 
     def test_capacity_has_no_ai_policy_fallback(self):
         value = packet()
@@ -1389,6 +1389,33 @@ class DirectCycleTests(unittest.TestCase):
 
             self.assertFalse(receipt["complete"])
             self.assertEqual(receipt["results"][0]["intent_id"], batch["decisions"][0]["intent_id"])
+
+    def test_pending_executor_keeps_receipt_and_attempt_incomplete_for_same_id_retry(self):
+        with tempfile.TemporaryDirectory() as root:
+            glitch_data = Path(root)
+            exchange = glitch_data / "hermes" / "exchange"
+            glitch_data.mkdir(parents=True, exist_ok=True)
+            (glitch_data / "telemetry.token").write_text("token", encoding="utf-8")
+            batch = {
+                "schema_version": "glitch.intent.batch.v1",
+                "cycle_id": "cycle-pending",
+                "decisions": [decision("glitch", "Sim101", 1)],
+            }
+            MODULE.write_json_atomic(MODULE.model_attempt_path(exchange, batch["cycle_id"]), {
+                "status": "decision_ready",
+            })
+
+            with mock.patch.object(MODULE, "post_intent", return_value={
+                "http_status": 202,
+                "body": {"executor": "pending", "executor_code": "master_entry_submitted"},
+            }):
+                receipt = MODULE.submit_batch(batch, glitch_data, exchange)
+
+            self.assertFalse(receipt["complete"])
+            self.assertEqual(MODULE.receipt_classification(receipt), "transport_uncertain")
+            MODULE.mark_attempt_from_receipt(exchange, batch["cycle_id"], receipt)
+            attempt = MODULE.read_json(MODULE.model_attempt_path(exchange, batch["cycle_id"]))
+            self.assertEqual(attempt["status"], "delivery_incomplete")
 
     def test_duplicate_http_response_is_terminal_delivery_evidence(self):
         with tempfile.TemporaryDirectory() as root:

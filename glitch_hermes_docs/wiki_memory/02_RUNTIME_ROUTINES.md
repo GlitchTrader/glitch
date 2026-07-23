@@ -31,7 +31,7 @@ Allowed actions:
 - EXIT
 - NOTHING
 
-Every entry requires complete protected legs. Current intent v3 can amend named legs independently; Hermes may tighten or safely fall back a stop while it remains protective and total downside stays inside authoritative Apex capacity.
+Every entry requires complete protected legs. Current intent v3 can amend named legs independently; Hermes may tighten or safely fall back a stop while it remains protective. Apex capacity stays visible packet evidence, not a deterministic amendment veto.
 
 ## portfolio_risk_review
 

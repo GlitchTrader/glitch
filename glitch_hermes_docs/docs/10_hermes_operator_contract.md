@@ -26,7 +26,7 @@ Fresh setup leaves trading inactive. The user selects the master/group in Glitch
 
 ## Decision input
 
-Each packet contains five latest paired complete minute frames, continuity and missing-minute metadata, current selected-master state, native protection, authoritative account capacity/buffer fields, valid master quantities, recent attributable history, and policy identity. Missing or ambiguous critical facts remain explicit.
+Each packet contains five latest paired complete minute frames, continuity and missing-minute metadata, current selected-master state, native protection, observed account capacity/buffer/session/lock fields, recent attributable history, and policy identity. Missing or ambiguous critical facts remain explicit.
 
 Hermes treats current acceptance, rejection, structure, excursion, and changed evidence as more important than stale forecasts. It may choose:
 
@@ -50,12 +50,12 @@ Each intent carries stable identity, packet/snapshot identity, route/master iden
 - Every entry leg has an absolute protective stop and profit target on the correct side of live price.
 - Targets need not be ordered and stops need not become progressively tighter.
 - `MOVE_STOP` and `MOVE_TP` use named `protection_updates`; unspecified legs remain unchanged.
-- A stop may tighten or move farther away while protective. Widening requires fresh authoritative Apex state, complete Glitch-owned coverage, point value, and total-downside recomputation.
+- A stop may tighten or move farther away while protective. Capacity and Apex buffer state remain packet evidence rather than a widening veto.
 - v2 entry/no-op/hold/exit/global MOVE_STOP remain compatibility inputs. Multi-target v2 MOVE_TP fails safely.
 
 ## Firewall
 
-Glitch rejects before mutation when policy/scope, schema, identity, idempotency, native state, ownership, instrument metadata, tick/side validity, complete protection, contract capacity, authoritative session state, or Apex liquidation survival cannot be established. Normal movement from snapshot price to market fill is not a cognitive veto.
+Glitch rejects before mutation when explicit policy/scope, schema, identity, idempotency, native state, ownership, instrument metadata, tick/side validity, complete protection, or an explicit human-enabled compliance lock cannot be established. Contract capacity, session state, and Apex liquidation state remain observational. Normal movement from snapshot price to market fill is not a cognitive veto.
 
 Followers and ratios do not constrain Hermes's master quantity. CopyEngine validates and executes each follower route independently. Risk-reducing actions remain available when entry-grade data is absent; unsafe widening causes zero mutation.
 

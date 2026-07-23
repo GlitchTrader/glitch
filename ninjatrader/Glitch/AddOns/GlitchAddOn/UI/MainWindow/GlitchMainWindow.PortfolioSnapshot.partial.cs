@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using Glitch.Services;
 using NinjaTrader.Cbi;
@@ -156,6 +157,7 @@ namespace Glitch.UI
             if (account?.Positions == null)
                 return false;
 
+            Stopwatch collectionLockStopwatch = Stopwatch.StartNew();
             try
             {
                 lock (account.Positions)
@@ -197,6 +199,11 @@ namespace Glitch.UI
                 records.Clear();
                 return false;
             }
+            finally
+            {
+                collectionLockStopwatch.Stop();
+                GlitchHermesExchangeWriter.RecordNativePositionCollectionLockDuration(collectionLockStopwatch.Elapsed);
+            }
         }
 
         private static bool TryBuildPortfolioSnapshotOrders(
@@ -206,6 +213,7 @@ namespace Glitch.UI
             records = new List<GlitchPortfolioSnapshotOrderRecord>();
             if (account?.Orders == null)
                 return false;
+            Stopwatch collectionLockStopwatch = Stopwatch.StartNew();
             try
             {
                 lock (account.Orders)
@@ -239,6 +247,11 @@ namespace Glitch.UI
             {
                 records.Clear();
                 return false;
+            }
+            finally
+            {
+                collectionLockStopwatch.Stop();
+                GlitchHermesExchangeWriter.RecordNativeOrderCollectionLockDuration(collectionLockStopwatch.Elapsed);
             }
         }
     }

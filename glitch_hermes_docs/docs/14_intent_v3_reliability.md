@@ -3,15 +3,14 @@
 `glitch.intent.v3` preserves the authority boundary: Hermes chooses thesis,
 master quantity, independent tranche geometry, timing, and management. Glitch
 validates factual executability, selected-master ownership, complete native OCO
-protection, contract capacity, and authoritative Apex Legacy liquidation
-survival.
+protection, and structurally valid native order construction. Contract capacity
+and Apex Legacy liquidation state remain observational packet evidence.
 
 ## Entries
 
 Entries remain `MARKET` only. Each TP1/TP2/TP3 leg is independently valid when
-its target is on the profit side, its stop is on the protective side, its
-quantity is a positive integral split, and total protected downside fits the
-master account. Targets do not have to be ordered, and later legs do not need
+its target is on the profit side, its stop is on the protective side, and its
+quantity is a positive integral split. Targets do not have to be ordered, and later legs do not need
 progressively tighter stops. A same-direction addition receives a new
 intent-derived correlation and therefore distinct stable leg IDs.
 
@@ -33,11 +32,9 @@ Hermes never receives broker order IDs.
   are actually equal.
 
 A stop may tighten or move farther away. Every requested stop must remain on
-the protective side of live price. Tightening stays available without
-entry-grade account data. Widening requires fresh authoritative Apex state,
-complete Glitch-owned protection coverage, point value, and recomputation of
-downside across every remaining protected contract. Downside at or beyond the
-liquidation buffer is rejected before any order is changed.
+the protective side of live price. Apex state, liquidation buffer, and
+protected-downside calculations remain observational evidence; they do not
+veto a structurally valid amendment.
 
 v2 remains a compatibility input: entries, no-ops, holds, exits, and global
 `MOVE_STOP` retain their behavior. v2 `MOVE_TP` is accepted only when one target
@@ -48,16 +45,35 @@ remains; a multi-target v2 amendment fails safely.
 Each UUID has atomic state under `GlitchData/intents/state`:
 
 ```text
-received → approved/rejected → execution_started → executed/failed
+received → approved/rejected → execution_started → execution_visibility_pending → pending → executed/failed
 ```
 
 The UUID is claimed before firewall/execution. Identical duplicates return the
 stored authoritative response; different content with the same UUID conflicts.
-Native entry correlation is deterministic from the UUID. After an uncertain
-crash, Glitch reconciles that signal and journals rather than blindly submitting
-again. Amendments and exits resume only when the requested native state can be
-proved. Compatible legacy journals are reconstructed into state when possible;
-unbound ambiguity fails closed.
+Native entry and exit correlations are deterministic from the UUID. After an
+uncertain pre-submit crash, Glitch takes two dispatcher snapshots while the
+account order-feed is Connected, records `execution_visibility_pending`, and
+waits a named 30-second native-order visibility settle interval before one
+same-UUID resume. `pending` means Submit may have returned and is
+reconcile-only: it never resumes submission. NinjaTrader exposes Connected
+order-feed state but no cross-process order-sync-complete token, so the bounded
+settle interval is delivery coordination around irreducible broker visibility,
+not strategy or compliance policy. Amendments and exits reconcile the requested
+native state; duplicate named identities or unbound ambiguity fail closed.
+Before an EXIT is submitted, Glitch durably records the exact AI protection
+correlations and close quantity it may replace. Protection remains live until
+the UUID-named native exit is actionable; reconciliation cancels only that
+recorded correlation set after its remaining native quantity still matches.
+Later AI additions, manual changes, missing attribution, and identity conflicts
+remain protected and resolve as ambiguity rather than broad cancellation.
+Cancellation is asynchronous: a terminal EXIT outcome waits for fresh native
+snapshots to show every recorded stop/target terminal or absent. If the named
+exit is absent while flat, the recorded correlation set is still reconciled;
+unrelated AI protection is never cancelled. ENTRY additions likewise persist an
+exact pre-submit per-account baseline (net and existing protected correlations).
+Recovery requires `baseline + named fill` exactly; it may rebuild only the new
+correlation's bracket, while any human or concurrent drift fails closed.
+Compatible legacy journals are reconstructed into state when possible.
 
 ## Observation and learning
 

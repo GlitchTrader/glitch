@@ -61,7 +61,7 @@ EXIT
 NOTHING
 ```
 
-Every entry intent requires complete protected legs. Optional second and third legs are supported where quantity allows. Current intent v3 amends named legs independently and permits a stop to tighten or safely fall back while it remains protective and total downside stays inside authoritative Apex capacity.
+Every entry intent requires complete protected legs. Optional second and third legs are supported. Current intent v3 amends named legs independently and permits a stop to tighten or safely fall back while it remains protective; capacity and buffer signals remain evidence for Hermes, not deterministic vetoes.
 
 ## Routine 3 — portfolio_risk_review
 

@@ -12,8 +12,12 @@ namespace Glitch.Services
         public const string SchemaVersion = "glitch.intent.server.v1";
         public const string BindAddress = "http://127.0.0.1:8788/";
         private const int MaxBodyBytes = 65536;
+        private static readonly TimeSpan NativeOrderVisibilitySettleInterval = TimeSpan.FromSeconds(30);
 
         private static readonly object SyncRoot = new object();
+        // Intent execution may issue native orders. One local owner keeps a same-UUID
+        // replay from crossing claim, approval, and execution-started independently.
+        private static readonly object IntentExecutionSync = new object();
         private static HttpListener _listener;
         private static Thread _listenerThread;
         private static int _isRunning;
@@ -130,6 +134,8 @@ namespace Glitch.Services
                     return;
                 }
 
+                lock (IntentExecutionSync)
+                {
                 if (!string.Equals(method, "POST", StringComparison.OrdinalIgnoreCase))
                 {
                     WriteResponse(context, 405, BuildErrorJson("method_not_allowed", "POST only for /intent"));
@@ -180,26 +186,87 @@ namespace Glitch.Services
                     WriteResponse(context, intentState.HttpStatus > 0 ? intentState.HttpStatus : 200, intentState.ResponseJson);
                     return;
                 }
-                if (!isNewClaim && string.Equals(intentState.Phase, "execution_started", StringComparison.Ordinal))
+                bool reconcileExistingClaim = !isNewClaim
+                    && (string.Equals(intentState.Phase, "execution_started", StringComparison.Ordinal)
+                        || string.Equals(intentState.Phase, "execution_visibility_pending", StringComparison.Ordinal)
+                        || string.Equals(intentState.Phase, "pending", StringComparison.Ordinal));
+                if (reconcileExistingClaim)
                 {
                     GlitchAiExecutionResult reconciled = GlitchAiOrderExecutor.TryReconcileStartedIntent(body, DateTime.UtcNow);
+                    // execution_started is written before Submit.  A restart can
+                    // therefore find neither an order nor a synchronous submit
+                    // result.  Only that pre-submit phase may resume the approved
+                    // intent; pending means Submit returned and is reconcile-only.
+                    if (string.Equals(intentState.Phase, "execution_started", StringComparison.Ordinal)
+                        && (string.Equals(reconciled.Code, "reconcile_entry_not_found", StringComparison.Ordinal)
+                            || string.Equals(reconciled.Code, "reconcile_exit_not_found", StringComparison.Ordinal)))
+                    {
+                        // A single native snapshot can lag a Submit that completed
+                        // before a process crash. Persist one observation-only retry
+                        // point before any resume; this is a state transition, not a
+                        // wall-clock gate.
+                        GlitchAiExecutionJournalWriter.TryAppend(validation.IntentId, reconciled, DateTime.UtcNow);
+                        string visibilityJson = GlitchAiIntentResultContract.BuildAcceptedJson(validation.IntentId, reconciled);
+                        if (!GlitchAiIntentStateStore.TrySavePhase(
+                            intentState,
+                            "execution_visibility_pending",
+                            202,
+                            visibilityJson,
+                            out string visibilityStateFailure))
+                        {
+                            WriteResponse(context, 500, BuildErrorJson("intent_state_failed", visibilityStateFailure));
+                            return;
+                        }
+                        WriteAuthoritativeResponse(context, intentState, 202, visibilityJson);
+                        return;
+                    }
+                    if (string.Equals(intentState.Phase, "execution_visibility_pending", StringComparison.Ordinal)
+                        && (string.Equals(reconciled.Code, "reconcile_entry_not_found", StringComparison.Ordinal)
+                            || string.Equals(reconciled.Code, "reconcile_exit_not_found", StringComparison.Ordinal)))
+                    {
+                        // UiInvoke above is the factual dispatcher/native refresh
+                        // boundary. NinjaTrader exposes no stronger cross-process
+                        // sync-complete fact, so retain the first absence durably
+                        // and require a second request after the bounded settle
+                        // interval before one resume. This is coordination around
+                        // irreducible broker visibility, never a trading policy gate.
+                        TimeSpan elapsed = DateTime.UtcNow - intentState.UpdatedUtc;
+                        if (elapsed < NativeOrderVisibilitySettleInterval)
+                        {
+                            TimeSpan remaining = NativeOrderVisibilitySettleInterval - elapsed;
+                            reconciled = GlitchAiExecutionResult.Pending(
+                                "native_visibility_settling",
+                                "remaining_ms=" + Math.Max(0, (long)Math.Ceiling(remaining.TotalMilliseconds)).ToString(CultureInfo.InvariantCulture)
+                                    + "|native_sync=account_connection_connected_dispatcher_snapshot");
+                            GlitchAiExecutionJournalWriter.TryAppend(validation.IntentId, reconciled, DateTime.UtcNow);
+                            WriteResponse(context, 202, GlitchAiIntentResultContract.BuildAcceptedJson(validation.IntentId, reconciled));
+                            return;
+                        }
+                        reconciled = GlitchAiOrderExecutor.TryExecuteApprovedIntent(body, DateTime.UtcNow);
+                    }
                     GlitchAiExecutionJournalWriter.TryAppend(validation.IntentId, reconciled, DateTime.UtcNow);
-                    string reconciledJson = BuildAcceptedJson(validation.IntentId, reconciled);
-                    string reconciledPhase = string.Equals(reconciled.Status, "failed", StringComparison.Ordinal)
-                        ? "failed"
-                        : "executed";
+                    string reconciledJson = GlitchAiIntentResultContract.BuildAcceptedJson(validation.IntentId, reconciled);
+                    string reconciledPhase = GlitchAiIntentResultContract.GetPhase(reconciled);
                     if (!GlitchAiIntentStateStore.TrySavePhase(intentState, reconciledPhase, 202, reconciledJson, out string reconcileStateFailure))
                     {
                         WriteResponse(context, 500, BuildErrorJson("intent_state_failed", reconcileStateFailure));
                         return;
                     }
-                    WriteResponse(context, 202, reconciledJson);
+                    WriteAuthoritativeResponse(context, intentState, 202, reconciledJson);
                     return;
                 }
 
-                bool resumeApproved = !isNewClaim
+                bool continueApprovedClaim = !isNewClaim
                     && string.Equals(intentState.Phase, "approved", StringComparison.Ordinal);
-                if (!resumeApproved)
+                bool resumeReceivedClaim = !isNewClaim
+                    && string.Equals(intentState.Phase, "received", StringComparison.Ordinal);
+                if (!isNewClaim && !continueApprovedClaim && !resumeReceivedClaim)
+                {
+                    WriteResponse(context, 409, BuildErrorJson("intent_state_phase_unknown", intentState.Phase));
+                    return;
+                }
+
+                if (!continueApprovedClaim)
                 {
                     GlitchAiRiskDecision decision = GlitchAiRiskFirewall.Validate(body, DateTime.UtcNow);
                     if (!GlitchAiJournalBridge.TryRecord(validation.IntentId, body, decision, DateTime.UtcNow))
@@ -233,7 +300,7 @@ namespace Glitch.Services
                             WriteResponse(context, 500, BuildErrorJson("intent_state_failed", rejectedStateFailure));
                             return;
                         }
-                        WriteResponse(context, 422, rejectedJson);
+                        WriteAuthoritativeResponse(context, intentState, 422, rejectedJson);
                         return;
                     }
 
@@ -264,17 +331,16 @@ namespace Glitch.Services
 
                 GlitchAiExecutionResult execution = GlitchAiOrderExecutor.TryExecuteApprovedIntent(body, DateTime.UtcNow);
                 GlitchAiExecutionJournalWriter.TryAppend(validation.IntentId, execution, DateTime.UtcNow);
-                string acceptedJson = BuildAcceptedJson(validation.IntentId, execution);
-                string terminalPhase = string.Equals(execution?.Status, "failed", StringComparison.Ordinal)
-                    ? "failed"
-                    : "executed";
+                string acceptedJson = GlitchAiIntentResultContract.BuildAcceptedJson(validation.IntentId, execution);
+                string terminalPhase = GlitchAiIntentResultContract.GetPhase(execution);
                 if (!GlitchAiIntentStateStore.TrySavePhase(intentState, terminalPhase, 202, acceptedJson, out string terminalStateFailure))
                 {
                     WriteResponse(context, 500, BuildErrorJson("intent_state_failed", terminalStateFailure));
                     return;
                 }
 
-                WriteResponse(context, 202, acceptedJson);
+                WriteAuthoritativeResponse(context, intentState, 202, acceptedJson);
+                }
             }
             catch
             {
@@ -326,19 +392,12 @@ namespace Glitch.Services
                 + "}";
         }
 
-        private static string BuildAcceptedJson(string intentId, GlitchAiExecutionResult execution)
+        private static void WriteAuthoritativeResponse(HttpListenerContext context, GlitchAiIntentState state, int fallbackStatus, string fallbackJson)
         {
-            string executorStatus = execution == null ? "none" : (execution.Status ?? "none");
-            string executorCode = execution == null ? string.Empty : (execution.Code ?? string.Empty);
-            return "{"
-                + "\"schema_version\":" + GlitchSnapshotJson.String("glitch.intent.response.v1") + ","
-                + "\"status\":" + GlitchSnapshotJson.String("accepted") + ","
-                + "\"intent_id\":" + GlitchSnapshotJson.String(intentId) + ","
-                + "\"executor\":" + GlitchSnapshotJson.String(executorStatus) + ","
-                + "\"executor_code\":" + GlitchSnapshotJson.String(executorCode) + ","
-                + "\"created_utc\":" + GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(DateTime.UtcNow))
-                + "}";
+            bool terminal = state != null && state.IsTerminal && !string.IsNullOrWhiteSpace(state.ResponseJson);
+            WriteResponse(context, terminal ? state.HttpStatus : fallbackStatus, terminal ? state.ResponseJson : fallbackJson);
         }
+
 
         private static string BuildFirewallRejectedJson(string intentId, GlitchAiRiskDecision decision)
         {

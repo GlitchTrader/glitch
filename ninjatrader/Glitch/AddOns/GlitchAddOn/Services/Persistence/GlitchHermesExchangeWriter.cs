@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace Glitch.Services
 {
@@ -21,60 +22,219 @@ namespace Glitch.Services
         private const int FramesPerPacket = 5;
         private const int RetainedMinuteFrames = 180;
         private static readonly object SyncRoot = new object();
+        private static DateTime CachedMinuteUtc = DateTime.MinValue;
+        private static bool CachedFrameComplete;
+        private static bool CachedPacketComplete;
+        private static bool PreflightComplete;
+        private static bool NativeCaptureRequired;
+        private static bool BackgroundPublishInFlight;
+        private static DateTime BackgroundPublishMinuteUtc = DateTime.MinValue;
+        private static readonly List<long> DispatcherCaptureSamples = new List<long>();
+        private static readonly List<long> BackgroundPublishSamples = new List<long>();
+        private static readonly List<long> NativePositionCollectionLockSamples = new List<long>();
+        private static readonly List<long> NativeOrderCollectionLockSamples = new List<long>();
+        private static readonly List<long> AnalyticsBusCollectionLockSamples = new List<long>();
+        private static long DispatcherCaptureCount;
+        private static long BackgroundPublishCount;
+        private static long NativePositionCollectionLockCount;
+        private static long NativeOrderCollectionLockCount;
+        private static long AnalyticsBusCollectionLockCount;
+        private static long DispatcherCaptureMaxMilliseconds;
+        private static long BackgroundPublishMaxMilliseconds;
+        private static long NativePositionCollectionLockMaxMilliseconds;
+        private static long NativeOrderCollectionLockMaxMilliseconds;
+        private static long AnalyticsBusCollectionLockMaxMilliseconds;
 
-        public static bool TryPublishMinute(
+        // Called from the NinjaTrader dispatcher. It only owns minute/coalescing
+        // state; all filesystem traversal, hashing, pruning and atomic writes run
+        // on the one queued background lane below.
+        public static bool TryBeginMinutePublish(
             DateTime nowUtc,
+            out bool needsPortfolioCapture,
+            out bool preflightOnly)
+        {
+            needsPortfolioCapture = false;
+            preflightOnly = false;
+            lock (SyncRoot)
+            {
+                ResetMinuteCache(ToMinuteUtc(nowUtc));
+                if (BackgroundPublishInFlight || CachedPacketComplete)
+                    return false;
+                BackgroundPublishInFlight = true;
+                BackgroundPublishMinuteUtc = CachedMinuteUtc;
+                preflightOnly = !PreflightComplete;
+                needsPortfolioCapture = !preflightOnly && NativeCaptureRequired;
+                return true;
+            }
+        }
+
+        public static bool QueuePublishMinute(
+            DateTime nowUtc,
+            bool preflightOnly,
+            string marketSnapshotJson,
             GlitchPortfolioSnapshotCapture portfolioCapture)
+        {
+            DateTime minuteUtc = ToMinuteUtc(nowUtc);
+            WaitCallback publish = _ =>
+            {
+                DateTime startedUtc = DateTime.UtcNow;
+                try
+                {
+                    if (preflightOnly)
+                        TryPreflightMinute(nowUtc);
+                    else
+                        TryPublishMinute(nowUtc, marketSnapshotJson, portfolioCapture);
+                }
+                finally
+                {
+                    RecordBackgroundPublishDuration(DateTime.UtcNow - startedUtc);
+                    lock (SyncRoot)
+                    {
+                        if (BackgroundPublishMinuteUtc == minuteUtc)
+                            BackgroundPublishInFlight = false;
+                    }
+                }
+            };
+            try
+            {
+                if (!ThreadPool.QueueUserWorkItem(publish))
+                {
+                    ClearBackgroundPublishInFlight(minuteUtc);
+                    return false;
+                }
+                return true;
+            }
+            catch
+            {
+                ClearBackgroundPublishInFlight(minuteUtc);
+                return false;
+            }
+        }
+
+        public static void ReleaseMinutePublishOwnership(DateTime nowUtc)
+        {
+            ClearBackgroundPublishInFlight(ToMinuteUtc(nowUtc));
+        }
+
+        public static void RecordDispatcherCaptureDuration(TimeSpan duration)
+        {
+            lock (SyncRoot)
+                RecordDuration(DispatcherCaptureSamples, ref DispatcherCaptureCount, ref DispatcherCaptureMaxMilliseconds, duration);
+        }
+
+        public static void RecordNativePositionCollectionLockDuration(TimeSpan duration)
+        {
+            lock (SyncRoot)
+                RecordDuration(NativePositionCollectionLockSamples, ref NativePositionCollectionLockCount, ref NativePositionCollectionLockMaxMilliseconds, duration);
+        }
+
+        public static void RecordNativeOrderCollectionLockDuration(TimeSpan duration)
+        {
+            lock (SyncRoot)
+                RecordDuration(NativeOrderCollectionLockSamples, ref NativeOrderCollectionLockCount, ref NativeOrderCollectionLockMaxMilliseconds, duration);
+        }
+
+        public static void RecordAnalyticsBusCollectionLockDuration(TimeSpan duration)
+        {
+            lock (SyncRoot)
+                RecordDuration(AnalyticsBusCollectionLockSamples, ref AnalyticsBusCollectionLockCount, ref AnalyticsBusCollectionLockMaxMilliseconds, duration);
+        }
+
+        public static string GetPublisherTimingSummary()
         {
             lock (SyncRoot)
             {
-                try
+                return "dispatcher_capture_count=" + DispatcherCaptureCount.ToString(CultureInfo.InvariantCulture)
+                    + "|dispatcher_capture_max_ms=" + DispatcherCaptureMaxMilliseconds.ToString(CultureInfo.InvariantCulture)
+                    + "|dispatcher_capture_p95_ms=" + Percentile(DispatcherCaptureSamples, 0.95d).ToString(CultureInfo.InvariantCulture)
+                    + "|dispatcher_capture_p99_ms=" + Percentile(DispatcherCaptureSamples, 0.99d).ToString(CultureInfo.InvariantCulture)
+                    + "|background_publish_count=" + BackgroundPublishCount.ToString(CultureInfo.InvariantCulture)
+                    + "|background_publish_max_ms=" + BackgroundPublishMaxMilliseconds.ToString(CultureInfo.InvariantCulture)
+                    + "|background_publish_p95_ms=" + Percentile(BackgroundPublishSamples, 0.95d).ToString(CultureInfo.InvariantCulture)
+                    + "|background_publish_p99_ms=" + Percentile(BackgroundPublishSamples, 0.99d).ToString(CultureInfo.InvariantCulture)
+                    + "|native_position_lock_count=" + NativePositionCollectionLockCount.ToString(CultureInfo.InvariantCulture)
+                    + "|native_position_lock_max_ms=" + NativePositionCollectionLockMaxMilliseconds.ToString(CultureInfo.InvariantCulture)
+                    + "|native_position_lock_p95_ms=" + Percentile(NativePositionCollectionLockSamples, 0.95d).ToString(CultureInfo.InvariantCulture)
+                    + "|native_position_lock_p99_ms=" + Percentile(NativePositionCollectionLockSamples, 0.99d).ToString(CultureInfo.InvariantCulture)
+                    + "|native_order_lock_count=" + NativeOrderCollectionLockCount.ToString(CultureInfo.InvariantCulture)
+                    + "|native_order_lock_max_ms=" + NativeOrderCollectionLockMaxMilliseconds.ToString(CultureInfo.InvariantCulture)
+                    + "|native_order_lock_p95_ms=" + Percentile(NativeOrderCollectionLockSamples, 0.95d).ToString(CultureInfo.InvariantCulture)
+                    + "|native_order_lock_p99_ms=" + Percentile(NativeOrderCollectionLockSamples, 0.99d).ToString(CultureInfo.InvariantCulture)
+                    + "|analytics_bus_lock_count=" + AnalyticsBusCollectionLockCount.ToString(CultureInfo.InvariantCulture)
+                    + "|analytics_bus_lock_max_ms=" + AnalyticsBusCollectionLockMaxMilliseconds.ToString(CultureInfo.InvariantCulture)
+                    + "|analytics_bus_lock_p95_ms=" + Percentile(AnalyticsBusCollectionLockSamples, 0.95d).ToString(CultureInfo.InvariantCulture)
+                    + "|analytics_bus_lock_p99_ms=" + Percentile(AnalyticsBusCollectionLockSamples, 0.99d).ToString(CultureInfo.InvariantCulture);
+            }
+        }
+
+
+        public static bool TryPublishMinute(
+            DateTime nowUtc,
+            string marketSnapshotJson,
+            GlitchPortfolioSnapshotCapture portfolioCapture)
+        {
+            DateTime minuteUtc = ToMinuteUtc(nowUtc);
+            bool frameComplete;
+            lock (SyncRoot)
+            {
+                if (CachedMinuteUtc == minuteUtc && CachedPacketComplete)
+                    return CachedFrameComplete;
+                frameComplete = CachedMinuteUtc == minuteUtc && CachedFrameComplete;
+            }
+
+            bool packetComplete = false;
+            try
+            {
+                string minuteId = minuteUtc.ToString("yyyyMMdd'T'HHmm'Z'", CultureInfo.InvariantCulture);
+                string minuteDirectory = GetGlitchExchangePath("minute-frames");
+                string framePath = Path.Combine(minuteDirectory, minuteId + ".json");
+                if (!frameComplete)
                 {
-                    DateTime minuteUtc = new DateTime(
-                        nowUtc.Year,
-                        nowUtc.Month,
-                        nowUtc.Day,
-                        nowUtc.Hour,
-                        nowUtc.Minute,
-                        0,
-                        DateTimeKind.Utc);
-                    string minuteId = minuteUtc.ToString("yyyyMMdd'T'HHmm'Z'", CultureInfo.InvariantCulture);
-                    string minuteDirectory = GetGlitchExchangePath("minute-frames");
-                    string framePath = Path.Combine(minuteDirectory, minuteId + ".json");
-                    if (File.Exists(framePath))
+                    frameComplete = File.Exists(framePath);
+                    if (!frameComplete)
                     {
-                        TryWriteDecisionPacket(minuteUtc, minuteDirectory);
-                        return true;
+                        if (portfolioCapture == null
+                            || string.IsNullOrWhiteSpace(marketSnapshotJson)
+                            || !GlitchMarketSnapshotWriter.TryWriteCapturedSnapshot(nowUtc, marketSnapshotJson)
+                            || !GlitchPortfolioSnapshotWriter.TryWriteLatest(nowUtc, portfolioCapture, minuteId))
+                            return false;
+
+                        string marketPath = GlitchMarketSnapshotWriter.GetLatestSnapshotPath();
+                        string portfolioPath = GlitchPortfolioSnapshotWriter.GetLatestSnapshotPath();
+                        if (!File.Exists(marketPath) || !File.Exists(portfolioPath))
+                            return false;
+                        string marketJson = File.ReadAllText(marketPath);
+                        string portfolioJson = File.ReadAllText(portfolioPath);
+                        if (!SnapshotMatches(marketJson, minuteId)
+                            || !SnapshotMatches(portfolioJson, minuteId))
+                            return false;
+
+                        Directory.CreateDirectory(minuteDirectory);
+                        WriteAtomic(framePath, BuildFrameJson(minuteId, nowUtc, minuteId, marketJson, portfolioJson));
+                        frameComplete = true;
+                        PruneOldFiles(minuteDirectory, RetainedMinuteFrames);
                     }
-
-                    if (portfolioCapture == null
-                        || !GlitchMarketSnapshotWriter.TryWriteLatest(nowUtc, minuteId)
-                        || !GlitchPortfolioSnapshotWriter.TryWriteLatest(nowUtc, portfolioCapture, minuteId))
-                        return false;
-
-                    string marketPath = GlitchMarketSnapshotWriter.GetLatestSnapshotPath();
-                    string portfolioPath = GlitchPortfolioSnapshotWriter.GetLatestSnapshotPath();
-                    if (!File.Exists(marketPath) || !File.Exists(portfolioPath))
-                        return false;
-
-                    string marketJson = File.ReadAllText(marketPath);
-                    string portfolioJson = File.ReadAllText(portfolioPath);
-                    if (!SnapshotMatches(marketJson, minuteId)
-                        || !SnapshotMatches(portfolioJson, minuteId))
-                        return false;
-
-                    string frameJson = BuildFrameJson(minuteId, nowUtc, minuteId, marketJson, portfolioJson);
-                    Directory.CreateDirectory(minuteDirectory);
-                    WriteAtomic(framePath, frameJson);
-                    PruneOldFiles(minuteDirectory, RetainedMinuteFrames);
-
-                    TryWriteDecisionPacket(minuteUtc, minuteDirectory);
-                    return File.Exists(framePath);
                 }
-                catch
+                packetComplete = TryWriteDecisionPacket(minuteUtc, minuteDirectory);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+            finally
+            {
+                // Only the minute that this background job captured may update its
+                // cache. No filesystem call occurs under SyncRoot.
+                lock (SyncRoot)
                 {
-                    // Snapshot publication is observational and must never interrupt the UI.
-                    return false;
+                    if (CachedMinuteUtc == minuteUtc)
+                    {
+                        CachedFrameComplete = frameComplete;
+                        CachedPacketComplete = packetComplete;
+                        PreflightComplete = packetComplete;
+                        NativeCaptureRequired = !frameComplete;
+                    }
                 }
             }
         }
@@ -84,9 +244,16 @@ namespace Glitch.Services
             return GlitchStateStore.GetDefaultPath(Path.Combine("hermes", "exchange"));
         }
 
-        private static void TryWriteDecisionPacket(DateTime windowCloseUtc, string minuteDirectory)
+        private static bool TryWriteDecisionPacket(DateTime windowCloseUtc, string minuteDirectory)
         {
             string packetId = windowCloseUtc.ToString("yyyyMMdd'T'HHmm'Z'", CultureInfo.InvariantCulture);
+            string packetDirectory = GetGlitchExchangePath("decision-packets");
+            string packetPath = Path.Combine(packetDirectory, packetId + ".json");
+            if (File.Exists(packetPath))
+                return true;
+            if (!Directory.Exists(minuteDirectory))
+                return false;
+
             FileInfo[] selected = new DirectoryInfo(minuteDirectory)
                 .GetFiles("*.json")
                 .Where(file => string.Compare(file.Name, packetId + ".json", StringComparison.Ordinal) <= 0)
@@ -96,7 +263,7 @@ namespace Glitch.Services
                 .ToArray();
             if (selected.Length != FramesPerPacket
                 || !string.Equals(Path.GetFileNameWithoutExtension(selected[selected.Length - 1].Name), packetId, StringComparison.Ordinal))
-                return;
+                return false;
 
             var frameJson = new List<string>(FramesPerPacket);
             var frameIds = new List<string>(FramesPerPacket);
@@ -133,16 +300,15 @@ namespace Glitch.Services
             packet = packet.Substring(0, packet.Length - 1)
                 + ",\"packet_hash\":" + GlitchSnapshotJson.String(packetHash) + "}";
 
-            string packetDirectory = GetGlitchExchangePath("decision-packets");
             Directory.CreateDirectory(packetDirectory);
-            string packetPath = Path.Combine(packetDirectory, packetId + ".json");
             if (File.Exists(packetPath))
-                return;
+                return true;
 
             WriteAtomic(packetPath, packet);
             WriteAtomic(GetGlitchExchangePath("latest-decision-packet.json"), packet);
             AppendPacketEvent(packetId, packetHash, frameIds);
             WriteStatus(packetId, packetHash, windowCloseUtc);
+            return true;
         }
 
         private static string BuildFrameJson(
@@ -226,6 +392,90 @@ namespace Glitch.Services
                 : DateTime.MinValue;
         }
 
+        private static DateTime ToMinuteUtc(DateTime value)
+        {
+            DateTime utc = value.Kind == DateTimeKind.Utc ? value : value.ToUniversalTime();
+            return new DateTime(utc.Year, utc.Month, utc.Day, utc.Hour, utc.Minute, 0, DateTimeKind.Utc);
+        }
+
+        private static void ResetMinuteCache(DateTime minuteUtc)
+        {
+            if (CachedMinuteUtc == minuteUtc)
+                return;
+
+            CachedMinuteUtc = minuteUtc;
+            CachedFrameComplete = false;
+            CachedPacketComplete = false;
+            PreflightComplete = false;
+            NativeCaptureRequired = false;
+        }
+
+        // Background-only immutable artifact check.  A restart therefore avoids
+        // dispatcher/native collection when the current minute already has a
+        // completed frame and packet; an absent frame leases capture to the next
+        // dispatcher tick after this preflight completes.
+        private static bool TryPreflightMinute(DateTime nowUtc)
+        {
+            DateTime minuteUtc = ToMinuteUtc(nowUtc);
+            string minuteId = minuteUtc.ToString("yyyyMMdd'T'HHmm'Z'", CultureInfo.InvariantCulture);
+            bool frameComplete;
+            bool packetComplete;
+            try
+            {
+                frameComplete = File.Exists(Path.Combine(GetGlitchExchangePath("minute-frames"), minuteId + ".json"));
+                packetComplete = File.Exists(Path.Combine(GetGlitchExchangePath("decision-packets"), minuteId + ".json"));
+            }
+            catch
+            {
+                return false;
+            }
+            lock (SyncRoot)
+            {
+                if (CachedMinuteUtc != minuteUtc)
+                    return false;
+                CachedFrameComplete = frameComplete;
+                CachedPacketComplete = packetComplete;
+                PreflightComplete = true;
+                NativeCaptureRequired = !frameComplete && !packetComplete;
+            }
+            return true;
+        }
+
+        private static void RecordBackgroundPublishDuration(TimeSpan duration)
+        {
+            lock (SyncRoot)
+                RecordDuration(BackgroundPublishSamples, ref BackgroundPublishCount, ref BackgroundPublishMaxMilliseconds, duration);
+        }
+
+        private static void ClearBackgroundPublishInFlight(DateTime minuteUtc)
+        {
+            lock (SyncRoot)
+            {
+                if (BackgroundPublishMinuteUtc == minuteUtc)
+                    BackgroundPublishInFlight = false;
+            }
+        }
+
+        private static void RecordDuration(List<long> samples, ref long count, ref long maximum, TimeSpan duration)
+        {
+            long milliseconds = Math.Max(0, (long)Math.Ceiling(duration.TotalMilliseconds));
+            count++;
+            maximum = Math.Max(maximum, milliseconds);
+            samples.Add(milliseconds);
+            if (samples.Count > 64)
+                samples.RemoveAt(0);
+        }
+
+        private static long Percentile(IReadOnlyList<long> samples, double percentile)
+        {
+            if (samples == null || samples.Count == 0)
+                return 0;
+            long[] sorted = samples.OrderBy(value => value).ToArray();
+            int index = Math.Min(sorted.Length - 1, Math.Max(0,
+                (int)Math.Ceiling(sorted.Length * percentile) - 1));
+            return sorted[index];
+        }
+
         private static string ReadJsonOrEmpty(string path)
         {
             try
@@ -305,7 +555,8 @@ namespace Glitch.Services
                 + "\"updated_utc\":" + GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(DateTime.UtcNow)) + ","
                 + "\"latest_packet_id\":" + GlitchSnapshotJson.String(packetId) + ","
                 + "\"latest_packet_hash\":" + GlitchSnapshotJson.String(packetHash) + ","
-                + "\"window_close_utc\":" + GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(windowCloseUtc))
+                + "\"window_close_utc\":" + GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(windowCloseUtc)) + ","
+                + "\"publisher_timing\":" + GlitchSnapshotJson.String(GetPublisherTimingSummary())
                 + "}";
             WriteAtomic(GetGlitchExchangePath("status.json"), status);
         }

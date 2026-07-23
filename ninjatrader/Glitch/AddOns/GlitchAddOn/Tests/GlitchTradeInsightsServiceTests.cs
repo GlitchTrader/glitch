@@ -1,10 +1,230 @@
 #if GLITCH_ADDON_TESTS
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 
 namespace Glitch.Services.Tests
 {
+    [TestFixture]
+    internal sealed class GlitchSyncLifecycleStateTests
+    {
+        [TestCase(-1)]
+        [TestCase(4)]
+        public void OppositeOrOverexposedFollowerFlattensThenCopiesPositiveTwoExactlyOnce(int followerActual)
+        {
+            Assert.That(
+                GlitchSyncLifecycleState.DecideInitial(2, followerActual),
+                Is.EqualTo(GlitchSyncInitialAction.SubmitFlatten));
+            var state = new GlitchSyncLifecycleState(followerActual);
+
+            Assert.That(state.TryBeginFlatten(), Is.True);
+            Assert.That(state.TryBeginFlatten(), Is.False);
+            state.MarkFlattenSubmitted(true);
+            Assert.That(
+                state.ObserveFlatten(0, Math.Abs(followerActual)),
+                Is.EqualTo(GlitchSyncObservation.ContinueTail));
+            Assert.That(state.TryBeginTail(0, 2), Is.True);
+            Assert.That(state.TryBeginTail(0, 2), Is.False);
+            state.MarkTailSubmitted(true);
+            Assert.That(state.ObserveTail(2, 2), Is.EqualTo(GlitchSyncObservation.Completed));
+            Assert.That(state.ObserveTail(2, 2), Is.EqualTo(GlitchSyncObservation.None));
+            Assert.That(state.IsTerminal, Is.True);
+        }
+
+        [Test]
+        public void PartialFlattenAndTailCallbacksWaitWithoutResubmission()
+        {
+            var state = new GlitchSyncLifecycleState(4);
+
+            Assert.That(state.TryBeginFlatten(), Is.True);
+            state.MarkFlattenSubmitted(true);
+            Assert.That(state.ObserveFlatten(3, 1), Is.EqualTo(GlitchSyncObservation.None));
+            Assert.That(state.ObserveFlatten(3, 1), Is.EqualTo(GlitchSyncObservation.None));
+            Assert.That(state.ObserveFlatten(0, 4), Is.EqualTo(GlitchSyncObservation.ContinueTail));
+            Assert.That(state.TryBeginTail(0, 2), Is.True);
+            state.MarkTailSubmitted(true);
+            Assert.That(state.ObserveTail(1, 1), Is.EqualTo(GlitchSyncObservation.None));
+            Assert.That(state.ObserveTail(1, 1), Is.EqualTo(GlitchSyncObservation.None));
+            Assert.That(state.ObserveTail(2, 2), Is.EqualTo(GlitchSyncObservation.Completed));
+        }
+
+        [Test]
+        public void FailedFlattenTerminatesWithoutTail()
+        {
+            var state = new GlitchSyncLifecycleState(-1);
+
+            Assert.That(state.TryBeginFlatten(), Is.True);
+            state.MarkFlattenSubmitted(false);
+            Assert.That(state.IsTerminal, Is.True);
+            Assert.That(state.ObserveFlatten(0, 0), Is.EqualTo(GlitchSyncObservation.None));
+            Assert.That(state.TryBeginTail(0, 2), Is.False);
+        }
+
+        [Test]
+        public void HumanOverrideSupersedesPendingSync()
+        {
+            var flatten = new GlitchSyncLifecycleState(-1);
+            Assert.That(flatten.TryBeginFlatten(), Is.True);
+            flatten.MarkFlattenSubmitted(true);
+            Assert.That(flatten.ObserveFlatten(0, 0), Is.EqualTo(GlitchSyncObservation.ManualOverride));
+            Assert.That(flatten.IsTerminal, Is.True);
+
+            var tail = new GlitchSyncLifecycleState(0);
+            Assert.That(tail.TryBeginTail(0, 2), Is.True);
+            tail.MarkTailSubmitted(true);
+            Assert.That(tail.ObserveTail(1, 0), Is.EqualTo(GlitchSyncObservation.ManualOverride));
+            Assert.That(tail.IsTerminal, Is.True);
+        }
+
+        [Test]
+        public void HumanPartialCloseCannotMasqueradeAsOwnedFlattenProgress()
+        {
+            var state = new GlitchSyncLifecycleState(4);
+
+            Assert.That(state.TryBeginFlatten(), Is.True);
+            state.MarkFlattenSubmitted(true);
+            Assert.That(state.ObserveFlatten(3, 0), Is.EqualTo(GlitchSyncObservation.ManualOverride));
+            Assert.That(state.IsTerminal, Is.True);
+        }
+    }
+
+    [TestFixture]
+    internal sealed class GlitchReplicationProtectionAllocationTests
+    {
+        [Test]
+        public void TwoPartialFillsReceiveDistinctProtectionLegs()
+        {
+            GlitchReplicationProtectionPlan plan = Plan(1, 1);
+
+            Assert.That(
+                GlitchReplicationProtection.TryScalePlanSlice(plan, 1.0, 0, 1, out List<GlitchScaledProtectionLeg> first),
+                Is.True);
+            Assert.That(
+                GlitchReplicationProtection.TryScalePlanSlice(plan, 1.0, 1, 1, out List<GlitchScaledProtectionLeg> second),
+                Is.True);
+            Assert.That(first.Select(leg => leg.SourceToken), Is.EqualTo(new[] { "leg1" }));
+            Assert.That(second.Select(leg => leg.SourceToken), Is.EqualTo(new[] { "leg2" }));
+        }
+
+        [Test]
+        public void FractionalRatioUsesCumulativeAwayFromZeroAllocation()
+        {
+            GlitchReplicationProtectionPlan plan = Plan(1, 1);
+
+            Assert.That(GlitchReplicationProtection.ScaleFollowerQuantity(1, 0.5), Is.EqualTo(1));
+            Assert.That(GlitchReplicationProtection.ScaleFollowerQuantity(2, 0.5), Is.EqualTo(1));
+            Assert.That(
+                GlitchReplicationProtection.TryScalePlanSlice(plan, 0.5, 0, 1, out List<GlitchScaledProtectionLeg> scaled),
+                Is.True);
+            Assert.That(scaled.Select(leg => leg.SourceToken), Is.EqualTo(new[] { "leg1" }));
+            Assert.That(
+                GlitchReplicationProtection.TryScalePlanSlice(plan, 0.5, 1, 1, out _),
+                Is.False);
+        }
+
+        [Test]
+        public void ThreeLegPlanSlicesAcrossOrderedLegBoundaries()
+        {
+            GlitchReplicationProtectionPlan plan = Plan(1, 1, 1);
+
+            Assert.That(
+                GlitchReplicationProtection.TryScalePlanSlice(plan, 1.0, 1, 2, out List<GlitchScaledProtectionLeg> scaled),
+                Is.True);
+            Assert.That(scaled.Select(leg => leg.SourceToken), Is.EqualTo(new[] { "leg2", "leg3" }));
+            Assert.That(scaled.Sum(leg => leg.Quantity), Is.EqualTo(2));
+        }
+
+        [Test]
+        public void SyncExistingQuantitySelectsOnlyMissingTail()
+        {
+            GlitchReplicationProtectionPlan plan = Plan(1, 1, 1);
+
+            Assert.That(
+                GlitchReplicationProtection.TryScalePlanSlice(plan, 1.0, 2, 1, out List<GlitchScaledProtectionLeg> scaled),
+                Is.True);
+            Assert.That(scaled.Select(leg => leg.SourceToken), Is.EqualTo(new[] { "leg3" }));
+        }
+
+        [Test]
+        public void DuplicateAllocationCallbackIsDeterministicAndDoesNotMutatePlan()
+        {
+            GlitchReplicationProtectionPlan plan = Plan(1, 1);
+
+            Assert.That(
+                GlitchReplicationProtection.TryScalePlanSlice(plan, 1.0, 1, 1, out List<GlitchScaledProtectionLeg> first),
+                Is.True);
+            Assert.That(
+                GlitchReplicationProtection.TryScalePlanSlice(plan, 1.0, 1, 1, out List<GlitchScaledProtectionLeg> duplicate),
+                Is.True);
+            Assert.That(duplicate.Select(leg => leg.SourceToken), Is.EqualTo(first.Select(leg => leg.SourceToken)));
+            Assert.That(plan.Legs.Select(leg => leg.MasterQuantity), Is.EqualTo(new[] { 1, 1 }));
+        }
+
+        [Test]
+        public void RecoveryMetadataRetainsRatioTwoAndSecondTrancheOffset()
+        {
+            const string signal =
+                "GLT-COPY-E-acct01-entry001-R4000000000000000-O00000002";
+
+            Assert.That(
+                GlitchCopyEngine.TryReadFollowerAllocationMetadata(signal, out double ratio, out int offset),
+                Is.True);
+            Assert.That(ratio, Is.EqualTo(2.0));
+            Assert.That(offset, Is.EqualTo(2));
+
+            GlitchReplicationProtectionPlan plan = Plan(1, 1);
+            Assert.That(
+                GlitchReplicationProtection.TryScalePlanSlice(plan, ratio, offset, 2, out List<GlitchScaledProtectionLeg> scaled),
+                Is.True);
+            Assert.That(scaled.Select(leg => leg.SourceToken), Is.EqualTo(new[] { "leg2" }));
+            Assert.That(scaled.Sum(leg => leg.Quantity), Is.EqualTo(2));
+        }
+
+        [Test]
+        public void RecoveryMetadataDuplicateIsDeterministicAndLegacySignalIsAmbiguous()
+        {
+            const string signal =
+                "GLT-COPY-E-acct01-entry001-R4000000000000000-O00000002";
+
+            Assert.That(
+                GlitchCopyEngine.TryReadFollowerAllocationMetadata(signal, out double firstRatio, out int firstOffset),
+                Is.True);
+            Assert.That(
+                GlitchCopyEngine.TryReadFollowerAllocationMetadata(signal, out double duplicateRatio, out int duplicateOffset),
+                Is.True);
+            Assert.That(duplicateRatio, Is.EqualTo(firstRatio));
+            Assert.That(duplicateOffset, Is.EqualTo(firstOffset));
+            Assert.That(
+                GlitchCopyEngine.TryReadFollowerAllocationMetadata(
+                    "GLT-COPY-E-acct01-entry001",
+                    out _,
+                    out _),
+                Is.False);
+        }
+
+        private static GlitchReplicationProtectionPlan Plan(params int[] quantities)
+        {
+            var plan = new GlitchReplicationProtectionPlan
+            {
+                MasterQuantity = quantities.Sum(),
+                IsLong = true,
+                TickSize = 0.25
+            };
+            for (int i = 0; i < quantities.Length; i++)
+            {
+                plan.Legs.Add(new GlitchReplicationProtectionLeg
+                {
+                    MasterQuantity = quantities[i],
+                    StopPrice = 100 - i,
+                    TargetPrice = 101 + i,
+                    SourceToken = "leg" + (i + 1)
+                });
+            }
+            return plan;
+        }
+    }
+
     [TestFixture]
     internal sealed class GlitchTradeInsightsServiceTests
     {

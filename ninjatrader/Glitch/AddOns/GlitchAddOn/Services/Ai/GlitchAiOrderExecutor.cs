@@ -14,7 +14,6 @@ namespace Glitch.Services
         public const string SignalTarget = "GLT-AI-T";
         public const string SignalExit = "GLT-AI-X";
         private static readonly TimeSpan ExecutionPriceMaxAge = TimeSpan.FromSeconds(5);
-        private static readonly TimeSpan ProtectionReconcileGrace = TimeSpan.FromSeconds(2);
 
         private static readonly object GroupSync = new object();
         private static readonly Dictionary<string, ExecutionGroupContext> GroupsBySignal =
@@ -141,26 +140,59 @@ namespace Glitch.Services
             Account master = members[0].Account;
             string action = GlitchAiJsonFields.ExtractString(rawJson, "action");
             if (string.Equals(action, "EXIT", StringComparison.Ordinal))
-            {
-                if (!TryGetNetPosition(master, instrument, out int exitNet))
-                    return GlitchAiExecutionResult.Failed("reconcile_exit_position_unknown");
-                return exitNet == 0
-                    ? GlitchAiExecutionResult.Succeeded("reconciled_exit_flat")
-                    : GlitchAiExecutionResult.Failed("reconcile_exit_outcome_ambiguous");
-            }
+                return TryReconcileOwnedExit(master, instrument, GlitchAiJsonFields.ExtractString(rawJson, "intent_id"), 0);
 
             if (string.Equals(action, "ENTER_LONG", StringComparison.Ordinal)
                 || string.Equals(action, "ENTER_SHORT", StringComparison.Ordinal))
             {
                 string correlation = BuildIntentCorrelation(GlitchAiJsonFields.ExtractString(rawJson, "intent_id"));
-                Order entry = FindNamedOrder(master, BuildSignalName(SignalEntry, correlation, 0), instrument);
-                if (entry == null)
-                    return GlitchAiExecutionResult.Failed("reconcile_entry_outcome_ambiguous");
-                if (entry.OrderState == OrderState.Rejected || entry.OrderState == OrderState.Cancelled)
-                    return GlitchAiExecutionResult.Failed("reconciled_entry_terminal_" + entry.OrderState);
-                if (entry.Filled > 0 && !HasCompleteAiProtection(master, instrument, out _))
-                    return GlitchAiExecutionResult.Failed("reconciled_entry_protection_ambiguous");
-                return GlitchAiExecutionResult.Succeeded("reconciled_entry_native_signal", entry.OrderState.ToString());
+                string intentId = GlitchAiJsonFields.ExtractString(rawJson, "intent_id");
+                if (!TryFindNamedOrders(
+                    master,
+                    BuildSignalName(SignalEntry, correlation, 0),
+                    instrument,
+                    out List<Order> matchingEntries))
+                    return GlitchAiExecutionResult.Pending("reconcile_entry_visibility_unavailable");
+                if (matchingEntries.Count == 0)
+                {
+                    // Take a second native snapshot before declaring a crash-before-
+                    // submit signal absent. This is bounded observation only; it does
+                    // not submit, cancel, or use elapsed time as authority.
+                    if (!IsNativeOrderVisibilityReady(master))
+                        return GlitchAiExecutionResult.Pending("reconcile_entry_visibility_unavailable", "account_connection_not_connected");
+                    if (!TryFindNamedOrders(
+                        master,
+                        BuildSignalName(SignalEntry, correlation, 0),
+                        instrument,
+                        out List<Order> confirmation))
+                        return GlitchAiExecutionResult.Pending("reconcile_entry_visibility_unavailable");
+                    if (confirmation.Count != 0)
+                        return GlitchAiExecutionResult.Pending("reconcile_entry_visibility_changing");
+                    return GlitchAiExecutionResult.Pending("reconcile_entry_not_found", "native_entry_absent");
+                }
+                if (matchingEntries.Count != 1)
+                    return GlitchAiExecutionResult.Failed("reconcile_entry_native_identity_ambiguous");
+                if (!GlitchAiEntryBaselinePlanStore.TryLoad(intentId, 0, out GlitchAiEntryBaselinePlan entryPlan))
+                    return GlitchAiExecutionResult.Failed("reconcile_entry_baseline_plan_unavailable");
+                Order entry = matchingEntries[0];
+                if (!TryGetNetPosition(master, instrument, out int currentNet))
+                    return GlitchAiExecutionResult.Failed("reconcile_entry_position_unknown");
+                int entryDirection = entry.OrderAction == OrderAction.Buy ? 1
+                    : entry.OrderAction == OrderAction.SellShort ? -1 : 0;
+                if (entryDirection == 0 || !EntryPlanMatchesNativeOrder(entryPlan, master, instrument, entry, entryDirection))
+                    return GlitchAiExecutionResult.Failed("reconcile_entry_baseline_plan_identity_ambiguous");
+                if (entry.Filled <= 0
+                    && (entry.OrderState == OrderState.Rejected || entry.OrderState == OrderState.Cancelled))
+                    return GlitchAiExecutionResult.Failed("reconciled_entry_terminal_" + entry.OrderState + "_zero_fill");
+                if (entry.Filled <= 0 || !IsTerminalTrackedOrder(entry))
+                    return GlitchAiExecutionResult.Pending("reconcile_entry_pending", entry.OrderState.ToString());
+                int expectedNet = entryPlan.BaselineNet + (entryDirection * entry.Filled);
+                if (currentNet != expectedNet
+                    || !HasExactBaselineProtection(master, instrument, entryPlan))
+                    return GlitchAiExecutionResult.Failed("reconcile_entry_superseded_manual_or_concurrent_intent");
+                if (HasExactCorrelationOwnedProtection(master, instrument, correlation, entry.Filled, entryDirection))
+                    return GlitchAiExecutionResult.Succeeded("reconciled_entry_native_protected");
+                return TryRecoverReconciledEntryProtection(rawJson, master, instrument, entry, correlation);
             }
 
             if (!HasCompleteAiProtection(master, instrument, out List<Order> stops, out List<Order> targets))
@@ -218,6 +250,115 @@ namespace Glitch.Services
             return GlitchAiExecutionResult.Failed("reconcile_action_unsupported", action);
         }
 
+        private static GlitchAiExecutionResult TryRecoverReconciledEntryProtection(
+            string rawJson,
+            Account account,
+            Instrument instrument,
+            Order entry,
+            string correlation)
+        {
+            string intentId = GlitchAiJsonFields.ExtractString(rawJson, "intent_id");
+            if (!GlitchAiEntryBaselinePlanStore.TryLoad(intentId, 0, out GlitchAiEntryBaselinePlan baselinePlan))
+                return GlitchAiExecutionResult.Failed("reconcile_entry_baseline_plan_unavailable");
+            if (HasOwnedCorrelationProtection(account, instrument, correlation))
+            {
+                if (!IsNativeOrderVisibilityReady(account))
+                    return GlitchAiExecutionResult.Pending("reconcile_entry_visibility_unavailable", "account_connection_not_connected");
+                if (!TryCancelActiveOwnedProtection(account, instrument, new HashSet<string>(new[] { correlation }, StringComparer.OrdinalIgnoreCase)))
+                    return GlitchAiExecutionResult.Pending("reconcile_entry_protection_cancel_request_failed");
+                if (!ArePlannedProtectionOrdersTerminalOrAbsent(account, instrument, new HashSet<string>(new[] { correlation }, StringComparer.OrdinalIgnoreCase)))
+                    return GlitchAiExecutionResult.Pending("reconcile_entry_protection_cancel_pending");
+            }
+            return TryCloseReconciledEntryDelta(account, instrument, entry, correlation, baselinePlan);
+        }
+
+        private static GlitchAiExecutionResult TryCloseReconciledEntryDelta(
+            Account account, Instrument instrument, Order entry, string correlation, GlitchAiEntryBaselinePlan plan)
+        {
+            if (!IsNativeOrderVisibilityReady(account))
+                return GlitchAiExecutionResult.Pending("reconcile_entry_visibility_unavailable", "account_connection_not_connected");
+            string closeSignal = BuildSignalName(SignalExit, correlation, 0);
+            if (!TryFindNamedOrders(account, closeSignal, instrument, out List<Order> closes))
+                return GlitchAiExecutionResult.Pending("reconcile_entry_visibility_unavailable");
+            if (closes.Count > 1)
+                return GlitchAiExecutionResult.Failed("reconcile_entry_recovery_close_identity_ambiguous");
+            if (closes.Count == 1)
+            {
+                Order close = closes[0];
+                if (!TryGetNetPosition(account, instrument, out int net))
+                    return GlitchAiExecutionResult.Failed("reconcile_entry_position_unknown");
+                if (close.OrderState == OrderState.Filled)
+                {
+                    GlitchAiExecutionResult terminal = close.Quantity == entry.Filled
+                        && net == plan.BaselineNet && HasExactBaselineProtection(account, instrument, plan)
+                        && ArePlannedProtectionOrdersTerminalOrAbsent(account, instrument,
+                            new HashSet<string>(new[] { correlation }, StringComparer.OrdinalIgnoreCase))
+                        ? GlitchAiExecutionResult.Failed("reconciled_entry_protection_failed_delta_closed")
+                        : GlitchAiExecutionResult.Failed("reconcile_entry_superseded_manual_or_concurrent_intent");
+                    GlitchAiIntentStateStore.TryFinalizeNonterminal(plan.IntentId, terminal, out _);
+                    return terminal;
+                }
+                if (close.OrderState == OrderState.Rejected || close.OrderState == OrderState.Cancelled)
+                {
+                    GlitchAiExecutionResult terminal = GlitchAiExecutionResult.Failed("reconcile_entry_recovery_close_terminal_" + close.OrderState);
+                    GlitchAiIntentStateStore.TryFinalizeNonterminal(plan.IntentId, terminal, out _);
+                    return terminal;
+                }
+                return GlitchAiExecutionResult.Pending("reconcile_entry_recovery_close_pending", close.OrderState.ToString());
+            }
+            if (!TryGetNetPosition(account, instrument, out int expectedNet)
+                || expectedNet != plan.BaselineNet + (plan.EntryDirection * entry.Filled)
+                || !HasExactBaselineProtection(account, instrument, plan))
+                return GlitchAiExecutionResult.Failed("reconcile_entry_superseded_manual_or_concurrent_intent");
+            if (!string.IsNullOrWhiteSpace(plan.RecoveryCloseSignal))
+            {
+                if (!string.Equals(plan.RecoveryCloseSignal, closeSignal, StringComparison.OrdinalIgnoreCase)
+                    || plan.RecoveryCloseQuantity != entry.Filled)
+                    return GlitchAiExecutionResult.Failed("reconcile_entry_recovery_close_identity_ambiguous");
+                if (!TryFindNamedOrders(account, closeSignal, instrument, out List<Order> confirmation))
+                    return GlitchAiExecutionResult.Pending("reconcile_entry_visibility_unavailable");
+                if (confirmation.Count != 0)
+                    return confirmation.Count == 1
+                        ? GlitchAiExecutionResult.Pending("reconcile_entry_recovery_close_visibility_changing")
+                        : GlitchAiExecutionResult.Failed("reconcile_entry_recovery_close_identity_ambiguous");
+                DateTime startedUtc = plan.RecoveryCloseStartedUtc ?? DateTime.UtcNow;
+                if (DateTime.UtcNow - startedUtc < TimeSpan.FromSeconds(30))
+                    return GlitchAiExecutionResult.Pending("reconcile_entry_recovery_close_visibility_settling");
+                if (plan.RecoveryCloseResumeUsed
+                    || !GlitchAiEntryBaselinePlanStore.TryMarkRecoveryCloseResumeUsed(plan.IntentId, plan.AccountIndex, out plan))
+                    return GlitchAiExecutionResult.Pending("reconcile_entry_recovery_close_absent_after_resume");
+            }
+            else if (!GlitchAiEntryBaselinePlanStore.TryBeginRecoveryClose(
+                plan.IntentId, plan.AccountIndex, closeSignal, entry.Filled, DateTime.UtcNow, out plan))
+                return GlitchAiExecutionResult.Pending("reconcile_entry_recovery_close_plan_pending");
+            OrderAction action = plan.EntryDirection > 0 ? OrderAction.Sell : OrderAction.BuyToCover;
+            try
+            {
+                Order close = CreateExitOrder(account, instrument, action, OrderType.Market, entry.Filled, 0, 0, string.Empty, closeSignal);
+                if (close == null)
+                    return GlitchAiExecutionResult.Failed("reconcile_entry_recovery_close_create_failed");
+                account.Submit(new[] { close });
+                return GlitchAiExecutionResult.Pending("reconcile_entry_recovery_close_submitted");
+            }
+            catch (Exception ex)
+            {
+                return GlitchAiExecutionResult.Pending("reconcile_entry_recovery_close_ambiguous", ex.GetType().Name);
+            }
+        }
+
+        private static bool HasOwnedCorrelationProtection(Account account, Instrument instrument, string correlation)
+        {
+            if (!TrySnapshotOrders(account, out Order[] orders))
+                return true;
+            string stopPrefix = BuildSignalName(SignalStop, correlation, 0);
+            string targetPrefix = BuildSignalName(SignalTarget, correlation, 0);
+            return orders.Any(order => order != null && SameInstrument(order.Instrument, instrument)
+                && (string.Equals(order.Name, stopPrefix, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(order.Name, targetPrefix, StringComparison.OrdinalIgnoreCase)
+                    || order.Name.StartsWith(stopPrefix + "-", StringComparison.OrdinalIgnoreCase)
+                    || order.Name.StartsWith(targetPrefix + "-", StringComparison.OrdinalIgnoreCase)));
+        }
+
         public static void ProcessAccountStateUpdate(Account account)
         {
             if (account == null)
@@ -260,42 +401,6 @@ namespace Glitch.Services
                 if (entry != null)
                     ReconcileEntryProtection(group, accountIndex, entry, "account_state_update");
 
-                bool protectionSubmitted;
-                lock (GroupSync)
-                    protectionSubmitted = group.ProtectionSubmitted != null
-                        && accountIndex < group.ProtectionSubmitted.Length
-                        && group.ProtectionSubmitted[accountIndex];
-                if (!group.RecoveryStarted
-                    && !protectionSubmitted
-                    && DateTime.UtcNow - group.EntrySubmittedUtc >= ProtectionReconcileGrace)
-                {
-                    if (!TryGetNetPosition(account, group.Instrument, out int netPosition))
-                    {
-                        GlitchAiExecutionJournalWriter.TryAppend(
-                            group.IntentId,
-                            GlitchAiExecutionResult.Failed(
-                                "master_position_state_unavailable",
-                                "account=" + CleanToken(account.Name)
-                                    + "|correlation=" + group.Correlation),
-                            DateTime.UtcNow);
-                        RecoverGroup(group, "position_state_unavailable_" + account.Name);
-                        TryCompleteGroup(group);
-                        continue;
-                    }
-                    if (netPosition == 0)
-                    {
-                        TryCompleteGroup(group);
-                        continue;
-                    }
-                    GlitchAiExecutionJournalWriter.TryAppend(
-                        group.IntentId,
-                        GlitchAiExecutionResult.Failed(
-                            "master_protection_reconcile_timeout",
-                            "account=" + CleanToken(account.Name)
-                                + "|correlation=" + group.Correlation),
-                        DateTime.UtcNow);
-                    RecoverGroup(group, "protection_reconcile_timeout_" + account.Name);
-                }
                 TryCompleteGroup(group);
             }
         }
@@ -470,9 +575,6 @@ namespace Glitch.Services
                 return GlitchAiExecutionResult.Failed("group_snapshot_invalid", snapshotFailure);
             }
 
-            if (!GlitchAiRiskFirewall.TryComputeTradeRiskUsd(rawJson, instrumentRoot, action, snapshotMarketPrice, out _))
-                return GlitchAiExecutionResult.Failed("group_risk_not_computable");
-
             GlitchInstrumentMetadata metadata;
             if (!GlitchInstrumentMetadataService.TryResolve(instrument, out metadata)
                 || metadata == null
@@ -543,7 +645,6 @@ namespace Glitch.Services
 
             bool riskLocked;
             bool evalTargetLocked;
-            string portfolioAccountJson;
             string portfolioFailure;
             if (!GlitchAiPortfolioSnapshotReader.TryGetFreshRiskState(
                 masterAccount.Name,
@@ -552,7 +653,7 @@ namespace Glitch.Services
                 out riskLocked,
                 out evalTargetLocked,
                 out _,
-                out portfolioAccountJson,
+                out _,
                 out portfolioFailure))
                 return GlitchAiExecutionResult.Failed("master_portfolio_snapshot_invalid", portfolioFailure);
             if (riskLocked)
@@ -560,64 +661,7 @@ namespace Glitch.Services
             if (evalTargetLocked)
                 return GlitchAiExecutionResult.Failed("master_account_eval_target_locked", masterAccount.Name);
 
-            string propFirmId = GlitchAiJsonFields.ExtractString(portfolioAccountJson, "prop_firm_id");
-            string ruleStatus = GlitchAiJsonFields.ExtractString(portfolioAccountJson, "rule_status");
-            if (string.IsNullOrWhiteSpace(propFirmId) || string.IsNullOrWhiteSpace(ruleStatus))
-                return GlitchAiExecutionResult.Failed("account_rule_state_missing", masterAccount.Name);
-            bool isApexLegacyEval = string.Equals(propFirmId, "ApexTraderFunding", StringComparison.OrdinalIgnoreCase)
-                && string.Equals(ruleStatus, "Eval", StringComparison.OrdinalIgnoreCase);
-            if (isApexLegacyEval)
-            {
-                if (!GlitchAiJsonFields.TryExtractNumber(portfolioAccountJson, "buffer_margin", out double bufferMargin)
-                    || bufferMargin <= 0)
-                    return GlitchAiExecutionResult.Failed("apex_liquidation_buffer_missing", masterAccount.Name);
-                if (!GlitchAiRiskFirewall.TryComputeTradeRiskUsd(
-                    rawJson,
-                    instrumentRoot,
-                    action,
-                    liveExecutionPrice,
-                    out double liveTradeRiskUsd))
-                    return GlitchAiExecutionResult.Failed("apex_protected_downside_unavailable", "live_trade_risk");
-                if (!GlitchAiPortfolioSnapshotReader.TryComputeOwnedProtectedDownsideUsdFromAccountBlock(
-                    portfolioAccountJson,
-                    instrumentRoot,
-                    liveExecutionPrice,
-                    metadata.PointValue,
-                    out double existingProtectedDownsideUsd,
-                    out string protectionFailure))
-                    return GlitchAiExecutionResult.Failed("apex_protected_downside_unavailable", protectionFailure);
-                double plannedProtectedDownsideUsd = existingProtectedDownsideUsd + liveTradeRiskUsd;
-                if (plannedProtectedDownsideUsd >= bufferMargin)
-                {
-                    return GlitchAiExecutionResult.Failed(
-                        "apex_liquidation_buffer_exceeded",
-                        "phase=execution|planned_downside_usd="
-                            + plannedProtectedDownsideUsd.ToString("F2", CultureInfo.InvariantCulture)
-                            + "|buffer_margin_usd="
-                            + bufferMargin.ToString("F2", CultureInfo.InvariantCulture));
-                }
-            }
-            if (!GlitchAiJsonFields.TryExtractNumber(portfolioAccountJson, "max_contracts", out double maxContracts)
-                || maxContracts < 1)
-                return GlitchAiExecutionResult.Failed("master_contract_ceiling_missing", masterAccount.Name);
-            int masterContractCeiling = (int)Math.Floor(maxContracts);
-            if (!TryGetTotalOpenContracts(masterAccount, out int masterTotalOpenContracts))
-                return GlitchAiExecutionResult.Failed("master_positions_unavailable", masterAccount.Name);
-            if (masterTotalOpenContracts + masterQuantity > masterContractCeiling)
-                return GlitchAiExecutionResult.Failed(
-                    "max_contracts_exceeded_at_execution",
-                    (masterTotalOpenContracts + masterQuantity).ToString(CultureInfo.InvariantCulture));
-
             OrderAction entryAction = isLong ? OrderAction.Buy : OrderAction.SellShort;
-            GlitchAiTradingWindowStatus finalTradingWindow = GlitchAiTradingWindow.Evaluate(
-                DateTime.UtcNow,
-                GlitchAiJsonFields.ExtractString(portfolioAccountJson, "trading_start_time_et"),
-                GlitchAiJsonFields.ExtractString(portfolioAccountJson, "trading_end_time_et"));
-            if (!finalTradingWindow.IsValid)
-                return GlitchAiExecutionResult.Failed("trading_window_unavailable_at_execution", finalTradingWindow.Failure);
-            if (!finalTradingWindow.IsEntryAllowed)
-                return GlitchAiExecutionResult.Failed("trading_window_closed_at_execution");
-
             string correlation = BuildIntentCorrelation(intentId);
             ExecutionGroupMember masterMember = members[0];
             var protectionLegs = new List<StructuralProtectionLeg>
@@ -659,11 +703,20 @@ namespace Glitch.Services
                 ProtectionLegs = protectionLegs,
                 EntrySubmissionStarted = new bool[1],
                 ProtectionSubmitted = new bool[1],
-                RecoveryFlattenSubmitted = new bool[1],
                 EntrySubmittedUtc = DateTime.UtcNow
             };
 
             string entrySignal = BuildSignalName(SignalEntry, correlation, 0);
+            if (!TryPrepareEntryBaselinePlan(
+                intentId,
+                0,
+                masterMember.Account,
+                instrument,
+                entrySignal,
+                requestedDirection,
+                masterCurrentNet,
+                out string baselineFailure))
+                return GlitchAiExecutionResult.Failed("master_entry_baseline_plan_unavailable", baselineFailure);
             Order entryOrder = CreateEntryOrder(masterMember.Account, instrument, entryAction, masterMember.Quantity, entrySignal);
             if (entryOrder == null)
                 return GlitchAiExecutionResult.Failed("master_entry_create_failed", masterMember.Account.Name);
@@ -686,7 +739,7 @@ namespace Glitch.Services
                 lock (GroupSync)
                     recoveryStarted = group.RecoveryStarted;
                 if (recoveryStarted)
-                    return GlitchAiExecutionResult.Failed("master_submit_recovery_started", masterMember.Account.Name);
+                    return GlitchAiExecutionResult.Pending("master_submit_recovery_pending", masterMember.Account.Name);
                 if (IsRejected(entryOrder))
                 {
                     RecoverGroup(group, "immediate_submit_reject_" + masterMember.Account.Name);
@@ -699,7 +752,7 @@ namespace Glitch.Services
                 return GlitchAiExecutionResult.Failed("group_submit_exception", ex.Message);
             }
 
-            return GlitchAiExecutionResult.Succeeded(
+            return GlitchAiExecutionResult.Pending(
                 "master_entry_submitted",
                 "group=" + CleanToken(groupId)
                     + "|correlation=" + correlation
@@ -846,7 +899,8 @@ namespace Glitch.Services
             }
 
             GlitchAiExecutionResult protection = TrySubmitStructuralProtection(group, accountIndex);
-            if (!string.Equals(protection.Status, "submitted", StringComparison.Ordinal))
+            if (!string.Equals(protection.Code, "group_structural_brackets_submitted", StringComparison.Ordinal)
+                && !string.Equals(protection.Code, "group_structural_brackets_already_submitted", StringComparison.Ordinal))
             {
                 GlitchAiExecutionJournalWriter.TryAppend(group.IntentId, protection, DateTime.UtcNow);
                 RecoverGroup(
@@ -874,8 +928,7 @@ namespace Glitch.Services
             Account account = group.Accounts[accountIndex];
             Order entry = group.Orders[offset];
             if (account == null || entry == null
-                || entry.OrderState != OrderState.Filled
-                || entry.Filled != entry.Quantity
+                || entry.Filled <= 0
                 || entry.AverageFillPrice <= 0)
                 return GlitchAiExecutionResult.Failed("group_entry_fill_incomplete");
 
@@ -998,38 +1051,97 @@ namespace Glitch.Services
             string groupId,
             string intentId)
         {
-            var failures = new List<string>();
-            foreach (Account account in accounts)
+            string exitCorrelation = BuildIntentCorrelation(intentId);
+            var plans = new List<OwnedExitPlan>();
+            for (int accountIndex = 0; accountIndex < accounts.Count; accountIndex++)
             {
+                Account account = accounts[accountIndex];
+                string exitSignal = BuildSignalName(SignalExit, exitCorrelation, accountIndex);
+                if (!TryFindNamedOrders(account, exitSignal, instrument, out List<Order> existingExits))
+                    return GlitchAiExecutionResult.Pending("group_exit_visibility_unavailable", account.Name);
+                if (existingExits.Count > 0)
+                    return TryReconcileOwnedExit(account, instrument, intentId, accountIndex);
                 if (!TryGetNetPosition(account, instrument, out int net))
                     return GlitchAiExecutionResult.Failed("group_exit_position_state_unavailable", account.Name);
                 if (net == 0)
-                    continue;
-                if (!HasCompleteAiProtection(account, instrument, out _))
-                    return GlitchAiExecutionResult.Failed("group_exit_not_fully_ai_owned", account.Name);
+                    return GlitchAiExecutionResult.Failed("group_exit_human_override_flat", account.Name);
+                if (!TryCollectActiveOwnedExposure(account, instrument, out ActiveOwnedExposure owned, out string ownershipFailure)
+                    || owned.Direction != Math.Sign(net)
+                    || owned.Quantity != Math.Abs(net))
+                    return GlitchAiExecutionResult.Failed(
+                        "group_exit_superseded_manual_override",
+                        "account=" + CleanToken(account.Name) + "|reason=" + CleanToken(ownershipFailure));
+                OrderAction closeAction = owned.Direction > 0 ? OrderAction.Sell : OrderAction.BuyToCover;
+                Order close = CreateExitOrder(
+                    account,
+                    instrument,
+                    closeAction,
+                    OrderType.Market,
+                    owned.Quantity,
+                    0,
+                    0,
+                    string.Empty,
+                    exitSignal);
+                if (close == null)
+                    return GlitchAiExecutionResult.Failed("group_exit_owned_close_create_failed", account.Name);
+                plans.Add(new OwnedExitPlan
+                {
+                    Account = account,
+                    Order = close,
+                    Correlations = owned.Correlations,
+                    Direction = owned.Direction,
+                    AccountIndex = accountIndex
+                });
             }
 
-            foreach (Account account in accounts)
+            // Commit the exact correlations before native Submit. A restart can
+            // then distinguish this EXIT's protection from a later AI addition.
+            foreach (OwnedExitPlan plan in plans)
             {
-                try
+                if (!GlitchAiExitOwnershipPlanStore.TryPersist(new GlitchAiExitOwnershipPlan
                 {
-                    account.Flatten(new[] { instrument });
-                }
-                catch (Exception ex)
-                {
-                    failures.Add(account.Name + ":" + ex.GetType().Name);
-                    GlitchAiExecutionJournalWriter.TryAppend(
-                        intentId,
-                        GlitchAiExecutionResult.Failed("group_exit_account_failed", account.Name + "|" + ex.Message),
-                        DateTime.UtcNow);
-                }
+                    IntentId = intentId,
+                    AccountIndex = plan.AccountIndex,
+                    AccountName = plan.Account.Name,
+                    InstrumentName = instrument.FullName,
+                    ExitSignal = plan.Order.Name,
+                    Quantity = plan.Order.Quantity,
+                    Direction = plan.Direction,
+                    Correlations = new HashSet<string>(plan.Correlations, StringComparer.OrdinalIgnoreCase)
+                }, out string planFailure))
+                    return GlitchAiExecutionResult.Failed("group_exit_ownership_plan_unavailable", planFailure);
             }
 
-            if (failures.Count > 0)
-                return GlitchAiExecutionResult.Failed("group_exit_partial_failure", string.Join(",", failures));
+            // Submit the deterministic exit while native protection remains live.
+            // A Submit return is not enough to remove OCO protection: NinjaTrader
+            // must first expose this UUID-named exit in an actionable native state.
+            // A thrown, initialized, or otherwise unobservable order leaves every
+            // protection order intact for same-UUID reconciliation rather than
+            // turning broker visibility ambiguity into an unprotected position.
+            try
+            {
+                foreach (OwnedExitPlan plan in plans)
+                {
+                    plan.Account.Submit(new[] { plan.Order });
+                    if (!TryFindNamedOrders(plan.Account, plan.Order.Name, instrument, out List<Order> observedExits)
+                        || observedExits.Count != 1
+                        || !IsNativeExitActionable(observedExits[0]))
+                        return GlitchAiExecutionResult.Pending("group_exit_native_visibility_pending", plan.Account.Name);
+                    if (!IsNativeOrderVisibilityReady(plan.Account))
+                        return GlitchAiExecutionResult.Pending("group_exit_visibility_unavailable", "account_connection_not_connected");
+                    if (!TryCancelActiveOwnedProtection(plan.Account, instrument, plan.Correlations))
+                        return GlitchAiExecutionResult.Pending("group_exit_protection_cancel_request_failed", plan.Account.Name);
+                    if (!ArePlannedProtectionOrdersTerminalOrAbsent(plan.Account, instrument, plan.Correlations))
+                        return GlitchAiExecutionResult.Pending("group_exit_protection_cancel_pending", plan.Account.Name);
+                }
+            }
+            catch (Exception ex)
+            {
+                return GlitchAiExecutionResult.Pending("group_exit_submit_ambiguous", ex.GetType().Name);
+            }
 
-            return GlitchAiExecutionResult.Succeeded(
-                "group_exit_submitted",
+            return GlitchAiExecutionResult.Pending(
+                "group_exit_owned_close_submitted",
                 "group=" + CleanToken(groupId)
                     + "|accounts=" + string.Join(",", accounts.Select(account => account.Name)));
         }
@@ -1079,16 +1191,6 @@ namespace Glitch.Services
                 if ((isLong && stopPrice >= livePrice) || (!isLong && stopPrice <= livePrice))
                     return GlitchAiExecutionResult.Failed("move_stop_market_side_invalid");
             }
-            GlitchAiExecutionResult wideningDecision = ValidateProposedStopState(
-                masterAccount,
-                instrument,
-                masterNet,
-                livePrice,
-                masterStops,
-                proposedStops);
-            if (wideningDecision != null)
-                return wideningDecision;
-
             List<Order> changes = proposedStops
                 .Where(item => !PricesEqual(item.Key.StopPrice, item.Value))
                 .Select(item => item.Key)
@@ -1181,16 +1283,6 @@ namespace Glitch.Services
                 if ((isLong && stopPrice >= livePrice) || (!isLong && stopPrice <= livePrice))
                     return GlitchAiExecutionResult.Failed("move_tp_stop_market_side_invalid");
             }
-            GlitchAiExecutionResult wideningDecision = ValidateProposedStopState(
-                masterAccount,
-                instrument,
-                masterNet,
-                livePrice,
-                masterStops,
-                proposedStops);
-            if (wideningDecision != null)
-                return wideningDecision;
-
             List<Order> targetChanges = proposedTargets
                 .Where(item => !PricesEqual(item.Key.LimitPrice, item.Value))
                 .Select(item => item.Key)
@@ -1386,78 +1478,6 @@ namespace Glitch.Services
             return true;
         }
 
-        private static GlitchAiExecutionResult ValidateProposedStopState(
-            Account masterAccount,
-            Instrument instrument,
-            int masterNet,
-            double livePrice,
-            IReadOnlyList<Order> allStops,
-            IDictionary<Order, double> proposedStops)
-        {
-            if (proposedStops == null || proposedStops.Count == 0)
-                return null;
-            bool isLong = masterNet > 0;
-            bool widens = proposedStops.Any(item => isLong
-                ? item.Value < item.Key.StopPrice && !PricesEqual(item.Value, item.Key.StopPrice)
-                : item.Value > item.Key.StopPrice && !PricesEqual(item.Value, item.Key.StopPrice));
-            if (!widens)
-                return null;
-
-            GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
-            if (policy == null || !policy.IsValid)
-                return GlitchAiExecutionResult.Failed("move_stop_policy_invalid", policy?.ValidationError);
-            if (!GlitchAiPortfolioSnapshotReader.TryGetFreshRiskState(
-                masterAccount.Name,
-                DateTime.UtcNow,
-                policy.SnapshotMaxAgeSeconds,
-                out bool riskLocked,
-                out _,
-                out _,
-                out string accountJson,
-                out string portfolioFailure))
-                return GlitchAiExecutionResult.Failed("move_stop_portfolio_snapshot_invalid", portfolioFailure);
-            if (riskLocked)
-                return GlitchAiExecutionResult.Failed("move_stop_account_risk_locked", masterAccount.Name);
-            string propFirmId = GlitchAiJsonFields.ExtractString(accountJson, "prop_firm_id");
-            string ruleStatus = GlitchAiJsonFields.ExtractString(accountJson, "rule_status");
-            if (!string.Equals(propFirmId, "ApexTraderFunding", StringComparison.OrdinalIgnoreCase)
-                || !string.Equals(ruleStatus, "Eval", StringComparison.OrdinalIgnoreCase))
-                return GlitchAiExecutionResult.Failed("move_stop_apex_state_missing", masterAccount.Name);
-            if (!GlitchAiJsonFields.TryExtractNumber(accountJson, "buffer_margin", out double bufferMargin)
-                || bufferMargin <= 0)
-                return GlitchAiExecutionResult.Failed("apex_liquidation_buffer_missing", masterAccount.Name);
-            if (!GlitchInstrumentMetadataService.TryResolve(instrument, out GlitchInstrumentMetadata metadata)
-                || metadata == null || !metadata.IsResolved || metadata.PointValue <= 0)
-                return GlitchAiExecutionResult.Failed("move_stop_metadata_unavailable");
-
-            int coverage = 0;
-            double plannedDownside = 0;
-            foreach (Order stop in allStops)
-            {
-                int remaining = Math.Max(0, stop.Quantity - stop.Filled);
-                if (remaining == 0)
-                    continue;
-                double price = proposedStops.TryGetValue(stop, out double proposed) ? proposed : stop.StopPrice;
-                double points = isLong ? livePrice - price : price - livePrice;
-                if (points <= 0)
-                    return GlitchAiExecutionResult.Failed("move_stop_market_side_invalid");
-                coverage += remaining;
-                plannedDownside += points * metadata.PointValue * remaining;
-            }
-            if (coverage != Math.Abs(masterNet))
-                return GlitchAiExecutionResult.Failed("move_stop_protection_coverage_ambiguous", "coverage=" + coverage.ToString(CultureInfo.InvariantCulture));
-            if (plannedDownside >= bufferMargin)
-            {
-                return GlitchAiExecutionResult.Failed(
-                    "apex_liquidation_buffer_exceeded",
-                    "phase=stop_widen|planned_downside_usd="
-                        + plannedDownside.ToString("F2", CultureInfo.InvariantCulture)
-                        + "|buffer_margin_usd="
-                        + bufferMargin.ToString("F2", CultureInfo.InvariantCulture));
-            }
-            return null;
-        }
-
         private static bool PricesEqual(double left, double right)
         {
             return Math.Abs(left - right) <= 0.0000001d;
@@ -1472,16 +1492,367 @@ namespace Glitch.Services
 
         private static Order FindNamedOrder(Account account, string name, Instrument instrument)
         {
+            List<Order> matches = FindNamedOrders(account, name, instrument);
+            return matches.Count == 1 ? matches[0] : null;
+        }
+
+        private static List<Order> FindNamedOrders(Account account, string name, Instrument instrument)
+        {
+            return TryFindNamedOrders(account, name, instrument, out List<Order> matches)
+                ? matches
+                : new List<Order>();
+        }
+
+        private static bool TryFindNamedOrders(
+            Account account,
+            string name,
+            Instrument instrument,
+            out List<Order> matches)
+        {
+            matches = new List<Order>();
             if (string.IsNullOrWhiteSpace(name)
                 || !TrySnapshotOrders(account, out Order[] orders))
-                return null;
+                return false;
 
-            List<Order> matches = orders.Where(order => order != null
+            matches = orders.Where(order => order != null
                 && string.Equals(order.Name, name, StringComparison.OrdinalIgnoreCase)
                 && order.Account != null
                 && string.Equals(order.Account.Name, account.Name, StringComparison.OrdinalIgnoreCase)
                 && SameInstrument(order.Instrument, instrument)).ToList();
-            return matches.Count == 1 ? matches[0] : null;
+            return true;
+        }
+
+        private static GlitchAiExecutionResult TryReconcileOwnedExit(
+            Account account,
+            Instrument instrument,
+            string intentId,
+            int accountIndex)
+        {
+            string exitSignal = BuildSignalName(SignalExit, BuildIntentCorrelation(intentId), accountIndex);
+            if (!TryFindNamedOrders(account, exitSignal, instrument, out List<Order> matches))
+                return GlitchAiExecutionResult.Pending("reconcile_exit_visibility_unavailable");
+            if (matches.Count != 1)
+            {
+                if (!TryGetNetPosition(account, instrument, out int missingNet))
+                    return GlitchAiExecutionResult.Failed("reconcile_exit_position_unknown");
+                if (matches.Count == 0 && missingNet == 0)
+                {
+                    if (!GlitchAiExitOwnershipPlanStore.TryLoad(intentId, accountIndex, out GlitchAiExitOwnershipPlan flatPlan))
+                        return ReconcileSecondAbsentExitSnapshot(account, instrument, exitSignal);
+                    if (!IsNativeOrderVisibilityReady(account))
+                        return GlitchAiExecutionResult.Pending("reconcile_exit_visibility_unavailable", "account_connection_not_connected");
+                    return ReconcilePlannedExitProtection(account, instrument, flatPlan, 0, true);
+                }
+                if (matches.Count == 0 && !IsNativeOrderVisibilityReady(account))
+                    return GlitchAiExecutionResult.Pending("reconcile_exit_visibility_unavailable", "account_connection_not_connected");
+                return matches.Count == 0
+                    ? ReconcileSecondAbsentExitSnapshot(account, instrument, exitSignal)
+                    : GlitchAiExecutionResult.Failed("reconcile_exit_native_identity_ambiguous");
+            }
+
+            Order exit = matches[0];
+            if (!GlitchAiExitOwnershipPlanStore.TryLoad(intentId, accountIndex, out GlitchAiExitOwnershipPlan plan))
+                return GlitchAiExecutionResult.Failed("reconcile_exit_ownership_plan_identity_ambiguous");
+            if (!ExitPlanMatchesNativeOrder(plan, account, instrument, exitSignal, exit))
+                return GlitchAiExecutionResult.Failed("reconcile_exit_ownership_plan_identity_ambiguous");
+            // A named UUID exit must be actionable before its redundant OCO
+            // protection is removed. This also covers a crash after native submit:
+            // a later Filled observation still clears the owned pairs when flat.
+            if (exit.OrderState == OrderState.Rejected || exit.OrderState == OrderState.Cancelled)
+            {
+                if (!TryGetNetPosition(account, instrument, out int terminalNet))
+                    return GlitchAiExecutionResult.Failed("reconcile_exit_position_unknown");
+                if (terminalNet != 0)
+                    return GlitchAiExecutionResult.Failed("reconciled_exit_terminal_" + exit.OrderState + "_residual");
+                return ReconcilePlannedExitProtection(account, instrument, plan, 0, true);
+            }
+            if (!IsNativeExitActionable(exit))
+                return GlitchAiExecutionResult.Pending("reconcile_exit_native_visibility_pending", exit.OrderState.ToString());
+            if (!TryGetNetPosition(account, instrument, out int net))
+                return GlitchAiExecutionResult.Failed("reconcile_exit_position_unknown");
+            int remainingExit = Math.Max(0, exit.Quantity - exit.Filled);
+            if (net != plan.Direction * remainingExit)
+                return GlitchAiExecutionResult.Failed(
+                    "reconcile_exit_superseded_manual_or_concurrent_intent",
+                    "net=" + net.ToString(CultureInfo.InvariantCulture)
+                        + "|expected=" + (plan.Direction * remainingExit).ToString(CultureInfo.InvariantCulture));
+            return ReconcilePlannedExitProtection(account, instrument, plan, net, exit.OrderState == OrderState.Filled);
+        }
+
+        private static GlitchAiExecutionResult ReconcilePlannedExitProtection(
+            Account account,
+            Instrument instrument,
+            GlitchAiExitOwnershipPlan plan,
+            int net,
+            bool exitFilledOrAbsent)
+        {
+            // Account.Orders can be stale while disconnected. Neither a cancel
+            // request nor a terminal/absent proof is safe until the native feed
+            // is Connected again.
+            if (!IsNativeOrderVisibilityReady(account))
+                return GlitchAiExecutionResult.Pending("reconcile_exit_visibility_unavailable", "account_connection_not_connected");
+            if (ArePlannedProtectionOrdersTerminalOrAbsent(account, instrument, plan.Correlations))
+                return net == 0 && exitFilledOrAbsent
+                    ? GlitchAiExecutionResult.Succeeded("reconciled_exit_flat")
+                    : GlitchAiExecutionResult.Pending("reconcile_exit_protection_cancelled_pending");
+            if (TryCollectActiveOwnedExposureForCorrelations(account, instrument, plan.Correlations, out ActiveOwnedExposure plannedExposure, out string ownershipFailure)
+                && (plannedExposure.Direction != plan.Direction || plannedExposure.Quantity != plan.Quantity))
+                return GlitchAiExecutionResult.Failed(
+                    "reconcile_exit_superseded_manual_or_concurrent_intent",
+                    "planned_qty=" + plannedExposure.Quantity.ToString(CultureInfo.InvariantCulture)
+                        + "|exit_qty=" + plan.Quantity.ToString(CultureInfo.InvariantCulture));
+            if (!TryCancelActiveOwnedProtection(account, instrument, plan.Correlations))
+                return GlitchAiExecutionResult.Pending("reconcile_exit_protection_cancel_request_failed");
+            // One OCO sibling may already be terminal while the other is still
+            // Working/CancelPending. That is normal asynchronous cancellation,
+            // not a reason to touch a different correlation or report success.
+            if (!ArePlannedProtectionOrdersTerminalOrAbsent(account, instrument, plan.Correlations))
+                return GlitchAiExecutionResult.Pending("reconcile_exit_protection_cancel_pending");
+            return net == 0 && exitFilledOrAbsent
+                ? GlitchAiExecutionResult.Succeeded("reconciled_exit_flat")
+                : GlitchAiExecutionResult.Pending("reconcile_exit_pending");
+        }
+
+        private static bool IsNativeExitActionable(Order exit)
+        {
+            if (exit == null)
+                return false;
+            return exit.OrderState == OrderState.Submitted
+                || exit.OrderState == OrderState.Accepted
+                || exit.OrderState == OrderState.Working
+                || exit.OrderState == OrderState.PartFilled
+                || exit.OrderState == OrderState.Filled;
+        }
+
+        private static GlitchAiExecutionResult ReconcileSecondAbsentExitSnapshot(
+            Account account,
+            Instrument instrument,
+            string exitSignal)
+        {
+            if (!TryFindNamedOrders(account, exitSignal, instrument, out List<Order> confirmation))
+                return GlitchAiExecutionResult.Pending("reconcile_exit_visibility_unavailable");
+            if (confirmation.Count == 0)
+                return GlitchAiExecutionResult.Pending("reconcile_exit_not_found", "native_exit_absent_stable");
+            return confirmation.Count == 1
+                ? GlitchAiExecutionResult.Pending("reconcile_exit_visibility_changing")
+                : GlitchAiExecutionResult.Failed("reconcile_exit_native_identity_ambiguous");
+        }
+
+        private static bool TryCollectActiveOwnedExposure(
+            Account account,
+            Instrument instrument,
+            out ActiveOwnedExposure owned,
+            out string failure)
+        {
+            owned = new ActiveOwnedExposure();
+            failure = null;
+            if (!TrySnapshotOrders(account, out Order[] orders))
+            {
+                failure = "native_orders_unavailable";
+                return false;
+            }
+            var coverageByCorrelation = new Dictionary<string, OwnedProtectionCoverage>(StringComparer.OrdinalIgnoreCase);
+            foreach (Order order in orders)
+            {
+                if (order == null || !SameInstrument(order.Instrument, instrument)
+                    || !GlitchReplicationEngine.IsWorkingOrderState(order.OrderState))
+                    continue;
+                bool isStop = TryGetProtectionCorrelation(order.Name, SignalStop, out string correlation);
+                bool isTarget = !isStop && TryGetProtectionCorrelation(order.Name, SignalTarget, out correlation);
+                if (!isStop && !isTarget)
+                    continue;
+                int remaining = Math.Max(0, order.Quantity - order.Filled);
+                int direction = order.OrderAction == OrderAction.Sell ? 1
+                    : order.OrderAction == OrderAction.BuyToCover ? -1 : 0;
+                if (remaining <= 0 || direction == 0)
+                {
+                    failure = "owned_protection_shape_invalid";
+                    return false;
+                }
+                if (!coverageByCorrelation.TryGetValue(correlation, out OwnedProtectionCoverage coverage))
+                {
+                    coverage = new OwnedProtectionCoverage();
+                    coverageByCorrelation[correlation] = coverage;
+                }
+                if (isStop)
+                {
+                    coverage.StopCoverage += remaining;
+                    coverage.StopDirection = coverage.StopDirection == 0 ? direction : coverage.StopDirection == direction ? direction : int.MinValue;
+                }
+                else
+                {
+                    coverage.TargetCoverage += remaining;
+                    coverage.TargetDirection = coverage.TargetDirection == 0 ? direction : coverage.TargetDirection == direction ? direction : int.MinValue;
+                }
+            }
+            if (coverageByCorrelation.Count == 0)
+            {
+                failure = "owned_protection_missing";
+                return false;
+            }
+            foreach (KeyValuePair<string, OwnedProtectionCoverage> item in coverageByCorrelation)
+            {
+                OwnedProtectionCoverage coverage = item.Value;
+                if (coverage.StopCoverage <= 0 || coverage.StopCoverage != coverage.TargetCoverage
+                    || coverage.StopDirection == 0 || coverage.StopDirection != coverage.TargetDirection
+                    || coverage.StopDirection == int.MinValue)
+                {
+                    failure = "owned_protection_incomplete";
+                    return false;
+                }
+                if (owned.Direction == 0)
+                    owned.Direction = coverage.StopDirection;
+                else if (owned.Direction != coverage.StopDirection)
+                {
+                    failure = "owned_protection_direction_mixed";
+                    return false;
+                }
+                owned.Quantity += coverage.StopCoverage;
+                owned.Correlations.Add(item.Key);
+            }
+            return owned.Direction != 0 && owned.Quantity > 0;
+        }
+
+        private static bool TryCollectActiveOwnedExposureForCorrelations(
+            Account account,
+            Instrument instrument,
+            ISet<string> correlations,
+            out ActiveOwnedExposure owned,
+            out string failure)
+        {
+            owned = new ActiveOwnedExposure();
+            failure = null;
+            if (correlations == null || correlations.Count == 0 || !TrySnapshotOrders(account, out Order[] orders))
+            {
+                failure = "native_orders_unavailable";
+                return false;
+            }
+            var coverageByCorrelation = new Dictionary<string, OwnedProtectionCoverage>(StringComparer.OrdinalIgnoreCase);
+            foreach (Order order in orders)
+            {
+                if (order == null || !SameInstrument(order.Instrument, instrument)
+                    || !GlitchReplicationEngine.IsWorkingOrderState(order.OrderState))
+                    continue;
+                bool isStop = TryGetProtectionCorrelation(order.Name, SignalStop, out string correlation);
+                bool isTarget = !isStop && TryGetProtectionCorrelation(order.Name, SignalTarget, out correlation);
+                if ((!isStop && !isTarget) || !correlations.Contains(correlation))
+                    continue;
+                int remaining = Math.Max(0, order.Quantity - order.Filled);
+                int direction = order.OrderAction == OrderAction.Sell ? 1
+                    : order.OrderAction == OrderAction.BuyToCover ? -1 : 0;
+                if (remaining <= 0 || direction == 0)
+                {
+                    failure = "owned_protection_shape_invalid";
+                    return false;
+                }
+                if (!coverageByCorrelation.TryGetValue(correlation, out OwnedProtectionCoverage coverage))
+                {
+                    coverage = new OwnedProtectionCoverage();
+                    coverageByCorrelation[correlation] = coverage;
+                }
+                if (isStop)
+                {
+                    coverage.StopCoverage += remaining;
+                    coverage.StopDirection = coverage.StopDirection == 0 ? direction : coverage.StopDirection == direction ? direction : int.MinValue;
+                }
+                else
+                {
+                    coverage.TargetCoverage += remaining;
+                    coverage.TargetDirection = coverage.TargetDirection == 0 ? direction : coverage.TargetDirection == direction ? direction : int.MinValue;
+                }
+            }
+            if (coverageByCorrelation.Count != correlations.Count)
+            {
+                failure = coverageByCorrelation.Count == 0 ? "owned_protection_missing" : "owned_protection_correlation_missing";
+                return false;
+            }
+            foreach (KeyValuePair<string, OwnedProtectionCoverage> item in coverageByCorrelation)
+            {
+                OwnedProtectionCoverage coverage = item.Value;
+                if (coverage.StopCoverage <= 0 || coverage.StopCoverage != coverage.TargetCoverage
+                    || coverage.StopDirection == 0 || coverage.StopDirection != coverage.TargetDirection
+                    || coverage.StopDirection == int.MinValue)
+                {
+                    failure = "owned_protection_incomplete";
+                    return false;
+                }
+                if (owned.Direction == 0)
+                    owned.Direction = coverage.StopDirection;
+                else if (owned.Direction != coverage.StopDirection)
+                {
+                    failure = "owned_protection_direction_mixed";
+                    return false;
+                }
+                owned.Quantity += coverage.StopCoverage;
+                owned.Correlations.Add(item.Key);
+            }
+            return owned.Direction != 0 && owned.Quantity > 0;
+        }
+
+        private static bool ExitPlanMatchesNativeOrder(
+            GlitchAiExitOwnershipPlan plan,
+            Account account,
+            Instrument instrument,
+            string exitSignal,
+            Order exit)
+        {
+            if (plan == null || exit == null || plan.Quantity != exit.Quantity
+                || !string.Equals(plan.AccountName, account.Name, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(plan.InstrumentName, instrument.FullName, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(plan.ExitSignal, exitSignal, StringComparison.OrdinalIgnoreCase))
+                return false;
+            return plan.Direction == 1 ? exit.OrderAction == OrderAction.Sell
+                : plan.Direction == -1 && exit.OrderAction == OrderAction.BuyToCover;
+        }
+
+        private static bool TryGetProtectionCorrelation(string signalName, string prefix, out string correlation)
+        {
+            correlation = null;
+            string marker = prefix + "-";
+            if (string.IsNullOrWhiteSpace(signalName)
+                || !signalName.StartsWith(marker, StringComparison.OrdinalIgnoreCase))
+                return false;
+            string[] parts = signalName.Substring(marker.Length).Split('-');
+            if (parts.Length < 2 || parts.Length > 3
+                || string.IsNullOrWhiteSpace(parts[0])
+                || !int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out _)
+                || (parts.Length == 3 && !int.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out _)))
+                return false;
+            correlation = parts[0];
+            return true;
+        }
+
+        private static bool TryCancelActiveOwnedProtection(Account account, Instrument instrument, ISet<string> correlations)
+        {
+            if (correlations == null || correlations.Count == 0 || !TrySnapshotOrders(account, out Order[] orders))
+                return false;
+            foreach (Order order in orders.Where(order => order != null
+                && SameInstrument(order.Instrument, instrument)
+                && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState)
+                && ((TryGetProtectionCorrelation(order.Name, SignalStop, out string stopCorrelation) && correlations.Contains(stopCorrelation))
+                    || (TryGetProtectionCorrelation(order.Name, SignalTarget, out string targetCorrelation) && correlations.Contains(targetCorrelation)))))
+            {
+                try
+                {
+                    account.Cancel(new[] { order });
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private static bool ArePlannedProtectionOrdersTerminalOrAbsent(Account account, Instrument instrument, ISet<string> correlations)
+        {
+            if (correlations == null || correlations.Count == 0 || !TrySnapshotOrders(account, out Order[] orders))
+                return false;
+            return orders.Where(order => order != null
+                    && SameInstrument(order.Instrument, instrument)
+                    && ((TryGetProtectionCorrelation(order.Name, SignalStop, out string stopCorrelation) && correlations.Contains(stopCorrelation))
+                        || (TryGetProtectionCorrelation(order.Name, SignalTarget, out string targetCorrelation) && correlations.Contains(targetCorrelation))))
+                .All(IsTerminalTrackedOrder);
         }
 
         private static void RegisterGroup(ExecutionGroupContext group)
@@ -1530,27 +1901,8 @@ namespace Glitch.Services
                 if (account == null)
                     continue;
 
-                int flattened = 0;
-                string result = "flat_no_exposure";
-                try
-                {
-                    if (HasFilledEntry(group, group.Accounts.IndexOf(account)))
-                    {
-                        int accountIndex = group.Accounts.IndexOf(account);
-                        lock (GroupSync)
-                            group.RecoveryFlattenSubmitted[accountIndex] = true;
-                        account.Flatten(new[] { group.Instrument });
-                        flattened = 1;
-                        result = "instrument_flatten_issued";
-                    }
-                }
-                catch (Exception ex)
-                {
-                    lock (GroupSync)
-                        group.RecoveryFlattenSubmitted[group.Accounts.IndexOf(account)] = false;
-                    result = "flatten_failed_" + ex.GetType().Name;
-                }
-
+                int accountIndex = group.Accounts.IndexOf(account);
+                string result = TryCloseAttributableEntryDelta(group, accountIndex, trigger);
                 if (firstRecovery || !string.Equals(result, "flat_no_exposure", StringComparison.Ordinal))
                 {
                     GlitchAiExecutionJournalWriter.TryAppend(
@@ -1562,7 +1914,7 @@ namespace Glitch.Services
                                 + "|trigger=" + CleanToken(trigger)
                                 + "|account=" + CleanToken(account.Name)
                                 + "|result=" + result
-                                + "|instruments=" + flattened.ToString(CultureInfo.InvariantCulture)),
+                                + "|scope=uuid_owned_entry_delta"),
                         DateTime.UtcNow);
                 }
             }
@@ -1577,40 +1929,42 @@ namespace Glitch.Services
                 || !HasFilledEntry(group, accountIndex))
                 return;
 
-            lock (GroupSync)
-            {
-                if (group.RecoveryFlattenSubmitted != null
-                    && accountIndex < group.RecoveryFlattenSubmitted.Length
-                    && group.RecoveryFlattenSubmitted[accountIndex])
-                    return;
-                group.RecoveryFlattenSubmitted[accountIndex] = true;
-            }
+            string result = TryCloseAttributableEntryDelta(group, accountIndex, trigger);
+            GlitchAiExecutionJournalWriter.TryAppend(
+                group.IntentId,
+                GlitchAiExecutionResult.Failed(
+                    "group_recovery_late_fill_reconciled",
+                    "group=" + CleanToken(group.GroupId)
+                        + "|correlation=" + group.Correlation
+                        + "|trigger=" + CleanToken(trigger)
+                        + "|account=" + CleanToken(group.Accounts[accountIndex].Name)
+                        + "|result=" + result),
+                DateTime.UtcNow);
+        }
 
+        private static string TryCloseAttributableEntryDelta(ExecutionGroupContext group, int accountIndex, string trigger)
+        {
+            if (group == null || accountIndex < 0 || accountIndex >= group.Accounts.Count
+                || !HasFilledEntry(group, accountIndex))
+                return "flat_no_exposure";
             Account account = group.Accounts[accountIndex];
-            try
+            int offset = accountIndex * GetOrderStride(group);
+            Order entry = group.Orders[offset];
+            if (!GlitchAiEntryBaselinePlanStore.TryLoad(group.IntentId, accountIndex, out GlitchAiEntryBaselinePlan plan))
+                return "entry_baseline_plan_unavailable";
+            // Live callbacks use the same durable plan and UUID close identity as
+            // restart reconciliation, including baseline+fill ownership proof.
+            if (HasOwnedCorrelationProtection(account, group.Instrument, group.Correlation))
             {
-                account.Flatten(new[] { group.Instrument });
-                GlitchAiExecutionJournalWriter.TryAppend(
-                    group.IntentId,
-                    GlitchAiExecutionResult.Failed(
-                        "group_recovery_late_fill_flattened",
-                        "group=" + CleanToken(group.GroupId)
-                            + "|correlation=" + group.Correlation
-                            + "|trigger=" + CleanToken(trigger)
-                            + "|account=" + CleanToken(account.Name)),
-                    DateTime.UtcNow);
+                var correlationSet = new HashSet<string>(new[] { group.Correlation }, StringComparer.OrdinalIgnoreCase);
+                if (!IsNativeOrderVisibilityReady(account))
+                    return "entry_recovery_visibility_unavailable";
+                if (!TryCancelActiveOwnedProtection(account, group.Instrument, correlationSet))
+                    return "entry_recovery_protection_cancel_request_failed";
+                if (!ArePlannedProtectionOrdersTerminalOrAbsent(account, group.Instrument, correlationSet))
+                    return "entry_recovery_protection_cancel_pending";
             }
-            catch (Exception ex)
-            {
-                lock (GroupSync)
-                    group.RecoveryFlattenSubmitted[accountIndex] = false;
-                GlitchAiExecutionJournalWriter.TryAppend(
-                    group.IntentId,
-                    GlitchAiExecutionResult.Failed(
-                        "group_recovery_late_fill_flatten_failed",
-                        CleanToken(account.Name) + "|" + ex.GetType().Name),
-                    DateTime.UtcNow);
-            }
+            return TryCloseReconciledEntryDelta(account, group.Instrument, entry, group.Correlation, plan).Code;
         }
 
         private static void TryCompleteGroup(ExecutionGroupContext group)
@@ -1661,12 +2015,11 @@ namespace Glitch.Services
                 }
                 if (recordTerminal)
                 {
-                    GlitchAiExecutionJournalWriter.TryAppend(
-                        group.IntentId,
-                        GlitchAiExecutionResult.Succeeded(
+                    GlitchAiExecutionResult recoveryTerminal = GlitchAiExecutionResult.Failed(
                             "group_recovery_terminal",
-                            "group=" + CleanToken(group.GroupId) + "|correlation=" + group.Correlation + "|state=flat_and_orders_terminal"),
-                        DateTime.UtcNow);
+                            "group=" + CleanToken(group.GroupId) + "|correlation=" + group.Correlation + "|state=flat_and_orders_terminal");
+                    GlitchAiExecutionJournalWriter.TryAppend(group.IntentId, recoveryTerminal, DateTime.UtcNow);
+                    GlitchAiIntentStateStore.TryFinalizeNonterminal(group.IntentId, recoveryTerminal, out _);
                 }
             }
             else
@@ -1762,12 +2115,11 @@ namespace Glitch.Services
             }
             if (recordOpenProtected)
             {
-                GlitchAiExecutionJournalWriter.TryAppend(
-                    group.IntentId,
-                    GlitchAiExecutionResult.Succeeded(
+                GlitchAiExecutionResult openProtected = GlitchAiExecutionResult.Succeeded(
                         "group_entry_open_protected",
-                        BuildGroupEvidenceMessage(group) + "|state=positions_exact_and_brackets_working"),
-                    DateTime.UtcNow);
+                        BuildGroupEvidenceMessage(group) + "|state=positions_exact_and_brackets_working");
+                GlitchAiExecutionJournalWriter.TryAppend(group.IntentId, openProtected, DateTime.UtcNow);
+                GlitchAiIntentStateStore.TryFinalizeNonterminal(group.IntentId, openProtected, out _);
             }
         }
 
@@ -1801,15 +2153,28 @@ namespace Glitch.Services
                 && accountIndex < group.EntrySubmissionStarted.Length
                 && group.EntrySubmissionStarted[accountIndex];
             bool entryHasFill = entry != null && entry.Filled > 0;
-            bool recoveryFlattenSubmitted = group.RecoveryFlattenSubmitted != null
-                && accountIndex < group.RecoveryFlattenSubmitted.Length
-                && group.RecoveryFlattenSubmitted[accountIndex];
             bool allOrdersTerminal = entry != null
                 && (!entrySubmissionStarted || IsTerminalTrackedOrder(entry))
                 && group.Orders.Skip(orderOffset + 1).Take(group.ProtectionLegs.Count * 2)
                     .All(order => order == null || IsTerminalTrackedOrder(order))
-                && (!entryHasFill || recoveryFlattenSubmitted);
+                && (!entryHasFill || IsDurableRecoveryCloseTerminal(group, accountIndex, entry));
             return GlitchReplicationEngine.IsAccountFlat(account) && allOrdersTerminal;
+        }
+
+        private static bool IsDurableRecoveryCloseTerminal(ExecutionGroupContext group, int accountIndex, Order entry)
+        {
+            if (group == null || entry == null || !GlitchAiEntryBaselinePlanStore.TryLoad(group.IntentId, accountIndex, out GlitchAiEntryBaselinePlan plan))
+                return false;
+            string closeSignal = BuildSignalName(SignalExit, group.Correlation, accountIndex);
+            Account account = group.Accounts[accountIndex];
+            if (!TryFindNamedOrders(account, closeSignal, group.Instrument, out List<Order> closes) || closes.Count != 1)
+                return false;
+            if (closes[0].OrderState != OrderState.Filled || !TryGetNetPosition(account, group.Instrument, out int net))
+                return false;
+            return net == plan.BaselineNet
+                && HasExactBaselineProtection(account, group.Instrument, plan)
+                && ArePlannedProtectionOrdersTerminalOrAbsent(account, group.Instrument,
+                    new HashSet<string>(new[] { group.Correlation }, StringComparer.OrdinalIgnoreCase));
         }
 
         private static bool HasExactEntryExposure(ExecutionGroupContext group, int accountIndex)
@@ -1820,19 +2185,149 @@ namespace Glitch.Services
             int offset = accountIndex * GetOrderStride(group);
             Account account = group.Accounts[accountIndex];
             Order entry = group.Orders[offset];
-            int expectedNet = entry.OrderAction == OrderAction.Buy
-                ? entry.Filled
-                : entry.OrderAction == OrderAction.SellShort
-                    ? -entry.Filled
-                    : 0;
+            int entryDirection = entry.OrderAction == OrderAction.Buy ? 1
+                : entry.OrderAction == OrderAction.SellShort ? -1 : 0;
             if (!TryGetNetPosition(account, group.Instrument, out int actualNet))
                 return false;
-            return expectedNet != 0
+            if (!GlitchAiEntryBaselinePlanStore.TryLoad(group.IntentId, accountIndex, out GlitchAiEntryBaselinePlan plan)
+                || !EntryPlanMatchesNativeOrder(plan, account, group.Instrument, entry, entryDirection))
+                return false;
+            return entryDirection != 0
                 && ReferenceEquals(entry.Account, account)
                 && SameInstrument(entry.Instrument, group.Instrument)
                 && entry.Name == BuildSignalName(SignalEntry, group.Correlation, accountIndex)
-                && Math.Sign(actualNet) == Math.Sign(expectedNet)
-                && Math.Abs(actualNet) >= Math.Abs(expectedNet);
+                && actualNet == plan.BaselineNet + (entryDirection * entry.Filled)
+                && HasExactBaselineProtection(account, group.Instrument, plan)
+                && HasExactCorrelationOwnedProtection(
+                    account,
+                    group.Instrument,
+                    group.Correlation,
+                    entry.Filled,
+                    entryDirection);
+        }
+
+        private static bool TryPrepareEntryBaselinePlan(
+            string intentId,
+            int accountIndex,
+            Account account,
+            Instrument instrument,
+            string entrySignal,
+            int entryDirection,
+            int observedNet,
+            out string failure)
+        {
+            failure = null;
+            if (GlitchAiEntryBaselinePlanStore.TryLoad(intentId, accountIndex, out GlitchAiEntryBaselinePlan existing))
+            {
+                if (!EntryPlanMatchesIdentity(existing, account, instrument, entrySignal, entryDirection)
+                    || observedNet != existing.BaselineNet
+                    || !HasExactBaselineProtection(account, instrument, existing))
+                {
+                    failure = "entry_baseline_superseded_manual_or_concurrent_intent";
+                    return false;
+                }
+                return true;
+            }
+
+            var correlations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            int protectionQuantity = 0;
+            if (observedNet != 0)
+            {
+                if (!TryCollectActiveOwnedExposure(account, instrument, out ActiveOwnedExposure baseline, out string baselineFailure)
+                    || baseline.Direction != entryDirection || baseline.Quantity != Math.Abs(observedNet))
+                {
+                    failure = "entry_baseline_" + CleanToken(baselineFailure);
+                    return false;
+                }
+                correlations = new HashSet<string>(baseline.Correlations, StringComparer.OrdinalIgnoreCase);
+                protectionQuantity = baseline.Quantity;
+            }
+            var plan = new GlitchAiEntryBaselinePlan
+            {
+                IntentId = intentId,
+                AccountIndex = accountIndex,
+                AccountName = account.Name,
+                InstrumentName = instrument.FullName,
+                EntrySignal = entrySignal,
+                EntryDirection = entryDirection,
+                BaselineNet = observedNet,
+                BaselineProtectionQuantity = protectionQuantity,
+                BaselineCorrelations = correlations
+            };
+            if (!GlitchAiEntryBaselinePlanStore.TryPersist(plan, out failure))
+                return false;
+            return true;
+        }
+
+        private static bool EntryPlanMatchesNativeOrder(
+            GlitchAiEntryBaselinePlan plan,
+            Account account,
+            Instrument instrument,
+            Order entry,
+            int entryDirection)
+        {
+            return entry != null
+                && EntryPlanMatchesIdentity(plan, account, instrument, entry.Name, entryDirection)
+                && string.Equals(plan.EntrySignal, entry.Name, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool EntryPlanMatchesIdentity(
+            GlitchAiEntryBaselinePlan plan,
+            Account account,
+            Instrument instrument,
+            string entrySignal,
+            int entryDirection)
+        {
+            return plan != null && account != null && instrument != null
+                && string.Equals(plan.AccountName, account.Name, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(plan.InstrumentName, instrument.FullName, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(plan.EntrySignal, entrySignal, StringComparison.OrdinalIgnoreCase)
+                && plan.EntryDirection == entryDirection;
+        }
+
+        private static bool HasExactBaselineProtection(Account account, Instrument instrument, GlitchAiEntryBaselinePlan plan)
+        {
+            if (plan == null)
+                return false;
+            if (plan.BaselineProtectionQuantity == 0)
+                return plan.BaselineNet == 0 && plan.BaselineCorrelations.Count == 0;
+            return TryCollectActiveOwnedExposureForCorrelations(account, instrument, plan.BaselineCorrelations, out ActiveOwnedExposure exposure, out _)
+                && exposure.Direction == plan.EntryDirection
+                && exposure.Quantity == plan.BaselineProtectionQuantity;
+        }
+
+        private static bool HasExactCorrelationOwnedProtection(
+            Account account,
+            Instrument instrument,
+            string correlation,
+            int expectedQuantity,
+            int expectedDirection)
+        {
+            if (expectedQuantity <= 0 || expectedDirection == 0
+                || !TrySnapshotOrders(account, out Order[] orders))
+                return false;
+            int stopCoverage = 0;
+            int targetCoverage = 0;
+            foreach (Order order in orders)
+            {
+                if (order == null || !SameInstrument(order.Instrument, instrument)
+                    || !GlitchReplicationEngine.IsWorkingOrderState(order.OrderState))
+                    continue;
+                bool isStop = TryGetProtectionCorrelation(order.Name, SignalStop, out string orderCorrelation);
+                bool isTarget = !isStop && TryGetProtectionCorrelation(order.Name, SignalTarget, out orderCorrelation);
+                if ((!isStop && !isTarget)
+                    || !string.Equals(orderCorrelation, correlation, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                int direction = order.OrderAction == OrderAction.Sell ? 1
+                    : order.OrderAction == OrderAction.BuyToCover ? -1 : 0;
+                if (direction != expectedDirection)
+                    return false;
+                if (isStop)
+                    stopCoverage += Math.Max(0, order.Quantity - order.Filled);
+                else
+                    targetCoverage += Math.Max(0, order.Quantity - order.Filled);
+            }
+            return stopCoverage == expectedQuantity && targetCoverage == expectedQuantity;
         }
 
         private static bool HasFilledEntry(ExecutionGroupContext group, int accountIndex)
@@ -2024,6 +2519,24 @@ namespace Glitch.Services
             }
         }
 
+        private static bool IsNativeOrderVisibilityReady(Account account)
+        {
+            try
+            {
+                // NinjaTrader exposes the order-feed connection state, but no
+                // cross-process order-sync-complete token. The server pairs this
+                // factual Connected check with two dispatcher snapshots and its
+                // durable 30-second delivery settle interval before one resume.
+                return account != null
+                    && account.Connection != null
+                    && account.Connection.Status == ConnectionStatus.Connected;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private static bool IsOwnedStopSignal(string name)
         {
             return !string.IsNullOrWhiteSpace(name)
@@ -2182,7 +2695,6 @@ namespace Glitch.Services
             public List<StructuralProtectionLeg> ProtectionLegs { get; set; }
             public bool[] EntrySubmissionStarted { get; set; }
             public bool[] ProtectionSubmitted { get; set; }
-            public bool[] RecoveryFlattenSubmitted { get; set; }
             public bool RecoveryStarted { get; set; }
             public bool RecoveryUnresolvedRecorded { get; set; }
             public bool RecoveryTerminalRecorded { get; set; }
@@ -2190,6 +2702,30 @@ namespace Glitch.Services
             public bool OpenProtectedRecorded { get; set; }
             public bool TradeClosedRecorded { get; set; }
             public DateTime EntrySubmittedUtc { get; set; }
+        }
+
+        private sealed class OwnedExitPlan
+        {
+            public Account Account { get; set; }
+            public Order Order { get; set; }
+            public ISet<string> Correlations { get; set; }
+            public int Direction { get; set; }
+            public int AccountIndex { get; set; }
+        }
+
+        private sealed class ActiveOwnedExposure
+        {
+            public int Direction { get; set; }
+            public int Quantity { get; set; }
+            public ISet<string> Correlations { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private sealed class OwnedProtectionCoverage
+        {
+            public int StopCoverage { get; set; }
+            public int TargetCoverage { get; set; }
+            public int StopDirection { get; set; }
+            public int TargetDirection { get; set; }
         }
 
         private sealed class StructuralProtectionLeg

@@ -57,12 +57,12 @@ All prices must be tick-rounded for the instrument (Glitch validates against the
 1. Firewall passes (see `03_risk_firewall.md` + roadmap check chain) → executor submits the market entry using signal `GLT-AI-E-*`.
 2. On full entry fill, Glitch immediately submits one account-local OCO stop/target pair per leg using `GLT-AI-S-*` / `GLT-AI-T-*`. A partial entry fill fails closed into cancel/flatten recovery; protection construction or submission failure does the same.
 3. TP2/TP3 present → position is bracketed as two or three independent OCO pairs. A target fill cancels only its paired stop; every remaining leg stays protected.
-4. A later `MOVE_STOP` intent may tighten all remaining Glitch-owned stops. It cannot widen risk.
+4. A later `MOVE_STOP` intent may change named remaining Glitch-owned stops in either direction while each stop remains on the protective market side. Capacity and liquidation-buffer evidence inform Hermes; they are not hidden amendment vetoes.
 5. A later `MOVE_TP` intent atomically moves every remaining Glitch-owned target to one absolute profit-side price and may tighten every remaining stop in the same change. CopyEngine mirrors both master changes to matching follower protection orders.
 6. `EXIT` → flatten the AI position via market order and cancel the bracket. Always allowed (risk-reducing), still journaled.
-7. Sizing: Hermes chooses only from Glitch's supplied valid master quantities. Glitch recomputes structural risk and account-wide contract capacity before submission.
+7. Sizing: Hermes chooses master quantity from current evidence. Glitch verifies only structural native executability before submission; supplied capacity remains packet evidence.
 
-There is no AI-only one-contract cap. Current account/group state and prop-firm ceilings determine valid quantities dynamically.
+There is no AI-only one-contract cap. Current account/group state and prop-firm ceilings remain visible evidence; they do not deterministically choose or veto Hermes quantity.
 
 ## Versioning
 

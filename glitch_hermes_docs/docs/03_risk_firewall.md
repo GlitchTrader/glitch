@@ -18,17 +18,19 @@ size suggestion
 Glitch owns:
 
 ```text
-position sizing
-risk limits
-drawdown protection
-prop-firm compliance
+factual account/group binding
+native position and order truth
+structural protection construction
+explicit human-enabled compliance actions
 order submission
 flattening
 risk locks
 audit log
 ```
 
-## M0 Defaults
+## Retired M0 defaults (historical only)
+
+These historical defaults are not current runtime policy or AI admission gates.
 
 ```text
 Instrument: MNQ only
@@ -39,19 +41,19 @@ Max trades/day: 3–5
 Cooldown after loss: 10–15 minutes
 No averaging down
 No pyramiding
-No stop widening
+No inferred stop-widening capacity veto
 No naked entry
 No entry without attached stop
 Reject if existing working orders are ambiguous
-Reject outside the authoritative trading session or at the must-flat cutoff
-Reject if account is locked
+Keep session and time-window state observational
+Reject only an account lock created by a visible, default-off Settings compliance action
 ```
 
 Scheduled news remains decision context unless a current, program-specific rule explicitly
 requires a lockout. The firewall must not manufacture a news prohibition from a calendar
 banner or an inferred event time.
 
-## MNQ Risk Math
+## Observational MNQ risk math
 
 ```text
 MNQ point value = $2 per point
@@ -69,7 +71,7 @@ ENTER_SHORT:
   stop_loss - estimated_entry <= 50 points
 ```
 
-Reject invalid stops.
+Reject only structurally invalid stops.
 
 Do not clamp stops.
 
@@ -88,7 +90,7 @@ realized_pnl
 unrealized_pnl
 ```
 
-Then reject if:
+Do not reject solely because:
 
 ```text
 open_risk + realized_loss_today > daily_loss_limit
@@ -100,7 +102,7 @@ account buffer below minimum safe margin
 
 ## Risk Lock Behavior
 
-On breach:
+On a breach of a visible, default-off Settings compliance action only:
 
 ```text
 flatten account
@@ -123,9 +125,9 @@ GlitchShellBridge.FlattenAll()
 ## M1 Additions
 
 ```text
-ADJUST_STOP allowed only if it tightens risk.
+ADJUST_STOP is allowed when it remains structurally protective.
 PARTIAL_EXIT allowed only if it reduces exposure.
-No stop widening.
+No inferred Apex-capacity veto for stop widening.
 No size increase in active trade.
 ```
 

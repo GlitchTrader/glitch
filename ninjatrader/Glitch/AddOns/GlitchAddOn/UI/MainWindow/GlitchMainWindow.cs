@@ -813,9 +813,6 @@ namespace Glitch.UI
 
             RefreshCopyEngineConfiguration(activeAccounts);
 
-            if (_isReplicatingUi)
-                AlignAllEnabledFollowersToMaster("replicate_on");
-
             AppendJournal(
                 "System",
                 "Replication",
@@ -1739,6 +1736,7 @@ namespace Glitch.UI
                 titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
                 var masterPanel = new StackPanel
                 {
@@ -1804,6 +1802,16 @@ namespace Glitch.UI
                     Style = CreateGroupAddButtonStyle(container)
                 };
 
+                var syncButton = new Button
+                {
+                    Content = L("dashboard.group.sync", "Sync"),
+                    MinWidth = 78,
+                    Margin = new Thickness(0, 0, 6, 0),
+                    Padding = new Thickness(10, 3, 10, 3),
+                    Style = CreateGroupActionButtonStyle(container),
+                    ToolTip = L("dashboard.group.sync_tooltip", "Sync enabled followers to the master now")
+                };
+
                 var dataGrid = CreateGroupMembersGrid(group, container);
 
                 Action updateRemoveButtonState = () =>
@@ -1830,6 +1838,7 @@ namespace Glitch.UI
                     }), DispatcherPriority.Background);
 
                 addButton.Click += (s, e) => AddFollowerToGroup(group);
+                syncButton.Click += (s, e) => SyncGroupFollowers(group);
                 removeButton.Click += (s, e) =>
                 {
                     if (group.Members == null || group.Members.Count == 0)
@@ -1862,8 +1871,10 @@ namespace Glitch.UI
                         queueRemoveButtonStateRefresh();
                 };
 
-                Grid.SetColumn(removeButton, 1);
-                Grid.SetColumn(addButton, 2);
+                Grid.SetColumn(syncButton, 1);
+                Grid.SetColumn(removeButton, 2);
+                Grid.SetColumn(addButton, 3);
+                titleRow.Children.Add(syncButton);
                 titleRow.Children.Add(removeButton);
                 titleRow.Children.Add(addButton);
                 updateRemoveButtonState();
@@ -2544,9 +2555,8 @@ namespace Glitch.UI
             }
 
             SaveAccountGroupsToDisk();
-
-            if (_replicationUserIntentLive && _isReplicatingUi)
-                AlignGroupEnabledFollowersToMaster(group, "master_change");
+            if (_replicationUserIntentLive)
+                RefreshCopyEngineConfiguration(GetActiveAccountsSnapshot());
         }
 
         private void AddFollowerToGroup(AccountGroupDefinition group)
@@ -3957,9 +3967,45 @@ namespace Glitch.UI
             if (!uiActive && !_isEditingAccountsGrid && !_isCommittingAccountsGridEdit)
                 RefreshHiddenRuntimeSafetyIfDue(nowUtc);
 
-            // One publisher owns the minute. It retries this minute until both
-            // snapshots and the paired immutable frame exist.
-            GlitchHermesExchangeWriter.TryPublishMinute(nowUtc, BuildPortfolioSnapshotCapture());
+            // The dispatcher captures the native account snapshot once for an owned
+            // minute. Exchange filesystem work is coalesced onto the writer's one
+            // background lane so timer ticks never hash/read/prune/write here.
+            if (GlitchHermesExchangeWriter.TryBeginMinutePublish(
+                nowUtc,
+                out bool needsPortfolioCapture,
+                out bool preflightOnly))
+            {
+                Stopwatch captureStopwatch = Stopwatch.StartNew();
+                bool handedOff = false;
+                try
+                {
+                    GlitchPortfolioSnapshotCapture portfolioCapture = null;
+                    string marketSnapshotJson = null;
+                    bool captureReady = true;
+                    if (needsPortfolioCapture)
+                    {
+                        portfolioCapture = BuildPortfolioSnapshotCapture();
+                        string minuteId = nowUtc.ToString("yyyyMMdd'T'HHmm'Z'", System.Globalization.CultureInfo.InvariantCulture);
+                        captureReady = portfolioCapture != null
+                            && GlitchMarketSnapshotWriter.TryCaptureSnapshotJson(nowUtc, minuteId, out marketSnapshotJson);
+                    }
+                    if (captureReady)
+                    {
+                        handedOff = GlitchHermesExchangeWriter.QueuePublishMinute(
+                            nowUtc,
+                            preflightOnly,
+                            marketSnapshotJson,
+                            portfolioCapture);
+                    }
+                }
+                finally
+                {
+                    captureStopwatch.Stop();
+                    GlitchHermesExchangeWriter.RecordDispatcherCaptureDuration(captureStopwatch.Elapsed);
+                    if (!handedOff)
+                        GlitchHermesExchangeWriter.ReleaseMinutePublishOwnership(nowUtc);
+                }
+            }
 
             if (_isEditingAccountsGrid || _isCommittingAccountsGridEdit)
             {

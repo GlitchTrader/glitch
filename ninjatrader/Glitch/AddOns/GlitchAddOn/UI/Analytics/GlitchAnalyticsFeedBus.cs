@@ -24,6 +24,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using Glitch.Services;
@@ -142,6 +143,33 @@ namespace Glitch.UI
             EnsurePersistenceLoaded();
             lock (SyncRoot)
                 return GetKnownInstrumentRootsUnsafe();
+        }
+
+        // Publication is called on the NinjaTrader dispatcher.  It snapshots the
+        // synchronized in-memory analytics bus without triggering persistence IO;
+        // the resulting DTOs are safe for the exchange writer's background lane.
+        internal static IReadOnlyList<GlitchIndicatorInstrumentSnapshot> CaptureSnapshotsForPublication()
+        {
+            Stopwatch collectionLockStopwatch = Stopwatch.StartNew();
+            try
+            {
+                lock (SyncRoot)
+                {
+                    var snapshots = new List<GlitchIndicatorInstrumentSnapshot>();
+                    foreach (string root in StateByInstrument.Keys.ToList())
+                    {
+                        if (TryCreateSnapshotUnsafe(root, out GlitchIndicatorInstrumentSnapshot snapshot)
+                            && snapshot != null)
+                            snapshots.Add(snapshot);
+                    }
+                    return snapshots;
+                }
+            }
+            finally
+            {
+                collectionLockStopwatch.Stop();
+                GlitchHermesExchangeWriter.RecordAnalyticsBusCollectionLockDuration(collectionLockStopwatch.Elapsed);
+            }
         }
 
         private static List<string> GetKnownInstrumentRootsUnsafe()

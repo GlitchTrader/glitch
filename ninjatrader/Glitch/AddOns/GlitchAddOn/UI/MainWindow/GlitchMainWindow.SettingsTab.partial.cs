@@ -34,6 +34,7 @@ namespace Glitch.UI
         private CheckBox _settingsNoProtectionFlattenSimCheckBox;
         private CheckBox _settingsNoProtectionFlattenEvalCheckBox;
         private CheckBox _settingsNoProtectionFlattenApCheckBox;
+        private CheckBox _settingsAiDailyCloseCheckBox;
         private TextBox _settingsLicenseKeyTextBox;
         private Border _settingsPlanBadgeBorder;
         private TextBlock _settingsPlanBadgeText;
@@ -154,6 +155,8 @@ namespace Glitch.UI
                 includeOffThreshold: false,
                 defaultThreshold: 0,
                 scopesOnly: true));
+
+            compliancePanel.Children.Add(BuildAiDailyCloseOptIn());
 
             _settingsCopyTradingPolicyNotice = new TextBlock
             {
@@ -337,6 +340,50 @@ namespace Glitch.UI
             ApplySkinResource(row, Border.BorderBrushProperty, "BorderThinBrush", "TabControlBorderBrush");
             row.Child = checkBox;
             return row;
+        }
+
+        private Expander BuildAiDailyCloseOptIn()
+        {
+            var panel = new StackPanel { Orientation = Orientation.Vertical };
+            _settingsAiDailyCloseCheckBox = BuildScopeCheckBox(
+                "settings.risk.enable",
+                "Enable");
+            _settingsAiDailyCloseCheckBox.Margin = new Thickness(0);
+            panel.Children.Add(BuildPolicyToggleRow(_settingsAiDailyCloseCheckBox));
+            var scope = new TextBlock
+            {
+                Text = BuildAiDailyCloseScopeDescription(),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0),
+                FontSize = ResolveSettingsBodyFontSize()
+            };
+            ApplySkinResource(scope, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
+            panel.Children.Add(scope);
+
+            Expander expander = CreateDisclosureRowExpander(
+                GetSettingsStyleContext(),
+                "settings.risk.enforce_ai_daily_close",
+                "Enable automated daily-close flatten only for the configured AI account scope.");
+            expander.IsExpanded = false;
+            expander.Content = WrapDisclosureRowContent(panel);
+            return expander;
+        }
+
+        private string BuildAiDailyCloseScopeDescription()
+        {
+            GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
+            IEnumerable<string> names = policy?.AccountAllowlist ?? Enumerable.Empty<string>();
+            string scope = string.Join(", ", names
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => name.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase));
+            return string.IsNullOrWhiteSpace(scope)
+                ? L("settings.risk.enforce_ai_daily_close_scope_empty",
+                    "Action at 16:59 Eastern: no persisted AI accounts are configured, so this setting cannot flatten any account.")
+                : L("settings.risk.enforce_ai_daily_close_scope",
+                    "Action at 16:59 Eastern: enabling submits a broad account flatten and cancels working orders only for these persisted AI accounts (independent of Hermes pause):")
+                    + " " + scope + ".";
         }
 
         private Expander BuildComplianceFeatureExpander(
@@ -701,7 +748,9 @@ namespace Glitch.UI
             if (_runtimePolicySettings == null)
                 _runtimePolicySettings = new GlitchRuntimePolicySettings();
 
+            bool aiDailyCloseWasEnabled = _runtimePolicySettings.EnforceAiDailyClose;
             _runtimePolicySettings.EnforceAccountLevelCompliance = false;
+            _runtimePolicySettings.EnforceAiDailyClose = _settingsAiDailyCloseCheckBox?.IsChecked == true;
             _runtimePolicySettings.BufferFreezeScopes.Sim = _settingsBufferFreezeSimCheckBox?.IsChecked == true;
             _runtimePolicySettings.BufferFreezeScopes.Eval = _settingsBufferFreezeEvalCheckBox?.IsChecked == true;
             _runtimePolicySettings.BufferFreezeScopes.Ap = _settingsBufferFreezeApCheckBox?.IsChecked == true;
@@ -744,6 +793,15 @@ namespace Glitch.UI
                 _runtimePolicySettings.LicenseApiBaseUrl = "https://api.glitchtrader.com";
 
             GlitchRuntimePolicyStore.SaveSettings(_runtimePolicyFilePath, _runtimePolicySettings);
+            if (aiDailyCloseWasEnabled != _runtimePolicySettings.EnforceAiDailyClose)
+            {
+                AppendJournal(
+                    "System",
+                    "Risk",
+                    "ai_daily_close|origin=settings|result="
+                        + (_runtimePolicySettings.EnforceAiDailyClose ? "enabled" : "disabled")
+                        + "|scope=configured_ai_accounts");
+            }
             AppendJournal("System", "Policy", "Runtime settings updated by user.");
             AppendJournal("System", "Runtime", BuildRuntimePolicySummaryLogLine());
 
@@ -847,6 +905,8 @@ namespace Glitch.UI
                 _settingsNoProtectionFlattenEvalCheckBox.IsChecked = _runtimePolicySettings.NoProtectionFlattenScopes.Eval;
             if (_settingsNoProtectionFlattenApCheckBox != null)
                 _settingsNoProtectionFlattenApCheckBox.IsChecked = _runtimePolicySettings.NoProtectionFlattenScopes.Ap;
+            if (_settingsAiDailyCloseCheckBox != null)
+                _settingsAiDailyCloseCheckBox.IsChecked = _runtimePolicySettings.EnforceAiDailyClose;
 
             UpdateComplianceThresholdEnabled(
                 _settingsBufferFreezeSimCheckBox,

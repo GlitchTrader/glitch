@@ -22,7 +22,17 @@ namespace Glitch.Services
         {
             return new GlitchAiExecutionResult
             {
-                Status = "submitted",
+                Status = "executed",
+                Code = code,
+                Message = message ?? code
+            };
+        }
+
+        public static GlitchAiExecutionResult Pending(string code, string message = null)
+        {
+            return new GlitchAiExecutionResult
+            {
+                Status = "pending",
                 Code = code,
                 Message = message ?? code
             };
