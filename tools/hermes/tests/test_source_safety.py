@@ -291,6 +291,8 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("Account masterAccount = members[0].Account", move_stop)
         self.assertIn("masterAccount.Change", move_stop)
         self.assertIn("move_stop_amendment_pending", move_stop)
+        self.assertIn("TrackPendingAmendment", executor)
+        self.assertIn("TryFinalizePendingAmendments", executor)
         self.assertNotIn("ValidateProposedStopState", move_stop)
         self.assertNotIn("Follower", move_stop)
 

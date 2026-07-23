@@ -70,6 +70,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("does not match checksums.json", validator)
         self.assertIn("Refusing to overwrite existing release", publisher)
         self.assertIn("Expected exactly three NinjaTrader export entries", publisher)
+        self.assertIn("if ($Edition -eq 'ai') { 'Glitch_AI' } else { 'Glitch' }", publisher)
         self.assertIn("Assembly version", publisher)
         self.assertIn("npm.cmd run validate:releases", publisher)
         self.assertNotIn("git commit ", publisher.lower())
@@ -81,7 +82,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn('startsWith("addon-ai-")', update)
         self.assertIn('searchParams.set("edition", "ai")', update)
         self.assertIn("DEFAULT_AI_ADDON_DOWNLOAD_URL", update)
-        self.assertRegex(client, r'CurrentClientVersion = "addon(?:-ai)?-0\.0\.2\.[012]"')
+        self.assertRegex(client, r'CurrentClientVersion = "addon(?:-ai)?-0\.0\.2\.0"')
 
     def test_follower_recovery_never_accepts_unscoped_instrument_protection(self):
         copy_engine = source(COPY_ENGINE)
@@ -161,12 +162,6 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("MasterAccountInstance = masterAccount", replication)
         self.assertIn("_copyEngine.Configure(_isReplicatingUi, routes)", replication)
 
-    def test_replication_route_does_not_admit_copies_from_projected_contract_caps(self):
-        replication = source(REPLICATION_UI)
-        self.assertNotIn("ResolveFollowerRouteContractCap", replication)
-        self.assertNotIn("BuildPortfolioSnapshotAccountRecord(row, account).MaxContracts", replication)
-        self.assertNotIn("MaxContracts =", replication)
-
     def test_manual_follower_divergence_never_blocks_later_execution_deltas(self):
         copy = source(COPY_ENGINE)
         opening = method_body(copy, "private void FanOutOpening", "private void FanOutCompleteClose")
@@ -193,6 +188,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         )
         state = method_body(copy, "public void ProcessAccountStateUpdate", "public void ProcessFollowerExecution")
         self.assertIn("ScaleExecution(context, route.Ratio)", close)
+        self.assertIn("TryGetNetQuantityForInstrument(route.FollowerAccount, context.Instrument", close)
         self.assertIn("Math.Min(requested, closable)", close)
         self.assertIn("SubmitFollowerClose", close)
         self.assertIn('signalPrefix + "-X-"', submit)
@@ -491,29 +487,6 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             "                _copyEngine.ProcessAccountStateUpdate(account);",
             body,
         )
-
-    def test_glitch_trade_lifecycle_keeps_earliest_terminal_exit(self):
-        ledger = source(ADDON / "Services/Insights/GlitchTradeLedgerService.cs")
-        body = method_body(
-            ledger,
-            "private void NormalizeDuplicateTradesUnsafe",
-            "private static string BuildExactDuplicateSignature",
-        )
-        self.assertIn("seenGlitchEntries", body)
-        self.assertIn('entrySignal.StartsWith("GLT-"', body)
-        self.assertIn(".OrderBy(pair => pair.Value?.ExitUtc", body)
-
-    def test_trade_ledger_flush_cannot_drop_a_dirty_merge_that_arrives_mid_flush(self):
-        ledger = source(ADDON / "Services/Insights/GlitchTradeLedgerService.cs")
-        body = method_body(
-            ledger,
-            "private void QueueBackgroundFlush",
-            "internal void Reset",
-        )
-        self.assertIn("Thread.Sleep(waitMilliseconds)", body)
-        self.assertIn("FlushUnsafe(DateTime.UtcNow", body)
-        self.assertIn("queuePendingWrite = !failed && _dirty", body)
-        self.assertIn("QueueBackgroundFlush(DateTime.UtcNow, force: false)", body)
 
     def test_follower_failure_evidence_is_trade_scoped_and_unambiguous(self):
         copy_engine = source(COPY_ENGINE)

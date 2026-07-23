@@ -16,6 +16,9 @@ namespace Glitch.Services
         private static readonly TimeSpan ExecutionPriceMaxAge = TimeSpan.FromSeconds(5);
 
         private static readonly object GroupSync = new object();
+        private static readonly object PendingAmendmentSync = new object();
+        private static readonly Dictionary<string, string> PendingAmendmentBodiesByIntentId =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string, ExecutionGroupContext> GroupsBySignal =
             new Dictionary<string, ExecutionGroupContext>(StringComparer.OrdinalIgnoreCase);
 
@@ -75,6 +78,7 @@ namespace Glitch.Services
                         .ToList();
                     foreach (ExecutionGroupContext item in recovering)
                         TryCompleteGroup(item);
+                    TryFinalizePendingAmendments(account, order);
                     return;
                 }
             }
@@ -100,6 +104,7 @@ namespace Glitch.Services
                 ReconcileEntryProtection(group, entryAccountIndex, order, "order_update");
 
             TryCompleteGroup(group);
+            TryFinalizePendingAmendments(account, order);
         }
 
         public static GlitchAiExecutionResult TryReconcileStartedIntent(string rawJson, DateTime nowUtc)
@@ -419,6 +424,66 @@ namespace Glitch.Services
                     ReconcileEntryProtection(group, accountIndex, entry, "account_state_update");
 
                 TryCompleteGroup(group);
+            }
+
+            TryFinalizePendingAmendments(account, null);
+        }
+
+        private static void TrackPendingAmendment(string intentId, string rawJson)
+        {
+            if (string.IsNullOrWhiteSpace(intentId) || string.IsNullOrWhiteSpace(rawJson))
+                return;
+            lock (PendingAmendmentSync)
+                PendingAmendmentBodiesByIntentId[intentId.Trim()] = rawJson;
+        }
+
+        private static void TryFinalizePendingAmendments(Account account, Order order)
+        {
+            if (account == null)
+                return;
+            if (order != null
+                && !IsOwnedStopSignal(order.Name)
+                && !IsOwnedTargetSignal(order.Name))
+                return;
+
+            List<string> intentIds;
+            lock (PendingAmendmentSync)
+                intentIds = PendingAmendmentBodiesByIntentId.Keys.ToList();
+            if (intentIds.Count == 0)
+                return;
+
+            foreach (string intentId in intentIds)
+            {
+                string rawJson;
+                lock (PendingAmendmentSync)
+                {
+                    if (!PendingAmendmentBodiesByIntentId.TryGetValue(intentId, out rawJson))
+                        continue;
+                }
+
+                string action = GlitchAiJsonFields.ExtractString(rawJson, "action");
+                if (!string.Equals(action, "MOVE_STOP", StringComparison.Ordinal)
+                    && !string.Equals(action, "MOVE_TP", StringComparison.Ordinal))
+                    continue;
+
+                string accountName = GlitchAiJsonFields.ExtractString(rawJson, "account");
+                if (!string.Equals(accountName, account.Name, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                GlitchAiExecutionResult reconciled = TryReconcileStartedIntent(rawJson, DateTime.UtcNow);
+                if (string.Equals(reconciled.Status, "pending", StringComparison.Ordinal))
+                    continue;
+
+                bool terminalMove = string.Equals(reconciled.Status, "executed", StringComparison.Ordinal)
+                    && reconciled.Code != null
+                    && reconciled.Code.StartsWith("reconciled_move_", StringComparison.Ordinal);
+                if (!terminalMove && !string.Equals(reconciled.Status, "failed", StringComparison.Ordinal))
+                    continue;
+
+                GlitchAiExecutionJournalWriter.TryAppend(intentId, reconciled, DateTime.UtcNow);
+                GlitchAiIntentStateStore.TryFinalizeNonterminal(intentId, reconciled, out _);
+                lock (PendingAmendmentSync)
+                    PendingAmendmentBodiesByIntentId.Remove(intentId);
             }
         }
 
@@ -1339,6 +1404,7 @@ namespace Glitch.Services
                         + "|followers=replication_engine");
             }
 
+            TrackPendingAmendment(intentId, rawJson);
             return GlitchAiExecutionResult.Pending(
                 "move_stop_amendment_pending",
                 "group=" + CleanToken(groupId)
@@ -1445,6 +1511,7 @@ namespace Glitch.Services
                 return GlitchAiExecutionResult.Failed("move_tp_change_failed", masterAccount.Name + ":" + ex.GetType().Name);
             }
 
+            TrackPendingAmendment(intentId, rawJson);
             return GlitchAiExecutionResult.Pending(
                 stopChanges.Count > 0 ? "move_tp_and_stop_amendment_pending" : "move_tp_amendment_pending",
                 "group=" + CleanToken(groupId)

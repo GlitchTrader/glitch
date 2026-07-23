@@ -1042,12 +1042,12 @@ namespace Glitch.Services
             string root = GlitchReplicationEngine.GetInstrumentRoot(context.Instrument);
             foreach (GlitchCopyFollowerRoute route in routes)
             {
-                if (!GlitchReplicationEngine.TryGetNetQuantityForInstrumentRoot(route.FollowerAccount, root, out int followerNet))
+                if (!GlitchReplicationEngine.TryGetNetQuantityForInstrument(route.FollowerAccount, context.Instrument, out int followerNet))
                 {
                     JournalCopy(route, context, 0, "copy_close_skip|native_state_unavailable");
                     RaiseCritical?.Invoke(route.FollowerAccount.Name,
                         "Follower position state is unavailable; no close order was submitted.",
-                        "FollowerCloseStateUnavailable|" + root);
+                        "FollowerCloseStateUnavailable|" + CleanToken(context.Instrument?.FullName ?? root));
                     continue;
                 }
                 int closable = context.Action == OrderAction.Sell
