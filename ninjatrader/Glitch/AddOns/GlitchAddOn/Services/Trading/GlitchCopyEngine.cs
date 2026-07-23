@@ -1849,7 +1849,64 @@ namespace Glitch.Services
                 if (netQuantity == 0)
                     CancelGlitchOwnedWorkingOrders(account, instrument, orders);
                 else
+                {
                     TrimExcessProtectionForInstrument(account, instrument, orders, netQuantity);
+                    ReconcileExcessCloseRemainders(account, instrument, orders, netQuantity);
+                }
+            }
+        }
+
+        private void ReconcileExcessCloseRemainders(
+            Account account,
+            Instrument instrument,
+            Order[] orders,
+            int netQuantity)
+        {
+            if (account == null || instrument == null || netQuantity == 0)
+                return;
+
+            int closable = Math.Abs(netQuantity);
+            List<Order> closeOrders = orders
+                .Where(order => order?.Instrument != null
+                    && string.Equals(order.Instrument.FullName, instrument.FullName, StringComparison.OrdinalIgnoreCase)
+                    && ParseFollowerSignalKind(order.Name) == FollowerSignalKind.Close
+                    && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState))
+                .ToList();
+            int totalRemaining = closeOrders.Sum(RemainingQuantity);
+            int excess = totalRemaining - closable;
+            if (excess <= 0)
+                return;
+
+            var cancellations = new List<Order>();
+            foreach (Order order in closeOrders
+                .OrderBy(item => RemainingQuantity(item))
+                .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                if (excess <= 0)
+                    break;
+                int remaining = RemainingQuantity(order);
+                if (remaining <= 0)
+                    continue;
+                cancellations.Add(order);
+                excess -= remaining;
+            }
+
+            if (cancellations.Count == 0)
+                return;
+            try
+            {
+                account.Cancel(cancellations.ToArray());
+                Journal?.Invoke(
+                    account.Name,
+                    "excess_close_remainder_cancel|instrument=" + CleanToken(instrument.FullName)
+                    + "|orders=" + cancellations.Count.ToString(CultureInfo.InvariantCulture));
+            }
+            catch (Exception ex)
+            {
+                RaiseCritical?.Invoke(
+                    account.Name,
+                    "Excess follower close remainder could not be cancelled: " + ex.GetType().Name,
+                    "FollowerCloseRemainderCancelFailed|" + CleanToken(instrument.FullName));
             }
         }
 
