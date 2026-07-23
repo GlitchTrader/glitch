@@ -37,6 +37,16 @@ LOCALE_SUFFIXES = {
     "ru": ".ru",
 }
 
+ADDON_DOCS = {
+    locale: DOCS_ROOT / f"addon{suffix}.md"
+    for locale, suffix in LOCALE_SUFFIXES.items()
+}
+
+ARCHITECTURE_DOCS = {
+    locale: DOCS_ROOT / f"architecture{suffix}.md"
+    for locale, suffix in LOCALE_SUFFIXES.items()
+}
+
 LANGUAGE_HREFS = {
     "en": "/installation-guide-troubleshooting",
     "pt": "/pt/installation-guide-troubleshooting",
@@ -127,6 +137,35 @@ class LocalizedInstallationGuideTests(unittest.TestCase):
         self.assertIn("does not promise profitability", text)
         self.assertIn("Do **not** install both packages", text)
         self.assertNotIn("This guide covers the standard Glitch setup flow", text)
+
+    def test_public_docs_match_current_learning_and_authority_contracts(self):
+        obsolete_cadence = {
+            "en": "every 15 minutes",
+            "pt": "a cada 15 minutos",
+            "es": "cada 15 minutos",
+            "zh": "每 15 分钟",
+            "fr": "toutes les 15 minutes",
+            "ru": "каждые 15 минут",
+        }
+        current_cadence = {
+            "en": "every 30 minutes",
+            "pt": "a cada 30 minutos",
+            "es": "cada 30 minutos",
+            "zh": "每 30 分钟",
+            "fr": "toutes les 30 minutes",
+            "ru": "каждые 30 минут",
+        }
+        for locale, path in GUIDES.items():
+            text = path.read_text(encoding="utf-8")
+            with self.subTest(locale=locale, contract="learning_cadence"):
+                self.assertNotIn(obsolete_cadence[locale], text)
+                self.assertIn(current_cadence[locale], text)
+
+        for documents in (ADDON_DOCS, ARCHITECTURE_DOCS):
+            for locale, path in documents.items():
+                text = path.read_text(encoding="utf-8")
+                with self.subTest(locale=locale, document=path.name, contract="explicit_sync"):
+                    self.assertIn("**Sync**", text)
 
 
 if __name__ == "__main__":

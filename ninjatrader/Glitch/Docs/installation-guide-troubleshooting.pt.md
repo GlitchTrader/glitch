@@ -82,7 +82,7 @@ Antes de operar:
 - revise limites e controles de compliance;
 - confirme o grupo antes de habilitar Replication ou AI Auto.
 
-A proporção de follower altera a **quantidade** da ordem follower. Ela não cria ordens independentes extras. Um follower `2x` recebe duas vezes a quantidade do master em um único fluxo de ordem nativo do follower, sujeito a capacidade e risco do Glitch.
+A proporção de follower altera a **quantidade** da ordem follower. Ela não cria ordens independentes extras. Um follower `2x` recebe duas vezes a quantidade do master em um único fluxo de ordem nativo do follower, sujeito apenas à aceitação nativa do NinjaTrader e aos controles de conformidade visíveis que o usuário habilitou.
 
 Ligue **Replication** apenas quando os followers habilitados devem copiar o master. Brackets e proteção OCO nativos são criados e gerenciados em cada conta follower.
 
@@ -191,7 +191,7 @@ glitch cron list --all
 Os únicos jobs suportados são:
 
 - `glitch-direct-operator` — verificado a cada minuto;
-- `glitch-learning-supervisor` — verificado a cada 15 minutos.
+- `glitch-learning-supervisor` — verificado a cada 30 minutos.
 
 O setup reconcilia esses dois jobs, mas não adivinha se jobs legados desconhecidos podem ser apagados. Mantenha jobs antigos de hourly review ou paper mode pausados e só os remova após confirmar que não são necessários.
 
@@ -201,11 +201,11 @@ O setup reconcilia esses dois jobs, mas não adivinha se jobs legados desconheci
 
 - O operador direto acorda a cada minuto. Quando flat, normalmente solicita uma decisão Luna a cada cinco minutos; em posição, pode solicitar a cada minuto para reagir com HOLD, mover stop, mover target, reduzir ou sair.
 - Se uma decisão falhar por JSON inválido, timeout, compactação ou outro erro reconhecido, o próximo packet novo pode tentar novamente no minuto seguinte.
-- O supervisor de aprendizado acorda a cada 15 minutos e executa debriefs de trades, supervisão horária, planejamento de 300 minutos e Journal diário quando cada camada estiver devida.
+- O supervisor de aprendizado acorda a cada 30 minutos e executa debriefs de trades, supervisão horária, planejamento de 300 minutos e Journal diário quando cada camada estiver devida.
 
 O aprendizado usa registros do NinjaTrader, Journal e ledger do Glitch, sessões/memória do Hermes, decisões, receipts e outcomes. Atualizações substituem cognição e scripts da distribuição, preservando autenticação, overrides, sessões, memórias, ledgers e o estado enabled/paused dos cron jobs.
 
-Hermes controla cognição, estratégia e propostas de quantidade no master. Glitch valida escopo, capacidade, risco, geometria, execução, brackets, replicação e receipts. Não existe um seletor paper/live que altere a autoridade das contas.
+Hermes controla cognição, estratégia e propostas de quantidade no master. Glitch valida vínculo factual de contas e grupos, estado nativo, geometria, execução, brackets, replicação e receipts. Capacidade, risco, sessão e compliance informam Hermes e a UI; não vetam a IA em silêncio sem uma ação específica habilitada pelo usuário em Settings. A intenção humana prevalece sobre Hermes, Hermes prevalece sobre inferências determinísticas e o NinjaTrader continua autoritativo para resultados nativos. Não existe um seletor paper/live que altere a autoridade das contas.
 
 ---
 

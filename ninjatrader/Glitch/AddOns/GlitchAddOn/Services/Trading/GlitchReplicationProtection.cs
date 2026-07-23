@@ -80,8 +80,7 @@ namespace Glitch.Services
                         entrySignal.Trim(),
                         StringComparison.OrdinalIgnoreCase))
                     .ToList();
-                if (linked.Count > 0)
-                    candidates = linked;
+                candidates = linked;
             }
 
             var legs = new List<GlitchReplicationProtectionLeg>();
@@ -177,6 +176,55 @@ namespace Glitch.Services
                     TargetPrice = source.TargetPrice,
                     SourceToken = source.SourceToken
                 });
+            }
+
+            return scaled.Sum(leg => leg.Quantity) == followerQuantity;
+        }
+
+        public static int ScaleFollowerQuantity(int masterQuantity, double ratio)
+        {
+            if (masterQuantity <= 0 || ratio <= 0 || double.IsNaN(ratio) || double.IsInfinity(ratio))
+                return 0;
+            return (int)Math.Round(masterQuantity * ratio, MidpointRounding.AwayFromZero);
+        }
+
+        public static bool TryScalePlanSlice(
+            GlitchReplicationProtectionPlan plan,
+            double ratio,
+            int followerAllocationOffset,
+            int followerQuantity,
+            out List<GlitchScaledProtectionLeg> scaled)
+        {
+            scaled = new List<GlitchScaledProtectionLeg>();
+            if (plan == null || followerAllocationOffset < 0 || followerQuantity <= 0)
+                return false;
+
+            int aggregateFollowerQuantity = ScaleFollowerQuantity(plan.MasterQuantity, ratio);
+            if (aggregateFollowerQuantity <= 0
+                || followerAllocationOffset > aggregateFollowerQuantity - followerQuantity
+                || !TryScalePlan(plan, aggregateFollowerQuantity, out List<GlitchScaledProtectionLeg> aggregate))
+                return false;
+
+            int sliceEnd = followerAllocationOffset + followerQuantity;
+            int cursor = 0;
+            foreach (GlitchScaledProtectionLeg source in aggregate)
+            {
+                int sourceStart = cursor;
+                int sourceEnd = sourceStart + Math.Max(0, source.Quantity);
+                int overlap = Math.Max(
+                    0,
+                    Math.Min(sliceEnd, sourceEnd) - Math.Max(followerAllocationOffset, sourceStart));
+                if (overlap > 0)
+                {
+                    scaled.Add(new GlitchScaledProtectionLeg
+                    {
+                        Quantity = overlap,
+                        StopPrice = source.StopPrice,
+                        TargetPrice = source.TargetPrice,
+                        SourceToken = source.SourceToken
+                    });
+                }
+                cursor = sourceEnd;
             }
 
             return scaled.Sum(leg => leg.Quantity) == followerQuantity;

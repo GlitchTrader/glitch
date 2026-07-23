@@ -64,20 +64,12 @@ namespace Glitch.UI
                     if (!accountsByName.TryGetValue(member.FollowerAccount.Trim(), out Account followerAccount) || followerAccount == null)
                         continue;
 
-                    AccountGridRow followerRow = FindAccountRowByName(followerAccount.Name);
                     routes.Add(new GlitchCopyFollowerRoute
                     {
                         MasterAccount = masterName,
                         MasterAccountInstance = masterAccount,
                         FollowerAccount = followerAccount,
-                        Ratio = member.Ratio,
-                        MaxContracts = followerRow?.MaxContractsRaw > 0
-                            ? Math.Max(1, (int)Math.Round(followerRow.MaxContractsRaw, MidpointRounding.AwayFromZero))
-                            : 0,
-                        MaxMicroContracts = followerRow?.MaxMicrosRaw > 0
-                            ? Math.Max(1, (int)Math.Round(followerRow.MaxMicrosRaw, MidpointRounding.AwayFromZero))
-                            : 0,
-                        MicroContractRootRegex = followerRow?.MicroContractRootRegex
+                        Ratio = member.Ratio
                     });
                 }
             }
@@ -86,22 +78,16 @@ namespace Glitch.UI
             UpdateReplicateButtonState();
         }
 
-        private void AlignAllEnabledFollowersToMaster(string origin)
+        private void SyncGroupFollowers(AccountGroupDefinition group)
         {
-            if (_copyEngine == null || !_isReplicatingUi || _isFlattenAllInProgress)
+            if (_copyEngine == null || !_isReplicatingUi || _isFlattenAllInProgress || group == null
+                || string.IsNullOrWhiteSpace(group.MasterAccount))
                 return;
 
-            foreach (AccountGroupDefinition group in _accountGroups ?? new ObservableCollection<AccountGroupDefinition>())
-                AlignGroupEnabledFollowersToMaster(group, origin);
-        }
-
-        private void AlignGroupEnabledFollowersToMaster(AccountGroupDefinition group, string origin)
-        {
-            if (group == null || string.IsNullOrWhiteSpace(group.MasterAccount) || _copyEngine == null)
-                return;
+            RefreshCopyEngineConfiguration(GetActiveAccountsSnapshot());
 
             Account masterAccount = TryFindConnectedAccountByName(group.MasterAccount);
-            if (masterAccount == null || group.Members == null)
+            if (group.Members == null)
                 return;
 
             foreach (AccountGroupMemberRow member in group.Members)
@@ -109,31 +95,29 @@ namespace Glitch.UI
                 if (member == null || member.IsMasterRow || !member.IsEnabled || string.IsNullOrWhiteSpace(member.FollowerAccount))
                     continue;
                 if (double.IsNaN(member.Ratio) || double.IsInfinity(member.Ratio) || member.Ratio <= 0)
+                {
+                    AppendJournal(
+                        member.FollowerAccount,
+                        "Replication",
+                        "replication_sync|origin=user_sync|follower=" + member.FollowerAccount
+                        + "|phase=validation|result=invalid_ratio");
                     continue;
+                }
 
                 Account followerAccount = TryFindConnectedAccountByName(member.FollowerAccount);
-                if (followerAccount == null)
+                if (masterAccount == null || followerAccount == null)
+                {
+                    AppendJournal(
+                        member.FollowerAccount,
+                        "Replication",
+                        "replication_sync|origin=user_sync|follower=" + member.FollowerAccount
+                        + "|phase=validation|result="
+                        + (masterAccount == null ? "master_unavailable" : "follower_unavailable"));
                     continue;
+                }
 
-                _copyEngine.AlignFollowerToMaster(masterAccount, followerAccount, member.Ratio, origin);
+                _copyEngine.SyncFollower(masterAccount, followerAccount, member.Ratio);
             }
-        }
-
-        private void AlignOneEnabledFollowerToMaster(AccountGroupDefinition group, AccountGroupMemberRow member, string origin)
-        {
-            if (group == null || member == null || _copyEngine == null || !member.IsEnabled)
-                return;
-            if (string.IsNullOrWhiteSpace(group.MasterAccount) || string.IsNullOrWhiteSpace(member.FollowerAccount))
-                return;
-            if (double.IsNaN(member.Ratio) || double.IsInfinity(member.Ratio) || member.Ratio <= 0)
-                return;
-
-            Account masterAccount = TryFindConnectedAccountByName(group.MasterAccount);
-            Account followerAccount = TryFindConnectedAccountByName(member.FollowerAccount);
-            if (masterAccount == null || followerAccount == null)
-                return;
-
-            _copyEngine.AlignFollowerToMaster(masterAccount, followerAccount, member.Ratio, origin);
         }
 
         private void HandleFollowerEnableUserToggle(AccountGroupDefinition group, AccountGroupMemberRow member, bool enabled)
@@ -144,8 +128,6 @@ namespace Glitch.UI
                 return;
 
             RefreshCopyEngineConfiguration(GetActiveAccountsSnapshot());
-            if (enabled && _isReplicatingUi)
-                AlignOneEnabledFollowerToMaster(group, member, "follower_enable");
 
             SaveAccountGroupsToDisk();
             AppendJournal(
@@ -165,8 +147,6 @@ namespace Glitch.UI
                 return;
 
             RefreshCopyEngineConfiguration(GetActiveAccountsSnapshot());
-            if (_isReplicatingUi && member.IsEnabled)
-                AlignOneEnabledFollowerToMaster(group, member, "ratio_change");
         }
 
         private void WireReplicationMemberHandlers(AccountGroupDefinition group)
@@ -216,15 +196,14 @@ namespace Glitch.UI
         {
             if (account == null || eventArgs == null || _copyEngine == null)
                 return;
+
             if (_isFlattenAllInProgress)
                 return;
 
             if (string.Equals(eventName, "ExecutionUpdate", StringComparison.OrdinalIgnoreCase))
                 _copyEngine.ProcessFollowerExecution(account);
 
-            if (string.Equals(eventName, "ExecutionUpdate", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(eventName, "PositionUpdate", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(eventName, "OrderUpdate", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(eventName, "PositionUpdate", StringComparison.OrdinalIgnoreCase))
                 _copyEngine.ProcessAccountStateUpdate(account);
 
             if (!string.Equals(eventName, "OrderUpdate", StringComparison.OrdinalIgnoreCase))

@@ -82,7 +82,7 @@ Antes de operar:
 - revisa límites y controles de cumplimiento;
 - confirma el grupo antes de activar Replication o AI Auto.
 
-La proporción de un seguidor cambia la **cantidad** de su orden. No crea órdenes independientes adicionales. Un seguidor `2x` recibe el doble de la cantidad maestra en un solo flujo de orden nativo, sujeto a capacidad y validación de riesgo de Glitch.
+La proporción de un seguidor cambia la **cantidad** de su orden. No crea órdenes independientes adicionales. Un seguidor `2x` recibe el doble de la cantidad maestra en un solo flujo de orden nativo, sujeto solo a la aceptación nativa de NinjaTrader y a los controles de cumplimiento visibles que habilitó el usuario.
 
 Activa **Replication** solo cuando los seguidores habilitados deban copiar al maestro. Cada cuenta seguidora recibe brackets y protección OCO nativos.
 
@@ -191,7 +191,7 @@ glitch cron list --all
 Los únicos jobs compatibles son:
 
 - `glitch-direct-operator` — se comprueba cada minuto;
-- `glitch-learning-supervisor` — se comprueba cada 15 minutos.
+- `glitch-learning-supervisor` — se comprueba cada 30 minutos.
 
 Setup reconcilia estos dos jobs, pero no decide si jobs legacy desconocidos son seguros de borrar. Mantén pausados los jobs antiguos de revisión horaria o paper mode; elimínalos solo después de confirmar que no se necesitan.
 
@@ -201,11 +201,11 @@ Setup reconcilia estos dos jobs, pero no decide si jobs legacy desconocidos son 
 
 - El operador directo despierta cada minuto. Estando plano suele pedir una decisión Luna cada cinco minutos; con posición puede pedirla cada minuto para reaccionar con HOLD, mover stop, mover target, reducir o salir.
 - Si una decisión falla por JSON inválido, timeout, compactación u otro error reconocido, el siguiente packet nuevo puede reintentar al minuto siguiente.
-- El supervisor de aprendizaje despierta cada 15 minutos y ejecuta debriefs de operaciones, supervisión horaria, planificación de 300 minutos y Journal diario cuando corresponde.
+- El supervisor de aprendizaje despierta cada 30 minutos y ejecuta debriefs de operaciones, supervisión horaria, planificación de 300 minutos y Journal diario cuando corresponde.
 
 El aprendizaje usa registros de NinjaTrader, Journal y ledger de Glitch, sesiones/memoria de Hermes, decisiones, receipts y outcomes. Las actualizaciones reemplazan la cognición y scripts distribuidos, pero conservan autenticación, overrides, sesiones, memorias, ledgers y el estado enabled/paused de los cron jobs.
 
-Hermes controla cognición, estrategia y propuestas de cantidad maestra. Glitch valida alcance, capacidad, riesgo, geometría, ejecución, brackets, replicación y receipts. Ningún selector paper/live cambia la autoridad de cuentas.
+Hermes controla cognición, estrategia y propuestas de cantidad maestra. Glitch valida la vinculación factual de cuentas y grupos, el estado nativo, la geometría, la ejecución, los brackets, la replicación y los receipts. Capacidad, riesgo, sesión y compliance informan a Hermes y a la UI; no vetan silenciosamente a la IA sin una acción específica habilitada por el usuario en Settings. La intención humana prevalece sobre Hermes, Hermes sobre la inferencia determinista y NinjaTrader sigue siendo autoritativo para los resultados nativos. Ningún selector paper/live cambia la autoridad de cuentas.
 
 ---
 

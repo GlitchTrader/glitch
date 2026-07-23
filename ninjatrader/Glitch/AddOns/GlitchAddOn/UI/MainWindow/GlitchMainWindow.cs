@@ -768,9 +768,6 @@ namespace Glitch.UI
 
             RefreshCopyEngineConfiguration(activeAccounts);
 
-            if (_isReplicatingUi)
-                AlignAllEnabledFollowersToMaster("replicate_on");
-
             AppendJournal(
                 "System",
                 "Replication",
@@ -1620,6 +1617,7 @@ namespace Glitch.UI
                 titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
                 var masterPanel = new StackPanel
                 {
@@ -1685,6 +1683,16 @@ namespace Glitch.UI
                     Style = CreateGroupAddButtonStyle(container)
                 };
 
+                var syncButton = new Button
+                {
+                    Content = L("dashboard.group.sync", "Sync"),
+                    MinWidth = 78,
+                    Margin = new Thickness(0, 0, 6, 0),
+                    Padding = new Thickness(10, 3, 10, 3),
+                    Style = CreateGroupActionButtonStyle(container),
+                    ToolTip = L("dashboard.group.sync_tooltip", "Sync enabled followers to the master now")
+                };
+
                 var dataGrid = CreateGroupMembersGrid(group, container);
 
                 Action updateRemoveButtonState = () =>
@@ -1711,6 +1719,7 @@ namespace Glitch.UI
                     }), DispatcherPriority.Background);
 
                 addButton.Click += (s, e) => AddFollowerToGroup(group);
+                syncButton.Click += (s, e) => SyncGroupFollowers(group);
                 removeButton.Click += (s, e) =>
                 {
                     if (group.Members == null || group.Members.Count == 0)
@@ -1743,8 +1752,10 @@ namespace Glitch.UI
                         queueRemoveButtonStateRefresh();
                 };
 
-                Grid.SetColumn(removeButton, 1);
-                Grid.SetColumn(addButton, 2);
+                Grid.SetColumn(syncButton, 1);
+                Grid.SetColumn(removeButton, 2);
+                Grid.SetColumn(addButton, 3);
+                titleRow.Children.Add(syncButton);
                 titleRow.Children.Add(removeButton);
                 titleRow.Children.Add(addButton);
                 updateRemoveButtonState();
@@ -2425,9 +2436,8 @@ namespace Glitch.UI
             }
 
             SaveAccountGroupsToDisk();
-
-            if (_replicationUserIntentLive && _isReplicatingUi)
-                AlignGroupEnabledFollowersToMaster(group, "master_change");
+            if (_replicationUserIntentLive)
+                RefreshCopyEngineConfiguration(GetActiveAccountsSnapshot());
         }
 
         private void AddFollowerToGroup(AccountGroupDefinition group)
