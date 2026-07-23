@@ -227,7 +227,7 @@
         "Atomic UUID plus body ownership, immutable terminal replay, and same-body concurrency/restart source fixtures pass.",
         "Historical independent review approved the atomic terminal callback/server transition only; native restart ambiguity remains open and the ticket remains in progress.",
         "Native restart fault-injection remains pending coupled AI deployment authority.",
-        "Current GlitchAiIntentServer holds IntentExecutionSync across method/auth/body parsing, blocking request reads, executor mutation, and response writes; ReadRequestBody limits characters rather than raw UTF-8 bytes."
+        "2026-07-23 ai/22: ReadRequestBody enforces MaxBodyBytes on raw UTF-8 bytes; method/auth/body/validation occur before IntentExecutionSync; TryClaim is lock-scoped; TryPromoteToExecutionStarted atomically owns execution_started before TryExecuteApprovedIntent; Hermes source safety 31/31, shared 55/55."
       ],
       "sources": [
         "branch:ai/22/ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Ai/GlitchAiIntentServer.cs",
