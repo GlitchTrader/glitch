@@ -1,8 +1,4 @@
-"""GL-REP-TEST-01 executable behavioral regressions (rail vs current).
-
-Tests pass while documenting the gap: assertFalse(rail_satisfied) until GL-REP-01 repairs CopyEngine.
-Flip to assertTrue(rail_satisfied) when the production fix lands.
-"""
+"""GL-REP-TEST-01 callback fixtures supplemented by production source contracts."""
 
 import unittest
 
@@ -17,6 +13,7 @@ from replication_lifecycle_sim import (
     rail_sync_should_reduce_by_delta,
     reconcile_follower_protection_current,
     scale_execution_delta,
+    should_cancel_owned_close_remainder,
     simulate_stale_execution_then_flat,
     sync_decide_initial,
     trim_follower_protection_current,
@@ -57,9 +54,10 @@ class ReplicationLifecycleRailGapTests(unittest.TestCase):
         account.set_net(inst, 1)
         trim_follower_protection_current(account)
         working_prot = [
-            o for o in account.orders if o.working and "-S-" in o.name or "-T-" in o.name
+            o for o in account.orders if o.working and ("-S-" in o.name or "-T-" in o.name)
         ]
         self.assertEqual(len(working_prot), 2)
+        self.assertEqual({o.remaining_qty() for o in working_prot}, {1})
         account.set_net(inst, 1)
         trim_follower_protection_current(account)
         self.assertGreater(len([o for o in account.orders if o.working]), 0)
@@ -75,10 +73,14 @@ class ReplicationLifecycleRailGapTests(unittest.TestCase):
         account = AccountSim("Sim102")
         account.set_net(mar, 1)
         account.set_net(jun, 0)
-        account.orders = [Order("GLT-COPY-S-1", mar, 1, oco="a")]
+        account.orders = [
+            Order("GLT-COPY-S-1", mar, 1, oco="a"),
+            Order("GLT-COPY-S-1", jun, 1, oco="b"),
+        ]
         trim_follower_protection_current(account)
         self.assertEqual(account.net_exact(mar), 1)
         self.assertEqual(account.net_exact(jun), 0)
+        self.assertFalse(account.orders[1].working)
 
     def test_fractional_two_separate_closes_reset_cumulative_basis(self):
         ratio = 0.5
@@ -99,6 +101,11 @@ class ReplicationLifecycleRailGapTests(unittest.TestCase):
         reconcile_follower_protection_current(account)
         still_working = [o for o in account.orders if o.working]
         self.assertFalse(still_working)
+
+    def test_owned_close_remainder_cancels_on_external_position_change_but_not_its_own_partial_fill(self):
+        self.assertTrue(should_cancel_owned_close_remainder(3, 1, 2, -1, 0))
+        self.assertFalse(should_cancel_owned_close_remainder(3, 1, 2, -1, 1))
+        self.assertTrue(should_cancel_owned_close_remainder(3, 2, 2, -1, 0))
 
 
 if __name__ == "__main__":

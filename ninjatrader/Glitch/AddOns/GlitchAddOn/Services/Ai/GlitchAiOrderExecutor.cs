@@ -341,12 +341,7 @@ namespace Glitch.Services
                     return confirmation.Count == 1
                         ? GlitchAiExecutionResult.Pending("reconcile_entry_recovery_close_visibility_changing")
                         : GlitchAiExecutionResult.Failed("reconcile_entry_recovery_close_identity_ambiguous");
-                DateTime startedUtc = plan.RecoveryCloseStartedUtc ?? DateTime.UtcNow;
-                if (DateTime.UtcNow - startedUtc < TimeSpan.FromSeconds(30))
-                    return GlitchAiExecutionResult.Pending("reconcile_entry_recovery_close_visibility_settling");
-                if (plan.RecoveryCloseResumeUsed
-                    || !GlitchAiEntryBaselinePlanStore.TryMarkRecoveryCloseResumeUsed(plan.IntentId, plan.AccountIndex, out plan))
-                    return GlitchAiExecutionResult.Pending("reconcile_entry_recovery_close_absent_after_resume");
+                return GlitchAiExecutionResult.Pending("reconcile_entry_recovery_close_visibility_unresolved");
             }
             else if (!GlitchAiEntryBaselinePlanStore.TryBeginRecoveryClose(
                 plan.IntentId, plan.AccountIndex, closeSignal, entry.Filled, DateTime.UtcNow, out plan))
@@ -513,18 +508,18 @@ namespace Glitch.Services
                     continue;
 
                 if (netQuantity == 0)
-                    CancelWorkingAiProtection(account, instrument, orders);
+                    CancelAiProtection(account, instrument, orders);
                 else
-                    TrimExcessAiProtection(account, instrument, orders, Math.Abs(netQuantity));
+                    ResizeAiProtection(account, instrument, orders, Math.Abs(netQuantity));
             }
         }
 
-        private static void CancelWorkingAiProtection(Account account, Instrument instrument, Order[] orders)
+        private static void CancelAiProtection(Account account, Instrument instrument, Order[] orders)
         {
             List<Order> cancellations = orders
                 .Where(order => order?.Instrument != null
                     && SameInstrument(order.Instrument, instrument)
-                    && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState)
+                    && GlitchReplicationEngine.CanCancelOrder(order)
                     && (IsOwnedStopSignal(order.Name) || IsOwnedTargetSignal(order.Name)))
                 .ToList();
             if (cancellations.Count == 0)
@@ -533,13 +528,16 @@ namespace Glitch.Services
             {
                 account.Cancel(cancellations.ToArray());
             }
-            catch
+            catch (Exception ex)
             {
-                // Position truth remains authoritative; a later account-state pass retries.
+                RaiseCritical?.Invoke(
+                    account.Name,
+                    "AI protection could not be cancelled after the native position became flat: " + ex.GetType().Name,
+                    "AiProtectionFlatCancelFailed|" + instrument.FullName);
             }
         }
 
-        private static void TrimExcessAiProtection(
+        private static void ResizeAiProtection(
             Account account,
             Instrument instrument,
             Order[] orders,
@@ -571,24 +569,61 @@ namespace Glitch.Services
                 return;
 
             var cancellations = new List<Order>();
+            var changes = new List<Order>();
             foreach (var unit in units)
             {
                 if (excess <= 0)
                     break;
-                if (unit.Quantity > excess)
-                    continue;
-                cancellations.AddRange(unit.Orders);
-                excess -= unit.Quantity;
+                int reduction = Math.Min(excess, unit.Quantity);
+                int desiredRemaining = unit.Quantity - reduction;
+                if (desiredRemaining == 0)
+                {
+                    cancellations.AddRange(unit.Orders.Where(GlitchReplicationEngine.CanCancelOrder));
+                }
+                else
+                {
+                    foreach (Order order in unit.Orders)
+                    {
+                        int currentRemaining = Math.Max(0, order.Quantity - order.Filled);
+                        int desiredOrderRemaining = Math.Min(currentRemaining, desiredRemaining);
+                        int desiredTotal = order.Filled + desiredOrderRemaining;
+                        if (desiredTotal == order.Quantity || desiredTotal == order.QuantityChanged)
+                            continue;
+                        order.QuantityChanged = desiredTotal;
+                        changes.Add(order);
+                    }
+                }
+                excess -= reduction;
             }
-            if (cancellations.Count == 0)
+            if (cancellations.Count == 0 && changes.Count == 0)
                 return;
-            try
+            if (changes.Count > 0)
             {
-                account.Cancel(cancellations.ToArray());
+                try
+                {
+                    account.Change(changes.ToArray());
+                }
+                catch (Exception ex)
+                {
+                    RaiseCritical?.Invoke(
+                        account.Name,
+                        "AI protection could not be resized to native position truth: " + ex.GetType().Name,
+                        "AiProtectionResizeFailed|" + instrument.FullName);
+                }
             }
-            catch
+            if (cancellations.Count > 0)
             {
-                // Position truth remains authoritative; a later account-state pass retries.
+                try
+                {
+                    account.Cancel(cancellations.ToArray());
+                }
+                catch (Exception ex)
+                {
+                    RaiseCritical?.Invoke(
+                        account.Name,
+                        "Excess AI protection could not be cancelled: " + ex.GetType().Name,
+                        "AiProtectionTrimCancelFailed|" + instrument.FullName);
+                }
             }
         }
 

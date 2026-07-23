@@ -146,7 +146,10 @@ Each native master execution, including a manual partial or full close, is copie
 once at the configured follower ratio. Manual follower changes are preserved and
 do not block later master executions. Replication, follower, ratio, and master
 controls configure future executions only. **Sync** is the only catch-up action
-and runs only when the user clicks it.
+and runs only when the user clicks it. Position and protection convergence is
+scoped to the exact instrument contract. A native position change may cancel or
+resize Glitch-owned working orders to prevent an over-close, but it never creates
+a replacement trade or silently realigns a follower.
 
 ## Summary
 

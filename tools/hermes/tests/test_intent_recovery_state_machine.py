@@ -32,11 +32,7 @@ class IntentRecoveryHarness:
             result = self.reconcile(named_entry, filled, net, protected,
                                     entry_direction, terminal, protection_submit_ok)
             if result == "entry_not_found":
-                if elapsed_seconds < 30:
-                    return "native_visibility_settling"
-                self.submits += 1
-                self.phase = "pending"
-                return "submitted_once"
+                return "native_visibility_unresolved"
             self.phase = "pending"
             return result
         raise AssertionError("unexpected retry phase: " + self.phase)
@@ -141,11 +137,7 @@ class ExitIntentVisibilityHarness:
             self.phase = "execution_visibility_pending"
             return "visibility_observed"
         if self.phase == "execution_visibility_pending" and result == "exit_not_found":
-            if elapsed_seconds < 30:
-                return "native_visibility_settling"
-            self.phase = "pending"
-            self.submits += 1
-            return "submitted_once"
+            return "native_visibility_unresolved"
         if self.phase == "execution_visibility_pending":
             self.phase = "pending"
         return result
@@ -239,33 +231,27 @@ class EntryBaselineRecoveryHarness:
     def recovery_close(self, named_close=False, elapsed_seconds=0, resume_used=False, filled=False, net=None):
         if named_close:
             return "closed" if filled and net == self.baseline_net else "close_pending"
-        if elapsed_seconds < 30:
-            return "close_visibility_settling"
-        if resume_used:
-            return "close_absent_after_resume"
-        return "close_resume_once"
+        return "close_visibility_unresolved"
 
 
 class IntentRecoveryStateMachineTests(unittest.TestCase):
-    def test_crash_before_submit_resumes_once_only_from_execution_started(self):
+    def test_crash_boundary_never_uses_absence_or_elapsed_time_to_resubmit(self):
         intent = IntentRecoveryHarness("execution_started")
         self.assertEqual("visibility_observed", intent.retry(named_entry=False))
         self.assertEqual("execution_visibility_pending", intent.phase)
         self.assertEqual(0, intent.submits)
-        self.assertEqual("native_visibility_settling", intent.retry(named_entry=False, elapsed_seconds=1))
-        self.assertEqual("submitted_once", intent.retry(named_entry=False, elapsed_seconds=30))
-        self.assertEqual(1, intent.submits)
-        self.assertEqual("pending", intent.phase)
-        self.assertEqual("entry_not_found", intent.retry(named_entry=False))
-        self.assertEqual(1, intent.submits)
+        self.assertEqual("native_visibility_unresolved", intent.retry(named_entry=False, elapsed_seconds=1))
+        self.assertEqual("native_visibility_unresolved", intent.retry(named_entry=False, elapsed_seconds=30))
+        self.assertEqual(0, intent.submits)
+        self.assertEqual("execution_visibility_pending", intent.phase)
 
-    def test_one_hundred_permanently_absent_retries_submit_once(self):
+    def test_one_hundred_permanently_absent_retries_never_resubmit(self):
         intent = IntentRecoveryHarness("execution_started")
         self.assertEqual("visibility_observed", intent.retry(named_entry=False))
-        self.assertEqual("submitted_once", intent.retry(named_entry=False, elapsed_seconds=30))
+        self.assertEqual("native_visibility_unresolved", intent.retry(named_entry=False, elapsed_seconds=30))
         replies = [intent.retry(named_entry=False) for _ in range(100)]
-        self.assertTrue(all(reply == "entry_not_found" for reply in replies))
-        self.assertEqual(1, intent.submits)
+        self.assertTrue(all(reply == "native_visibility_unresolved" for reply in replies))
+        self.assertEqual(0, intent.submits)
 
     def test_delayed_native_entry_visibility_never_resubmits(self):
         intent = IntentRecoveryHarness("execution_started")
@@ -373,13 +359,13 @@ class IntentRecoveryStateMachineTests(unittest.TestCase):
         ]))
         self.assertEqual(0, same_side.submits + opposite.submits + flat.submits)
 
-    def test_exit_crash_before_submit_uses_one_observation_then_resumes_once(self):
+    def test_exit_crash_boundary_never_uses_absence_or_elapsed_time_to_resubmit(self):
         exit_intent = ExitIntentVisibilityHarness()
         self.assertEqual("visibility_observed", exit_intent.retry(named_exit=False, net=2))
         self.assertEqual("execution_visibility_pending", exit_intent.phase)
-        self.assertEqual("native_visibility_settling", exit_intent.retry(named_exit=False, net=2, elapsed_seconds=1))
-        self.assertEqual("submitted_once", exit_intent.retry(named_exit=False, net=2, elapsed_seconds=30))
-        self.assertEqual(1, exit_intent.submits)
+        self.assertEqual("native_visibility_unresolved", exit_intent.retry(named_exit=False, net=2, elapsed_seconds=1))
+        self.assertEqual("native_visibility_unresolved", exit_intent.retry(named_exit=False, net=2, elapsed_seconds=30))
+        self.assertEqual(0, exit_intent.submits)
 
     def test_exit_delayed_native_visibility_and_duplicate_retry_never_resubmit(self):
         exit_intent = ExitIntentVisibilityHarness()
@@ -389,13 +375,13 @@ class IntentRecoveryStateMachineTests(unittest.TestCase):
             self.assertEqual("pending", exit_intent.retry(named_exit=True, net=2, state="working"))
         self.assertEqual(0, exit_intent.submits)
 
-    def test_exit_permanently_absent_retries_submit_once_then_pending_is_reconcile_only(self):
+    def test_exit_permanently_absent_retries_never_resubmit(self):
         exit_intent = ExitIntentVisibilityHarness()
         self.assertEqual("visibility_observed", exit_intent.retry(named_exit=False))
-        self.assertEqual("submitted_once", exit_intent.retry(named_exit=False, elapsed_seconds=30))
+        self.assertEqual("native_visibility_unresolved", exit_intent.retry(named_exit=False, elapsed_seconds=30))
         replies = [exit_intent.retry(named_exit=False) for _ in range(100)]
-        self.assertTrue(all(reply == "exit_not_found" for reply in replies))
-        self.assertEqual(1, exit_intent.submits)
+        self.assertTrue(all(reply == "native_visibility_unresolved" for reply in replies))
+        self.assertEqual(0, exit_intent.submits)
 
     def test_exit_missing_native_order_is_terminal_success_only_when_flat(self):
         exit_intent = ExitIntentVisibilityHarness()
@@ -473,11 +459,11 @@ class IntentRecoveryStateMachineTests(unittest.TestCase):
         self.assertEqual("new_correlation_visibility_pending", entry.reconcile(3, True, False, recovery_started=True))
         self.assertEqual("protected", entry.reconcile(3, True, True, recovery_started=True))
 
-    def test_entry_recovery_close_has_one_durable_resume_and_exact_baseline_terminal_state(self):
+    def test_entry_recovery_close_never_resubmits_from_absence_and_uses_exact_terminal_state(self):
         entry = EntryBaselineRecoveryHarness(2, {"baseline"}, 2, entry_fill=1)
-        self.assertEqual("close_visibility_settling", entry.recovery_close(elapsed_seconds=1))
-        self.assertEqual("close_resume_once", entry.recovery_close(elapsed_seconds=30))
-        self.assertEqual("close_absent_after_resume", entry.recovery_close(elapsed_seconds=31, resume_used=True))
+        self.assertEqual("close_visibility_unresolved", entry.recovery_close(elapsed_seconds=1))
+        self.assertEqual("close_visibility_unresolved", entry.recovery_close(elapsed_seconds=30))
+        self.assertEqual("close_visibility_unresolved", entry.recovery_close(elapsed_seconds=31, resume_used=True))
         self.assertEqual("close_pending", entry.recovery_close(named_close=True, filled=False, net=3))
         self.assertEqual("closed", entry.recovery_close(named_close=True, filled=True, net=2))
 

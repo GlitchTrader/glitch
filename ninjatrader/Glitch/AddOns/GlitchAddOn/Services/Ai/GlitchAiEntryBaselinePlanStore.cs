@@ -24,7 +24,6 @@ namespace Glitch.Services
         public string RecoveryCloseSignal { get; set; }
         public int RecoveryCloseQuantity { get; set; }
         public DateTime? RecoveryCloseStartedUtc { get; set; }
-        public bool RecoveryCloseResumeUsed { get; set; }
     }
 
     internal static class GlitchAiEntryBaselinePlanStore
@@ -111,15 +110,6 @@ namespace Glitch.Services
             return TryReplace(intentId, accountIndex, plan);
         }
 
-        public static bool TryMarkRecoveryCloseResumeUsed(string intentId, int accountIndex, out GlitchAiEntryBaselinePlan plan)
-        {
-            plan = null;
-            if (!TryLoad(intentId, accountIndex, out plan) || plan.RecoveryCloseResumeUsed)
-                return false;
-            plan.RecoveryCloseResumeUsed = true;
-            return TryReplace(intentId, accountIndex, plan);
-        }
-
         private static bool TryReplace(string intentId, int accountIndex, GlitchAiEntryBaselinePlan plan)
         {
             if (!Guid.TryParse(intentId, out Guid parsed) || plan == null)
@@ -174,7 +164,6 @@ namespace Glitch.Services
                     RecoveryCloseSignal = GlitchAiJsonFields.ExtractString(json, "recovery_close_signal"),
                     RecoveryCloseQuantity = (int)Math.Round(ExtractNumber(json, "recovery_close_quantity"), MidpointRounding.AwayFromZero),
                     RecoveryCloseStartedUtc = GlitchAiJsonFields.TryExtractUtc(json, "recovery_close_started_utc"),
-                    RecoveryCloseResumeUsed = string.Equals(GlitchAiJsonFields.ExtractString(json, "recovery_close_resume_used"), "true", StringComparison.OrdinalIgnoreCase),
                     BaselineCorrelations = new HashSet<string>((csv ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(value => value.Trim()), StringComparer.OrdinalIgnoreCase)
                 };
                 return IsValid(plan);
@@ -224,7 +213,6 @@ namespace Glitch.Services
                 + "\"recovery_close_signal\":" + GlitchSnapshotJson.String(plan.RecoveryCloseSignal) + ","
                 + "\"recovery_close_quantity\":" + plan.RecoveryCloseQuantity.ToString(CultureInfo.InvariantCulture) + ","
                 + "\"recovery_close_started_utc\":" + GlitchSnapshotJson.String(plan.RecoveryCloseStartedUtc.HasValue ? GlitchSnapshotJson.FormatUtc(plan.RecoveryCloseStartedUtc.Value) : string.Empty) + ","
-                + "\"recovery_close_resume_used\":" + GlitchSnapshotJson.String(plan.RecoveryCloseResumeUsed ? "true" : "false") + ","
                 + "\"baseline_correlations_csv\":" + GlitchSnapshotJson.String(string.Join(",", plan.BaselineCorrelations.OrderBy(value => value, StringComparer.OrdinalIgnoreCase))) + "}";
         }
     }

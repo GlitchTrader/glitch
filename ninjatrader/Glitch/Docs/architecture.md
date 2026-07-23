@@ -102,7 +102,13 @@ Manual follower changes remain under user control while later master executions
 continue copying normally. Manual partial and full master closes propagate at the
 configured ratio. Replication, follower, ratio, and master controls configure
 future executions only. **Sync** is the only catch-up action and runs only after
-an explicit user click. Startup and recompile remain observe-only.
+an explicit user click. Sync and close reconciliation use the exact native
+instrument, including expiry, rather than combining contracts by root. If native
+position truth diverges while a Glitch-owned close is still working, Glitch
+cancels only that owned remainder; it does not create a replacement or initiate
+catch-up. Protection is resized to the remaining native quantity, including a
+partial resize inside a multi-contract OCO pair. Startup and recompile remain
+observe-only.
 
 The authority order is human, Hermes, then deterministic inference. Glitch
 enforces factual native executability and user-enabled Settings actions; inferred

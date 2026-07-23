@@ -20,11 +20,6 @@ namespace Glitch.UI
             return GlitchReplicationEngine.GetInstrumentRoot(instrument);
         }
 
-        private static int GetNetQuantityForInstrumentRoot(Account account, string instrumentRoot)
-        {
-            return GlitchReplicationEngine.GetNetQuantityForInstrumentRoot(account, instrumentRoot);
-        }
-
         private static List<Instrument> GetOpenPositionInstruments(Account account)
         {
             return GlitchReplicationEngine.GetOpenPositionInstruments(account);

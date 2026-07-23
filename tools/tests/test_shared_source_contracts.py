@@ -70,7 +70,8 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("does not match checksums.json", validator)
         self.assertIn("Refusing to overwrite existing release", publisher)
         self.assertIn("Expected exactly three NinjaTrader export entries", publisher)
-        self.assertIn("if ($Edition -eq 'ai') { 'Glitch_AI' } else { 'Glitch' }", publisher)
+        self.assertIn("$fileName = if ($Edition -eq 'ai')", publisher)
+        self.assertIn('"Glitch_AI_v$Version.zip"', publisher)
         self.assertIn("Assembly version", publisher)
         self.assertIn("npm.cmd run validate:releases", publisher)
         self.assertNotIn("git commit ", publisher.lower())
@@ -82,7 +83,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn('startsWith("addon-ai-")', update)
         self.assertIn('searchParams.set("edition", "ai")', update)
         self.assertIn("DEFAULT_AI_ADDON_DOWNLOAD_URL", update)
-        self.assertRegex(client, r'CurrentClientVersion = "addon(?:-ai)?-0\.0\.2\.0"')
+        self.assertRegex(client, r'CurrentClientVersion = "addon(?:-ai)?-0\.0\.2\.(?:0|2)"')
 
     def test_follower_recovery_never_accepts_unscoped_instrument_protection(self):
         copy_engine = source(COPY_ENGINE)
@@ -125,7 +126,8 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("return false;", flat)
         self.assertIn("!TrySnapshotOrders", working)
         self.assertIn("return true;", working)
-        self.assertIn("TryGetNetQuantityForInstrumentRoot", text)
+        self.assertIn("TryGetNetQuantityForInstrument", text)
+        self.assertNotIn("TryGetNetQuantityForInstrumentRoot", text)
         self.assertIn("TryGetOpenPositionInstruments", text)
 
     def test_live_replication_copies_each_execution_delta_without_position_repair(self):
@@ -198,6 +200,38 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertNotIn("PartialFollowerExitUnsupported", copy)
         self.assertNotIn("partial_manual_exit", copy)
 
+    def test_close_and_sync_lifecycles_cancel_owned_remainders_from_exact_position_truth(self):
+        copy = source(COPY_ENGINE)
+        state = method_body(copy, "public void ProcessAccountStateUpdate", "public void ProcessFollowerExecution")
+        sync_lifecycle = method_body(copy, "private void ProcessSyncLifecycle", "private void ProcessSyncFollowerOrderUpdate")
+        sync_order = method_body(copy, "private void ProcessSyncFollowerOrderUpdate", "private void CancelSyncOwnedRemainder")
+        close_reconcile = method_body(copy, "private void ReconcileCloses", "private void CancelUnsafeCloseRemainders")
+        self.assertIn("TryGetNetQuantityForInstrument(", sync_lifecycle)
+        self.assertNotIn("TryGetNetQuantityForInstrumentRoot(", sync_lifecycle)
+        self.assertIn("CancelSyncOwnedRemainder(sync, sync.ReduceOrder)", sync_lifecycle)
+        self.assertIn("sync.ReduceOrderSignal", sync_order)
+        self.assertIn("ReconcileCloses(account", state)
+        self.assertIn("expectedFromOwnedFills", close_reconcile)
+        self.assertIn("account.Cancel(cancellations.ToArray())", close_reconcile)
+
+    def test_partial_protection_reconcile_resizes_native_oco_quantity(self):
+        copy = source(COPY_ENGINE)
+        trim = method_body(
+            copy,
+            "private void ResizeProtection",
+            "private void CleanupFlatFollowerOrders",
+        )
+        flat = method_body(
+            copy,
+            "private void CancelOwnedOrdersAtFlat",
+            "private void ResizeProtection",
+        )
+        self.assertIn("QuantityChanged", trim)
+        self.assertIn("account.Change(changes.ToArray())", trim)
+        self.assertIn("FollowerSignalKind.Protection", flat)
+        self.assertIn("FollowerSignalKind.Close", flat)
+        self.assertNotIn("ParseFollowerSignalKind(order.Name) != FollowerSignalKind.None", flat)
+
     def test_copy_engine_never_uses_account_flatten_or_human_orders_for_cleanup(self):
         copy = source(COPY_ENGINE)
         cleanup = method_body(copy, "private void CleanupFlatFollowerOrders", "private bool TryGetRouteSnapshot")
@@ -269,7 +303,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         mirror = method_body(
             source(COPY_ENGINE),
             "private void MirrorMasterProtection",
-            "private void TrimFollowerProtection",
+            "private void ReconcileFollowerProtection",
         )
         self.assertIn("GlitchReplicationEngine.IsStopLikeOrder(masterOrder)", mirror)
         self.assertIn("masterOrder.OrderType == OrderType.Limit", mirror)

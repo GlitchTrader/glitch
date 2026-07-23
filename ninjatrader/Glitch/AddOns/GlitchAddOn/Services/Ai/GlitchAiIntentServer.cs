@@ -12,12 +12,7 @@ namespace Glitch.Services
         public const string SchemaVersion = "glitch.intent.server.v1";
         public const string BindAddress = "http://127.0.0.1:8788/";
         private const int MaxBodyBytes = 65536;
-        private static readonly TimeSpan NativeOrderVisibilitySettleInterval = TimeSpan.FromSeconds(30);
-
         private static readonly object SyncRoot = new object();
-        // Intent execution may issue native orders. One local owner keeps a same-UUID
-        // replay from crossing claim, approval, and execution-started independently.
-        private static readonly object IntentExecutionSync = new object();
         private static HttpListener _listener;
         private static Thread _listenerThread;
         private static int _isRunning;
@@ -164,22 +159,19 @@ namespace Glitch.Services
                 bool isNewClaim;
                 bool contentConflict;
                 string claimFailure;
-                lock (IntentExecutionSync)
+                if (!GlitchAiIntentStateStore.TryClaim(
+                    validation.IntentId,
+                    body,
+                    out intentState,
+                    out isNewClaim,
+                    out contentConflict,
+                    out claimFailure))
                 {
-                    if (!GlitchAiIntentStateStore.TryClaim(
-                        validation.IntentId,
-                        body,
-                        out intentState,
-                        out isNewClaim,
-                        out contentConflict,
-                        out claimFailure))
-                    {
-                        int claimStatus = string.Equals(claimFailure, "legacy_duplicate_outcome_unavailable", StringComparison.Ordinal)
-                            ? 409
-                            : 500;
-                        WriteResponse(context, claimStatus, BuildErrorJson(claimFailure ?? "intent_claim_failed", validation.IntentId));
-                        return;
-                    }
+                    int claimStatus = string.Equals(claimFailure, "legacy_duplicate_outcome_unavailable", StringComparison.Ordinal)
+                        ? 409
+                        : 500;
+                    WriteResponse(context, claimStatus, BuildErrorJson(claimFailure ?? "intent_claim_failed", validation.IntentId));
+                    return;
                 }
 
                 if (contentConflict)
@@ -230,25 +222,13 @@ namespace Glitch.Services
                         && (string.Equals(reconciled.Code, "reconcile_entry_not_found", StringComparison.Ordinal)
                             || string.Equals(reconciled.Code, "reconcile_exit_not_found", StringComparison.Ordinal)))
                     {
-                        // UiInvoke above is the factual dispatcher/native refresh
-                        // boundary. NinjaTrader exposes no stronger cross-process
-                        // sync-complete fact, so retain the first absence durably
-                        // and require a second request after the bounded settle
-                        // interval before one resume. This is coordination around
-                        // irreducible broker visibility, never a trading policy gate.
-                        TimeSpan elapsed = DateTime.UtcNow - intentState.UpdatedUtc;
-                        if (elapsed < NativeOrderVisibilitySettleInterval)
-                        {
-                            TimeSpan remaining = NativeOrderVisibilitySettleInterval - elapsed;
-                            reconciled = GlitchAiExecutionResult.Pending(
-                                "native_visibility_settling",
-                                "remaining_ms=" + Math.Max(0, (long)Math.Ceiling(remaining.TotalMilliseconds)).ToString(CultureInfo.InvariantCulture)
-                                    + "|native_sync=account_connection_connected_dispatcher_snapshot");
-                            GlitchAiExecutionJournalWriter.TryAppend(validation.IntentId, reconciled, DateTime.UtcNow);
-                            WriteResponse(context, 202, GlitchAiIntentResultContract.BuildAcceptedJson(validation.IntentId, reconciled));
-                            return;
-                        }
-                        reconciled = GlitchAiOrderExecutor.TryExecuteApprovedIntent(body, DateTime.UtcNow);
+                        // Absence is not proof that the pre-crash submission never
+                        // reached NinjaTrader. Preserve the approved intent and keep
+                        // reconciling; only fresh human/Hermes intent may authorize
+                        // another native submission.
+                        reconciled = GlitchAiExecutionResult.Pending(
+                            "native_visibility_unresolved",
+                            "native_sync=account_connection_connected_dispatcher_snapshot");
                     }
                     GlitchAiExecutionJournalWriter.TryAppend(validation.IntentId, reconciled, DateTime.UtcNow);
                     string reconciledJson = GlitchAiIntentResultContract.BuildAcceptedJson(validation.IntentId, reconciled);
@@ -331,28 +311,25 @@ namespace Glitch.Services
 
                 bool alreadyExecuting;
                 string promoteFailure;
-                lock (IntentExecutionSync)
+                if (!GlitchAiIntentStateStore.TryPromoteToExecutionStarted(intentState, out alreadyExecuting, out promoteFailure))
                 {
-                    if (!GlitchAiIntentStateStore.TryPromoteToExecutionStarted(intentState, out alreadyExecuting, out promoteFailure))
+                    if (alreadyExecuting)
                     {
-                        if (alreadyExecuting)
+                        GlitchAiExecutionResult reconciled = GlitchAiOrderExecutor.TryReconcileStartedIntent(body, DateTime.UtcNow);
+                        GlitchAiExecutionJournalWriter.TryAppend(validation.IntentId, reconciled, DateTime.UtcNow);
+                        string reconciledJson = GlitchAiIntentResultContract.BuildAcceptedJson(validation.IntentId, reconciled);
+                        string reconciledPhase = GlitchAiIntentResultContract.GetPhase(reconciled);
+                        if (!GlitchAiIntentStateStore.TrySavePhase(intentState, reconciledPhase, 202, reconciledJson, out string reconcileStateFailure))
                         {
-                            GlitchAiExecutionResult reconciled = GlitchAiOrderExecutor.TryReconcileStartedIntent(body, DateTime.UtcNow);
-                            GlitchAiExecutionJournalWriter.TryAppend(validation.IntentId, reconciled, DateTime.UtcNow);
-                            string reconciledJson = GlitchAiIntentResultContract.BuildAcceptedJson(validation.IntentId, reconciled);
-                            string reconciledPhase = GlitchAiIntentResultContract.GetPhase(reconciled);
-                            if (!GlitchAiIntentStateStore.TrySavePhase(intentState, reconciledPhase, 202, reconciledJson, out string reconcileStateFailure))
-                            {
-                                WriteResponse(context, 500, BuildErrorJson("intent_state_failed", reconcileStateFailure));
-                                return;
-                            }
-                            WriteAuthoritativeResponse(context, intentState, 202, reconciledJson);
+                            WriteResponse(context, 500, BuildErrorJson("intent_state_failed", reconcileStateFailure));
                             return;
                         }
-
-                        WriteResponse(context, 409, BuildErrorJson(promoteFailure ?? "intent_promote_failed", validation.IntentId));
+                        WriteAuthoritativeResponse(context, intentState, 202, reconciledJson);
                         return;
                     }
+
+                    WriteResponse(context, 409, BuildErrorJson(promoteFailure ?? "intent_promote_failed", validation.IntentId));
+                    return;
                 }
 
                 GlitchAiExecutionResult execution = GlitchAiOrderExecutor.TryExecuteApprovedIntent(body, DateTime.UtcNow);

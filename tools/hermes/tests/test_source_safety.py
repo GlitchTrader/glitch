@@ -59,8 +59,7 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("TryReconstructLegacyState", store)
         self.assertIn("TryReconcileStartedIntent", server)
         self.assertIn("BuildIntentCorrelation", executor)
-        self.assertIn("lock (IntentExecutionSync)", server)
-        self.assertLess(server.index("ReadRequestBody"), server.index("lock (IntentExecutionSync)"))
+        self.assertNotIn("IntentExecutionSync", server)
         self.assertIn("TryPromoteToExecutionStarted", store)
         promote = server.index("TryPromoteToExecutionStarted")
         execute = server.rindex("TryExecuteApprovedIntent")
@@ -78,7 +77,7 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertNotIn("StreamReader", body)
         self.assertNotIn("char[] buffer", body)
 
-    def test_restart_resumes_only_after_a_durable_pre_submit_visibility_observation(self):
+    def test_restart_reconciles_without_time_created_replay_authority(self):
         server = source(INTENT_SERVER)
         self.assertIn("resumeReceivedClaim", server)
         self.assertIn("continueApprovedClaim", server)
@@ -97,10 +96,9 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn('reconciled.Code, "reconcile_entry_not_found"', reconciliation)
         self.assertIn('reconciled.Code, "reconcile_exit_not_found"', reconciliation)
         self.assertIn('intentState.Phase, "execution_visibility_pending"', reconciliation)
-        self.assertIn("TryExecuteApprovedIntent", reconciliation)
-        self.assertIn("NativeOrderVisibilitySettleInterval", reconciliation)
-        self.assertIn("native_visibility_settling", reconciliation)
-        self.assertIn("remaining_ms=", reconciliation)
+        self.assertNotIn("TryExecuteApprovedIntent", reconciliation)
+        self.assertNotIn("NativeOrderVisibilitySettleInterval", reconciliation)
+        self.assertIn("native_visibility_unresolved", reconciliation)
         self.assertIn("ConnectionStatus.Connected", source(EXECUTOR))
 
         resume = method_body(
@@ -112,6 +110,17 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("GlitchAiRiskFirewall.Validate", resume)
         self.assertIn('TrySavePhase(intentState, "approved"', resume)
         self.assertNotIn("TryReconcileStartedIntent", resume)
+
+    def test_ai_protection_reconcile_can_resize_partial_oco_units_and_reports_failure(self):
+        executor = source(EXECUTOR)
+        trim = method_body(
+            executor,
+            "private static void ResizeAiProtection",
+            "public static bool IsExecutionEnabled",
+        )
+        self.assertIn("QuantityChanged", trim)
+        self.assertIn("account.Change(changes.ToArray())", trim)
+        self.assertIn("RaiseCritical", trim)
 
     def test_one_minute_publisher_is_paired_gap_aware_and_not_modulo_gated(self):
         exchange = source(EXCHANGE_WRITER)
@@ -465,11 +474,12 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("reconcile_entry_protection_cancel_pending", executor)
         self.assertIn("TryCloseReconciledEntryDelta", executor)
         self.assertIn("reconcile_entry_recovery_close_submitted", executor)
-        self.assertIn("reconcile_entry_recovery_close_visibility_settling", executor)
-        self.assertIn("reconcile_entry_recovery_close_absent_after_resume", executor)
+        self.assertIn("reconcile_entry_recovery_close_visibility_unresolved", executor)
+        self.assertNotIn("TimeSpan.FromSeconds(30)", executor)
         entry_plan = source(ADDON / "Services/Ai/GlitchAiEntryBaselinePlanStore.cs")
         self.assertIn("TryBeginRecoveryClose", entry_plan)
-        self.assertIn("TryMarkRecoveryCloseResumeUsed", entry_plan)
+        self.assertNotIn("TryMarkRecoveryCloseResumeUsed", entry_plan)
+        self.assertNotIn("RecoveryCloseResumeUsed", entry_plan)
         self.assertIn("RecoveryCloseStartedUtc", entry_plan)
         self.assertNotIn("RecoveryCloseSubmitted", executor)
         self.assertIn("IsDurableRecoveryCloseTerminal", executor)

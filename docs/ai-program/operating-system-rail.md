@@ -45,7 +45,7 @@ One minute publisher retries until market and portfolio snapshots form a complet
 - Recognized failure: next available packet.
 - Transport uncertainty reuses the idempotent outbox; terminal rejection requests a new decision.
 
-PID/start-time locks recover dead owners. Atomic intent state progresses from received through terminal execution state. Same UUID/same content returns stored truth; changed content conflicts. Restart recovery reconciles native identity and journals and never blindly resubmits an ambiguous entry.
+PID/start-time locks recover dead owners. Atomic intent state progresses from received through terminal execution state. Same UUID/same content returns stored truth; changed content conflicts. Restart recovery reconciles native identity and journals and never resubmits from absence, elapsed time, or a retry count. A fresh native submission requires fresh human or Hermes intent.
 
 Closing the Glitch window hides the retained runtime. Packets, risk mitigation, reconciliation, daily-close enforcement, and local servers continue until AddOn termination.
 

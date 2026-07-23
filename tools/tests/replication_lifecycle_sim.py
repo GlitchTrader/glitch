@@ -34,8 +34,8 @@ class OrderState(str, Enum):
 
 class SignalKind(str, Enum):
     None_ = "None"
-    Copy = "Copy"
-    Catchup = "Catchup"
+    Entry = "Entry"
+    Close = "Close"
     Protection = "Protection"
 
 
@@ -103,32 +103,30 @@ def parse_signal_kind(name: str) -> SignalKind:
     upper = (name or "").upper()
     if "-S-" in upper or "-T-" in upper:
         return SignalKind.Protection
-    if "-X-" in upper and "GLT-COPY" in upper:
-        return SignalKind.Copy
-    if "GLT-CATCHUP" in upper:
-        return SignalKind.Catchup
-    if "GLT-COPY" in upper:
-        return SignalKind.Copy
+    if "-X-" in upper and ("GLT-COPY" in upper or "GLT-CATCHUP" in upper):
+        return SignalKind.Close
+    if "GLT-CATCHUP" in upper or "GLT-COPY" in upper:
+        return SignalKind.Entry
     return SignalKind.None_
 
 
 def trim_follower_protection_current(account: AccountSim) -> None:
-    """Port of TrimFollowerProtection (execution-time path)."""
+    """Model authoritative exact-instrument protection resizing."""
     if not account.is_configured_follower:
         return
-    by_root: dict[str, list[Order]] = {}
+    by_instrument: dict[str, list[Order]] = {}
     for order in account.orders:
         if not order.working or parse_signal_kind(order.name) != SignalKind.Protection:
             continue
         if not order.oco:
             continue
-        by_root.setdefault(order.instrument.root, []).append(order)
+        by_instrument.setdefault(order.instrument.exact_key(), []).append(order)
 
-    for root, root_orders in by_root.items():
-        net = account.net_root(root)
+    for _instrument_key, instrument_orders in by_instrument.items():
+        net = account.net_exact(instrument_orders[0].instrument)
         units: list[tuple[str, list[Order], int]] = []
         oco_groups: dict[str, list[Order]] = {}
-        for order in root_orders:
+        for order in instrument_orders:
             oco_groups.setdefault(order.oco, []).append(order)
         for oco, group in oco_groups.items():
             qty = max((o.remaining_qty() for o in group), default=0)
@@ -142,10 +140,16 @@ def trim_follower_protection_current(account: AccountSim) -> None:
         for _oco, group, qty in units:
             if excess <= 0:
                 break
-            if qty > excess:
-                continue
-            cancellations.extend(group)
-            excess -= qty
+            reduction = min(excess, qty)
+            desired = qty - reduction
+            if desired == 0:
+                cancellations.extend(group)
+            else:
+                for order in group:
+                    order.quantity = min(order.quantity, desired)
+                    if order.remaining is not None:
+                        order.remaining = min(order.remaining, desired)
+            excess -= reduction
         if cancellations:
             account.cancel(cancellations)
 
@@ -198,6 +202,20 @@ def rail_sync_should_reduce_by_delta(expected: int, actual: int) -> bool:
     )
 
 
+def should_cancel_owned_close_remainder(
+    initial_net: int,
+    target_net: int,
+    actual_net: int,
+    action_sign: int,
+    owned_filled: int,
+) -> bool:
+    """Position truth may cancel, but never create, an owned close remainder."""
+    if actual_net == 0:
+        return False
+    expected_from_owned_fills = initial_net + action_sign * max(0, owned_filled)
+    return actual_net == target_net or actual_net != expected_from_owned_fills
+
+
 def rail_flat_requires_protection_cancel(
     account: AccountSim,
     instrument: Instrument,
@@ -230,7 +248,7 @@ def reconcile_follower_protection_current(account: AccountSim) -> None:
                 for o in account.orders
                 if o.working
                 and o.instrument.exact_key() == key
-                and parse_signal_kind(o.name) != SignalKind.None_
+                and parse_signal_kind(o.name) in {SignalKind.Protection, SignalKind.Close}
             ]
             account.cancel(to_cancel)
         else:
@@ -248,8 +266,7 @@ def reconcile_excess_close_remainders_current(account: AccountSim, instrument: I
         for o in account.orders
         if o.working
         and o.instrument.exact_key() == instrument.exact_key()
-        and "-X-" in (o.name or "").upper()
-        and "GLT-COPY" in (o.name or "").upper()
+        and parse_signal_kind(o.name) == SignalKind.Close
     ]
     excess = sum(o.remaining_qty() for o in close_orders) - closable
     if excess <= 0:

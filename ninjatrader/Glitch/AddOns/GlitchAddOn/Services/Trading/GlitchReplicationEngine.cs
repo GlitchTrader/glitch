@@ -17,35 +17,6 @@ namespace Glitch.Services
             return GlitchInstrumentMetadataService.GetInstrumentRoot(instrument);
         }
 
-        public static int GetNetQuantityForInstrumentRoot(Account account, string instrumentRoot)
-        {
-            return TryGetNetQuantityForInstrumentRoot(account, instrumentRoot, out int netQuantity)
-                ? netQuantity
-                : 0;
-        }
-
-        public static bool TryGetNetQuantityForInstrumentRoot(
-            Account account,
-            string instrumentRoot,
-            out int netQuantity)
-        {
-            netQuantity = 0;
-            if (account == null || string.IsNullOrWhiteSpace(instrumentRoot)
-                || !TrySnapshotPositions(account, out Position[] positions))
-                return false;
-
-            foreach (Position position in positions)
-            {
-                if (position == null || position.Instrument == null)
-                    continue;
-                if (!string.Equals(GetInstrumentRoot(position.Instrument), instrumentRoot, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                netQuantity += GetSignedQuantity(position);
-            }
-            return true;
-        }
-
         public static bool TryGetNetQuantityForInstrument(
             Account account,
             Instrument instrument,
@@ -65,30 +36,6 @@ namespace Glitch.Services
                 netQuantity += GetSignedQuantity(position);
             }
             return true;
-        }
-
-        public static Instrument FindInstrumentForInstrumentRoot(Account account, string instrumentRoot)
-        {
-            if (account == null || string.IsNullOrWhiteSpace(instrumentRoot))
-                return null;
-
-            if (!TrySnapshotPositions(account, out Position[] positions)
-                || !TrySnapshotOrders(account, out Order[] orders))
-                return null;
-
-            Position position = positions.FirstOrDefault(p =>
-                p != null &&
-                p.Instrument != null &&
-                string.Equals(GetInstrumentRoot(p.Instrument), instrumentRoot, StringComparison.OrdinalIgnoreCase));
-            if (position?.Instrument != null)
-                return position.Instrument;
-
-            Order order = orders.FirstOrDefault(o =>
-                o != null &&
-                o.Instrument != null &&
-                IsWorkingOrderState(o.OrderState) &&
-                string.Equals(GetInstrumentRoot(o.Instrument), instrumentRoot, StringComparison.OrdinalIgnoreCase));
-            return order?.Instrument;
         }
 
         public static List<Instrument> GetOpenPositionInstruments(Account account)
@@ -185,6 +132,13 @@ namespace Glitch.Services
             return false;
         }
 
+        public static bool CanCancelOrder(Order order)
+        {
+            if (order == null || !IsWorkingOrderState(order.OrderState))
+                return false;
+            return order.OrderState.ToString().IndexOf("Cancel", StringComparison.OrdinalIgnoreCase) < 0;
+        }
+
         public static bool IsStopLikeOrder(Order order)
         {
             if (order == null)
@@ -203,22 +157,20 @@ namespace Glitch.Services
             return 0;
         }
 
-        public static void CollectPositionInstrumentRoots(Account account, ISet<string> roots)
+        public static void CollectPositionInstruments(Account account, IDictionary<string, Instrument> instruments)
         {
-            if (account == null || roots == null)
-                return;
-
-            if (!TrySnapshotPositions(account, out Position[] positions))
+            if (account == null || instruments == null
+                || !TrySnapshotPositions(account, out Position[] positions))
                 return;
 
             foreach (Position position in positions)
             {
-                if (position == null || position.Instrument == null || position.MarketPosition == MarketPosition.Flat)
+                Instrument instrument = position?.Instrument;
+                if (instrument == null
+                    || position.MarketPosition == MarketPosition.Flat
+                    || string.IsNullOrWhiteSpace(instrument.FullName))
                     continue;
-
-                string root = GetInstrumentRoot(position.Instrument);
-                if (!string.IsNullOrWhiteSpace(root))
-                    roots.Add(root);
+                instruments[instrument.FullName] = instrument;
             }
         }
 
