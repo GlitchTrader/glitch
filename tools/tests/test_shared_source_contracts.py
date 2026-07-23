@@ -280,6 +280,25 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("lifecycle.ProtectionAvailable = true", attach)
         self.assertIn("ProcessFollowerOrderUpdate(lifecycle.Account, entryOrder)", attach)
         self.assertIn("result=late_plan_attached", attach)
+        self.assertIn("LogPlanWait(lifecycle)", attach)
+
+    def test_unlinked_manual_atm_plan_requires_exact_full_native_position(self):
+        protection = source(PROTECTION)
+        resolve = method_body(
+            protection,
+            "public static bool TryResolveMasterPlan",
+            "public static bool TryScalePlan",
+        )
+        fallback = method_body(
+            protection,
+            "private static bool CanUseFullPositionPlan",
+            "private static string TryGetSignalCorrelation",
+        )
+        self.assertIn("CanUseFullPositionPlan(", resolve)
+        self.assertIn("TryGetNetQuantityForInstrument(", fallback)
+        self.assertIn("Math.Abs(masterNet) != requiredMasterQuantity", fallback)
+        self.assertIn("instrument.FullName", resolve)
+        self.assertNotIn("GetInstrumentRoot(order.Instrument)", resolve)
 
     def test_duplicate_master_order_callbacks_do_not_repeat_late_attachment(self):
         attach = method_body(

@@ -51,15 +51,15 @@ namespace Glitch.Services
             if (masterAccount == null || instrument == null || requiredMasterQuantity <= 0)
                 return false;
 
-            string root = GlitchReplicationEngine.GetInstrumentRoot(instrument);
+            string instrumentName = instrument.FullName?.Trim() ?? string.Empty;
             OrderAction exitAction = isLong ? OrderAction.Sell : OrderAction.BuyToCover;
             Order[] orders = SnapshotOrders(masterAccount);
             IEnumerable<Order> candidates = orders.Where(order =>
                 order != null
                 && order.Instrument != null
                 && string.Equals(
-                    GlitchReplicationEngine.GetInstrumentRoot(order.Instrument),
-                    root,
+                    order.Instrument.FullName,
+                    instrumentName,
                     StringComparison.OrdinalIgnoreCase)
                 && order.OrderAction == exitAction
                 && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState)
@@ -80,7 +80,14 @@ namespace Glitch.Services
                         entrySignal.Trim(),
                         StringComparison.OrdinalIgnoreCase))
                     .ToList();
-                candidates = linked;
+                if (linked.Count > 0)
+                    candidates = linked;
+                else if (!CanUseFullPositionPlan(
+                    masterAccount,
+                    instrument,
+                    requiredMasterQuantity,
+                    isLong))
+                    return false;
             }
 
             var legs = new List<GlitchReplicationProtectionLeg>();
@@ -265,6 +272,22 @@ namespace Glitch.Services
             }
             string token = hash.ToString("x8", CultureInfo.InvariantCulture);
             return token.Substring(0, Math.Max(1, Math.Min(token.Length, length)));
+        }
+
+        private static bool CanUseFullPositionPlan(
+            Account masterAccount,
+            Instrument instrument,
+            int requiredMasterQuantity,
+            bool isLong)
+        {
+            if (!GlitchReplicationEngine.TryGetNetQuantityForInstrument(
+                masterAccount,
+                instrument,
+                out int masterNet))
+                return false;
+            if (Math.Abs(masterNet) != requiredMasterQuantity)
+                return false;
+            return masterNet != 0 && (masterNet > 0) == isLong;
         }
 
         private static string TryGetSignalCorrelation(string signalName, string role)
