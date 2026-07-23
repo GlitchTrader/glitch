@@ -118,7 +118,7 @@ finally {
     core_model = 'gpt-5.6-luna'
     core_provider = 'openai-codex'
     core_reasoning_effort = 'medium'
-    learning_reasoning_effort = 'high'
+    learning_reasoning_effort = 'medium'
     fallback_providers = @()
     terminal_backend = 'local'
     memory_enabled = $true
