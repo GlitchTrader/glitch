@@ -609,16 +609,6 @@ namespace Glitch.Services
                     (masterTotalOpenContracts + masterQuantity).ToString(CultureInfo.InvariantCulture));
 
             OrderAction entryAction = isLong ? OrderAction.Buy : OrderAction.SellShort;
-            if (!GlitchApexDirectionGuard.TryApproveEntry(
-                masterAccount,
-                instrument,
-                isLong ? 1 : -1,
-                out string apexDirectionFailure))
-            {
-                return GlitchAiExecutionResult.Failed(
-                    "apex_direction_compliance_rejected",
-                    apexDirectionFailure);
-            }
             GlitchAiTradingWindowStatus finalTradingWindow = GlitchAiTradingWindow.Evaluate(
                 DateTime.UtcNow,
                 GlitchAiJsonFields.ExtractString(portfolioAccountJson, "trading_start_time_et"),

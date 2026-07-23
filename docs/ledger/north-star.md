@@ -17,8 +17,9 @@ Hermes decides; Glitch validates, executes, protects, replicates, reconciles, an
 ## Invariants
 
 - Native NinjaTrader account, position, order, execution, and PnL truth outranks local state.
-- One producer-neutral CopyEngine owns followers, user ratios, native OCO protection, close propagation, and explicit resync.
+- One producer-neutral CopyEngine copies each master execution delta at the configured ratio, owns follower-native OCO protection and close propagation, preserves manual follower changes without blocking later copies, and performs catch-up only on explicit user resync.
 - Hermes owns thesis, direction, master quantity, geometry, timing, scaling, management, and self-review.
+- Inferred policy does not override Hermes intent or an already accepted native master execution.
 - Glitch may reject only factual invalidity, ambiguous native state, ownership, incomplete protection, contract capacity, and authoritative account-survival violations.
 - Code never chooses a strategy, quantity schedule, stop formula, risk percentage, target formula, quota, grid, or martingale behavior.
 - Decisions, receipts, outcomes, journals, episodes, memory, and supervisory review remain attributable through stable IDs.

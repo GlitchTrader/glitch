@@ -10,7 +10,6 @@ FIREWALL = ADDON / "Services/Ai/GlitchAiRiskFirewall.cs"
 POLICY = ADDON / "Services/Ai/GlitchAiRailPolicyStore.cs"
 PORTFOLIO_READER = ADDON / "Services/Ai/GlitchAiPortfolioSnapshotReader.cs"
 TELEMETRY_UI = ADDON / "UI/MainWindow/GlitchMainWindow.Telemetry.partial.cs"
-APEX_DIRECTION_GUARD = ADDON / "Services/Risk/GlitchApexDirectionGuard.cs"
 INTENT_VALIDATOR = ADDON / "Services/Ai/GlitchAiIntentValidator.cs"
 JSON_FIELDS = ADDON / "Services/Ai/GlitchAiJsonFields.cs"
 TRADING_WINDOW = ADDON / "Services/Ai/GlitchAiTradingWindow.cs"
@@ -148,13 +147,12 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertNotIn("GetReplicationEntryDenialReason", entry)
         self.assertNotIn("GlitchAiOrderExecutor.GetReplicationEntryDenialReason", source(TELEMETRY_UI))
 
-    def test_ai_refuses_firm_direction_conflicts(self):
+    def test_ai_does_not_override_hermes_with_inferred_direction_policy(self):
         telemetry = source(TELEMETRY_UI)
-        guard = source(APEX_DIRECTION_GUARD)
         executor = source(EXECUTOR)
         self.assertNotIn("GetAiEntryDenialReason", telemetry)
-        self.assertIn("GlitchApexDirectionGuard.TryApproveEntry", executor)
-        self.assertIn("apex_cross_direction_conflict", guard)
+        self.assertNotIn("GlitchApexDirectionGuard", executor)
+        self.assertNotIn("apex_direction_compliance_rejected", executor)
 
     def test_ai_does_not_treat_replication_routes_as_a_cognitive_gate(self):
         telemetry = source(TELEMETRY_UI)

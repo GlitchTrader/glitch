@@ -22,7 +22,6 @@ METADATA = ADDON / "Services/Trading/GlitchInstrumentMetadataService.cs"
 FEED_BUS = ADDON / "UI/Analytics/GlitchAnalyticsFeedBus.cs"
 ANALYTICS_BRIDGE = INDICATORS / "GlitchAnalyticsBridge.cs"
 PROP_RULES = ADDON / "Resources/PropFirmRules.json"
-APEX_DIRECTION_GUARD = ADDON / "Services/Risk/GlitchApexDirectionGuard.cs"
 PROP_RULE_BUNDLE = ADDON / "UI/MainWindow/GlitchMainWindow.PropFirmRulesBundle.generated.cs"
 PROP_RULE_GENERATOR = ROOT / "scripts/generate_bundled_prop_rules.ps1"
 FUNDAMENTAL_ANALYSIS = ADDON / "Services/FundamentalAnalysis/GlitchFundamentalAnalysisService.cs"
@@ -127,31 +126,19 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("TryGetNetQuantityForInstrumentRoot", text)
         self.assertIn("TryGetOpenPositionInstruments", text)
 
-    def test_follower_submission_fails_closed_on_unknown_native_state_or_capacity(self):
+    def test_live_replication_copies_each_execution_delta_without_position_alignment(self):
         copy = source(COPY_ENGINE)
-        fanout = method_body(copy, "private void FanOutOpening", "private void FanOutCompleteClose")
-        submit = method_body(copy, "private void SubmitProtectedFollowerEntry", "private bool SubmitProtectionUnits")
-        for token in (
-            "copy_reject|native_state_unavailable",
-            "copy_reject|contract_cap_unavailable",
-            "copy_reject|max_contracts",
-        ):
-            self.assertIn(token, fanout)
-        self.assertIn("FollowerFinalAdmissionUnavailable", submit)
-        self.assertIn("TryGetTotalOpenContracts", copy)
-        self.assertIn("TryGetInFlightOpeningQuantity", copy)
-        self.assertIn("TryResolveRouteContractCap", copy)
+        opening = method_body(copy, "private void FanOutOpening", "private void FanOutCompleteClose")
+        scale = method_body(copy, "private static int ScaleExecution", "private static bool TrySnapshotOrders")
+        self.assertIn("ScaleExecution(context, route.Ratio)", opening)
+        self.assertIn("filled * ratio", scale)
+        self.assertIn("before * ratio", scale)
+        self.assertNotIn("ResolveContextMasterQuantity(context)", opening)
+        self.assertNotIn("expected", opening)
+        self.assertNotIn("actual", opening)
+        self.assertNotIn("inFlight", opening)
         self.assertNotIn("GetEntryDenialReason", copy)
-        self.assertNotIn("private static int GetTotalOpenContracts", copy)
-        self.assertNotIn("private static Order[] SnapshotOrders", copy)
-
-    def test_replication_suppresses_only_the_divergent_follower(self):
-        copy = source(COPY_ENGINE)
-        fanout = method_body(copy, "private void FanOutOpening", "private void FanOutCompleteClose")
-        self.assertIn("expectedBeforeFill", fanout)
-        self.assertIn("Math.Abs(actual) + inFlight != expectedBeforeFill", fanout)
-        self.assertIn("SuppressFollowerRoot", fanout)
-        self.assertIn("continue;", fanout)
+        self.assertNotIn("TryGetInFlightOpeningQuantity", copy)
 
     def test_explicit_resync_and_final_submit_use_the_configured_route_cap(self):
         copy = source(COPY_ENGINE)
@@ -184,15 +171,38 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("MaxContracts = followerMaxContracts", replication)
         self.assertNotIn("MaxContracts = followerRow?.MaxContractsRaw > 0", replication)
 
-    def test_manual_follower_divergence_suppresses_only_automatic_reentry_until_resync(self):
+    def test_manual_follower_divergence_never_blocks_later_execution_deltas(self):
         copy = source(COPY_ENGINE)
         opening = method_body(copy, "private void FanOutOpening", "private void FanOutCompleteClose")
         align = method_body(copy, "public void AlignFollowerToMaster", "private void FanOutOpening")
-        self.assertIn("manual_or_external_divergence", opening)
-        self.assertIn("SuppressFollowerRoot", opening)
-        self.assertIn("explicit_resync_required", opening)
-        self.assertIn("ClearFollowerRootSuppression", align)
-        self.assertNotRegex(copy, r"(?i)quarantin")
+        self.assertIn("ScaleExecution(context, route.Ratio)", opening)
+        self.assertIn("int expected =", align)
+        self.assertIn("SubmitProtectedFollowerEntry", align)
+        for forbidden in (
+            "_suppressedFollowerRoots",
+            "SuppressFollowerRoot",
+            "explicit_resync_required",
+            "manual_or_external_divergence",
+        ):
+            self.assertNotIn(forbidden, copy)
+
+    def test_partial_master_close_is_copied_and_excess_protection_is_trimmed(self):
+        copy = source(COPY_ENGINE)
+        replication = source(REPLICATION_UI)
+        close = method_body(copy, "private void FanOutCompleteClose", "private string SubmitFollowerClose")
+        submit = method_body(copy, "private string SubmitFollowerClose", "private void SubmitProtectedFollowerEntry")
+        trim = method_body(copy, "private void TrimFollowerProtection", "private void CleanupFlatFollowerOrders")
+        state = method_body(copy, "public void ProcessAccountStateUpdate", "public void ProcessFollowerExecution")
+        self.assertIn("ScaleExecution(context, route.Ratio)", close)
+        self.assertIn("Math.Min(requested, closable)", close)
+        self.assertIn("SubmitFollowerClose", close)
+        self.assertIn('CopySignalName + "-X-"', submit)
+        self.assertIn("units.Sum(unit => unit.Quantity) - Math.Abs(netQuantity)", trim)
+        self.assertIn("account.Cancel(cancellations.ToArray())", trim)
+        self.assertIn("_copyEngine.ProcessFollowerExecution(account)", replication)
+        self.assertNotIn("TrimFollowerProtection", state)
+        self.assertNotIn("PartialFollowerExitUnsupported", copy)
+        self.assertNotIn("partial_manual_exit", copy)
 
     def test_follower_flatten_latch_releases_per_instrument_root(self):
         copy = source(COPY_ENGINE)
@@ -215,11 +225,13 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         replication = source(REPLICATION_UI)
         self.assertIn("EntryOrderFilledQuantity", copy)
         self.assertIn("ResolveContextMasterQuantity(context)", copy)
+        self.assertIn("context.EntryOrder?.Filled", copy)
         self.assertIn("Math.Abs(currentMasterNet) < copyMasterQuantity", copy)
         self.assertIn("Math.Abs(masterNet) < copyMasterQuantity", copy)
         self.assertIn('TryGetNestedPropertyValueAsString(executionObject, "ExecutionId")', replication)
         self.assertNotIn('TryGetNestedPropertyValueAsString(executionObject, "ExecutionId", "Id")', replication)
         self.assertIn("Math.Max(quantity, Math.Max(0, order.Filled))", replication)
+        self.assertIn("EntryOrder = order", replication)
 
     def test_each_follower_unit_has_an_independent_native_oco_pair(self):
         body = method_body(
@@ -371,6 +383,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         text = source(COPY_ENGINE)
         self.assertIn('StartsWith(CopySignalName + "-E-"', text)
         self.assertIn('StartsWith(CatchUpSignalName + "-E-"', text)
+        self.assertIn('StartsWith(CopySignalName + "-X-"', text)
         self.assertNotRegex(text, r"StartsWith\(\s*\"GLT-\"")
         self.assertNotRegex(text, r"Cancel.*Unknown|Flatten.*Unknown")
 
@@ -441,14 +454,11 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             )
             self.assertIn("autonomous AI/automation is prohibited", policy["notes"])
 
-    def test_glitch_generated_apex_entries_fail_closed_on_cross_direction_state(self):
-        guard = source(APEX_DIRECTION_GUARD)
+    def test_replication_does_not_veto_executed_entries_with_apex_inference(self):
         copy = source(COPY_ENGINE)
-        self.assertIn("TrySnapshotPositions", guard)
-        self.assertIn("TrySnapshotOrders", guard)
-        self.assertIn("apex_cross_direction_conflict", guard)
-        self.assertIn("GlitchApexDirectionGuard.TryApproveEntry", copy)
-        self.assertIn("Glitch preserved the human position", copy)
+        self.assertNotIn("GlitchApexDirectionGuard", copy)
+        self.assertNotIn("apex_direction_compliance", copy)
+        self.assertNotIn("master_entry_not_replicated", copy)
 
     def test_journal_scope_and_card_units_are_explicit(self):
         summary = source(SUMMARY_TAB)

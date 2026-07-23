@@ -238,6 +238,9 @@ namespace Glitch.UI
                 || string.Equals(eventName, "OrderUpdate", StringComparison.OrdinalIgnoreCase))
                 GlitchAiOrderExecutor.ProcessAccountStateUpdate(account);
 
+            if (string.Equals(eventName, "ExecutionUpdate", StringComparison.OrdinalIgnoreCase))
+                _copyEngine.ProcessFollowerExecution(account);
+
             if (string.Equals(eventName, "PositionUpdate", StringComparison.OrdinalIgnoreCase))
                 _copyEngine.ProcessAccountStateUpdate(account);
 
@@ -443,6 +446,7 @@ namespace Glitch.UI
                 EntryOrderFilledQuantity = order == null
                     ? quantity
                     : Math.Max(quantity, Math.Max(0, order.Filled)),
+                EntryOrder = order,
                 OrderSignalName = signalName,
                 Oco = order?.Oco,
                 ExecutionTimeUtc = TryReadExecutionTimeUtc(executionObject)

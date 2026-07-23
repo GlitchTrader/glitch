@@ -90,3 +90,13 @@ Glitch is not organized like a single monolithic indicator. The design splits:
 - user-facing control surfaces
 
 That architecture matters for real use. It lets the chart layer stay responsive, the AddOn stay stateful, and the operator work from one consistent control surface across multiple accounts and workflows.
+
+## Replication contract
+
+The CopyEngine responds to native master execution deltas and deduplicates each
+execution identity. It applies the configured follower ratio without using
+follower alignment as an admission gate. Manual follower changes remain under
+user control while later master executions continue copying normally. Manual
+partial and full master closes propagate at the configured ratio. Catch-up is
+position alignment and runs only after an explicit user resync action. Startup
+and recompile remain observe-only.

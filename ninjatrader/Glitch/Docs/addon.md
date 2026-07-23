@@ -127,7 +127,7 @@ These files keep the AddOn readable by separating operator-facing surfaces from 
 Glitch separates operator signals by severity:
 
 - **Critical warnings** appear in the header count (orange), the Journal critical-warnings grid, and persist until dismissed. They include trading locks such as buffer critical lock, eval profit target lock, replication freeze, max contracts breach, and no-protection lock.
-- **Operational warnings** appear in the header count (white) and the critical-warnings grid. They cover replication conflicts and hard resync blocks that need attention but do not use the same dismiss-to-unlock flow as risk locks.
+- **Operational warnings** appear in the header count (white) and the critical-warnings grid. They cover factual replication or native-order failures that need attention but do not use the same dismiss-to-unlock flow as risk locks.
 - **Informational signals** (for example transient replication submit failures, protective order rejections, policy limit notices, and risk flatten fallback notices) are written to the Journal under category `Warning` only. They do not increase the header warning count and are not persisted as critical warnings.
 
 Dashboard equity coloring uses neutral text unless net-liq or intratrade drawdown warnings are active. Small negative unrealized PnL stays neutral until it reaches the intratrade drawdown warning threshold.
@@ -137,6 +137,11 @@ follower's stop/target geometry from the corresponding master leg and follower
 fill, preserves route ratios, and records protection only after submission
 succeeds. Invalid or rejected protection enters the bounded native recovery path;
 it is never treated as a protected position.
+
+Each native master execution, including a manual partial or full close, is copied
+once at the configured follower ratio. Manual follower changes are preserved and
+do not block later master executions. Catch-up is a separate action performed only
+when the user explicitly requests resync.
 
 ## Summary
 
