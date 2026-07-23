@@ -27,7 +27,9 @@
         "AI source commit ai/22@ae51406; shared npm.cmd test 54/54.",
         "GlitchCopyEngine.cs and GlitchReplicationProtection.cs are byte-identical across Standard and AI; Replication UI drift is limited to named AI executor hooks.",
         "Independent gpt-5.6-sol high review: APPROVE after replication ownership, recovery, and terminal-state corrections.",
-        "Native bounded Sim scenario and final flat/order-free proof remain pending coupled AI deployment authority."
+        "AI AddOn ai/22@ae51406 deployed once as the complete 91-file GlitchAddOn folder; live hashes match 91/91 and NinjaScript F5 compile exposed no error row or modal.",
+        "Deployed UI exposes the explicit per-group Sync control. Deployment submitted no order and preserved the pre-existing Sim102 long 1 and Sim103 long 1 manual divergence.",
+        "A fresh bounded Sim lifecycle and final flat/order-free proof remain pending because pre-existing follower exposure was intentionally not overridden."
       ],
       "sources": [
         "branch:standard/20/ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Trading/GlitchCopyEngine.cs",
@@ -215,8 +217,10 @@
         "AI shared suite 54/54 and Hermes suite 186/186.",
         "Pre-model eligibility suppression and inferred quantity, Apex, session, time-window, and stop-widening gates were removed from non-opt-in authority paths.",
         "AI recovery and EXIT use UUID/correlation-attributable deltas and preserve ambiguous human changes.",
-        "Public Hermes v0.0.2.9 candidate commit glitch-hermes-profile@744eb30 passes manifest, PowerShell parse, runner help, and normalized runner parity; it is not pushed or installed.",
-        "Native Hermes and human-interleave Sim proof remains pending coupled AI deployment authority."
+        "Public Hermes v0.0.2.9 commit glitch-hermes-profile@744eb30 and tag v0.0.2.9 are pushed; installed profile passes 28/28 distribution-owned hash parity with plugin and supervised gateway present.",
+        "AI profile source ai/22@4c13209 now reproduces the public v0.0.2.9 tree exactly and removes the stale embedded deterministic capacity/session language that the drift check exposed.",
+        "AI and both preserved Hermes jobs remained paused through profile update and AddOn deployment.",
+        "Native Hermes and human-interleave Sim proof remains pending because the existing follower positions were preserved rather than commandeered for a test."
       ],
       "sources": [
         "branch:ai/22/tools/hermes/run-direct-glitch-cycle.py",
@@ -276,7 +280,8 @@
         "AI source commit ai/22@ae51406.",
         "Default-off daily-close setting is visible, persisted, independently scoped, and localized in all six authored locales.",
         "AI shared suite 54/54 and Hermes suite 186/186 include off, on, persistence, scope, and unresolved-account source contracts.",
-        "Native enabled bounded Sim proof remains pending coupled AI deployment authority."
+        "Native deployed Settings UI exposes the account-scoped daily-close control unchecked; no compliance order was submitted.",
+        "Native enabled bounded Sim proof remains pending because enabling a broad flatten control would mutate the preserved follower positions."
       ],
       "sources": [
         "branch:ai/22/ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.AiTemporalCompliance.partial.cs",
@@ -387,7 +392,7 @@
       "reviewer_role": "code-reviewer",
       "acceptance": [
         "Internal rail, public AddOn documentation, public Hermes profile facts, and ABKB all state the same human > AI > determinism hierarchy and explicit catch-up/compliance semantics.",
-        "The AI rail states Hermes profile v0.0.2.8 and the 30-minute learning cadence proven by distribution source.",
+        "The AI rail states Hermes profile v0.0.2.9 and the 30-minute learning cadence proven by distribution source.",
         "A drift check detects synthetic version, cadence, or shared replication-contract mismatch.",
         "No documentation claims release, profitability, unattended operation, or live readiness without named evidence and approval."
       ],
@@ -404,7 +409,9 @@
         "Durable internal/public contracts and all six authored public locales pass npm.cmd test 46/46.",
         "ABKB authority update commit projects/abkb@9801289.",
         "Standard source commit standard/20@b1b94f8 and AI source commit ai/22@ae51406.",
-        "Public Hermes v0.0.2.9 candidate commit glitch-hermes-profile@744eb30 is local only; published and installed profile facts remain v0.0.2.8 until explicit promotion authority.",
+        "AI profile source reconciliation commit ai/22@4c13209; public-profile rebuild is byte-clean against glitch-hermes-profile@744eb30.",
+        "Public Hermes v0.0.2.9 commit glitch-hermes-profile@744eb30 and tag v0.0.2.9 are pushed; installed profile passes 28/28 distribution-owned hash parity.",
+        "Hermes plugin and supervised gateway are present; both persisted jobs and Glitch AI remain paused.",
         "Independent gpt-5.6-sol high review: APPROVE."
       ],
       "sources": [
@@ -420,7 +427,7 @@
       "spec_kit": {
         "user_story": "As an operator and maintainer, I need one current explanation of what Glitch may do and which component owns each decision.",
         "scenarios": [
-          "Given public profile v0.0.2.8, when docs are checked, then version and 30-minute cadence agree everywhere.",
+          "Given public profile v0.0.2.9, when docs are checked, then version and 30-minute cadence agree everywhere.",
           "Given a replication or compliance behavior change, when docs are reconciled, then internal, public, and ABKB authority text agrees.",
           "Given a synthetic mismatch, when the drift check runs, then it fails before merge."
         ],
@@ -475,7 +482,8 @@
         "Shared GlitchCopyEngine.cs and GlitchReplicationProtection.cs are byte-identical across editions; the Replication UI difference is the named AI executor hook only.",
         "CopyEngine net growth versus lane HEAD is 701 lines after consolidating route lookup, signal parsing, submission results, and observational recovery construction.",
         "Independent gpt-5.6-sol high review: APPROVE and final simplification re-review: Lean already. Ship.",
-        "Native compile and bounded Sim parity remain pending coupled AI deployment authority."
+        "AI AddOn ai/22@ae51406 deployed once as the complete 91-file GlitchAddOn folder; live hashes match 91/91 and NinjaScript F5 compile exposed no error row or modal.",
+        "Native bounded Sim parity remains pending because the pre-existing Sim102 and Sim103 long positions were preserved."
       ],
       "sources": [
         "docs/ledger/branching.md",

@@ -147,9 +147,18 @@ test authority.
 - AI shared source contracts: 54/54 passed.
 - AI Hermes contracts: 186/186 passed.
 - Durable-main contracts and localized documentation: 46/46 passed.
-- Public Hermes candidate: checksum manifest verified; PowerShell setup/reset
-  scripts parsed; direct worker help path passed; normalized worker parity with
-  AI source passed.
+- Public Hermes v0.0.2.9: commit `744eb30` and tag `v0.0.2.9` pushed;
+  installed profile verified against all 28 distribution-owned hashes; setup
+  preserved the paused direct and learning jobs, enabled the plugin, and
+  confirmed the supervised gateway.
+- AI profile source: `ai/22@4c13209` now rebuilds the public v0.0.2.9 tree
+  without diff. The reconciliation caught and removed stale embedded
+  deterministic capacity/session instructions before they could downgrade a
+  later public build.
+- AI AddOn: the complete 91-file `GlitchAddOn` folder deployed once from
+  `ai/22@ae51406`; live hashes match 91/91; NinjaScript F5 compile exposed no
+  error row or modal; the deployed UI exposes Sync and the unchecked
+  account-scoped daily-close control.
 - Standard, AI, durable-main, and public-profile `git diff --check`: clean
   apart from Git's CRLF conversion warnings.
 
@@ -176,32 +185,33 @@ or native callback timing.
    atomic certainty.
 2. A legacy copied follower signal cannot prove its original ratio/allocation
    offset. Recovery observes and journals it but submits no mutation.
-3. A source-only public Hermes profile candidate is not the current published
-   profile. Public version facts remain at the last published v0.0.2.8 until an
-   explicitly authorized commit/push/update promotes the prepared v0.0.2.9
-   candidate.
+3. Public Hermes profile v0.0.2.9 was explicitly authorized, pushed, tagged,
+   installed, and parity-verified. The AI source-owned profile builder and
+   reset evidence now name the same version so a future build cannot silently
+   downgrade the public profile.
 4. The available native environment has nine accounts, not the 25-account
    bounded performance fixture required by `GL-PERF-01`. Instrumentation and
    source behavior may pass while that ticket remains runtime-open.
 
 ## Remaining native rail
 
-The final tester cycle is:
+The remaining tester cycle is:
 
 ```text
 architect review
   -> source approval
-  -> AI off + flat/order-free proof
-  -> authorized full-folder deployment
-  -> NinjaScript compile
+  -> AI off
+  -> authorized full-folder deployment (complete)
+  -> NinjaScript compile (complete)
   -> bounded Sim callback/UI scenarios
   -> final flat/order-free proof
   -> ledger evidence
   -> architect closure
 ```
 
-Experimental AI deployment is coupled to the public Hermes profile. It is not
-complete until the authorized public profile branch is pushed, the local
-profile update and installed `setup.ps1` succeed, and installed distribution,
-skills, worker, plugin, jobs, gateway, and paused/enabled-state parity are
-verified.
+The coupled AI AddOn/profile deployment is complete. A fresh lifecycle test was
+not started because native truth at deployment time was master Sim101 flat,
+Sim102 long 1, and Sim103 long 1. Deployment submitted no order and preserved
+those pre-existing follower positions exactly. Using Sync, Flatten All, or a
+new master trade to manufacture a clean test would have overridden existing
+human/native state, contrary to the authority contract.

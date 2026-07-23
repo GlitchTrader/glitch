@@ -19,7 +19,7 @@ The goal is an adaptive cognitive operator inside a factual operational rail. Th
 ## Shipped experimental state
 
 - AI AddOn: **v0.0.2.2**, source `2975b2e4070af118d7e752ca7566aa2353647ccf`.
-- Public Hermes profile: **v0.0.2.8**, source `38a9292db5e593482ca878693d2f0203770c9381d`.
+- Public Hermes profile: **v0.0.2.9**, source `744eb30`.
 - Distribution: local customer profile installed and updated from `GlitchTrader/glitch-hermes-profile`.
 - Exactly two jobs: minute `glitch-direct-operator` and 30-minute `glitch-learning-supervisor`.
 - Entry type: MARKET only. A safe pending LIMIT lifecycle is deferred.
