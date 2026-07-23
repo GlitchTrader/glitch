@@ -576,6 +576,13 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("GlitchAddOn.RequestFlattenAll()", shell)
         self.assertIn("RunFlattenAllAsync(showHeaderButtonFeedback: true)", source(MAIN_WINDOW))
 
+    def test_ninjascript_reload_permanently_closes_previous_assembly_window(self):
+        shell = source(ADDON / "GlitchAddOn.cs")
+        self.assertIn('GetMethod(\n                    "ShutdownForAddOn"', shell)
+        self.assertIn("System.Reflection.BindingFlags.NonPublic", shell)
+        self.assertIn("shutdown.Invoke(window, null)", shell)
+        self.assertIn("internal void ShutdownForAddOn()", source(MAIN_WINDOW))
+
     def test_follower_cleanup_is_narrowly_owned(self):
         text = source(COPY_ENGINE)
         self.assertIn("ParseFollowerSignalKind", text)
