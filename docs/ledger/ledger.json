@@ -122,12 +122,9 @@
         "Root cause: cross-assembly GlitchMainWindow instances matched by type name but failed the current-assembly cast; fallback Close was converted to Hide, so old account-event subscriptions remained live after F5 reload.",
         "Standard and AI now invoke the prior assembly's ShutdownForAddOn contract across the reflection boundary; Standard npm.cmd test 62/62, AI shared 55/55, and Hermes 186/186.",
         "AI was redeployed as an exact 91-file source/live set, the source-absent GlitchApexDirectionGuard.cs gate was removed, F5 replaced the old Glitch window handle without an error surface, and read-only telemetry proved all nine visible accounts flat and order-free.",
-        "Outstanding at current heads: ReconcileFollowerProtection is absent; CleanupFlatFollowerOrders contains no cancel and skips roots with working Glitch orders; cleanup/trim require IsConfiguredFollower.",
-        "Outstanding at current heads: CopyEngine still calls TryGetNetQuantityForInstrumentRoot across lifecycle paths and contains no exact-contract allocation/reconciliation authority.",
-        "Outstanding at current heads: GlitchSyncLifecycleState has only Flatten and Tail phases; same-direction overexposure is routed to flatten(actual) followed by open(expected), with no reduce phase.",
-        "Outstanding at current heads: FanOutCompleteClose submits an untracked market close and has no lifecycle that cancels an excess remainder after a concurrent protective fill/native position change; submission-time closable is not an execution-time reversal guard.",
-        "Outstanding at current heads: ScaleExecution derives cumulative before/after only from the current order's fill, so separate fractional close orders reset rounding allocation; UCL-01 remains unresolved.",
-        "The green 62/55 static suites currently encode the broken callback split; GL-REP-TEST-01 must record the failing behavioral regression before this implementation proceeds.",
+        "2026-07-23 implementation standard/20@2079618 and ai/22@1528192: ReconcileFollowerProtection on ProcessAccountStateUpdate; signal-owned flat cancel; exact-instrument TryGetNetQuantityForInstrument; Sync SubmitReduce/BeginSyncReduce; ProcessFollowerExecution no longer trims on stale execution callbacks.",
+        "Verified: Standard npm test 69/69; AI shared 55/55 + behavioral 7/7; CopyEngine parity copied across lanes.",
+        "Outstanding: FanOutCompleteClose close-remainder cancel after protective-fill race; cumulative fractional allocation pending UCL-01; bounded native Sim replication + Flatten All fixture; root-net usage may remain on non-reconcile paths until full exact-instrument pass.",
         "A fresh bounded single-fill replication and one-click Flatten All operator fixture remains pending; Codex did not create a test trade."
       ],
       "sources": [
