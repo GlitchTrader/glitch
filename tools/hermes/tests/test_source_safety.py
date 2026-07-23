@@ -290,6 +290,7 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         )
         self.assertIn("Account masterAccount = members[0].Account", move_stop)
         self.assertIn("masterAccount.Change", move_stop)
+        self.assertIn("move_stop_amendment_pending", move_stop)
         self.assertNotIn("ValidateProposedStopState", move_stop)
         self.assertNotIn("Follower", move_stop)
 
@@ -356,6 +357,7 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("order.Account.Name", identity)
         self.assertIn("SameInstrument", identity)
         self.assertIn("FindNamedOrder", account_reconcile)
+        self.assertIn("ReconcileAiOwnedProtectionFromPosition(account)", account_reconcile)
         self.assertNotIn("master_protection_reconcile_timeout", account_reconcile)
         self.assertNotIn("ProtectionReconcileGrace", executor)
         self.assertIn("TrySubmitStructuralProtection", protection)

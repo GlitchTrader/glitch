@@ -207,31 +207,43 @@ namespace Glitch.Services
             if (string.Equals(action, "MOVE_STOP", StringComparison.Ordinal))
             {
                 if (!IsIntentV3(rawJson))
-                    return stops.All(stop => PricesEqual(stop.StopPrice, amendments[0].StopPrice.Value))
-                        ? GlitchAiExecutionResult.Succeeded("reconciled_move_stop_native_state")
-                        : GlitchAiExecutionResult.Failed("reconcile_move_stop_outcome_ambiguous");
+                {
+                    if (stops.All(stop => PricesEqual(stop.StopPrice, amendments[0].StopPrice.Value)))
+                        return GlitchAiExecutionResult.Succeeded("reconciled_move_stop_native_state");
+                    if (stops.Any(stop => GlitchReplicationEngine.IsWorkingOrderState(stop.OrderState)))
+                        return GlitchAiExecutionResult.Pending("reconcile_move_stop_amendment_pending");
+                    return GlitchAiExecutionResult.Failed("reconcile_move_stop_outcome_ambiguous");
+                }
                 if (!TryIndexProtectionOrders(stops, SignalStop, out Dictionary<string, Order> stopsByLeg, out string stopFailure))
                     return GlitchAiExecutionResult.Failed("reconcile_move_stop_leg_state_invalid", stopFailure);
                 bool stopsMatch = amendments.All(amendment => stopsByLeg.TryGetValue(amendment.LegId, out Order stop)
                     && PricesEqual(stop.StopPrice, amendment.StopPrice.Value));
-                return stopsMatch
-                    ? GlitchAiExecutionResult.Succeeded("reconciled_move_stop_native_state")
-                    : GlitchAiExecutionResult.Failed("reconcile_move_stop_outcome_ambiguous");
+                if (stopsMatch)
+                    return GlitchAiExecutionResult.Succeeded("reconciled_move_stop_native_state");
+                if (stops.Any(stop => GlitchReplicationEngine.IsWorkingOrderState(stop.OrderState)))
+                    return GlitchAiExecutionResult.Pending("reconcile_move_stop_amendment_pending");
+                return GlitchAiExecutionResult.Failed("reconcile_move_stop_outcome_ambiguous");
             }
 
             if (string.Equals(action, "MOVE_TP", StringComparison.Ordinal))
             {
                 if (!IsIntentV3(rawJson))
                 {
-                    if (targets.Count != 1 || !PricesEqual(targets[0].LimitPrice, amendments[0].TargetPrice.Value))
-                        return GlitchAiExecutionResult.Failed("reconcile_move_tp_outcome_ambiguous");
+                    bool targetsMatch = targets.Count == 1
+                        && PricesEqual(targets[0].LimitPrice, amendments[0].TargetPrice.Value);
                     if (amendments[0].StopPrice.HasValue)
                     {
                         Order matchingStop = stops.SingleOrDefault(stop => string.Equals(stop.Oco, targets[0].Oco, StringComparison.Ordinal));
-                        if (matchingStop == null || !PricesEqual(matchingStop.StopPrice, amendments[0].StopPrice.Value))
-                            return GlitchAiExecutionResult.Failed("reconcile_move_tp_stop_outcome_ambiguous");
+                        targetsMatch = targetsMatch
+                            && matchingStop != null
+                            && PricesEqual(matchingStop.StopPrice, amendments[0].StopPrice.Value);
                     }
-                    return GlitchAiExecutionResult.Succeeded("reconciled_move_tp_native_state");
+                    if (targetsMatch)
+                        return GlitchAiExecutionResult.Succeeded("reconciled_move_tp_native_state");
+                    if (targets.Any(target => GlitchReplicationEngine.IsWorkingOrderState(target.OrderState))
+                        || stops.Any(stop => GlitchReplicationEngine.IsWorkingOrderState(stop.OrderState)))
+                        return GlitchAiExecutionResult.Pending("reconcile_move_tp_amendment_pending");
+                    return GlitchAiExecutionResult.Failed("reconcile_move_tp_outcome_ambiguous");
                 }
                 if (!TryIndexProtectionOrders(targets, SignalTarget, out Dictionary<string, Order> targetsByLeg, out string targetFailure))
                     return GlitchAiExecutionResult.Failed("reconcile_move_tp_leg_state_invalid", targetFailure);
@@ -242,9 +254,12 @@ namespace Glitch.Services
                     && (!amendment.StopPrice.HasValue
                         || (stopsByTargetLeg.TryGetValue(amendment.LegId, out Order stop)
                             && PricesEqual(stop.StopPrice, amendment.StopPrice.Value))));
-                return targetsMatch
-                    ? GlitchAiExecutionResult.Succeeded("reconciled_move_tp_native_state")
-                    : GlitchAiExecutionResult.Failed("reconcile_move_tp_outcome_ambiguous");
+                if (targetsMatch)
+                    return GlitchAiExecutionResult.Succeeded("reconciled_move_tp_native_state");
+                if (targets.Any(target => GlitchReplicationEngine.IsWorkingOrderState(target.OrderState))
+                    || stops.Any(stop => GlitchReplicationEngine.IsWorkingOrderState(stop.OrderState)))
+                    return GlitchAiExecutionResult.Pending("reconcile_move_tp_amendment_pending");
+                return GlitchAiExecutionResult.Failed("reconcile_move_tp_outcome_ambiguous");
             }
 
             return GlitchAiExecutionResult.Failed("reconcile_action_unsupported", action);
@@ -364,6 +379,8 @@ namespace Glitch.Services
             if (account == null)
                 return;
 
+            ReconcileAiOwnedProtectionFromPosition(account);
+
             List<ExecutionGroupContext> groups;
             lock (GroupSync)
             {
@@ -402,6 +419,111 @@ namespace Glitch.Services
                     ReconcileEntryProtection(group, accountIndex, entry, "account_state_update");
 
                 TryCompleteGroup(group);
+            }
+        }
+
+        private static void ReconcileAiOwnedProtectionFromPosition(Account account)
+        {
+            if (account == null || !TrySnapshotOrders(account, out Order[] orders))
+                return;
+
+            HashSet<string> instrumentFullNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (Order order in orders)
+            {
+                if (order?.Instrument == null
+                    || string.IsNullOrWhiteSpace(order.Instrument.FullName)
+                    || (!IsOwnedStopSignal(order.Name) && !IsOwnedTargetSignal(order.Name)))
+                    continue;
+                instrumentFullNames.Add(order.Instrument.FullName);
+            }
+
+            foreach (string instrumentFullName in instrumentFullNames)
+            {
+                Instrument instrument = orders
+                    .FirstOrDefault(order => order?.Instrument != null
+                        && string.Equals(order.Instrument.FullName, instrumentFullName, StringComparison.OrdinalIgnoreCase))
+                    ?.Instrument;
+                if (instrument == null
+                    || !TryGetNetPosition(account, instrument, out int netQuantity))
+                    continue;
+
+                if (netQuantity == 0)
+                    CancelWorkingAiProtection(account, instrument, orders);
+                else
+                    TrimExcessAiProtection(account, instrument, orders, Math.Abs(netQuantity));
+            }
+        }
+
+        private static void CancelWorkingAiProtection(Account account, Instrument instrument, Order[] orders)
+        {
+            List<Order> cancellations = orders
+                .Where(order => order?.Instrument != null
+                    && SameInstrument(order.Instrument, instrument)
+                    && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState)
+                    && (IsOwnedStopSignal(order.Name) || IsOwnedTargetSignal(order.Name)))
+                .ToList();
+            if (cancellations.Count == 0)
+                return;
+            try
+            {
+                account.Cancel(cancellations.ToArray());
+            }
+            catch
+            {
+                // Position truth remains authoritative; a later account-state pass retries.
+            }
+        }
+
+        private static void TrimExcessAiProtection(
+            Account account,
+            Instrument instrument,
+            Order[] orders,
+            int requiredUnits)
+        {
+            var protectionOrders = orders
+                .Where(order => order?.Instrument != null
+                    && SameInstrument(order.Instrument, instrument)
+                    && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState)
+                    && !string.IsNullOrWhiteSpace(order.Oco)
+                    && (IsOwnedStopSignal(order.Name) || IsOwnedTargetSignal(order.Name)))
+                .ToList();
+            if (protectionOrders.Count == 0)
+                return;
+
+            var units = protectionOrders
+                .GroupBy(order => order.Oco.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Select(group => new
+                {
+                    Orders = group.ToList(),
+                    Quantity = group.Max(order => Math.Max(0, order.Quantity - order.Filled))
+                })
+                .Where(unit => unit.Quantity > 0)
+                .OrderBy(unit => unit.Orders.Count)
+                .ThenByDescending(unit => unit.Orders[0].Oco, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            int excess = units.Sum(unit => unit.Quantity) - requiredUnits;
+            if (excess <= 0)
+                return;
+
+            var cancellations = new List<Order>();
+            foreach (var unit in units)
+            {
+                if (excess <= 0)
+                    break;
+                if (unit.Quantity > excess)
+                    continue;
+                cancellations.AddRange(unit.Orders);
+                excess -= unit.Quantity;
+            }
+            if (cancellations.Count == 0)
+                return;
+            try
+            {
+                account.Cancel(cancellations.ToArray());
+            }
+            catch
+            {
+                // Position truth remains authoritative; a later account-state pass retries.
             }
         }
 
@@ -1208,8 +1330,17 @@ namespace Glitch.Services
                     return GlitchAiExecutionResult.Failed("move_stop_change_failed", masterAccount.Name + ":" + ex.GetType().Name);
                 }
             }
-            return GlitchAiExecutionResult.Succeeded(
-                changes.Count == 0 ? "move_stop_already_set" : "move_stop_submitted",
+            if (changes.Count == 0)
+            {
+                return GlitchAiExecutionResult.Succeeded(
+                    "move_stop_already_set",
+                    "group=" + CleanToken(groupId)
+                        + "|requested_legs=" + amendments.Count.ToString(CultureInfo.InvariantCulture)
+                        + "|followers=replication_engine");
+            }
+
+            return GlitchAiExecutionResult.Pending(
+                "move_stop_amendment_pending",
                 "group=" + CleanToken(groupId)
                     + "|master_orders=" + changes.Count.ToString(CultureInfo.InvariantCulture)
                     + "|requested_legs=" + amendments.Count.ToString(CultureInfo.InvariantCulture)
@@ -1314,8 +1445,8 @@ namespace Glitch.Services
                 return GlitchAiExecutionResult.Failed("move_tp_change_failed", masterAccount.Name + ":" + ex.GetType().Name);
             }
 
-            return GlitchAiExecutionResult.Succeeded(
-                stopChanges.Count > 0 ? "move_tp_and_stop_submitted" : "move_tp_submitted",
+            return GlitchAiExecutionResult.Pending(
+                stopChanges.Count > 0 ? "move_tp_and_stop_amendment_pending" : "move_tp_amendment_pending",
                 "group=" + CleanToken(groupId)
                     + "|master_target_orders=" + targetChanges.Count.ToString(CultureInfo.InvariantCulture)
                     + "|master_stop_orders=" + stopChanges.Count.ToString(CultureInfo.InvariantCulture)

@@ -103,6 +103,8 @@ def parse_signal_kind(name: str) -> SignalKind:
     upper = (name or "").upper()
     if "-S-" in upper or "-T-" in upper:
         return SignalKind.Protection
+    if "-X-" in upper and "GLT-COPY" in upper:
+        return SignalKind.Copy
     if "GLT-CATCHUP" in upper:
         return SignalKind.Catchup
     if "GLT-COPY" in upper:
@@ -233,6 +235,33 @@ def reconcile_follower_protection_current(account: AccountSim) -> None:
             account.cancel(to_cancel)
         else:
             trim_follower_protection_current(account)
+            reconcile_excess_close_remainders_current(account, inst)
+
+
+def reconcile_excess_close_remainders_current(account: AccountSim, instrument: Instrument) -> None:
+    net = account.net_exact(instrument)
+    if net == 0:
+        return
+    closable = abs(net)
+    close_orders = [
+        o
+        for o in account.orders
+        if o.working
+        and o.instrument.exact_key() == instrument.exact_key()
+        and "-X-" in (o.name or "").upper()
+        and "GLT-COPY" in (o.name or "").upper()
+    ]
+    excess = sum(o.remaining_qty() for o in close_orders) - closable
+    if excess <= 0:
+        return
+    for order in sorted(close_orders, key=lambda o: (o.remaining_qty(), o.name)):
+        if excess <= 0:
+            break
+        rem = order.remaining_qty()
+        if rem <= 0:
+            continue
+        account.cancel([order])
+        excess -= rem
 
 
 def simulate_stale_execution_then_flat(
