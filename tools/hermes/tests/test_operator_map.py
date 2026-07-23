@@ -33,7 +33,7 @@ class OperatorMapTests(unittest.TestCase):
         setup = (profile / "setup.ps1").read_text(encoding="utf-8")
         builder = (ROOT / "tools/hermes/build-public-profile.ps1").read_text(encoding="utf-8")
 
-        self.assertIn("version: 0.0.2.9", distribution)
+        self.assertIn("version: 0.0.2.10", distribution)
         self.assertEqual((profile / ".gitattributes").read_text(encoding="utf-8"), "* -text\n")
         self.assertIn("'.gitattributes'", builder)
         self.assertIn('hermes_requires: \">=0.18.2\"', distribution)
@@ -93,14 +93,30 @@ class OperatorMapTests(unittest.TestCase):
 
     def test_clean_epoch_reset_discards_runtime_state_without_archive(self):
         reset = (ROOT / "tools/hermes/reset-hermes-trading-epoch.ps1").read_text(encoding="utf-8")
-        self.assertIn("all_accounts_flat_and_order_free", reset)
+        self.assertIn("native_accounts_inspected = $false", reset)
         self.assertIn("'state.db'", reset)
         self.assertIn("'sessions'", reset)
         self.assertIn("'memories'", reset)
         self.assertIn("'cron'", reset)
-        self.assertIn("'Journal.tsv'", reset)
-        self.assertIn("'TradeLedger.tsv'", reset)
-        self.assertIn("'AccountPeaks.tsv'", reset)
+        self.assertIn("'intents'", reset)
+        self.assertIn("'hermes\\exchange'", reset)
+        self.assertIn("'snapshots'", reset)
+        self.assertIn("'hermes\\epoch.json'", reset)
+        self.assertIn("Reset the intended NinjaTrader accounts.", reset)
+        self.assertIn("Use Glitch Reset Data to clear Journal and Summary statistics.", reset)
+        backend_targets = reset.split("$backendTargets = @(", 1)[1].split(")", 1)[0]
+        for preserved in (
+            "Journal.tsv",
+            "TradeLedger.tsv",
+            "CriticalWarnings.tsv",
+            "RiskLocks.tsv",
+            "AccountPeaks.tsv",
+            "AnalyticsBridgeCache.json",
+        ):
+            self.assertNotIn(f"'{preserved}'", backend_targets)
+        self.assertNotIn("all_accounts_flat_and_order_free", reset)
+        self.assertNotIn("unsafeAccounts", reset)
+        self.assertNotIn("snapshotPath", reset)
         self.assertIn("backup_created = $false", reset)
         self.assertIn("Remove-Item -LiteralPath $target -Recurse -Force", reset)
         self.assertNotIn("Compress-Archive", reset)
