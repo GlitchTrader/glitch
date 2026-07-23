@@ -4,6 +4,7 @@ import unittest
 
 from replication_lifecycle_sim import (
     AccountSim,
+    can_attach_unlinked_full_position_plan,
     Instrument,
     Order,
     OrderState,
@@ -22,6 +23,45 @@ from replication_lifecycle_sim import (
 
 
 class ReplicationLifecycleRailGapTests(unittest.TestCase):
+    def test_manual_atm_entry_before_bracket_attaches_only_complete_exact_full_position_plan(self):
+        mnq_sep = Instrument("MNQ", "202609")
+        mnq_dec = Instrument("MNQ", "202612")
+        stop = Order("Stop1", mnq_sep, 1, oco="atm-1", order_type="stop")
+        target = Order("Target1", mnq_sep, 1, oco="atm-1", order_type="target")
+
+        self.assertFalse(
+            can_attach_unlinked_full_position_plan(1, 1, True, mnq_sep, [stop])
+        )
+        self.assertTrue(
+            can_attach_unlinked_full_position_plan(1, 1, True, mnq_sep, [stop, target])
+        )
+        self.assertTrue(
+            can_attach_unlinked_full_position_plan(
+                1,
+                1,
+                True,
+                mnq_sep,
+                [stop, target, Order("Stop2", mnq_dec, 1, oco="atm-2", order_type="stop")],
+            )
+        )
+        self.assertFalse(
+            can_attach_unlinked_full_position_plan(
+                1,
+                1,
+                True,
+                mnq_sep,
+                [
+                    stop,
+                    target,
+                    Order("Stop2", mnq_sep, 1, oco="atm-2", order_type="stop"),
+                    Order("Target2", mnq_sep, 1, oco="atm-2", order_type="target"),
+                ],
+            )
+        )
+        self.assertFalse(
+            can_attach_unlinked_full_position_plan(2, 1, True, mnq_sep, [stop, target])
+        )
+
     def test_stale_execution_then_authoritative_flat_cancels_glitch_protection(self):
         inst = Instrument("MNQ", "202509")
         account = AccountSim("Sim102", is_configured_follower=True)

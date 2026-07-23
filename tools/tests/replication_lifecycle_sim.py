@@ -59,6 +59,7 @@ class Order:
     state: OrderState = OrderState.Working
     oco: str = ""
     remaining: int | None = None
+    order_type: str = ""
 
     @property
     def working(self) -> bool:
@@ -108,6 +109,42 @@ def parse_signal_kind(name: str) -> SignalKind:
     if "GLT-CATCHUP" in upper or "GLT-COPY" in upper:
         return SignalKind.Entry
     return SignalKind.None_
+
+
+def can_attach_unlinked_full_position_plan(
+    master_net: int,
+    required_master_quantity: int,
+    is_long: bool,
+    instrument: Instrument,
+    orders: Iterable[Order],
+) -> bool:
+    """An unlinked ATM plan is authoritative only when it covers the full exact position."""
+    if (
+        master_net == 0
+        or abs(master_net) != required_master_quantity
+        or (master_net > 0) != is_long
+    ):
+        return False
+    groups: dict[str, list[Order]] = {}
+    for order in orders:
+        if (
+            not order.working
+            or order.instrument.exact_key() != instrument.exact_key()
+            or not order.oco
+        ):
+            continue
+        groups.setdefault(order.oco, []).append(order)
+    total = 0
+    for group in groups.values():
+        stops = [order for order in group if order.order_type == "stop"]
+        targets = [order for order in group if order.order_type == "target"]
+        if len(stops) != 1 or len(targets) != 1:
+            return False
+        quantity = min(stops[0].remaining_qty(), targets[0].remaining_qty())
+        if quantity <= 0:
+            return False
+        total += quantity
+    return bool(groups) and total == required_master_quantity
 
 
 def trim_follower_protection_current(account: AccountSim) -> None:

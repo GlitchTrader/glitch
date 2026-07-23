@@ -1731,7 +1731,7 @@ namespace Glitch.Services
                 return;
 
             string masterName = masterAccount.Name?.Trim() ?? string.Empty;
-            string root = GlitchReplicationEngine.GetInstrumentRoot(masterOrder.Instrument);
+            string instrumentName = masterOrder.Instrument.FullName?.Trim() ?? string.Empty;
             List<FollowerEntryLifecycle> candidates;
             lock (_gate)
             {
@@ -1745,8 +1745,8 @@ namespace Glitch.Services
                         && string.Equals(lifecycle.MasterAccountName, masterName, StringComparison.OrdinalIgnoreCase)
                         && lifecycle.Instrument != null
                         && string.Equals(
-                            GlitchReplicationEngine.GetInstrumentRoot(lifecycle.Instrument),
-                            root,
+                            lifecycle.Instrument.FullName,
+                            instrumentName,
                             StringComparison.OrdinalIgnoreCase))
                     .ToList();
             }
@@ -1762,8 +1762,12 @@ namespace Glitch.Services
                         lifecycle.MasterEntrySignal,
                         requiredMasterQuantity,
                         lifecycle.IsLong,
-                        out GlitchReplicationProtectionPlan plan)
-                    || !GlitchReplicationProtection.TryScalePlanSlice(
+                        out GlitchReplicationProtectionPlan plan))
+                {
+                    LogPlanWait(lifecycle);
+                    continue;
+                }
+                if (!GlitchReplicationProtection.TryScalePlanSlice(
                         plan,
                         lifecycle.RouteRatio,
                         lifecycle.FollowerAllocationOffset,
@@ -1796,6 +1800,19 @@ namespace Glitch.Services
             }
         }
 
+        private void LogPlanWait(FollowerEntryLifecycle lifecycle)
+        {
+            lock (_gate)
+            {
+                if (lifecycle.LatePlanWaitLogged)
+                    return;
+                lifecycle.LatePlanWaitLogged = true;
+            }
+            Journal?.Invoke(lifecycle.Account?.Name ?? "Unknown",
+                "follower_protection|entry=" + CleanToken(lifecycle.EntrySignal)
+                + "|result=waiting_for_complete_master_plan");
+        }
+
         private void MirrorMasterProtection(Account masterAccount, Order masterOrder)
         {
             bool isStop = GlitchReplicationEngine.IsStopLikeOrder(masterOrder);
@@ -1826,7 +1843,7 @@ namespace Glitch.Services
                     .Where(order => order?.Instrument != null
                         && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState)
                         && (order.Name ?? string.Empty).StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-                        && string.Equals(GlitchReplicationEngine.GetInstrumentRoot(order.Instrument), root, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(order.Instrument.FullName, masterOrder.Instrument.FullName, StringComparison.OrdinalIgnoreCase)
                         && Math.Abs((isStop ? order.StopPrice : order.LimitPrice) - masterPrice) > 0.0000001d)
                     .ToList();
                 if (changes.Count == 0)
@@ -2475,6 +2492,7 @@ namespace Glitch.Services
             public bool ProtectionAvailable { get; set; }
             public bool RecoveryCloseSubmitted { get; set; }
             public List<GlitchScaledProtectionLeg> ScaledLegs { get; set; }
+            public bool LatePlanWaitLogged { get; set; }
         }
     }
 }
