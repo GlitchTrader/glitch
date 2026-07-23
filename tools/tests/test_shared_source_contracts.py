@@ -182,7 +182,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, copy)
 
-    def test_partial_master_close_is_copied_and_excess_protection_is_trimmed(self):
+    def test_partial_master_close_is_copied_with_authoritative_protection_reconcile(self):
         copy = source(COPY_ENGINE)
         replication = source(REPLICATION_UI)
         close = method_body(copy, "private void FanOutCompleteClose", "private FollowerOrderSubmission SubmitFollowerClose")
@@ -191,16 +191,14 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             "private FollowerOrderSubmission SubmitFollowerClose",
             "private void TrySubmitAttributedRecoveryClose",
         )
-        trim = method_body(copy, "private void TrimFollowerProtection", "private void CleanupFlatFollowerOrders")
         state = method_body(copy, "public void ProcessAccountStateUpdate", "public void ProcessFollowerExecution")
         self.assertIn("ScaleExecution(context, route.Ratio)", close)
         self.assertIn("Math.Min(requested, closable)", close)
         self.assertIn("SubmitFollowerClose", close)
         self.assertIn('signalPrefix + "-X-"', submit)
-        self.assertIn("units.Sum(unit => unit.Quantity) - Math.Abs(netQuantity)", trim)
-        self.assertIn("account.Cancel(cancellations.ToArray())", trim)
         self.assertIn("_copyEngine.ProcessFollowerExecution(account)", replication)
-        self.assertNotIn("TrimFollowerProtection", state)
+        self.assertIn("ReconcileFollowerProtection(account)", state)
+        self.assertIn("follower_protection_reconcile", copy)
         self.assertNotIn("PartialFollowerExitUnsupported", copy)
         self.assertNotIn("partial_manual_exit", copy)
 
@@ -373,6 +371,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             "private void HandleFollowerEnableUserToggle",
         )
         self.assertIn("BeginSyncFlatten", sync)
+        self.assertIn("BeginSyncReduce", sync)
         self.assertIn("ProcessSyncLifecycle(sync)", sync)
         self.assertIn("CatchUpSignalName", sync)
         self.assertIn("sync.FlattenOrder?.Filled", sync)
