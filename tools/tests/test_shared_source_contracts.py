@@ -188,6 +188,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         )
         state = method_body(copy, "public void ProcessAccountStateUpdate", "public void ProcessFollowerExecution")
         self.assertIn("ScaleExecution(context, route.Ratio)", close)
+        self.assertIn("TryGetNetQuantityForInstrument(route.FollowerAccount, context.Instrument", close)
         self.assertIn("Math.Min(requested, closable)", close)
         self.assertIn("SubmitFollowerClose", close)
         self.assertIn('signalPrefix + "-X-"', submit)
