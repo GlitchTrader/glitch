@@ -3639,6 +3639,11 @@ namespace Glitch.UI
             _ = RefreshLicenseStateAsync(useValidateEndpoint: true, force: true);
         }
 
+        internal void ShutdownForAddOn()
+        {
+            Close();
+        }
+
         private void BootstrapAnalyticsBridgeOnStartup()
         {
             try

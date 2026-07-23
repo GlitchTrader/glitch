@@ -425,6 +425,27 @@ namespace NinjaTrader.NinjaScript.AddOns
         {
             try
             {
+                GlitchMainWindow glitchWindow = window as GlitchMainWindow;
+                if (glitchWindow != null)
+                {
+                    glitchWindow.ShutdownForAddOn();
+                    return;
+                }
+
+                // A NinjaScript reload creates a new assembly, so an old Glitch
+                // window has the same type name but cannot be cast to this type.
+                // Invoke its permanent shutdown contract across that boundary.
+                var shutdown = window?.GetType().GetMethod(
+                    "ShutdownForAddOn",
+                    System.Reflection.BindingFlags.Instance
+                    | System.Reflection.BindingFlags.Public
+                    | System.Reflection.BindingFlags.NonPublic);
+                if (shutdown != null)
+                {
+                    shutdown.Invoke(window, null);
+                    return;
+                }
+
                 window?.Close();
             }
             catch
