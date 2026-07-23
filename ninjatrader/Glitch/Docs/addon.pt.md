@@ -30,7 +30,7 @@ Cada grupo define um master, followers habilitados e ratios. Os ratios escalam a
 - Inicialização e recompilação observam o estado existente, sem catch-up automático.
 - Replication desligado interrompe novas cópias e preserva a proteção nativa existente.
 - Stops e targets dos followers usam OCO nativo.
-- Divergência manual permanece até um resync solicitado pelo usuário.
+- Alterações manuais no follower são preservadas, enquanto execuções posteriores do master continuam sendo copiadas; o catch-up só ocorre quando o usuário solicita explicitamente um resync.
 - Envios ambíguos não são repetidos às cegas.
 - Falha de proteção gera uma limpeza nativa limitada, sem loop de envio.
 

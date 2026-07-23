@@ -219,6 +219,9 @@ namespace Glitch.UI
             if (_isFlattenAllInProgress)
                 return;
 
+            if (string.Equals(eventName, "ExecutionUpdate", StringComparison.OrdinalIgnoreCase))
+                _copyEngine.ProcessFollowerExecution(account);
+
             if (string.Equals(eventName, "ExecutionUpdate", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(eventName, "PositionUpdate", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(eventName, "OrderUpdate", StringComparison.OrdinalIgnoreCase))
@@ -425,6 +428,7 @@ namespace Glitch.UI
                 EntryOrderFilledQuantity = order == null
                     ? quantity
                     : Math.Max(quantity, Math.Max(0, order.Filled)),
+                EntryOrder = order,
                 OrderSignalName = signalName,
                 Oco = order?.Oco,
                 ExecutionTimeUtc = TryReadExecutionTimeUtc(executionObject)

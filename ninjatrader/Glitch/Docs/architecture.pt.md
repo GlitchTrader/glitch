@@ -34,7 +34,7 @@ O AddOn trata o estado nativo de contas, ordens, execuções e posições do Nin
 
 Um grupo configurado tem um master e zero ou mais followers habilitados. O ratio do follower escala a quantidade; ele não cria outra estratégia nem uma cadeia de masters sintéticos.
 
-O copy engine reage às execuções nativas do master, elimina duplicatas, recusa rotas para a mesma conta e fechamentos que cruzariam zero, e instala proteção OCO nativa nos followers. Inicialização e recompilação apenas observam. Desligar Replication interrompe novas cópias, mas mantém a proteção já ativa no NinjaTrader. Uma alteração manual no follower continua sob controle do usuário até um resync explícito.
+O copy engine reage às execuções nativas do master, elimina duplicatas, recusa rotas para a mesma conta e fechamentos que cruzariam zero, e instala proteção OCO nativa nos followers. Cada nova execução do master, incluindo um fechamento manual parcial ou total, é copiada uma vez na proporção configurada. Inicialização e recompilação apenas observam. Desligar Replication interrompe novas cópias, mas mantém a proteção já ativa no NinjaTrader. Uma alteração manual no follower continua sob controle do usuário; execuções posteriores do master continuam sendo copiadas normalmente, e o catch-up só ocorre em um resync explícito.
 
 ## Fluxos de dados
 

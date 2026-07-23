@@ -32,7 +32,7 @@ Current behavior is deliberately conservative about ownership:
 - startup and recompile observe existing state instead of catching up automatically;
 - Replication off stops new copies while existing native protection remains working;
 - follower stops and targets are native OCO orders;
-- manual follower divergence is preserved until the user requests resync;
+- manual follower changes are preserved while later master executions continue copying; catch-up occurs only when the user explicitly requests resync;
 - ambiguous submissions are not blindly retried;
 - a follower protection failure triggers one bounded native cleanup and no submission loop.
 

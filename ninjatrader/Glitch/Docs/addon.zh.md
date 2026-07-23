@@ -28,7 +28,7 @@ Ratios 缩放复制数量。`GlitchCopyEngine` 监听原生 master 成交，并�
 - 启动和重新编译不会自动 catch-up。
 - 关闭 Replication 会停止新复制并保留已有保护。
 - Followers 的 stops 和 targets 使用原生 OCO。
-- 手动差异会保留到用户主动 resync。
+- follower 的手动变更会被保留，master 后续成交仍会继续复制；只有用户明确请求 resync 时才会执行 catch-up。
 - 不明确的提交不会盲目重试。
 - 保护失败只触发一次有界的原生清理，不会形成提交循环。
 

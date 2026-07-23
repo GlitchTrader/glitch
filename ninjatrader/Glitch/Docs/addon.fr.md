@@ -28,7 +28,7 @@ Les ratios multiplient la quantité copiée. `GlitchCopyEngine` écoute les exé
 - Démarrage et recompilation n’effectuent aucun catch-up automatique.
 - Replication désactivé bloque les nouvelles copies et conserve la protection native.
 - Stops et targets des followers sont des OCO natifs.
-- Une divergence manuelle persiste jusqu’au resync demandé.
+- Les modifications manuelles du follower sont conservées, tandis que les exécutions ultérieures du master continuent d’être copiées ; le catch-up n’a lieu que lorsque l’utilisateur demande explicitement un resync.
 - Les soumissions ambiguës ne sont pas répétées aveuglément.
 - Un échec de protection produit un nettoyage natif borné, jamais une boucle.
 

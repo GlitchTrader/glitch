@@ -33,7 +33,7 @@ AddOn 将 NinjaTrader 原生账户、订单、成交和持仓状态视为权威�
 
 一个组包含一个 master 和若干已启用 followers。Ratio 只缩放数量，不会创建第二套策略或合成 master 链。
 
-复制引擎响应原生 master 成交，去重，拒绝自复制和越过零仓位的平仓，并安装 follower 原生 OCO 保护。启动和重新编译时只观察现有状态。关闭 Replication 会停止新复制，但保留已有原生保护。用户手动修改 follower 后，该差异会一直保留，直到明确执行 resync。
+复制引擎响应原生 master 成交，去重，拒绝自复制和越过零仓位的平仓，并安装 follower 原生 OCO 保护。每个新的 master 成交（包括手动部分或全部平仓）都会按配置比例复制一次。启动和重新编译时只观察现有状态。关闭 Replication 会停止新复制，但保留已有原生保护。用户对 follower 的手动修改仍归用户所有；之后的 master 成交会继续正常复制，只有明确执行 resync 时才会进行 catch-up。
 
 ## 数据路径
 

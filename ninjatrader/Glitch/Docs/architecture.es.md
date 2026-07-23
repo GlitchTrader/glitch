@@ -33,7 +33,7 @@ El AddOn considera autoritativo el estado nativo de cuentas, órdenes, ejecucion
 
 Un grupo tiene un master y followers habilitados. El ratio escala la cantidad; no crea otra estrategia ni masters sintéticos.
 
-El motor reacciona a ejecuciones nativas, deduplica, rechaza rutas a la misma cuenta y cierres que crucen cero, e instala protección OCO nativa. Inicio y recompilación solo observan. Al apagar Replication cesan las nuevas copias, pero la protección existente sigue activa. Un cambio manual del follower permanece hasta un resync explícito.
+El motor reacciona a ejecuciones nativas, deduplica, rechaza rutas a la misma cuenta y cierres que crucen cero, e instala protección OCO nativa. Cada nueva ejecución del master, incluido un cierre manual parcial o total, se copia una vez con la proporción configurada. Inicio y recompilación solo observan. Al apagar Replication cesan las nuevas copias, pero la protección existente sigue activa. Un cambio manual del follower permanece bajo control del usuario; las ejecuciones posteriores del master siguen copiándose normalmente y el catch-up solo ocurre con un resync explícito.
 
 ## Flujos
 

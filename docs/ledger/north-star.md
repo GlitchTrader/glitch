@@ -17,7 +17,7 @@ Hermes decides; Glitch validates, executes, protects, replicates, reconciles, an
 ## Invariants
 
 - **PnL truth:** display the native NinjaTrader value for the same account and session. Unknown native data stays unknown.
-- **Replication integrity:** one producer-neutral `GlitchCopyEngine` owns followers, ratios, follower-native OCO protection, close propagation, and explicit resync.
+- **Replication integrity:** one producer-neutral `GlitchCopyEngine` copies each master execution delta at the configured ratio, owns follower-native OCO protection and close propagation, preserves manual follower changes without blocking later copies, and performs catch-up only on explicit user resync.
 - **User sovereignty:** the user selects accounts, groups, ratios, and enabled risk actions. Startup and recompile are observe-only.
 - **Bounded mutation:** ambiguous order state is never blindly retried. Flatten and protection recovery report unresolved state.
 - **Cognitive authority:** Hermes owns thesis, direction, master quantity, geometry, timing, scaling, and management. Code does not hard-code a trading strategy.

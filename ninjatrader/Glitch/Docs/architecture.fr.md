@@ -33,7 +33,7 @@ L’AddOn considère l’état natif NinjaTrader des comptes, ordres, exécution
 
 Un groupe comporte un master et des followers activés. Le ratio multiplie la quantité ; il ne crée ni autre stratégie ni masters synthétiques.
 
-Le moteur réagit aux exécutions natives, déduplique, refuse l’auto-copie et les clôtures traversant zéro, puis installe une protection OCO native. Démarrage et recompilation restent en observation. Désactiver Replication arrête les nouvelles copies sans retirer la protection existante. Une modification manuelle du follower reste sous contrôle de l’utilisateur jusqu’à un resync explicite.
+Le moteur réagit aux exécutions natives, déduplique, refuse l’auto-copie et les clôtures traversant zéro, puis installe une protection OCO native. Chaque nouvelle exécution du master, y compris une clôture manuelle partielle ou totale, est copiée une fois selon le ratio configuré. Démarrage et recompilation restent en observation. Désactiver Replication arrête les nouvelles copies sans retirer la protection existante. Une modification manuelle du follower reste sous contrôle de l’utilisateur ; les exécutions ultérieures du master continuent d’être copiées normalement et le catch-up n’a lieu que lors d’un resync explicite.
 
 ## Flux
 

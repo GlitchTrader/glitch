@@ -28,7 +28,7 @@ Los ratios escalan la cantidad copiada. `GlitchCopyEngine` escucha ejecuciones n
 - Inicio y recompilación no hacen catch-up automático.
 - Replication apagado detiene copias nuevas y conserva protección nativa.
 - Stops y targets de followers son OCO nativos.
-- La divergencia manual permanece hasta un resync solicitado.
+- Los cambios manuales del follower se conservan, mientras las ejecuciones posteriores del master siguen copiándose; el catch-up solo ocurre cuando el usuario solicita explícitamente un resync.
 - Los envíos ambiguos no se repiten a ciegas.
 - Un fallo de protección provoca una limpieza nativa limitada, no un bucle.
 

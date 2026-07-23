@@ -36,7 +36,7 @@ The AddOn separates operational concerns into focused services:
 
 A configured group has one master and zero or more enabled followers. A follower ratio scales quantity; it does not create a second strategy or a chain of synthetic masters.
 
-The copy engine reacts to native master executions. It deduplicates executions, refuses self-copy routes and cross-zero closes, and installs follower-native OCO protection. Startup and recompile are observe-only. Turning Replication off stops new copying but does not remove protection already working at NinjaTrader. A manual follower change remains owned by the user until an explicit resync.
+The copy engine reacts to native master executions. It deduplicates executions, refuses self-copy routes and cross-zero closes, and installs follower-native OCO protection. Each new master execution, including a manual partial or full close, is copied once at the configured ratio. Startup and recompile are observe-only. Turning Replication off stops new copying but does not remove protection already working at NinjaTrader. A manual follower change remains owned by the user; later master executions continue to copy normally, and catch-up occurs only on explicit resync.
 
 ## Data paths
 
