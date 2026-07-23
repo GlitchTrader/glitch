@@ -335,6 +335,54 @@ namespace Glitch.Services
             return saved;
         }
 
+        public static bool TryPromoteToExecutionStarted(
+            GlitchAiIntentState state,
+            out bool alreadyExecuting,
+            out string failure)
+        {
+            alreadyExecuting = false;
+            failure = null;
+            if (state == null || !Guid.TryParse(state.IntentId, out Guid parsed))
+            {
+                failure = "intent_state_invalid";
+                return false;
+            }
+
+            bool saved = TryTransition(
+                parsed,
+                state.IntentId,
+                state.BodyHash,
+                current =>
+                {
+                    if (current.IsTerminal)
+                        return "intent_already_terminal";
+                    if (string.Equals(current.Phase, "execution_started", StringComparison.Ordinal)
+                        || string.Equals(current.Phase, "execution_visibility_pending", StringComparison.Ordinal)
+                        || string.Equals(current.Phase, "pending", StringComparison.Ordinal))
+                        return "already_executing";
+                    if (!string.Equals(current.Phase, "received", StringComparison.Ordinal)
+                        && !string.Equals(current.Phase, "approved", StringComparison.Ordinal))
+                        return "intent_state_phase_unknown";
+
+                    current.Phase = "execution_started";
+                    current.UpdatedUtc = DateTime.UtcNow;
+                    return null;
+                },
+                "intent_promote",
+                out GlitchAiIntentState authoritative,
+                out failure);
+            if (saved)
+            {
+                CopyState(authoritative, state);
+                return true;
+            }
+
+            alreadyExecuting = string.Equals(failure, "already_executing", StringComparison.Ordinal);
+            if (alreadyExecuting && TryLoadPath(GetStatePath(parsed), out authoritative))
+                CopyState(authoritative, state);
+            return false;
+        }
+
         public static bool TryFinalizeNonterminal(string intentId, GlitchAiExecutionResult result, out string failure)
         {
             failure = null;

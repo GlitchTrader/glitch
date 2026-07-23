@@ -60,11 +60,23 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("TryReconcileStartedIntent", server)
         self.assertIn("BuildIntentCorrelation", executor)
         self.assertIn("lock (IntentExecutionSync)", server)
-        self.assertNotIn("resumeApproved", server)
+        self.assertLess(server.index("ReadRequestBody"), server.index("lock (IntentExecutionSync)"))
+        self.assertIn("TryPromoteToExecutionStarted", store)
+        promote = server.index("TryPromoteToExecutionStarted")
+        execute = server.rindex("TryExecuteApprovedIntent")
+        self.assertLess(promote, execute)
         self.assertIn("GlitchAiExecutionResult.Pending", executor)
         self.assertIn("HasExactCorrelationOwnedProtection", executor)
         self.assertNotIn("HasExactReconciledEntryExposure", executor)
         self.assertIn("reconcile_entry_recovery_close_submitted", executor)
+
+    def test_intent_body_limit_uses_raw_utf8_bytes(self):
+        server = source(INTENT_SERVER)
+        body = method_body(server, "private static string ReadRequestBody", "private static string BuildHealthJson")
+        self.assertIn("byte[] buffer", body)
+        self.assertIn("total > MaxBodyBytes", body)
+        self.assertNotIn("StreamReader", body)
+        self.assertNotIn("char[] buffer", body)
 
     def test_restart_resumes_only_after_a_durable_pre_submit_visibility_observation(self):
         server = source(INTENT_SERVER)

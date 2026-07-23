@@ -134,8 +134,6 @@ namespace Glitch.Services
                     return;
                 }
 
-                lock (IntentExecutionSync)
-                {
                 if (!string.Equals(method, "POST", StringComparison.OrdinalIgnoreCase))
                 {
                     WriteResponse(context, 405, BuildErrorJson("method_not_allowed", "POST only for /intent"));
@@ -162,20 +160,28 @@ namespace Glitch.Services
                     return;
                 }
 
-                if (!GlitchAiIntentStateStore.TryClaim(
-                    validation.IntentId,
-                    body,
-                    out GlitchAiIntentState intentState,
-                    out bool isNewClaim,
-                    out bool contentConflict,
-                    out string claimFailure))
+                GlitchAiIntentState intentState;
+                bool isNewClaim;
+                bool contentConflict;
+                string claimFailure;
+                lock (IntentExecutionSync)
                 {
-                    int claimStatus = string.Equals(claimFailure, "legacy_duplicate_outcome_unavailable", StringComparison.Ordinal)
-                        ? 409
-                        : 500;
-                    WriteResponse(context, claimStatus, BuildErrorJson(claimFailure ?? "intent_claim_failed", validation.IntentId));
-                    return;
+                    if (!GlitchAiIntentStateStore.TryClaim(
+                        validation.IntentId,
+                        body,
+                        out intentState,
+                        out isNewClaim,
+                        out contentConflict,
+                        out claimFailure))
+                    {
+                        int claimStatus = string.Equals(claimFailure, "legacy_duplicate_outcome_unavailable", StringComparison.Ordinal)
+                            ? 409
+                            : 500;
+                        WriteResponse(context, claimStatus, BuildErrorJson(claimFailure ?? "intent_claim_failed", validation.IntentId));
+                        return;
+                    }
                 }
+
                 if (contentConflict)
                 {
                     WriteResponse(context, 409, BuildConflictJson(validation.IntentId));
@@ -304,11 +310,11 @@ namespace Glitch.Services
                         return;
                     }
 
-                    if (!GlitchAiIntentStateStore.TrySavePhase(intentState, "approved", 0, null, out string approvedStateFailure))
-                    {
-                        WriteResponse(context, 500, BuildErrorJson("intent_state_failed", approvedStateFailure));
-                        return;
-                    }
+                if (!GlitchAiIntentStateStore.TrySavePhase(intentState, "approved", 0, null, out string approvedStateFailure))
+                {
+                    WriteResponse(context, 500, BuildErrorJson("intent_state_failed", approvedStateFailure));
+                    return;
+                }
                 }
 
                 Action<string, string, string> handler = IntentAccepted;
@@ -323,10 +329,30 @@ namespace Glitch.Services
                     }
                 }
 
-                if (!GlitchAiIntentStateStore.TrySavePhase(intentState, "execution_started", 0, null, out string startedStateFailure))
+                bool alreadyExecuting;
+                string promoteFailure;
+                lock (IntentExecutionSync)
                 {
-                    WriteResponse(context, 500, BuildErrorJson("intent_state_failed", startedStateFailure));
-                    return;
+                    if (!GlitchAiIntentStateStore.TryPromoteToExecutionStarted(intentState, out alreadyExecuting, out promoteFailure))
+                    {
+                        if (alreadyExecuting)
+                        {
+                            GlitchAiExecutionResult reconciled = GlitchAiOrderExecutor.TryReconcileStartedIntent(body, DateTime.UtcNow);
+                            GlitchAiExecutionJournalWriter.TryAppend(validation.IntentId, reconciled, DateTime.UtcNow);
+                            string reconciledJson = GlitchAiIntentResultContract.BuildAcceptedJson(validation.IntentId, reconciled);
+                            string reconciledPhase = GlitchAiIntentResultContract.GetPhase(reconciled);
+                            if (!GlitchAiIntentStateStore.TrySavePhase(intentState, reconciledPhase, 202, reconciledJson, out string reconcileStateFailure))
+                            {
+                                WriteResponse(context, 500, BuildErrorJson("intent_state_failed", reconcileStateFailure));
+                                return;
+                            }
+                            WriteAuthoritativeResponse(context, intentState, 202, reconciledJson);
+                            return;
+                        }
+
+                        WriteResponse(context, 409, BuildErrorJson(promoteFailure ?? "intent_promote_failed", validation.IntentId));
+                        return;
+                    }
                 }
 
                 GlitchAiExecutionResult execution = GlitchAiOrderExecutor.TryExecuteApprovedIntent(body, DateTime.UtcNow);
@@ -340,7 +366,6 @@ namespace Glitch.Services
                 }
 
                 WriteAuthoritativeResponse(context, intentState, 202, acceptedJson);
-                }
             }
             catch
             {
@@ -364,14 +389,23 @@ namespace Glitch.Services
             if (request == null || !request.HasEntityBody)
                 return string.Empty;
 
-            using (var reader = new StreamReader(request.InputStream, request.ContentEncoding ?? Encoding.UTF8))
+            using (Stream stream = request.InputStream)
             {
-                char[] buffer = new char[MaxBodyBytes + 1];
-                int read = reader.ReadBlock(buffer, 0, buffer.Length);
-                if (read > MaxBodyBytes)
-                    return null;
+                byte[] buffer = new byte[MaxBodyBytes + 1];
+                int total = 0;
+                while (true)
+                {
+                    int read = stream.Read(buffer, total, buffer.Length - total);
+                    if (read <= 0)
+                        break;
+                    total += read;
+                    if (total > MaxBodyBytes)
+                        return null;
+                }
 
-                return new string(buffer, 0, Math.Min(read, MaxBodyBytes)).Trim();
+                if (total == 0)
+                    return string.Empty;
+                return Encoding.UTF8.GetString(buffer, 0, total).Trim();
             }
         }
 
