@@ -674,10 +674,10 @@ def validate_debrief_attribution(records: list[dict[str, Any]], outcomes: list[d
 
 def continuity(supervisor: Path) -> dict[str, Any]:
     return {
-        "current_plan": DIRECT.read_current_learning_artifact(
+        "current_plan": DIRECT.read_trading_learning_artifact(
             supervisor / "current-plan.json", DIRECT.CURRENT_PLAN_SCHEMA
         ),
-        "current_guidance": DIRECT.read_current_learning_artifact(
+        "current_guidance": DIRECT.read_trading_learning_artifact(
             supervisor / "current-guidance.json", DIRECT.CURRENT_GUIDANCE_SCHEMA
         ),
         "proposed_cognitive_overlay": DIRECT.read_optional_json(
@@ -870,6 +870,7 @@ def activate_cognitive_candidate(record: dict[str, Any], supervisor: Path) -> No
         "rollback_condition": candidate.get("rollback_condition"),
         "status": "proposed",
         "activation_scope": "configured_glitch_scope",
+        "decision_prompt_version": DIRECT.DIRECT_PROMPT_VERSION,
     }
     value["change_event_id"] = stable_id("cognitive-change-event", candidate_id + "|proposed")
     value["event"] = "proposed"
@@ -886,6 +887,7 @@ def persist_hourly(record: dict[str, Any], supervisor: Path, episode_ids: list[s
         "guidance_id": stable_id("guidance", str(record["review_id"])),
         "recorded_utc": record.get("recorded_utc") or utc_now(),
         "source_review_id": record["review_id"],
+        "decision_prompt_version": DIRECT.DIRECT_PROMPT_VERSION,
         "trading_influence": "outcome_backed" if trade_count >= 2 else "observational",
         "trade_episode_count": trade_count,
         "decision_episode_count": decision_count,
@@ -1045,6 +1047,7 @@ def run_once(args) -> dict[str, Any]:
             }, [plan_id], supervisor)
             trade_count = len(episodes)
             records[0]["trading_influence"] = "outcome_backed" if trade_count >= 2 else "observational"
+            records[0]["decision_prompt_version"] = DIRECT.DIRECT_PROMPT_VERSION
             records[0]["trade_episode_count"] = trade_count
             records[0]["decision_episode_count"] = len(decision_episodes)
             append_unique(supervisor / "plans.jsonl", records, "plan_id")

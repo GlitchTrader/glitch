@@ -361,7 +361,11 @@ class DirectCycleTests(unittest.TestCase):
             intents.mkdir()
             (intents / "decisions.jsonl").write_text(
                 "\n".join(
-                    json.dumps({"intent_id": str(index), "recorded_utc": today})
+                    json.dumps({
+                        "intent_id": str(index),
+                        "recorded_utc": today,
+                        "prompt_version": MODULE.DIRECT_PROMPT_VERSION,
+                    })
                     for index in range(9)
                 ) + "\n",
                 encoding="utf-8",
@@ -370,6 +374,23 @@ class DirectCycleTests(unittest.TestCase):
             decisions = MODULE.journal_tail(Path(root))["decisions"]
 
         self.assertEqual([row["intent_id"] for row in decisions], list(map(str, range(3, 9))))
+
+    def test_recent_ledger_excludes_decisions_from_prior_prompt_versions(self):
+        with tempfile.TemporaryDirectory() as root:
+            intents = Path(root) / "intents"
+            intents.mkdir()
+            (intents / "decisions.jsonl").write_text(
+                "\n".join((
+                    json.dumps({"intent_id": "old", "prompt_version": "direct-v4"}),
+                    json.dumps({
+                        "intent_id": "current",
+                        "prompt_version": MODULE.DIRECT_PROMPT_VERSION,
+                    }),
+                )) + "\n",
+                encoding="utf-8",
+            )
+            decisions = MODULE.journal_tail(Path(root))["decisions"]
+        self.assertEqual([row["intent_id"] for row in decisions], ["current"])
 
     def test_prompt_uses_probabilistic_confirmation_and_short_decision_horizons(self):
         value = MODULE.build_prompt(packet(), MODULE.build_scenario(packet()), {})
@@ -446,6 +467,15 @@ class DirectCycleTests(unittest.TestCase):
             plan_path.write_text(json.dumps(plan), encoding="utf-8")
             guidance_path.write_text(json.dumps(guidance), encoding="utf-8")
 
+            incompatible = MODULE.learning_context(Path(root))
+            self.assertIsNone(incompatible["current_plan"])
+            self.assertIsNone(incompatible["current_guidance"])
+
+            plan["decision_prompt_version"] = MODULE.DIRECT_PROMPT_VERSION
+            guidance["decision_prompt_version"] = MODULE.DIRECT_PROMPT_VERSION
+            plan_path.write_text(json.dumps(plan), encoding="utf-8")
+            guidance_path.write_text(json.dumps(guidance), encoding="utf-8")
+
             current = MODULE.learning_context(Path(root))
             self.assertEqual(current["current_plan"]["schema_version"], MODULE.CURRENT_PLAN_SCHEMA)
             self.assertEqual(
@@ -468,6 +498,7 @@ class DirectCycleTests(unittest.TestCase):
                 "status": "active",
                 "instruction": "Outcome-backed evidence may influence cognition.",
                 "activation_evidence_kind": "completed_master_outcomes",
+                "decision_prompt_version": MODULE.DIRECT_PROMPT_VERSION,
             }), encoding="utf-8")
             self.assertEqual(
                 MODULE.learning_context(Path(root))["active_cognitive_overlay"]["instruction"],

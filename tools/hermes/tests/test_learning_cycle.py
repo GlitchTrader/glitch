@@ -152,6 +152,16 @@ class LearningCycleTests(unittest.TestCase):
         self.assertIn('"--source", SOURCE', source)
         self.assertIn('"--toolsets", "memory"', source)
 
+    def test_learning_continuity_excludes_prior_prompt_artifacts(self):
+        with tempfile.TemporaryDirectory() as root:
+            supervisor = Path(root)
+            (supervisor / "current-plan.json").write_text(json.dumps({
+                "schema_version": MODULE.DIRECT.CURRENT_PLAN_SCHEMA,
+                "trading_influence": "outcome_backed",
+                "decision_prompt_version": "direct-v4",
+            }), encoding="utf-8")
+            self.assertIsNone(MODULE.continuity(supervisor)["current_plan"])
+
     def test_debrief_template_is_exact_and_master_owned(self):
         episode_id = MODULE.stable_id("episode", "intent-1")
         template = MODULE.output_template("debrief", [episode_id])

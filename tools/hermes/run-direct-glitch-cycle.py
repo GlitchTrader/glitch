@@ -31,6 +31,7 @@ ACTIONS = {"ENTER_LONG", "ENTER_SHORT", "HOLD", "MOVE_STOP", "MOVE_TP", "EXIT", 
 ACTION_ALIASES = {"NO_ACTION": "NOTHING"}
 CORE_MODEL = "gpt-5.6-luna"
 CORE_PROVIDER = "openai-codex"
+DIRECT_PROMPT_VERSION = "direct-v5-local"
 TRADING_SOURCE = "trading"
 REQUIRED_ENTRY_FIELDS = {"quantity", "order_type", "stop_loss", "take_profit_1"}
 ENTRY_FIELDS = REQUIRED_ENTRY_FIELDS | {
@@ -534,9 +535,14 @@ def journal_tail(glitch_data: Path, max_lines: int = 6) -> dict[str, list[dict[s
         _compact_execution(row)
         for row in _jsonl_tail(intents / "executions.jsonl", max_lines)
     ]
+    recent_decisions = [
+        row for row in _jsonl_tail(intents / "decisions.jsonl", max_lines * 4)
+        if (
+            row.get("intent") if isinstance(row.get("intent"), dict) else row
+        ).get("prompt_version") == DIRECT_PROMPT_VERSION
+    ]
     result["decisions"] = [
-        _compact_decision(row)
-        for row in _jsonl_tail(intents / "decisions.jsonl", max_lines)
+        _compact_decision(row) for row in recent_decisions[-max_lines:]
     ]
     eligible = [
         row for row in _jsonl_tail(intents / "hermes-trade-outcomes.jsonl", max_lines * 4)
@@ -565,7 +571,11 @@ def read_current_learning_artifact(path: Path, schema_version: str) -> dict[str,
 
 def read_trading_learning_artifact(path: Path, schema_version: str) -> dict[str, Any] | None:
     value = read_current_learning_artifact(path, schema_version)
-    return value if value and value.get("trading_influence") == "outcome_backed" else None
+    return value if (
+        value
+        and value.get("trading_influence") == "outcome_backed"
+        and value.get("decision_prompt_version") == DIRECT_PROMPT_VERSION
+    ) else None
 
 
 def learning_context(exchange: Path) -> dict[str, Any]:
@@ -575,6 +585,7 @@ def learning_context(exchange: Path) -> dict[str, Any]:
         not overlay
         or overlay.get("status") not in {"active", "promoted"}
         or overlay.get("activation_evidence_kind") != "completed_master_outcomes"
+        or overlay.get("decision_prompt_version") != DIRECT_PROMPT_VERSION
         or not overlay.get("instruction")
     ):
         overlay = None
@@ -1390,7 +1401,7 @@ def build_prompt(
             "confidence": 0.5,
             "snapshot_hash": str(scenario["market"]["snapshot_hash"]),
             "model_version": CORE_MODEL,
-            "prompt_version": "direct-v5-local",
+            "prompt_version": DIRECT_PROMPT_VERSION,
             "reason": "Replace with the current evidence-based decision.",
             "decision_audit": {
                 "bull_case": "Replace with compact bullish evidence.",
