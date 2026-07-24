@@ -1390,7 +1390,7 @@ def build_prompt(
             "confidence": 0.5,
             "snapshot_hash": str(scenario["market"]["snapshot_hash"]),
             "model_version": CORE_MODEL,
-            "prompt_version": "direct-v4",
+            "prompt_version": "direct-v5-local",
             "reason": "Replace with the current evidence-based decision.",
             "decision_audit": {
                 "bull_case": "Replace with compact bullish evidence.",
@@ -1425,19 +1425,21 @@ def build_prompt(
         "use 15m/60m for regime context, and never treat a higher-timeframe row as a completed-candle confirmation. "
         "Confirmation is probabilistic: infer it from the five-frame price path and available structure; a closed candle is not required. "
         "Missing order flow is neutral, not evidence against a trade. Higher timeframes provide regime, location, and opposing-risk context, "
-        "not permission; they cannot rescue a locally late, extended, exhausted, or poorly located entry. When flat, predict and trade the most likely next five minutes, not "
+        "not permission or the direction of a one-to-five-minute trade. When flat, evaluate ENTER_LONG, ENTER_SHORT, and NOTHING symmetrically: "
+        "flat is the current state, not the preferred decision. Predict and trade the most likely next five minutes, not "
         "the next fifteen. When positioned and reviewing each minute, predict the most likely next one-minute candle and manage the trade "
         "from that forecast, current structure, and risk. Do not remain flat merely because evidence is imperfect when a bounded, locally timely "
         "positive-expectancy opportunity exists. Conversely, activity, fear of inactivity, and desire for more data are never evidence. "
-        "Do not manufacture edge or force a trade. Before new exposure, classify the local move as initiating, progressing, or exhausting. "
-        "Prefer early participation or a favorable retest; when price has already traveled into opposing structure, session extremes, or exhaustion, "
-        "compare entry now against waiting or remaining flat. Confirmation arriving after most of the expected short-term move is not timely evidence. "
+        "Do not manufacture edge or force a trade. Before new exposure, describe whether the local move is initiating, progressing, or exhausting, "
+        "but treat those labels, session extremes, support, resistance, and the word late as observations, not conclusions or vetoes. "
+        "A retest is one possible entry, not a requirement. Compare remaining plausible movement from the current price with local structural risk "
+        "and act when either direction retains bounded positive expectancy. NOTHING carries the same burden of proof: state why neither direction qualifies now. "
         "Mixed timeframes are normal; bounded experimentation may sample multiple valid setups without a trade quota or deterministic cooldown. After a stop or failed managed exit, re-enter nearby in the same direction only "
         "when price, structure, or immediate behavior has materially changed, and state exactly what changed; a small reclaim or repeated thesis at nearly the same level is churn. State the most likely "
         "next-five-minute path in decisive_evidence and its concrete invalidation in change_condition. "
-        "For entries, define structural invalidation before reward. Anchor every stop beyond a relevant recent pivot or swing, the actual "
-        "invalidation, and observable noise rather than merely offsetting it from the immediate price. A valid stop should survive the ordinary "
-        "one-minute path expected by the thesis; "
+        "For entries, define structural invalidation before reward and match it to the one-to-five-minute thesis. Anchor every stop beyond the nearest "
+        "local structure that genuinely invalidates the expected movement, with room for observable one-minute noise; do not substitute a distant "
+        "higher-timeframe pivot or merely offset it from the immediate price. "
         "never compress a stop to create attractive R:R. Use realistic targets supported by the same horizon and regime. stop_loss and "
         "take_profit fields are absolute MNQ prices, not distances, and Glitch preserves them unless the live market has already crossed them. "
         "Treat execution_scope capacity, buffer, session, native-state, and lock fields as current packet evidence, not a model-call or intent-validation veto. Hermes owns quantity from current evidence. Follower accounts and ratios are user-owned replication "
@@ -1451,8 +1453,10 @@ def build_prompt(
         "do not mechanically maximize size or default to one contract. "
         "Packet evidence may inform an explicit NOTHING, but deterministic policy does not replace Hermes's decision with an inferred veto. "
         "Treat a flat NOTHING as an active observation: use decisive_evidence, disconfirming_evidence, and change_condition to preserve the developing "
-        "path, favorable participation condition, and invalidation. Later learning may compare the observed path, but the counterfactual remains "
-        "hypothetical and never becomes realized PnL, reward, punishment, or pressure to trade. "
+        "path, favorable participation condition, and invalidation. A prior change_condition is accountable: when current evidence satisfies it, act "
+        "on the newly supported choice or name genuinely new contrary evidence; do not merely move the threshold because price followed the forecast. "
+        "Later learning may classify the matured decision as justified abstention, avoided adverse movement, missed directional participation, or ambiguous "
+        "from the declared forecast and observed path, but it must never invent counterfactual fills, geometry, or PnL. "
         "A quantity of two or more may use TP2 plus quantity_tp1; "
         "a quantity of three or more may also use TP3 plus quantity_tp2. Each leg may have independently chosen valid stop and target geometry, and every leg receives "
         "an independent native OCO pair. These native legs are the current scale-out mechanism; there is no partial-reduction action after entry. "

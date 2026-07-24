@@ -39,10 +39,13 @@ replication, and the immutable journal.
    changes, and exits. For flat `NOTHING`, preserve a structured
    counterfactual: the developing movement, the condition or price that would
    have offered favorable participation, invalidation, and the later observed
-   path. Label the actual outcome as no trade and the counterfactual as
-   informational only; never convert it into realized PnL, reward, punishment,
-   entry pressure, or durable memory. Do not impose trade quotas or fear-driven
-   cooldowns.
+   path. Classify the matured decision as justified abstention, avoided adverse
+   movement, missed directional participation, or ambiguous by comparing the
+   declared forecast and participation condition with the observed path. Label
+   the actual outcome as no trade and never invent counterfactual fills,
+   geometry, PnL, reward, or punishment. Use the classification to improve
+   timing questions and accountability, never as a deterministic entry rule,
+   quantity pressure, durable memory, trade quota, or fear-driven cooldown.
 5. Never loosen an accepted live stop. Improve initial geometry, quantity,
    management, exit, or later re-entry instead.
 6. Treat each prior `change_condition` as accountable. If later evidence meets
