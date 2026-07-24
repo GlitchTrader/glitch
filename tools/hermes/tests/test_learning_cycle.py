@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import sys
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -9,6 +10,7 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "tools" / "hermes"))
 SCRIPT = ROOT / "tools" / "hermes" / "run-hermes-learning-cycle.py"
 SPEC = importlib.util.spec_from_file_location("glitch_learning_cycle", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -346,7 +348,8 @@ class LearningCycleTests(unittest.TestCase):
         self.assertIn("launch-hermes-learning-cycle.py", enabler)
         self.assertIn("launch-hermes-learning-cycle.py", installer)
         self.assertIn("subprocess.Popen", launcher)
-        self.assertIn("DETACHED_PROCESS", launcher)
+        self.assertIn("detach_flags()", launcher)
+        self.assertNotIn("DETACHED_PROCESS", launcher)
         args = SimpleNamespace(
             glitch_data=Path("C:/GlitchData"),
             profile="glitch",

@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import sys
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -9,6 +10,7 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "tools" / "hermes"))
 SCRIPT = ROOT / "tools" / "hermes" / "run-direct-glitch-cycle.py"
 SPEC = importlib.util.spec_from_file_location("direct_glitch_cycle", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -119,8 +121,8 @@ class DirectCycleTests(unittest.TestCase):
         )
 
         self.assertIn("subprocess.Popen", source)
-        self.assertIn("DETACHED_PROCESS", source)
-        self.assertIn("CREATE_NO_WINDOW", source)
+        self.assertIn("detach_flags()", source)
+        self.assertNotIn("DETACHED_PROCESS", source)
         self.assertIn("run-direct-glitch-cycle.py", LAUNCHER.worker_command(args)[1])
         self.assertIn("--packet-rollover-wait-seconds", LAUNCHER.worker_command(args))
         self.assertIn("-Script 'launch-direct-glitch-cycle.py'", setup)
