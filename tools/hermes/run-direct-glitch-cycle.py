@@ -9,6 +9,7 @@ Glitch's existing authenticated firewall. Codex is not part of this process.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -522,7 +523,9 @@ def _compact_outcome(row: dict[str, Any]) -> dict[str, Any]:
     value["master_result"] = {
         key: master_result.get(key) for key in (
             "quantity", "entry_price", "exit_price", "close_kind",
-            "observed_mfe_usd", "observed_mae_usd",
+            "sampled_mfe_usd", "sampled_mae_usd", "excursion_sampling_method",
+            "excursion_sample_count", "excursion_eligible",
+            "initial_native_risk_usd", "risk_normalization_status",
         ) if master_result.get(key) is not None
     }
     return value
@@ -586,7 +589,7 @@ def learning_context(exchange: Path) -> dict[str, Any]:
         or overlay.get("status") not in {"active", "promoted"}
         or overlay.get("activation_evidence_kind") != "completed_master_outcomes"
         or overlay.get("decision_prompt_version") != DIRECT_PROMPT_VERSION
-        or not overlay.get("instruction")
+        or not (overlay.get("replacement_text") or overlay.get("instruction"))
     ):
         overlay = None
     return {
@@ -598,6 +601,26 @@ def learning_context(exchange: Path) -> dict[str, Any]:
         ),
         "active_cognitive_overlay": overlay,
     }
+
+
+def apply_cognitive_overlay(prompt: str, overlay: dict[str, Any] | None) -> str:
+    if not isinstance(overlay, dict) or overlay.get("status") not in {"active", "promoted"}:
+        return prompt
+    if overlay.get("operation") != "replace" or overlay.get("target") != "core_prompt":
+        return prompt
+    expected = str(overlay.get("expected_old_text") or "")
+    replacement = str(overlay.get("replacement_text") or "")
+    expected_hash = str(overlay.get("expected_old_sha256") or "")
+    if (
+        not expected
+        or not replacement
+        or len(expected) > 600
+        or len(replacement) > 600
+        or prompt.count(expected) != 1
+        or hashlib.sha256(expected.encode("utf-8")).hexdigest() != expected_hash
+    ):
+        return prompt
+    return prompt.replace(expected, replacement, 1)
 
 
 def _jsonl_objects(path: Path) -> list[dict[str, Any]]:
@@ -1428,7 +1451,7 @@ def build_prompt(
         "operator_advisory": directive,
         "required_output_template": output_template,
     }
-    return (
+    prompt = (
         "Apply the Glitch SOUL and the five loaded trading skills to CURRENT_CYCLE. Glitch and NinjaTrader facts in the supplied "
         "packet and ledger outrank memory and interpretation. The timeframe rows are live in-progress observations. "
         "Packet is_contiguous, observed_span_minutes, and missing_minute_ids describe observation continuity. Treat gaps as explicit uncertainty evidence, not as an automatic no-trade rule. "
@@ -1525,6 +1548,7 @@ def build_prompt(
         "CURRENT_CYCLE="
         + json.dumps(envelope, separators=(",", ":"), ensure_ascii=False)
     )
+    return apply_cognitive_overlay(prompt, journals.get("active_cognitive_overlay"))
 
 
 def packet_is_current(packet: dict[str, Any], max_age_seconds: int | None = None) -> bool:

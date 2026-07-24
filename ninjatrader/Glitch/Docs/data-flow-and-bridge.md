@@ -24,6 +24,19 @@ The published reading includes the categories the AddOn needs to stay useful:
 
 The bridge is designed to move structured state, not to expose private analytics internals.
 
+## Fact normalization contract
+
+Every downstream consumer must be able to distinguish observation from native
+execution truth. A packet price is a decision reference, not an entry fill.
+NinjaTrader's actual fill and accepted native order state own execution
+calculations. Point value and tick size come from canonical instrument metadata,
+not a consumer-side symbol constant. Coarse time-sampled unrealized PnL is labeled
+as sampled evidence and is not represented as native MAE/MFE.
+
+Missing or lower-quality analytical data is published with its provenance and
+quality. It remains information for the operator; the bridge does not convert it
+into a hidden cognition or trading veto.
+
 ## Feed bus responsibilities
 
 The AddOn feed bus is the runtime cache for chart analytics.

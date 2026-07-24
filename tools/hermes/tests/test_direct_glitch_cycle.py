@@ -505,6 +505,26 @@ class DirectCycleTests(unittest.TestCase):
                 "Outcome-backed evidence may influence cognition.",
             )
 
+    def test_active_overlay_replaces_exactly_one_prompt_clause(self):
+        old = "Hermes owns the trading decision."
+        replacement = "Hermes owns the trading decision and may revise it from new evidence."
+        overlay = {
+            "status": "active",
+            "operation": "replace",
+            "target": "core_prompt",
+            "expected_old_text": old,
+            "expected_old_sha256": MODULE.hashlib.sha256(old.encode("utf-8")).hexdigest(),
+            "replacement_text": replacement,
+        }
+
+        rendered = MODULE.apply_cognitive_overlay(f"Before. {old} After.", overlay)
+
+        self.assertEqual(rendered, f"Before. {replacement} After.")
+        self.assertEqual(
+            MODULE.apply_cognitive_overlay(f"{old} {old}", overlay),
+            f"{old} {old}",
+        )
+
     def test_direct_prompt_uses_compact_structured_outcome_context(self):
         with tempfile.TemporaryDirectory() as root:
             glitch_data = Path(root)

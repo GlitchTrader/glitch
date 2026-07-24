@@ -80,12 +80,28 @@ class DirectOutcomeReconcileTests(unittest.TestCase):
             self.assertTrue(MODULE.acquire_lock(dead))
             self.assertEqual(json.loads(dead.read_text(encoding="utf-8"))["pid"], os.getpid())
 
-    def test_excursion_bounds_include_entry_and_terminal_fill(self):
+    def test_sampled_excursion_is_not_mislabeled_as_native_mae_mfe(self):
         now = datetime.now(timezone.utc)
         loss = MODULE.excursion([], "Sim101", now, now, "MNQ", -15.1)
-        self.assertEqual(loss["observed_mfe_usd"], 0.0)
-        self.assertEqual(loss["observed_mae_usd"], -15.1)
-        self.assertEqual(loss["excursion_samples"], 0)
+        self.assertEqual(loss["sampled_mfe_usd"], 0.0)
+        self.assertEqual(loss["sampled_mae_usd"], -15.1)
+        self.assertEqual(loss["excursion_sample_count"], 0)
+        self.assertFalse(loss["excursion_eligible"])
+
+    def test_initial_native_risk_uses_actual_fill_and_per_leg_stops(self):
+        legs, risk, status = MODULE.initial_native_risk(
+            20005.0,
+            3,
+            {
+                "leg1_qty": "1", "sl1": "19970",
+                "leg2_qty": "1", "sl2": "19980",
+                "leg3_qty": "1", "sl3": "19990",
+            },
+            2.0,
+        )
+        self.assertEqual(status, "complete")
+        self.assertEqual([row["risk_points_per_contract"] for row in legs], [35.0, 25.0, 15.0])
+        self.assertEqual(risk, 150.0)
 
     def test_master_learning_survives_a_missing_follower_round_trip(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -115,8 +131,8 @@ class DirectOutcomeReconcileTests(unittest.TestCase):
             (outbox / "cycle.json").write_text(json.dumps({"cycle_id": "cycle-1", "decisions": [intent]}), encoding="utf-8")
             correlation = "abc123def0"
             events = [
-                ("2026-07-14T12:00:01Z", "master_entry_submitted", f"contract=MNQ 09-26|correlation={correlation}|expected_accounts=Sim101,Sim102,Sim103"),
-                ("2026-07-14T12:00:02Z", "group_structural_brackets_submitted", "account=Sim101|fill=20000|sl=19980|tp1=20040|quantity=1"),
+                ("2026-07-14T12:00:01Z", "master_entry_submitted", f"contract=MNQ 09-26|correlation={correlation}|expected_accounts=Sim101,Sim102,Sim103|point_value_usd=2|tick_size=0.25"),
+                ("2026-07-14T12:00:02Z", "group_structural_brackets_submitted", "account=Sim101|fill=20000|point_value_usd=2|tick_size=0.25|leg1_qty=1|sl1=19980|tp1=20040"),
                 ("2026-07-14T12:05:01Z", "group_trade_closed", "state=flat_and_orders_terminal"),
             ]
             execution_path = gd / "intents" / "executions.jsonl"
@@ -163,6 +179,10 @@ class DirectOutcomeReconcileTests(unittest.TestCase):
             self.assertTrue(partial[0]["master_learning_eligible"])
             self.assertFalse(partial[0]["learning_eligible"])
             self.assertIsNone(partial[0]["replication_terminal_verified_utc"])
+            master_result = partial[0]["account_outcomes"][0]
+            self.assertEqual(master_result["initial_native_risk_usd"], 40.0)
+            self.assertTrue(master_result["risk_normalization_eligible"])
+            self.assertEqual(master_result["instrument_economics_source"], "native_execution_receipt")
 
             with ledger.open("a", encoding="utf-8") as stream:
                 stream.write(ledger_row("Sim103", "2026-07-14T12:00:04Z", "2026-07-14T12:05:03Z", 20002, 20010, quantity=3, entry_signal=sim103_signal))

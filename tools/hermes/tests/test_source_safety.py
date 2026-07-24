@@ -24,6 +24,8 @@ STATE_STORE = ADDON / "Services/Ai/GlitchAiIntentStateStore.cs"
 INTENT_SERVER = ADDON / "Services/Ai/GlitchAiIntentServer.cs"
 MAIN_WINDOW = ADDON / "UI/MainWindow/GlitchMainWindow.cs"
 ADDON_SHELL = ADDON / "GlitchAddOn.cs"
+OUTCOME_RECONCILER = ROOT / "tools/hermes/reconcile-hermes-outcomes.py"
+LEARNING_CYCLE = ROOT / "tools/hermes/run-hermes-learning-cycle.py"
 
 
 def source(path: Path) -> str:
@@ -35,6 +37,19 @@ def method_body(text: str, signature: str, next_signature: str) -> str:
 
 
 class AiSourceArchitectureContractTests(unittest.TestCase):
+    def test_learning_uses_native_economics_actual_fill_and_honest_sampling_labels(self):
+        executor = source(EXECUTOR)
+        reconciler = source(OUTCOME_RECONCILER)
+        learning = source(LEARNING_CYCLE)
+        self.assertIn("|point_value_usd=", executor)
+        self.assertIn("|tick_size=", executor)
+        self.assertIn("entry.AverageFillPrice", executor)
+        self.assertNotIn('POINT_VALUE = {"MNQ"', reconciler)
+        self.assertIn('"sampled_mfe_usd"', reconciler)
+        self.assertIn('"excursion_eligible": False', reconciler)
+        self.assertIn('"actual_entry_vwap"', learning)
+        self.assertIn('"initial_native_risk_usd"', learning)
+
     def test_intent_v3_is_exact_leg_and_v2_compatibility_is_bounded(self):
         validator = source(INTENT_VALIDATOR)
         executor = source(EXECUTOR)

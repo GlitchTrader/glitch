@@ -246,8 +246,20 @@ class LearningCycleTests(unittest.TestCase):
                 "entry_utc": "2099-01-01T14:05:02Z", "exit_utc": "2099-01-01T14:10:00Z",
                 "master_learning_eligible": True, "master_realized_pnl_usd": 90.0,
                 "account_outcomes": [{
-                    "account": "Sim101", "realized_pnl_usd": 90.0,
-                    "observed_mfe_usd": 150.0, "observed_mae_usd": -60.0,
+                    "account": "Sim101", "entry_price": 20005.0,
+                    "realized_pnl_usd": 90.0,
+                    "point_value_usd": 2.0, "tick_size": 0.25,
+                    "instrument_economics_source": "native_execution_receipt",
+                    "initial_protection_legs": [
+                        {"leg": 1, "quantity": 1, "initial_stop_price": 19970.0},
+                        {"leg": 2, "quantity": 1, "initial_stop_price": 19980.0},
+                        {"leg": 3, "quantity": 1, "initial_stop_price": 19990.0},
+                    ],
+                    "initial_native_risk_usd": 150.0,
+                    "risk_normalization_status": "complete",
+                    "sampled_mfe_usd": 150.0, "sampled_mae_usd": -60.0,
+                    "excursion_sampling_method": "minute_unrealized_plus_terminal_bounds",
+                    "excursion_sample_count": 2, "excursion_eligible": False,
                     "close_kind": "target",
                 }],
             }
@@ -257,10 +269,33 @@ class LearningCycleTests(unittest.TestCase):
             self.assertEqual(context["status"], "complete")
             self.assertEqual(context["pre_entry"]["valid_entry_quantities"], list(range(1, 28)))
             self.assertEqual(context["selected_plan"]["entry_role"], "initial_position")
-            self.assertEqual(context["selected_plan"]["planned_risk_usd"], 120.0)
+            self.assertEqual(context["decision_reference_price"], 20000.0)
+            self.assertEqual(context["actual_entry_vwap"], 20005.0)
+            self.assertEqual(context["selected_plan"]["decision_reference_risk_usd"], 120.0)
             self.assertEqual([leg["quantity"] for leg in context["selected_plan"]["legs"]], [1, 1, 1])
+            self.assertEqual(context["native_entry_facts"]["initial_native_risk_usd"], 150.0)
+            self.assertTrue(context["native_entry_facts"]["risk_normalization_eligible"])
             self.assertEqual(context["normalized_outcome"]["realized_pnl_per_contract_usd"], 30.0)
-            self.assertEqual(context["normalized_outcome"]["realized_r_multiple"], 0.75)
+            self.assertEqual(context["normalized_outcome"]["realized_r_multiple"], 0.6)
+            self.assertFalse(context["normalized_outcome"]["excursion_eligible"])
+
+    def test_debrief_episode_persists_deterministic_facts_separately_from_interpretation(self):
+        facts = [{
+            "expected_episode_id": "episode-1",
+            "master_outcome": {"intent_id": "intent-1"},
+            "master_result": {"entry_price": 20005.0, "initial_native_risk_usd": 150.0},
+        }]
+        records = [{
+            "schema_version": "glitch.hermes.trade_episode.v1",
+            "episode_id": "episode-1",
+            "intent_id": "intent-1",
+        }]
+
+        enriched = MODULE.attach_fact_envelopes(records, facts)[0]
+
+        self.assertEqual(enriched["schema_version"], "glitch.hermes.trade_episode.v2")
+        self.assertEqual(enriched["facts"], facts[0])
+        self.assertEqual(len(enriched["facts_sha256"]), 64)
 
     def test_newest_completed_outcomes_are_selected_before_backfill(self):
         with tempfile.TemporaryDirectory() as root:
@@ -381,7 +416,9 @@ class LearningCycleTests(unittest.TestCase):
         self.assertFalse(candidate["propose"])
         self.assertEqual(candidate["target"], "core_prompt")
         prompt = MODULE.build_prompt("daily", [], template, {})
-        self.assertIn("targeting core_prompt, soul, or skill:<name>", prompt)
+        self.assertIn("one compact versioned core-prompt change", prompt)
+        self.assertIn("expected_old_text", prompt)
+        self.assertIn("replacement_text", prompt)
 
     def test_hourly_loop_can_correct_repeated_cognition_without_fixed_quantity(self):
         review_id = MODULE.stable_id("hourly-review", "20990101T14")
@@ -391,7 +428,7 @@ class LearningCycleTests(unittest.TestCase):
         self.assertEqual(candidate["target"], "core_prompt")
         hourly = MODULE.build_prompt("hourly", [], template, {})
         planning = MODULE.build_prompt("planning", [], MODULE.output_template("planning", ["plan-1"]), {})
-        self.assertIn("at least two later completed master trade episodes", hourly)
+        self.assertIn("later comparable completed master evidence", hourly)
         self.assertIn("rather than waiting for the daily loop", hourly)
         self.assertIn("Label the actual outcome no trade", hourly)
         self.assertIn("Do not create a fixed or provisional quantity baseline", planning)
@@ -420,8 +457,10 @@ class LearningCycleTests(unittest.TestCase):
                 "cognitive_change_candidate": {
                     "propose": True,
                     "candidate_id": "candidate-1",
-                    "target": "skill:glitch-form-thesis",
-                    "instruction": "Give structural invalidation more room when repeated sweep evidence supports it.",
+                    "target": "core_prompt",
+                    "operation": "replace",
+                    "expected_old_text": "Old thesis sentence.",
+                    "replacement_text": "Give structural invalidation more room when repeated sweep evidence supports it.",
                     "evidence_episode_ids": ["episode-1"],
                     "expected_effect": "Fewer correct-thesis stopouts.",
                     "evaluation_metric": "Post-stop reclaim and realized capture.",
@@ -434,7 +473,7 @@ class LearningCycleTests(unittest.TestCase):
             self.assertEqual(proposed["candidate_id"], "candidate-1")
             self.assertFalse((supervisor / "active-cognitive-overlay.json").exists())
 
-    def test_cognitive_change_requires_two_later_trade_episodes(self):
+    def test_cognitive_change_uses_one_later_comparable_trade_without_a_numeric_gate(self):
         with tempfile.TemporaryDirectory() as root:
             supervisor = Path(root)
             for episode_id in ("episode-1", "episode-2"):
@@ -448,7 +487,9 @@ class LearningCycleTests(unittest.TestCase):
                         "propose": True,
                         "candidate_id": "candidate-1",
                         "target": "core_prompt",
-                        "instruction": "Consider whether repeated geometry outcomes warrant a small change in attention.",
+                        "operation": "replace",
+                        "expected_old_text": "Old geometry sentence.",
+                        "replacement_text": "Consider whether repeated geometry outcomes warrant a small change in attention.",
                         "evidence_episode_ids": ["episode-1", "episode-2"],
                         "expected_effect": "Fewer repeated mistakes.",
                         "evaluation_metric": "Later trade episodes.",
@@ -457,7 +498,7 @@ class LearningCycleTests(unittest.TestCase):
                 },
                 supervisor,
             )
-            for episode_id in ("episode-3", "episode-4"):
+            for episode_id in ("episode-3",):
                 MODULE.DIRECT.append_event(
                     supervisor / "trade-episodes.jsonl",
                     {"schema_version": "glitch.hermes.trade_episode.v1", "episode_id": episode_id},
@@ -466,23 +507,23 @@ class LearningCycleTests(unittest.TestCase):
                 {
                     "cognitive_change_decision": {
                         "candidate_id": "candidate-1", "action": "activate",
-                        "evidence_episode_ids": ["episode-3", "episode-4"],
+                        "evidence_episode_ids": ["episode-3"],
                     }
                 },
                 supervisor,
-                ["episode-1", "episode-2", "episode-3", "episode-4"],
+                ["episode-1", "episode-2", "episode-3"],
             )
             self.assertFalse((supervisor / "active-cognitive-overlay.json").exists())
             MODULE.apply_cognitive_decision(
                 {
                     "cognitive_change_decision": {
                         "candidate_id": "candidate-1", "action": "activate",
-                        "evidence_episode_ids": ["episode-3", "episode-4"],
+                        "evidence_episode_ids": ["episode-3"],
                         "contradiction_review": "Later losses do not contradict the geometry finding.",
                     }
                 },
                 supervisor,
-                ["episode-1", "episode-2", "episode-3", "episode-4"],
+                ["episode-1", "episode-2", "episode-3"],
             )
             active = MODULE.DIRECT.read_json(supervisor / "active-cognitive-overlay.json")
             self.assertEqual(active["status"], "active")
@@ -502,7 +543,7 @@ class LearningCycleTests(unittest.TestCase):
             active = MODULE.DIRECT.read_json(supervisor / "active-cognitive-overlay.json")
             self.assertEqual(active["status"], "active")
 
-            later_ids = ["episode-5", "episode-6"]
+            later_ids = ["episode-4"]
             for episode_id in later_ids:
                 MODULE.DIRECT.append_event(
                     supervisor / "trade-episodes.jsonl",
@@ -518,11 +559,11 @@ class LearningCycleTests(unittest.TestCase):
                     }
                 },
                 supervisor,
-                ["episode-1", "episode-2", "episode-3", "episode-4", *later_ids],
+                ["episode-1", "episode-2", "episode-3", *later_ids],
             )
             active = MODULE.DIRECT.read_json(supervisor / "active-cognitive-overlay.json")
             self.assertEqual(active["status"], "rolled_back")
-            self.assertNotIn("instruction", active)
+            self.assertNotIn("replacement_text", active)
             history = MODULE.read_jsonl(supervisor / "cognitive-changes.jsonl")
             self.assertEqual([row["event"] for row in history], ["proposed", "activated", "evaluated"])
 
@@ -540,7 +581,9 @@ class LearningCycleTests(unittest.TestCase):
                         "propose": True,
                         "candidate_id": "decision-only",
                         "target": "core_prompt",
-                        "instruction": "Do not turn abstention reviews into trade pressure.",
+                        "operation": "replace",
+                        "expected_old_text": "Old abstention sentence.",
+                        "replacement_text": "Do not turn abstention reviews into trade pressure.",
                         "evidence_episode_ids": ["decision-1"],
                         "expected_effect": "Observation remains observational.",
                         "evaluation_metric": "Completed master outcomes.",

@@ -925,6 +925,8 @@ namespace Glitch.Services
                 ProtectionLegs = protectionLegs,
                 EntrySubmissionStarted = new bool[1],
                 ProtectionSubmitted = new bool[1],
+                PointValue = metadata.PointValue,
+                TickSize = metadata.TickSize,
                 EntrySubmittedUtc = DateTime.UtcNow
             };
 
@@ -985,6 +987,8 @@ namespace Glitch.Services
                     + "|replication_owner=GlitchCopyEngine"
                     + "|snapshot_price=" + snapshotMarketPrice.ToString(CultureInfo.InvariantCulture)
                     + "|live_price=" + liveExecutionPrice.ToString(CultureInfo.InvariantCulture)
+                    + "|point_value_usd=" + metadata.PointValue.ToString(CultureInfo.InvariantCulture)
+                    + "|tick_size=" + metadata.TickSize.ToString(CultureInfo.InvariantCulture)
                     + "|stop_price=" + stopLoss.ToString(CultureInfo.InvariantCulture)
                     + "|target_price=" + takeProfit1.ToString(CultureInfo.InvariantCulture)
                     + "|protection_legs=" + protectionLegs.Count.ToString(CultureInfo.InvariantCulture)
@@ -1238,6 +1242,8 @@ namespace Glitch.Services
                 BuildGroupEvidenceMessage(group)
                     + "|account=" + CleanToken(account.Name)
                     + "|fill=" + fillPrice.ToString(CultureInfo.InvariantCulture)
+                    + "|point_value_usd=" + group.PointValue.ToString(CultureInfo.InvariantCulture)
+                    + "|tick_size=" + group.TickSize.ToString(CultureInfo.InvariantCulture)
                     + "|" + string.Join("|", evidence));
         }
 
@@ -2934,6 +2940,8 @@ namespace Glitch.Services
             public bool EntryFilledRecorded { get; set; }
             public bool OpenProtectedRecorded { get; set; }
             public bool TradeClosedRecorded { get; set; }
+            public double PointValue { get; set; }
+            public double TickSize { get; set; }
             public DateTime EntrySubmittedUtc { get; set; }
         }
 

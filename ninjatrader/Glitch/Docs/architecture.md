@@ -115,3 +115,17 @@ enforces factual native executability and user-enabled Settings actions; inferre
 capacity, prop-firm, session, and buffer policy remains observational. NinjaTrader
 is authoritative about the positions, orders, executions, and broker outcomes
 that actually exist.
+
+## Cognition and factual tooling
+
+Glitch equips the human operator and the optional Hermes operator; it does not
+replace either operator's judgment with a hidden deterministic strategy.
+Structural validation protects native identity and executability. Analytical
+uncertainty remains visible evidence rather than an automatic no-trade rule.
+
+This creates a strict product obligation: Glitch must not induce an operator
+error through an incorrect calculation, stale or conflated price, mislabeled
+sample, missing provenance, or false success receipt. Decision-time reference
+prices, actual fills, native protection, instrument point/tick economics, and
+sampled path observations remain separately named so an operator can reason
+from the right tool for the job.
