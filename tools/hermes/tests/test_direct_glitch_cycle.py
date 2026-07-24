@@ -376,11 +376,16 @@ class DirectCycleTests(unittest.TestCase):
         self.assertIn("Missing order flow is neutral", value)
         self.assertIn("predict and trade the most likely next five minutes", value)
         self.assertIn("predict the most likely next one-minute candle", value)
-        self.assertIn("Avoid staying idle for too long", value)
+        self.assertIn("immediate and next one-minute movement as the primary timing object", value)
+        self.assertIn("classify the local move as initiating, progressing, or exhausting", value)
+        self.assertIn("activity, fear of inactivity, and desire for more data are never evidence", value)
+        self.assertIn("counterfactual remains hypothetical", value)
+        self.assertNotIn("Avoid staying idle for too long", value)
         self.assertIn("recent pivot or swing", value)
         self.assertIn("live in-progress observations", value)
         self.assertIn("Packet evidence may inform an explicit NOTHING", value)
         self.assertIn("deterministic policy does not replace Hermes's decision with an inferred veto", value)
+        self.assertIn('"prompt_version":"direct-v4"', value)
 
     def test_prompt_makes_hold_accountable_and_keeps_quantity_adaptive(self):
         value = MODULE.build_prompt(packet(), MODULE.build_scenario(packet()), {})

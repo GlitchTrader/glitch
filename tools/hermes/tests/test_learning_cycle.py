@@ -380,8 +380,10 @@ class LearningCycleTests(unittest.TestCase):
         planning = MODULE.build_prompt("planning", [], MODULE.output_template("planning", ["plan-1"]), {})
         self.assertIn("at least two later completed master trade episodes", hourly)
         self.assertIn("rather than waiting for the daily loop", hourly)
+        self.assertIn("Label the actual outcome no trade", hourly)
         self.assertIn("Do not create a fixed or provisional quantity baseline", planning)
         self.assertIn("master-quantity calibration", planning)
+        self.assertIn("flat counterfactuals remain informational", planning)
 
     def test_supervisor_quantity_contract_is_versioned(self):
         plan = MODULE.output_template("planning", ["plan-1"])["records"][0]
