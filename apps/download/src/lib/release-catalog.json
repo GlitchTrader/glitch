@@ -122,5 +122,14 @@
         "status":  "experimental",
         "sourceCommit":  "5c6f4a7ca62bfeef0a94e487e6d6f3eb9bfda826",
         "hermesProfileVersion":  "0.0.2.12"
+    },
+    {
+        "fileName":  "Glitch_AI_v0.0.2.4.zip",
+        "edition":  "ai",
+        "version":  "0.0.2.4",
+        "releaseDate":  "2026-07-24T19:55:09.860Z",
+        "status":  "experimental",
+        "sourceCommit":  "ea588048d669b8d28c996046ba626f224fc27aac",
+        "hermesProfileVersion":  "0.0.2.13"
     }
 ]
