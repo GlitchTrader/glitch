@@ -131,5 +131,13 @@
         "status":  "experimental",
         "sourceCommit":  "ea588048d669b8d28c996046ba626f224fc27aac",
         "hermesProfileVersion":  "0.0.2.13"
+    },
+    {
+        "fileName":  "Glitch_v0.0.2.1.zip",
+        "edition":  "standard",
+        "version":  "0.0.2.1",
+        "releaseDate":  "2026-07-24T20:51:35.586Z",
+        "status":  "stable",
+        "sourceCommit":  "02dc216c73cd0618813171bec3f71dd0951bd169"
     }
 ]
