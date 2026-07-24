@@ -5807,6 +5807,7 @@ namespace Glitch.UI
 
             if (normalizedEvent.Equals("ExecutionUpdate", StringComparison.OrdinalIgnoreCase))
             {
+                TryPublishHermesProtectiveExecutionWake(accountName, eventArgs);
                 if (TryBuildExecutionJournalMessage(eventArgs, out string executionMessage))
                 {
                     if (TryBuildExecutionJournalSnapshotKey(accountName, eventArgs, executionMessage, out string executionKey, out string executionSnapshot))
@@ -5869,6 +5870,27 @@ namespace Glitch.UI
             string fallback = eventArgs?.ToString();
             if (!string.IsNullOrWhiteSpace(fallback))
                 AppendJournal(accountName, "Runtime", normalizedEvent + ": " + fallback.Trim());
+        }
+
+        private static void TryPublishHermesProtectiveExecutionWake(string accountName, object eventArgs)
+        {
+            object executionObject = TryGetNestedPropertyValue(eventArgs, "Execution") ?? eventArgs;
+            string signalName = TryGetNestedPropertyValueAsString(executionObject, "Order.Name", "Name");
+            if (string.IsNullOrWhiteSpace(signalName)
+                || (signalName.IndexOf("STP", StringComparison.OrdinalIgnoreCase) < 0
+                    && signalName.IndexOf("STOP", StringComparison.OrdinalIgnoreCase) < 0
+                    && signalName.IndexOf("TGT", StringComparison.OrdinalIgnoreCase) < 0
+                    && signalName.IndexOf("TARGET", StringComparison.OrdinalIgnoreCase) < 0))
+                return;
+
+            GlitchHermesPortfolioEventWriter.TryPublishProtectiveExecution(
+                accountName,
+                TryGetNestedPropertyValueAsString(executionObject, "Instrument.MasterInstrument.Name", "Instrument.FullName", "Instrument"),
+                signalName,
+                TryGetNestedPropertyValueAsString(executionObject, "Quantity"),
+                TryGetNestedPropertyValueAsString(executionObject, "Price", "ExecutionPrice", "FillPrice"),
+                TryGetNestedPropertyValueAsString(executionObject, "ExecutionId", "Id"),
+                DateTime.UtcNow);
         }
 
         private bool ShouldLogRuntimeSnapshot(
