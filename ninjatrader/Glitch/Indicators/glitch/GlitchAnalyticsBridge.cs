@@ -46,6 +46,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         private const int OrderFlowDepthLevels = 6;
         private static readonly TimeSpan OrderFlowTapeWindow = TimeSpan.FromSeconds(45);
         private static readonly TimeSpan OrderFlowDepthFreshness = TimeSpan.FromSeconds(20);
+        private static readonly TimeSpan BootstrapPrimaryMaxAge = TimeSpan.FromMinutes(3);
+        private static readonly TimeSpan BootstrapFutureTolerance = TimeSpan.FromMinutes(1);
 
         private EMA[] _emaFastByBip;
         private EMA[] _emaMedByBip;
@@ -164,8 +166,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Name = "GlitchAnalyticsBridge";
                 Calculate = Calculate.OnPriceChange;
                 IsOverlay = true;
-                // ponytail: SetDefaults-only; keep bridge publishing when chart tab is inactive (PublishToGlitchUi defaults true)
-                IsSuspendedWhileInactive = false;
+                // Do not reassign IsSuspendedWhileInactive here: NinjaTrader can throw when
+                // SetDefaults is replayed during a script reload.
                 NeutralBand = 0.01;
                 EnableBarColoring = true;
                 PublishToGlitchUi = true;
@@ -174,7 +176,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 PredictiveBoost = 0.35;
                 FlipHysteresis = 0.03;
                 PerformanceMode = true;
-                EnableOrderFlowLayer = true;
+                EnableOrderFlowLayer = false;
                 OrderFlowBlend = 0.8;
             }
             else if (State == State.Configure)
@@ -192,6 +194,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                         ? null
                         : (Instrument.MasterInstrument == null ? Instrument.FullName : Instrument.MasterInstrument.Name));
 
+                InitializeSeriesMetadata();
                 InitializeIndicators();
                 InitializeColorPalettes();
                 _lastPublishUtcByMinutes.Clear();
@@ -219,7 +222,6 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Array.Clear(_depthBidByLevel, 0, _depthBidByLevel.Length);
                 Array.Clear(_depthAskByLevel, 0, _depthAskByLevel.Length);
                 _orderFlowTickBip = ResolveOrderFlowTickBip();
-                InitializeSeriesMetadata();
 
                 InitializeOrderFlowIndicators();
 
@@ -345,7 +347,13 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
             }
 
-            bool shouldPublish = PublishToGlitchUi && bridgeAvailable && ShouldPublish(minutes, BarsInProgress);
+            // Historical chart hydration is not a live observation and must not
+            // advance the timestamp consumed by the AddOn analytics surface.
+            bool shouldPublish =
+                State == State.Realtime &&
+                PublishToGlitchUi &&
+                bridgeAvailable &&
+                ShouldPublish(minutes, BarsInProgress);
             if (!shouldColor && !shouldPublish)
                 return;
 
@@ -548,6 +556,16 @@ namespace NinjaTrader.NinjaScript.Indicators
                 return;
 
             DateTime nowUtc = DateTime.UtcNow;
+            DateTime primaryBarUtc;
+            if (!TryGetFreshPrimaryBarUtc(nowUtc, out primaryBarUtc))
+            {
+                Log(
+                    "GlitchAnalyticsBridge bootstrap skipped for " + (_instrumentRoot ?? "(null)") +
+                    ": primary 1-minute bar is missing or stale.",
+                    NinjaTrader.Cbi.LogLevel.Warning);
+                return;
+            }
+
             int seriesCount = BarsArray.Length;
             int publishedCount = 0;
             for (int bip = 0; bip < seriesCount; bip++)
@@ -634,6 +652,23 @@ namespace NinjaTrader.NinjaScript.Indicators
                     "GlitchAnalyticsBridge bootstrap published " + publishedCount + " timeframe(s) for " + (_instrumentRoot ?? "(null)") + ".",
                     NinjaTrader.Cbi.LogLevel.Information);
             }
+        }
+
+        private bool TryGetFreshPrimaryBarUtc(DateTime nowUtc, out DateTime primaryBarUtc)
+        {
+            primaryBarUtc = DateTime.MinValue;
+            if (Times == null || Times.Length == 0 || Times[0] == null || Times[0].Count == 0)
+                return false;
+
+            DateTime primaryBarTime = Times[0][0];
+            if (primaryBarTime == DateTime.MinValue)
+                return false;
+
+            primaryBarUtc = primaryBarTime.ToUniversalTime();
+            if (primaryBarUtc > nowUtc + BootstrapFutureTolerance)
+                return false;
+
+            return (nowUtc - primaryBarUtc) <= BootstrapPrimaryMaxAge;
         }
 
         private SignalSnapshot BuildWarmupSignal(int bip, bool includeOrderFlowHint)
@@ -1046,6 +1081,9 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             for (int bip = 0; bip < seriesCount; bip++)
             {
+                if (!IsTrackedMinutesForBip(bip))
+                    continue;
+
                 _emaFastByBip[bip] = EMA(BarsArray[bip], 12);
                 _emaMedByBip[bip] = EMA(BarsArray[bip], 26);
                 _emaSlowByBip[bip] = EMA(BarsArray[bip], 55);

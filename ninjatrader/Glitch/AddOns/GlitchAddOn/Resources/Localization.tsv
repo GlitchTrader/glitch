@@ -246,7 +246,7 @@ settings.risk.scope_pa	PA	PA	PA	PA	PA	PA
 settings.risk.threshold	Threshold (ratio)	Limite (razão)	Umbral (ratio)	阈值（比率）	Seuil (ratio)	Порог (доля)
 settings.risk.threshold_on	On threshold (ratio)	Limite ligar (razão)	Umbral activar (ratio)	开启阈值（比率）	Seuil activation (ratio)	Порог включения (доля)
 settings.risk.threshold_off	Off threshold (ratio)	Limite desligar (razão)	Umbral liberar (ratio)	关闭阈值（比率）	Seuil relâchement (ratio)	Порог отключения (доля)
-settings.license.title	License	Licença	Licencia	许可证	Licence	Лицензия
+settings.license.title	License & Updates	Licença e Atualizações	Licencia y Actualizaciones	许可证和更新	Licence et Mises à Jour	Лицензия и Обновления
 settings.license.key	License Key	Chave de Licença	Clave de Licencia	许可证密钥	Clé de Licence	Ключ Лицензии
 settings.license.key_placeholder	Enter license key	Digite a chave de licença	Introduce la clave de licencia	输入许可证密钥	Saisir la clé de licence	Введите ключ лицензии
 settings.license.paste_placeholder	Paste your license here	Cole sua licença aqui	Pega tu licencia aquí	请在此粘贴许可证	Collez votre licence ici	Вставьте лицензию сюда
@@ -274,6 +274,7 @@ overlay.journal.go_pro_title	Go Pro for Journal	Ative o Pro para o Journal	Activ
 overlay.settings.shortcut_link	Open Settings	Abrir Configurações	Abrir Configuración	打开设置	Ouvrir les Réglages	Открыть Настройки
 overlay.settings.shortcut_prefix	Already have a key?	Já tem uma chave?	¿Ya tiene una clave?	已有密钥？	Vous avez déjà une clé ?	Уже есть ключ?
 overlay.surface.premium_features	Premium Features	Recursos Premium	Funciones Premium	高级功能	Fonctionnalités Premium	Премиум-Функции
+overlay.go_pro.title_format	Go Pro for {0}	Ative o Pro para {0}	Active Pro para {0}	为 {0} 升级到 Pro	Passez Pro pour {0}	Перейти на Pro для {0}
 settings.license.active_prefix	Active License:	Licença Ativa:	Licencia Activa:	有效许可证：	Licence Active :	Активная Лицензия:
 settings.license.plan_lite	Lite	Lite	Lite	Lite	Lite	Lite
 settings.license.plan_pro	Pro	Pro	Pro	Pro	Pro	Pro

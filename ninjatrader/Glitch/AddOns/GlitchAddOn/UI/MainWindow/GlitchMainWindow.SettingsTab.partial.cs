@@ -78,8 +78,6 @@ namespace Glitch.UI
                 Orientation = Orientation.Vertical,
                 Margin = new Thickness(0)
             };
-            compliancePanel.Children.Add(BuildSectionHeader("settings.risk.title", "Risk Management Rules"));
-
             compliancePanel.Children.Add(BuildComplianceFeatureExpander(
                 "settings.risk.enforce_15_flatten_freeze",
                 "Flatten and freeze account when buffer falls below threshold.",
@@ -165,12 +163,15 @@ namespace Glitch.UI
             ApplySkinResource(_settingsCopyTradingPolicyNotice, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
             compliancePanel.Children.Add(_settingsCopyTradingPolicyNotice);
 
-            settingsStack.Children.Add(compliancePanel);
+            Expander riskManagementExpander = CreateAccordionExpander(root, "settings.risk.title", "Risk Management Rules");
+            riskManagementExpander.IsExpanded = true;
+            riskManagementExpander.Content = WrapAccordionSectionContent(compliancePanel);
+            settingsStack.Children.Add(riskManagementExpander);
 
             var licensingPanel = new StackPanel
             {
                 Orientation = Orientation.Vertical,
-                Margin = new Thickness(0, 16, 0, 0)
+                Margin = new Thickness(0)
             };
             _settingsLicenseKeyTextBox = BuildSettingsTextBox("settings.license.key_placeholder", "Enter license key");
             _settingsLicenseKeyTextBox.GotFocus += OnSettingsLicenseKeyTextBoxGotFocus;
@@ -198,8 +199,6 @@ namespace Glitch.UI
             licensingPanel.Children.Add(BuildSettingsLabel("settings.license.key", "License Key"));
             licensingPanel.Children.Add(_settingsLicenseKeyTextBox);
             licensingPanel.Children.Add(_settingsPlanBadgeBorder);
-
-            settingsStack.Children.Add(licensingPanel);
 
             var actionHost = new StackPanel
             {
@@ -244,8 +243,12 @@ namespace Glitch.UI
 
             actionHost.Children.Add(actionRow);
             actionHost.Children.Add(_settingsUpdateBadgeText);
+            licensingPanel.Children.Add(actionHost);
 
-            settingsStack.Children.Add(actionHost);
+            Expander licensingExpander = CreateAccordionExpander(root, "settings.license.title", "License & Updates");
+            licensingExpander.IsExpanded = true;
+            licensingExpander.Content = WrapAccordionSectionContent(licensingPanel);
+            settingsStack.Children.Add(licensingExpander);
 
             _settingsPageScroll = CreateAccordionPageScrollHost(settingsStack);
             _settingsPageScroll.Loaded += (_, __) => SyncSettingsPageScrollViewport();
@@ -306,20 +309,6 @@ namespace Glitch.UI
             _settingsCopyTradingPolicyNotice.Visibility = Visibility.Visible;
         }
 
-        private TextBlock BuildSectionHeader(string key, string fallback)
-        {
-            var header = new TextBlock
-            {
-                Text = L(key, fallback),
-                FontWeight = UiHeadingFontWeight,
-                FontSize = ResolveSettingsHeadingFontSize(),
-                Margin = new Thickness(0, 0, 0, 6)
-            };
-            RegisterLocalizationBinding(() => header.Text = L(key, fallback));
-            ApplySkinResource(header, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel4Brush", "FontTableBrush");
-            return header;
-        }
-
         private TextBlock BuildSettingsLabel(string key, string fallback)
         {
             var label = new TextBlock
@@ -370,7 +359,7 @@ namespace Glitch.UI
             threshold = null;
             thresholdOff = null;
 
-            var panel = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(0, 4, 0, 8) };
+            var panel = new StackPanel { Orientation = Orientation.Vertical };
             var description = new TextBlock
             {
                 Text = descriptionFallback,
@@ -432,14 +421,9 @@ namespace Glitch.UI
                 UpdateComplianceThresholdEnabled(simLocal, evalLocal, apLocal, thresholdLocal, thresholdOffLocal);
             }
 
-            var expander = new Expander
-            {
-                Header = L(titleKey, descriptionFallback),
-                IsExpanded = false,
-                Margin = new Thickness(0, 2, 0, 2),
-                Content = panel
-            };
-            RegisterLocalizationBinding(() => expander.Header = L(titleKey, descriptionFallback));
+            Expander expander = CreateDisclosureRowExpander(GetSettingsStyleContext(), titleKey, descriptionFallback);
+            expander.IsExpanded = false;
+            expander.Content = WrapDisclosureRowContent(panel);
             return expander;
         }
 
@@ -1054,12 +1038,13 @@ namespace Glitch.UI
                 _settingsUpdateBadgeText.Inlines.Clear();
                 _settingsUpdateBadgeText.Visibility = Visibility.Collapsed;
             }
-            _settingsPlanBadgeText.Inlines.Add(new Run(L("settings.license.active_prefix", "Active License: "))
+            _settingsPlanBadgeText.Inlines.Add(new Run(L("settings.license.active_prefix", "Active License:"))
             {
                 Foreground = baseTextBrush,
                 FontWeight = UiHeadingFontWeight,
                 FontSize = sharedFontSize
             });
+            _settingsPlanBadgeText.Inlines.Add(new Run(" "));
 
             if (hasProAccess)
             {
@@ -1103,12 +1088,13 @@ namespace Glitch.UI
 
             _settingsUpdateBadgeText.Inlines.Clear();
             _settingsUpdateBadgeText.Visibility = Visibility.Visible;
-            _settingsUpdateBadgeText.Inlines.Add(new Run(L("settings.update.available_prefix", "Update Available v. "))
+            _settingsUpdateBadgeText.Inlines.Add(new Run(L("settings.update.available_prefix", "Update Available v."))
             {
                 Foreground = baseTextBrush,
                 FontWeight = UiHeadingFontWeight,
                 FontSize = sharedFontSize
             });
+            _settingsUpdateBadgeText.Inlines.Add(new Run(" "));
             _settingsUpdateBadgeText.Inlines.Add(new Run(_latestClientVersion.Trim())
             {
                 Foreground = baseTextBrush,

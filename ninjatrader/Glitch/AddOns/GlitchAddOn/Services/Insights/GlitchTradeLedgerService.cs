@@ -87,7 +87,7 @@ namespace Glitch.Services
                     }
                 }
 
-                NormalizeExactDuplicateTradesUnsafe();
+                NormalizeDuplicateTradesUnsafe();
                 bool queueFlush = _dirty;
 
                 var snapshot = _ledgerById.Values
@@ -124,20 +124,37 @@ namespace Glitch.Services
 
             Task.Run(() =>
             {
+                bool failed = false;
                 try
                 {
+                    int waitMilliseconds;
                     lock (_sync)
                     {
                         EnsureLoadedUnsafe();
-                        FlushUnsafe(nowUtc, force);
+                        double remainingMilliseconds = MinWriteIntervalMs - (DateTime.UtcNow - _lastWriteUtc).TotalMilliseconds;
+                        waitMilliseconds = force || remainingMilliseconds <= 0
+                            ? 0
+                            : (int)Math.Ceiling(remainingMilliseconds);
                     }
+
+                    if (waitMilliseconds > 0)
+                        Thread.Sleep(waitMilliseconds);
+
+                    lock (_sync)
+                        FlushUnsafe(DateTime.UtcNow, force);
                 }
                 catch
                 {
+                    failed = true;
                 }
                 finally
                 {
                     Interlocked.Exchange(ref _backgroundFlushActive, 0);
+                    bool queuePendingWrite;
+                    lock (_sync)
+                        queuePendingWrite = !failed && _dirty;
+                    if (queuePendingWrite)
+                        QueueBackgroundFlush(DateTime.UtcNow, force: false);
                 }
             });
         }
@@ -205,7 +222,7 @@ namespace Glitch.Services
             {
             }
 
-            NormalizeExactDuplicateTradesUnsafe();
+            NormalizeDuplicateTradesUnsafe();
         }
 
         private void FlushUnsafe(DateTime nowUtc, bool force)
@@ -385,13 +402,14 @@ namespace Glitch.Services
             return true;
         }
 
-        private void NormalizeExactDuplicateTradesUnsafe()
+        private void NormalizeDuplicateTradesUnsafe()
         {
             if (_ledgerById.Count <= 1)
                 return;
 
             var seenSignatures = new HashSet<string>(StringComparer.Ordinal);
-            var duplicateTradeIds = new List<string>();
+            var seenGlitchEntries = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var duplicateTradeIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (KeyValuePair<string, GlitchTradeInsightsService.TradeRoundTrip> kvp in _ledgerById
                 .OrderBy(pair => pair.Value?.ExitUtc ?? DateTime.MinValue)
@@ -406,6 +424,17 @@ namespace Glitch.Services
                     continue;
 
                 if (!seenSignatures.Add(signature))
+                {
+                    duplicateTradeIds.Add(kvp.Key);
+                    continue;
+                }
+
+                string entrySignal = CleanToken(trade.EntrySignal);
+                if (entrySignal.StartsWith("GLT-", StringComparison.OrdinalIgnoreCase)
+                    && !seenGlitchEntries.Add(string.Join("|",
+                        CleanToken(trade.AccountName),
+                        CleanToken(trade.Instrument),
+                        entrySignal)))
                     duplicateTradeIds.Add(kvp.Key);
             }
 

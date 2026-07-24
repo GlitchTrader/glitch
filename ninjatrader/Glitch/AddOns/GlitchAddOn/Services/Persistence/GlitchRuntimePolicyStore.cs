@@ -25,7 +25,6 @@ namespace Glitch.Services
         public bool EnforceBufferOneContract30Percent { get; set; } = false;
         public bool EnforceUnrealizedFlatten70Percent { get; set; } = false;
         public bool EnforceEvalProfitTargetLock { get; set; } = false;
-        public bool EnforceStrategyComplianceActions { get; set; } = false;
         public bool ReplicationUiEnabled { get; set; } = false;
         public ComplianceAccountTypeScope BufferFreezeScopes { get; set; } = new ComplianceAccountTypeScope();
         public double BufferFreezeThresholdRatio { get; set; } = 0.15;
@@ -196,7 +195,6 @@ namespace Glitch.Services
             settings.EnforceBufferOneContract30Percent = ReadBool(rows, "ENFORCE_BUFFER_ONE_CONTRACT_30_PERCENT", settings.EnforceBufferOneContract30Percent);
             settings.EnforceUnrealizedFlatten70Percent = ReadBool(rows, "ENFORCE_UNREALIZED_FLATTEN_70_PERCENT", settings.EnforceUnrealizedFlatten70Percent);
             settings.EnforceEvalProfitTargetLock = ReadBool(rows, "ENFORCE_EVAL_PROFIT_TARGET_LOCK", settings.EnforceEvalProfitTargetLock);
-            settings.EnforceStrategyComplianceActions = ReadBool(rows, "ENFORCE_STRATEGY_COMPLIANCE_ACTIONS", settings.EnforceStrategyComplianceActions);
             settings.ReplicationUiEnabled = ReadBool(rows, "REPLICATION_UI_ENABLED", settings.ReplicationUiEnabled);
             settings.FlattenOnCriticalBufferLock = ReadBool(rows, "FLATTEN_ON_CRITICAL_BUFFER_LOCK", settings.FlattenOnCriticalBufferLock);
             LoadComplianceFeatureScopes(settings, rows);
@@ -257,7 +255,6 @@ namespace Glitch.Services
                 $"ENFORCE_BUFFER_ONE_CONTRACT_30_PERCENT\t{ToBoolToken(settings.EnforceBufferOneContract30Percent)}",
                 $"ENFORCE_UNREALIZED_FLATTEN_70_PERCENT\t{ToBoolToken(settings.EnforceUnrealizedFlatten70Percent)}",
                 $"ENFORCE_EVAL_PROFIT_TARGET_LOCK\t{ToBoolToken(settings.EnforceEvalProfitTargetLock)}",
-                $"ENFORCE_STRATEGY_COMPLIANCE_ACTIONS\t{ToBoolToken(settings.EnforceStrategyComplianceActions)}",
                 $"REPLICATION_UI_ENABLED\t{ToBoolToken(settings.ReplicationUiEnabled)}",
                 $"FLATTEN_ON_CRITICAL_BUFFER_LOCK\t{ToBoolToken(settings.FlattenOnCriticalBufferLock)}",
                 $"ENFORCE_BUFFER_FREEZE_15_SIM\t{ToBoolToken(settings.BufferFreezeScopes.Sim)}",

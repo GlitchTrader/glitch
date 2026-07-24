@@ -5123,6 +5123,7 @@ namespace Glitch.UI
 
                 UpdateWarningCountUi();
                 RefreshWarningCollectionViews();
+                RefreshTradeLedgerFromJournal(DateTime.UtcNow);
             }
             catch
             {

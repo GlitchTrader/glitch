@@ -18,6 +18,7 @@ REPLICATION_UI = ADDON / "UI/MainWindow/GlitchMainWindow.Replication.partial.cs"
 LOCALIZATION = ADDON / "Resources/Localization.tsv"
 POLICY_STORE = ADDON / "Services/Persistence/GlitchRuntimePolicyStore.cs"
 TRADE_INSIGHTS = ADDON / "Services/Insights/GlitchTradeInsightsService.cs"
+TRADE_LEDGER = ADDON / "Services/Insights/GlitchTradeLedgerService.cs"
 SUMMARY_TAB = ADDON / "UI/MainWindow/GlitchMainWindow.SummaryTab.partial.cs"
 METADATA = ADDON / "Services/Trading/GlitchInstrumentMetadataService.cs"
 FEED_BUS = ADDON / "UI/Analytics/GlitchAnalyticsFeedBus.cs"
@@ -96,6 +97,8 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         text = "\n".join(source(path) for path in ADDON.rglob("*.cs")) + source(PROP_RULES)
         self.assertNotIn("automatedTradingAllowed", text)
         self.assertNotIn("firm_automation_prohibited", text)
+        self.assertNotIn("EnforceStrategyComplianceActions", text)
+        self.assertNotIn("ENFORCE_STRATEGY_COMPLIANCE_ACTIONS", text)
 
     def test_fred_release_rows_are_context_not_live_compliance_alerts(self):
         text = source(FUNDAMENTAL_ANALYSIS)
@@ -645,6 +648,16 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("AccumulateExecutionCommission(state, evt, closeQty / executionQuantity)", text)
         self.assertIn("AccumulateExecutionCommission(states[key], evt, remainder / executionQuantity)", text)
 
+    def test_trade_ledger_flushes_deferred_writes_and_deduplicates_owned_entries(self):
+        text = source(TRADE_LEDGER)
+        self.assertIn("Thread.Sleep(waitMilliseconds)", text)
+        self.assertIn("queuePendingWrite = !failed && _dirty", text)
+        self.assertIn("QueueBackgroundFlush(DateTime.UtcNow, force: false)", text)
+        self.assertIn("NormalizeDuplicateTradesUnsafe", text)
+        self.assertIn('entrySignal.StartsWith("GLT-"', text)
+        self.assertIn("seenGlitchEntries.Add", text)
+        self.assertNotIn("NormalizeExactDuplicateTradesUnsafe", text)
+
     def test_currency_pnl_never_uses_unknown_point_value(self):
         summary = source(SUMMARY_TAB)
         metadata = source(METADATA)
@@ -722,6 +735,17 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("clone.Open = NormalizePositiveFinite", feed)
         self.assertIn("clone.Volume = NormalizeFinite", feed)
         self.assertRegex(bridge, r"UtcTime\s*=\s*(?:DateTime\.UtcNow|nowUtc|readingUtc)")
+        self.assertIn("State == State.Realtime", bridge)
+        self.assertIn("TryGetFreshPrimaryBarUtc", bridge)
+        self.assertIn("BootstrapPrimaryMaxAge", bridge)
+        self.assertNotIn("IsSuspendedWhileInactive = false;", bridge)
+        self.assertIn("EnableOrderFlowLayer = false;", bridge)
+        self.assertLess(
+            bridge.index("InitializeSeriesMetadata();"),
+            bridge.index("InitializeIndicators();"),
+        )
+        initialize = method_body(bridge, "private void InitializeIndicators", "private void InitializeColorPalettes")
+        self.assertIn("if (!IsTrackedMinutesForBip(bip))", initialize)
 
 
 if __name__ == "__main__":
