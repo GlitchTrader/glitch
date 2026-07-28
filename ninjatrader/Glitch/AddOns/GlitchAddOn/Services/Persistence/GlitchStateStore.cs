@@ -280,12 +280,14 @@ namespace Glitch.Services
                 }
 
                 bool isManual = parts.Length >= 5 && ParseBooleanToken(parts[4]);
+                string accountSizeSource = parts.Length >= 6 ? parts[5]?.Trim() : string.Empty;
 
                 results[accountName] = new SelectionOverrideRecord
                 {
                     AccountStatus = status,
                     PropFirmId = firmId,
                     AccountSize = accountSize,
+                    AccountSizeSource = accountSizeSource,
                     IsManual = isManual
                 };
             }
@@ -298,7 +300,7 @@ namespace Glitch.Services
             if (string.IsNullOrWhiteSpace(filePath))
                 return;
 
-            var lines = new List<string> { "# account\tstatus\tfirmId\tsize\tmanual" };
+            var lines = new List<string> { "# account\tstatus\tfirmId\tsize\tmanual\tsizeSource" };
             if (records != null)
             {
                 foreach (var kvp in records.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
@@ -315,7 +317,8 @@ namespace Glitch.Services
                         ? kvp.Value.AccountSize.Value.ToString("F0", CultureInfo.InvariantCulture)
                         : string.Empty;
 
-                    lines.Add(string.Join("\t", account, status, firmId, size, kvp.Value.IsManual ? "true" : "false"));
+                    string sizeSource = CleanPersistToken(kvp.Value.AccountSizeSource);
+                    lines.Add(string.Join("\t", account, status, firmId, size, kvp.Value.IsManual ? "true" : "false", sizeSource));
                 }
             }
 
