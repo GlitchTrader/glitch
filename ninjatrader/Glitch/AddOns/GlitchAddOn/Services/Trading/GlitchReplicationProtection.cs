@@ -120,8 +120,19 @@ namespace Glitch.Services
             }
 
             int totalQuantity = legs.Sum(leg => leg.MasterQuantity);
-            if (totalQuantity != requiredMasterQuantity)
+            if (totalQuantity <= 0)
                 return false;
+            if (totalQuantity != requiredMasterQuantity)
+            {
+                if (totalQuantity > requiredMasterQuantity)
+                    return false;
+                if (!CanUseFullPositionPlan(
+                        masterAccount,
+                        instrument,
+                        requiredMasterQuantity,
+                        isLong))
+                    return false;
+            }
 
             legs = isLong
                 ? legs.OrderBy(leg => leg.TargetPrice).ToList()

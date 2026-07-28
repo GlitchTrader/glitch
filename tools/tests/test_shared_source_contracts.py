@@ -132,7 +132,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
 
     def test_live_replication_copies_each_execution_delta_without_position_repair(self):
         copy = source(COPY_ENGINE)
-        opening = method_body(copy, "private void FanOutOpening", "private void FanOutCompleteClose")
+        opening = method_body(copy, "private void FanOutOpening", "private void FanOutMasterProtectionExit")
         scale = method_body(copy, "private static int ScaleExecution", "private static bool TrySnapshotOrders")
         self.assertIn("ScaleExecution(context, route.Ratio)", opening)
         self.assertIn("ScaleFollowerQuantity(filled, ratio)", scale)
@@ -309,7 +309,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         text = source(COPY_ENGINE)
         opening = method_body(text, "public void ProcessMasterExecution", "public void ProcessMasterOrderUpdate")
         submit = method_body(text, "private FollowerOrderSubmission SubmitFollowerEntry", "private bool SubmitProtectionUnits")
-        self.assertIn("FanOutOpening(masterAccount, context, routes, plan, masterEntryQuantity)", opening)
+        self.assertIn("FanOutOpening(masterAccount, context, routes, plan, masterEntryQuantity, action)", opening)
         self.assertIn("TryResolveMasterPlan", opening)
         self.assertNotIn("TryGetNetQuantityForInstrumentRoot", opening)
         self.assertNotIn("PendingMasterCopy", text)
@@ -788,6 +788,73 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("clone.Open = NormalizePositiveFinite", feed)
         self.assertIn("clone.Volume = NormalizeFinite", feed)
         self.assertRegex(bridge, r"UtcTime\s*=\s*(?:DateTime\.UtcNow|nowUtc|readingUtc)")
+
+    def test_manual_flat_sell_normalizes_to_sell_short(self):
+        copy = source(COPY_ENGINE)
+        normalize = method_body(
+            copy,
+            "private static OrderAction NormalizeMasterExecutionAction",
+            "private static FollowerSignalKind ParseFollowerSignalKind",
+        )
+        process = method_body(
+            copy,
+            "public void ProcessMasterExecution",
+            "public void ProcessMasterOrderUpdate",
+        )
+        self.assertIn("action == OrderAction.Sell && masterNet <= 0", normalize)
+        self.assertIn("return OrderAction.SellShort", normalize)
+        self.assertIn("NormalizeMasterExecutionAction(masterAccount, context)", process)
+
+    def test_master_protection_exit_triggers_follower_recovery(self):
+        copy = source(COPY_ENGINE)
+        process = method_body(
+            copy,
+            "public void ProcessMasterExecution",
+            "public void ProcessMasterOrderUpdate",
+        )
+        recovery = method_body(
+            copy,
+            "private void FanOutMasterProtectionExit",
+            "private void FanOutCompleteClose",
+        )
+        self.assertIn("FanOutMasterProtectionExit(masterAccount, context, routes)", process)
+        self.assertIn("master_protection_exit", recovery)
+        self.assertIn("TrySubmitAttributedRecoveryClose", recovery)
+        self.assertIn("copy_skip|reason=master_native_bracket_owns_exit", recovery)
+
+    def test_duplicate_entry_suppression_on_same_master_signal(self):
+        submit = method_body(
+            source(COPY_ENGINE),
+            "private FollowerOrderSubmission SubmitFollowerEntry",
+            "private bool SubmitProtectionUnits",
+        )
+        self.assertIn("duplicate_entry_suppressed", submit)
+        self.assertIn("existing.MasterEntrySignal", submit)
+
+    def test_partial_master_bracket_plan_is_accepted_before_full_quantity(self):
+        protection = source(PROTECTION)
+        resolve = method_body(
+            protection,
+            "public static bool TryResolveMasterPlan",
+            "public static bool TryScalePlan",
+        )
+        self.assertIn("if (totalQuantity > requiredMasterQuantity)", resolve)
+        self.assertIn("CanUseFullPositionPlan(", resolve)
+
+    def test_fleet_header_uses_realized_pnl(self):
+        refresh = source(ADDON / "UI/MainWindow/GlitchMainWindow.RefreshPipeline.partial.cs")
+        header = source(ADDON / "UI/MainWindow/GlitchMainWindow.Header.partial.cs")
+        localization = source(LOCALIZATION)
+        metrics = method_body(
+            refresh,
+            "private void UpdateHeaderMetricsFromRows",
+            "private sealed class AccountRefreshBuildResult",
+        )
+        self.assertIn("rows.Sum(r => r.RealizedPnlRaw)", metrics)
+        self.assertNotIn("rows.Sum(r => r.TotalPnlRaw)", metrics)
+        self.assertIn("Fleet Realized PnL", header)
+        self.assertIn("Fleet Realized PnL", localization)
+        self.assertIn("PnL Realizado da Frota", localization)
 
 
 if __name__ == "__main__":
