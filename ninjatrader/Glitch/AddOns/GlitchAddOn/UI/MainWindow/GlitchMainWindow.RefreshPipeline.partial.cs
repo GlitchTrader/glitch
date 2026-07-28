@@ -59,6 +59,27 @@ namespace Glitch.UI
             PublishGlitchShellState();
         }
 
+        private void QueueAccountRefreshFromRuntimeEvent(Account account, object eventArgs)
+        {
+            if (_isWindowClosed || account == null || !IsRelevantAccountItemUpdate(eventArgs))
+                return;
+
+            QueueBackgroundAccountRefresh(GetActiveAccountsSnapshot(), heavyTabWork: false);
+        }
+
+        private static bool IsRelevantAccountItemUpdate(object eventArgs)
+        {
+            object itemObject = TryGetNestedPropertyValue(eventArgs, "AccountItem", "Item");
+            if (itemObject == null)
+                return false;
+
+            string itemName = itemObject.ToString();
+            return itemName.IndexOf("NetLiquidation", StringComparison.OrdinalIgnoreCase) >= 0
+                || itemName.IndexOf("CashValue", StringComparison.OrdinalIgnoreCase) >= 0
+                || itemName.IndexOf("RealizedProfitLoss", StringComparison.OrdinalIgnoreCase) >= 0
+                || itemName.IndexOf("UnrealizedProfitLoss", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         private void RefreshHiddenRuntimeSafetyIfDue(DateTime nowUtc)
         {
             if (_isWindowClosed
@@ -92,6 +113,7 @@ namespace Glitch.UI
                         AccountStatus = selectionOverride.AccountStatus,
                         PropFirmId = selectionOverride.PropFirmId,
                         AccountSize = selectionOverride.AccountSize,
+                        AccountSizeSource = selectionOverride.AccountSizeSource,
                         IsManual = selectionOverride.IsManual
                     };
                 }
@@ -127,7 +149,9 @@ namespace Glitch.UI
         {
             try
             {
-                if (_isWindowClosed || sequence <= _accountRefreshAppliedSequence)
+                if (_isWindowClosed
+                    || sequence <= _accountRefreshAppliedSequence
+                    || sequence < Interlocked.Read(ref _accountRefreshSequence))
                     return;
 
                 AccountRefreshBuildResult result = BuildAccountRowsOnWorker(accountsCopy, overridesSnapshot);

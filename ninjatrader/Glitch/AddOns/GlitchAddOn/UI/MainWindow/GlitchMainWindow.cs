@@ -109,6 +109,7 @@ namespace Glitch.UI
         private readonly DispatcherTimer _refreshTimer;
         private readonly ConcurrentDictionary<string, PeakState> _peakStatesByAccount;
         private readonly Dictionary<string, List<EventBridgeSubscription>> _accountEventSubscriptions;
+        private EventBridgeSubscription _accountStatusEventSubscription;
         private readonly HashSet<string> _riskLockedAccounts;
         private readonly HashSet<string> _evalTargetLockedAccounts;
         private readonly HashSet<string> _riskLockAcknowledgedAccounts;
@@ -363,6 +364,7 @@ namespace Glitch.UI
                             AccountStatus = status,
                             PropFirmId = string.IsNullOrWhiteSpace(firmId) ? "None" : firmId,
                             AccountSize = parsedSize,
+                            AccountSizeSource = "Manual",
                             IsManual = true
                         };
                     }
@@ -395,6 +397,7 @@ namespace Glitch.UI
                 accountNode.SetAttributeValue("FirmId", string.IsNullOrWhiteSpace(kvp.Value.PropFirmId) ? "None" : kvp.Value.PropFirmId);
                 if (kvp.Value.AccountSize.HasValue && kvp.Value.AccountSize.Value > 0)
                     accountNode.SetAttributeValue("Size", kvp.Value.AccountSize.Value.ToString("F0", CultureInfo.InvariantCulture));
+                accountNode.SetAttributeValue("SizeSource", "Manual");
                 accountNode.SetAttributeValue("Manual", true);
 
                 overridesNode.Add(accountNode);
@@ -4245,6 +4248,8 @@ namespace Glitch.UI
             {
                 if (row == null || string.IsNullOrWhiteSpace(row.DisplayName))
                     continue;
+                if (!row.IsRiskDataReady)
+                    continue;
 
                 string accountName = row.DisplayName.Trim();
                 seenAccounts.Add(accountName);
@@ -4259,7 +4264,13 @@ namespace Glitch.UI
                         int declaredCap = row.MaxContractsRaw > 0
                             ? Math.Max(1, (int)Math.Round(row.MaxContractsRaw, MidpointRounding.AwayFromZero))
                             : Math.Max(0, _runtimePolicySettings.ReplicationDeclaredCapContracts);
-                        int currentAbsContracts = GetTotalAbsoluteOpenContracts(liveAccount);
+                        if (!TryGetTotalAbsoluteOpenContracts(liveAccount, out int currentAbsContracts))
+                        {
+                            RecordSubsystemFault(
+                                "risk_position_snapshot",
+                                new InvalidOperationException($"Could not acquire a locked position snapshot for {accountName}."));
+                            continue;
+                        }
                         if (declaredCap > 0 && currentAbsContracts > declaredCap)
                         {
                             string settingKey = GlitchRiskMitigationEngine.ResolveScopeSettingKey(
@@ -4613,15 +4624,22 @@ namespace Glitch.UI
             return (ratio * 100.0).ToString("0.#", CultureInfo.InvariantCulture) + "%";
         }
 
-        private static int GetTotalAbsoluteOpenContracts(Account account)
+        private static bool TryGetTotalAbsoluteOpenContracts(Account account, out int total)
         {
+            total = 0;
             if (account == null)
-                return 0;
+                return false;
 
-            int total = 0;
             try
             {
-                foreach (Position position in account.Positions)
+                if (account.Positions == null)
+                    return false;
+
+                Position[] positions;
+                lock (account.Positions)
+                    positions = account.Positions.ToArray();
+
+                foreach (Position position in positions)
                 {
                     if (position == null || position.MarketPosition == MarketPosition.Flat)
                         continue;
@@ -4629,11 +4647,13 @@ namespace Glitch.UI
                     total += Math.Abs(position.Quantity);
                 }
             }
+                return true;
+            }
             catch
             {
+                total = 0;
+                return false;
             }
-
-            return total;
         }
 
         private static bool HasWorkingProtectiveStop(Account account, string instrumentRoot)
@@ -5229,6 +5249,7 @@ namespace Glitch.UI
                 AccountStatus = status,
                 PropFirmId = firmId,
                 AccountSize = selectedSize,
+                AccountSizeSource = "Manual",
                 IsManual = true
             };
         }
@@ -5655,6 +5676,7 @@ namespace Glitch.UI
 
         private void SyncAccountRuntimeEventSubscriptions(IReadOnlyList<Account> activeAccounts)
         {
+            EnsureAccountStatusEventSubscribed();
             var activeByName = new Dictionary<string, Account>(StringComparer.OrdinalIgnoreCase);
             if (activeAccounts != null)
             {
@@ -5690,7 +5712,7 @@ namespace Glitch.UI
             }
 
             var subscriptions = new List<EventBridgeSubscription>();
-            string[] eventNames = { "ExecutionUpdate", "PositionUpdate", "OrderUpdate", "AccountStatusUpdate" };
+            string[] eventNames = { "ExecutionUpdate", "PositionUpdate", "OrderUpdate", "AccountItemUpdate" };
 
             foreach (string eventName in eventNames)
             {
@@ -5724,6 +5746,48 @@ namespace Glitch.UI
                 _accountEventSubscriptions[accountName] = subscriptions;
         }
 
+        private void EnsureAccountStatusEventSubscribed()
+        {
+            if (_accountStatusEventSubscription != null)
+                return;
+
+            try
+            {
+                EventInfo eventInfo = typeof(Account).GetEvent(
+                    "AccountStatusUpdate",
+                    BindingFlags.Public | BindingFlags.Static);
+                if (eventInfo == null || eventInfo.EventHandlerType == null)
+                {
+                    RecordSubsystemFault(
+                        "account_status_event_subscription",
+                        new InvalidOperationException("NinjaTrader AccountStatusUpdate static event is unavailable."));
+                    return;
+                }
+
+                Action<object, object> callback = (runtimeSender, runtimeArgs) =>
+                    OnAccountRuntimeEventBridge("AccountStatusUpdate", runtimeSender, runtimeArgs);
+                Delegate handler = CreateEventBridgeDelegate(eventInfo.EventHandlerType, callback);
+                if (handler == null)
+                {
+                    RecordSubsystemFault(
+                        "account_status_event_subscription",
+                        new InvalidOperationException("NinjaTrader AccountStatusUpdate handler could not be created."));
+                    return;
+                }
+
+                eventInfo.AddEventHandler(null, handler);
+                _accountStatusEventSubscription = new EventBridgeSubscription
+                {
+                    EventInfo = eventInfo,
+                    Handler = handler
+                };
+            }
+            catch (Exception ex)
+            {
+                RecordSubsystemFault("account_status_event_subscription", ex);
+            }
+        }
+
         private void OnAccountRuntimeEventBridge(string eventName, object sender, object eventArgs)
         {
             if (_isWindowClosed)
@@ -5754,6 +5818,8 @@ namespace Glitch.UI
                 {
                     if (ShouldThrottleAccountItemUpdate(account.Name, nowUtc))
                         return;
+
+                    QueueAccountRefreshFromRuntimeEvent(account, eventArgs);
                 }
 
                 if (!isAccountItemUpdate)
@@ -6448,6 +6514,21 @@ namespace Glitch.UI
 
         private void UnsubscribeFromAllAccountRuntimeEvents()
         {
+            if (_accountStatusEventSubscription != null)
+            {
+                try
+                {
+                    _accountStatusEventSubscription.EventInfo?.RemoveEventHandler(
+                        null,
+                        _accountStatusEventSubscription.Handler);
+                }
+                catch
+                {
+                }
+
+                _accountStatusEventSubscription = null;
+            }
+
             foreach (string accountName in _accountEventSubscriptions.Keys.ToList())
                 UnsubscribeFromAccountRuntimeEvents(accountName);
         }
@@ -6474,6 +6555,7 @@ namespace Glitch.UI
                         AccountStatus = NormalizeAccountStatus(persistedRow.AccountStatus),
                         PropFirmId = string.IsNullOrWhiteSpace(persistedRow.PropFirmId) ? "None" : persistedRow.PropFirmId.Trim(),
                         AccountSize = persistedRow.AccountSize,
+                        AccountSizeSource = string.IsNullOrWhiteSpace(persistedRow.AccountSizeSource) ? "LegacyPersisted" : persistedRow.AccountSizeSource.Trim(),
                         IsManual = persistedRow.IsManual
                     };
                 }
@@ -6495,6 +6577,7 @@ namespace Glitch.UI
                             AccountStatus = NormalizeAccountStatus(kvp.Value?.AccountStatus),
                             PropFirmId = string.IsNullOrWhiteSpace(kvp.Value?.PropFirmId) ? "None" : kvp.Value.PropFirmId,
                             AccountSize = kvp.Value?.AccountSize,
+                            AccountSizeSource = string.IsNullOrWhiteSpace(kvp.Value?.AccountSizeSource) ? "LegacyPersisted" : kvp.Value.AccountSizeSource,
                             IsManual = kvp.Value?.IsManual ?? false
                         },
                         StringComparer.OrdinalIgnoreCase);
@@ -6663,8 +6746,9 @@ namespace Glitch.UI
             {
             }
 
-            // Mirror old-simplified eligibility behavior: only accounts with retrievable size are treated as active.
-            return GetAccountSizeFromNt(account) > 0;
+            // Discovery is connectivity-based. Risk readiness is represented on the row and
+            // must not be conflated with account visibility or explicit route configuration.
+            return true;
         }
 
         private static bool IsFlattenEligibleAccount(Account account)
@@ -6757,8 +6841,11 @@ namespace Glitch.UI
             AccountSelectionOverride selectionOverride,
             IDictionary<string, AccountSelectionOverride> deferredAutoOverrides = null)
         {
-            double accountSizeRaw = GetAccountSizeFromNt(account);
             double cashValue = TryGetAccountItem(account, "CashValue");
+            double nativeNetLiquidation = TryGetAccountItem(account,
+                "NetLiquidation", "NetLiquidationValue", "NetLiquidationAmount", "NetLiq");
+            double accountSizeRaw = nativeNetLiquidation > 0 ? nativeNetLiquidation : cashValue;
+            bool isRiskDataReady = nativeNetLiquidation > 0 || cashValue > 0;
             double realizedPnl = TryGetAccountItem(account, "RealizedProfitLoss", "RealizedPnL", "RealizedProfit", "RealizedLoss");
             double unrealizedPnl = TryGetAccountItem(account, "UnrealizedProfitLoss", "UnrealizedPnL");
             // ponytail: flat or flatten-in-flight → realized-only avoids NT lag double-count in group PnL
@@ -6786,19 +6873,35 @@ namespace Glitch.UI
             string executionProvider = GetExecutionProviderHint(account);
             var accountSizeChoices = GetAccountSizeOptionsForFirm(selectedFirmId, selectedStatus, executionProvider);
             double selectedAccountSize = hasSelectionOverride ? (selectionOverride.AccountSize ?? 0) : 0;
+            string accountSizeSource = selectedAccountSize > 0
+                ? (string.IsNullOrWhiteSpace(selectionOverride?.AccountSizeSource)
+                    ? (hasManualOverride ? "LegacyManual" : "LegacyPersisted")
+                    : selectionOverride.AccountSizeSource.Trim())
+                : null;
             if (selectedAccountSize <= 0)
             {
                 double? inferredAccountSize = InferAccountSizeFromName(account?.Name);
                 if (inferredAccountSize.HasValue && inferredAccountSize.Value > 0)
+                {
                     selectedAccountSize = inferredAccountSize.Value;
+                    accountSizeSource = "AccountName";
+                }
             }
             if (selectedAccountSize <= 0)
+            {
                 selectedAccountSize = accountSizeRaw;
+                accountSizeSource = nativeNetLiquidation > 0
+                    ? "LiveNetLiquidation"
+                    : (cashValue > 0 ? "LiveCashValue" : null);
+            }
 
             if (accountSizeChoices.Count > 0)
                 selectedAccountSize = FindNearestAccountSize(selectedAccountSize, accountSizeChoices);
             else
                 selectedAccountSize = RoundToNearestStep(selectedAccountSize, 25000);
+
+            if (selectedAccountSize > 0 && string.IsNullOrWhiteSpace(accountSizeSource))
+                accountSizeSource = "DefaultTier";
 
             if (!hasManualOverride &&
                 account != null &&
@@ -6810,6 +6913,7 @@ namespace Glitch.UI
                     AccountStatus = selectedStatus,
                     PropFirmId = selectedFirmId,
                     AccountSize = selectedAccountSize,
+                    AccountSizeSource = accountSizeSource,
                     IsManual = false
                 };
 
@@ -6941,6 +7045,8 @@ namespace Glitch.UI
                 PropFirmOptions = propFirmOptions,
                 AccountSizeSelection = FormatAccountSize(selectedAccountSize),
                 AccountSizeOptions = accountSizeOptionDisplays,
+                AccountSizeSource = accountSizeSource ?? "Unavailable",
+                IsRiskDataReady = isRiskDataReady,
                 CashValue = FormatCurrency(effectiveBalance),
                 MaxDrawdown = FormatCurrencyOrDash(maxDrawdown > 0 ? (double?)maxDrawdown : null),
                 IntratradeDrawdown = FormatCurrencyOrDash(intratradeDrawdown > 0 ? (double?)intratradeDrawdown : null),
@@ -6982,6 +7088,7 @@ namespace Glitch.UI
                 SnapshotKey = string.Join("|",
                     selectedStatus,
                     selectedFirmId,
+                    accountSizeSource,
                     selectedAccountSize.ToString("F0", CultureInfo.InvariantCulture),
                     FormatCurrencyOrDash(minMargin),
                     FormatCurrencyOrDash(bufferMargin),

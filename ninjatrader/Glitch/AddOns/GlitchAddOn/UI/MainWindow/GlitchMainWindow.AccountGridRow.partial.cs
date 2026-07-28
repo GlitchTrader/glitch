@@ -21,6 +21,7 @@ namespace Glitch.UI
             private List<string> _propFirmOptions;
             private string _accountSizeSelection;
             private List<string> _accountSizeOptions;
+            private string _accountSizeSource;
             private string _cashValue;
             private string _maxDrawdown;
             private string _intratradeDrawdown;
@@ -59,6 +60,7 @@ namespace Glitch.UI
             private double _unrealizedPnlRaw;
             private double _totalPnlRaw;
             private bool _isManualSelection;
+            private bool _isRiskDataReady;
             private string _snapshotKey;
 
             public event PropertyChangedEventHandler PropertyChanged;
@@ -71,6 +73,7 @@ namespace Glitch.UI
             public List<string> PropFirmOptions { get => _propFirmOptions; set => SetListField(ref _propFirmOptions, value); }
             public string AccountSizeSelection { get => _accountSizeSelection; set => SetField(ref _accountSizeSelection, value); }
             public List<string> AccountSizeOptions { get => _accountSizeOptions; set => SetListField(ref _accountSizeOptions, value); }
+            public string AccountSizeSource { get => _accountSizeSource; set => SetField(ref _accountSizeSource, value); }
             public string CashValue { get => _cashValue; set => SetField(ref _cashValue, value); }
             public string MaxDrawdown { get => _maxDrawdown; set => SetField(ref _maxDrawdown, value); }
             public string IntratradeDrawdown { get => _intratradeDrawdown; set => SetField(ref _intratradeDrawdown, value); }
@@ -109,6 +112,7 @@ namespace Glitch.UI
             public double UnrealizedPnlRaw { get => _unrealizedPnlRaw; set => SetField(ref _unrealizedPnlRaw, value); }
             public double TotalPnlRaw { get => _totalPnlRaw; set => SetField(ref _totalPnlRaw, value); }
             public bool IsManualSelection { get => _isManualSelection; set => SetField(ref _isManualSelection, value); }
+            public bool IsRiskDataReady { get => _isRiskDataReady; set => SetField(ref _isRiskDataReady, value); }
             public string SnapshotKey { get => _snapshotKey; set => SetField(ref _snapshotKey, value); }
 
             public void ApplyFrom(AccountGridRow source)
@@ -124,6 +128,7 @@ namespace Glitch.UI
                 PropFirmOptions = source.PropFirmOptions;
                 AccountSizeSelection = source.AccountSizeSelection;
                 AccountSizeOptions = source.AccountSizeOptions;
+                AccountSizeSource = source.AccountSizeSource;
                 CashValue = source.CashValue;
                 MaxDrawdown = source.MaxDrawdown;
                 IntratradeDrawdown = source.IntratradeDrawdown;
@@ -162,6 +167,7 @@ namespace Glitch.UI
                 UnrealizedPnlRaw = source.UnrealizedPnlRaw;
                 TotalPnlRaw = source.TotalPnlRaw;
                 IsManualSelection = source.IsManualSelection;
+                IsRiskDataReady = source.IsRiskDataReady;
                 SnapshotKey = source.SnapshotKey;
             }
 

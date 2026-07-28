@@ -173,6 +173,63 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn('AccountSize = 250000, MaxContracts = 27', rules)
         self.assertIn('AccountSize = 300000, MaxContracts = 35', rules)
 
+    def test_account_size_provenance_is_additive_and_does_not_change_replication_rules(self):
+        window = source(ADDON / "UI/MainWindow/GlitchMainWindow.cs")
+        row = source(ADDON / "UI/MainWindow/GlitchMainWindow.AccountGridRow.partial.cs")
+        models = source(ADDON / "UI/MainWindow/GlitchMainWindow.Models.partial.cs")
+        state = source(ADDON / "Services/Persistence/GlitchStateStore.cs")
+        self.assertIn("AccountSizeSource", window)
+        self.assertIn("AccountSizeSource", row)
+        self.assertIn("AccountSizeSource", models)
+        refresh = source(ADDON / "UI/MainWindow/GlitchMainWindow.RefreshPipeline.partial.cs")
+        self.assertIn("AccountSizeSource = selectionOverride.AccountSizeSource", refresh)
+        self.assertIn('"LiveNetLiquidation"', window)
+        self.assertIn('"LiveCashValue"', window)
+        self.assertIn('"AccountName"', window)
+        self.assertIn('"DefaultTier"', window)
+        self.assertIn("sizeSource", state)
+        self.assertIn('ruleFirmId = "ApexTraderFunding";', window)
+        self.assertIn("GetRuleForFirmAndSize(ruleFirmId, selectedStatus", window)
+        self.assertIn("public bool IsRiskDataReady", row)
+        self.assertIn("IsRiskDataReady = isRiskDataReady", window)
+        self.assertIn("if (!row.IsRiskDataReady)", window)
+        self.assertNotIn("return GetAccountSizeFromNt(account) > 0;", window)
+
+    def test_account_runtime_events_use_correct_scopes_without_direct_order_refresh(self):
+        window = source(ADDON / "UI/MainWindow/GlitchMainWindow.cs")
+        refresh = source(ADDON / "UI/MainWindow/GlitchMainWindow.RefreshPipeline.partial.cs")
+        self.assertIn('EnsureAccountStatusEventSubscribed();', window)
+        self.assertIn('string[] eventNames = { "ExecutionUpdate", "PositionUpdate", "OrderUpdate", "AccountItemUpdate" };', window)
+        self.assertIn('"AccountStatusUpdate",\n                    BindingFlags.Public | BindingFlags.Static', window)
+        self.assertIn('_accountStatusEventSubscription', window)
+        callback = method_body(window, "private void OnAccountRuntimeEventBridgeCore", "private static bool IsReplicationInternalSignal")
+        self.assertNotIn("RefreshAccountData(", callback)
+        self.assertIn("QueueAccountRefreshFromRuntimeEvent(account, eventArgs);", callback)
+        self.assertIn("private void QueueAccountRefreshFromRuntimeEvent(Account account, object eventArgs)", refresh)
+        self.assertIn("sequence < Interlocked.Read(ref _accountRefreshSequence)", refresh)
+
+    def test_group_refresh_is_projection_only_and_persistence_keeps_route_authority(self):
+        window = source(ADDON / "UI/MainWindow/GlitchMainWindow.cs")
+        projection = method_body(window, "private static void ApplyAccountSnapshotToGroupMemberRow", "private void UpdateGroupMasterSelection")
+        refresh = method_body(source(ADDON / "UI/MainWindow/GlitchMainWindow.RefreshPipeline.partial.cs"), "private void ApplyFullAccountRefreshResult", "private void UpdateHeaderMetricsFromRows")
+        persistence = method_body(window, "private void SaveAccountGroupsToDisk", "private void RestoreWindowPlacementFromDisk")
+        self.assertIn("member.Pnl", projection)
+        self.assertIn("member.Position", projection)
+        for forbidden in ("member.FollowerSize =", "member.MasterSize =", "member.Ratio =", "member.IsEnabled ="):
+            self.assertNotIn(forbidden, projection)
+        self.assertNotIn("SaveAccountGroupsToDisk(", refresh)
+        self.assertIn("FollowerSize = followerSize", persistence)
+        self.assertIn("Ratio = ratio", persistence)
+        self.assertIn("MasterSize = masterSize", persistence)
+        self.assertIn("IsEnabled = member.IsEnabled", persistence)
+
+    def test_max_contracts_risk_read_uses_locked_snapshot_and_fails_closed(self):
+        window = source(ADDON / "UI/MainWindow/GlitchMainWindow.cs")
+        helper = method_body(window, "private static bool TryGetTotalAbsoluteOpenContracts", "private static bool HasWorkingProtectiveStop")
+        self.assertIn("lock (account.Positions)", helper)
+        self.assertIn("ToArray()", helper)
+        self.assertIn("TryGetTotalAbsoluteOpenContracts(liveAccount, out int currentAbsContracts)", window)
+
     def test_manual_follower_divergence_never_blocks_later_execution_deltas(self):
         copy = source(COPY_ENGINE)
         opening = method_body(copy, "private void FanOutOpening", "private void FanOutCompleteClose")
