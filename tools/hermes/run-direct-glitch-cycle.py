@@ -32,7 +32,7 @@ ACTIONS = {"ENTER_LONG", "ENTER_SHORT", "HOLD", "MOVE_STOP", "MOVE_TP", "EXIT", 
 ACTION_ALIASES = {"NO_ACTION": "NOTHING"}
 CORE_MODEL = "gpt-5.6-luna"
 CORE_PROVIDER = "openai-codex"
-DIRECT_PROMPT_VERSION = "direct-v5-local"
+DIRECT_PROMPT_VERSION = "direct-v6-local"
 TRADING_SOURCE = "trading"
 REQUIRED_ENTRY_FIELDS = {"quantity", "order_type", "stop_loss", "take_profit_1"}
 ENTRY_FIELDS = REQUIRED_ENTRY_FIELDS | {
@@ -45,7 +45,9 @@ DECISION_FIELDS = {
     "operator_profile", "action", "confidence", "snapshot_hash", "model_version",
     "prompt_version", "reason", "decision_audit",
 }
-ALLOWED_DECISION_FIELDS = DECISION_FIELDS | ENTRY_FIELDS | {"protection_updates"}
+# Hermes may retain one structured review trigger alongside the intent.  It is
+# control-plane metadata, not part of the Glitch execution intent contract.
+ALLOWED_DECISION_FIELDS = DECISION_FIELDS | ENTRY_FIELDS | {"protection_updates", "wake_trigger"}
 DECISION_AUDIT_FIELDS = {
     "bull_case", "bear_case", "flat_case", "aggressive_case", "conservative_case",
     "decisive_evidence", "disconfirming_evidence", "change_condition", "final_choice",
@@ -58,7 +60,9 @@ MNQ_TICK_SIZE = 0.25
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    # Match GlitchSnapshotJson.FormatUtc's round-trip ISO shape.  The seventh
+    # fractional digit matters to the strict NinjaTrader intent parser.
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f0Z")
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -829,6 +833,145 @@ def model_attempt_path(exchange: Path, packet_id: str) -> Path:
     return exchange / "hermes" / "model-attempts" / f"{packet_id}.json"
 
 
+def wake_trigger_path(exchange: Path) -> Path:
+    return exchange / "hermes" / "supervisor" / "active-wake-triggers.json"
+
+
+def validate_wake_trigger(trigger: Any, index: int) -> None:
+    if trigger is None:
+        return
+    if not isinstance(trigger, dict):
+        raise ValueError(f"wake_trigger_invalid:{index}")
+    if set(trigger) != {"type", "direction", "price"}:
+        raise ValueError(f"wake_trigger_fields_invalid:{index}")
+    if trigger.get("type") != "PRICE_CROSS":
+        raise ValueError(f"wake_trigger_type_invalid:{index}")
+    if trigger.get("direction") not in {"ABOVE", "BELOW"}:
+        raise ValueError(f"wake_trigger_direction_invalid:{index}")
+    price = trigger.get("price")
+    if (not isinstance(price, (int, float)) or isinstance(price, bool)
+            or not math.isfinite(float(price))):
+        raise ValueError(f"wake_trigger_price_invalid:{index}")
+
+
+def packet_current_price(packet: dict[str, Any]) -> float | None:
+    frames = packet.get("frames")
+    if not isinstance(frames, list) or not frames:
+        return None
+    latest = frames[-1]
+    snapshot = latest.get("market_snapshot") if isinstance(latest, dict) else None
+    instruments = snapshot.get("instruments") if isinstance(snapshot, dict) else None
+    if not isinstance(instruments, list) or not instruments:
+        return None
+    for instrument in instruments:
+        if not isinstance(instrument, dict):
+            continue
+        value = instrument.get("current_price")
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)):
+            return float(value)
+    return None
+
+
+def prior_packet_price(exchange: Path, packet: dict[str, Any]) -> float | None:
+    packets = exchange / "glitch" / "decision-packets"
+    current_id = str(packet.get("packet_id", ""))
+    for path in sorted(packets.glob("*.json"), reverse=True):
+        if path.stem >= current_id:
+            continue
+        try:
+            return packet_current_price(read_json(path))
+        except (OSError, ValueError, TypeError):
+            continue
+    return None
+
+
+def wake_trigger_fired(exchange: Path, packet: dict[str, Any], scenario: dict[str, Any]) -> bool:
+    del scenario
+    path = wake_trigger_path(exchange)
+    if not path.is_file():
+        return False
+    try:
+        state = read_json(path)
+    except (OSError, ValueError, TypeError):
+        return False
+    triggers = state.get("triggers")
+    if not isinstance(triggers, list):
+        return False
+    previous = prior_packet_price(exchange, packet)
+    current = packet_current_price(packet)
+    if previous is None or current is None:
+        return False
+    for trigger in triggers:
+        if not isinstance(trigger, dict):
+            continue
+        try:
+            level = float(trigger["price"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        direction = trigger.get("direction")
+        if direction == "ABOVE" and previous <= level < current:
+            return True
+        if direction == "BELOW" and previous >= level > current:
+            return True
+    return False
+
+
+def persist_wake_triggers(exchange: Path, batch: dict[str, Any], packet_id: str) -> None:
+    triggers = []
+    for decision in batch.get("decisions", []):
+        trigger = decision.get("wake_trigger") if isinstance(decision, dict) else None
+        if trigger is not None:
+            triggers.append(trigger)
+    write_json_atomic(wake_trigger_path(exchange), {
+        "schema_version": "glitch.hermes.wake_triggers.v1",
+        "cycle_id": packet_id,
+        "triggers": triggers,
+        "updated_utc": utc_now(),
+    })
+
+
+def batch_contains_entry(batch: dict[str, Any]) -> bool:
+    return any(
+        isinstance(decision, dict)
+        and decision.get("action") in {"ENTER_LONG", "ENTER_SHORT"}
+        for decision in batch.get("decisions", [])
+    )
+
+
+def packet_has_advanced(exchange: Path, packet_id: str) -> bool:
+    path = exchange / "glitch" / "latest-decision-packet.json"
+    if not path.is_file():
+        return False
+    try:
+        latest_id = str(read_json(path).get("packet_id", ""))
+    except (OSError, ValueError, TypeError):
+        return False
+    return bool(latest_id and latest_id > packet_id)
+
+
+def discard_stale_entry_batch(
+    exchange: Path,
+    events_path: Path,
+    outbox_path: Path,
+    packet_id: str,
+    batch: dict[str, Any],
+) -> bool:
+    if not batch_contains_entry(batch) or not packet_has_advanced(exchange, packet_id):
+        return False
+    try:
+        outbox_path.unlink(missing_ok=True)
+    except OSError:
+        return False
+    append_event(events_path, {
+        "schema_version": "glitch.hermes.cycle_event.v1",
+        "event": "intent_discarded_stale_packet",
+        "reason": "newer_packet_published_before_entry_delivery",
+        "recorded_utc": utc_now(),
+        "cycle_id": packet_id,
+    })
+    return True
+
+
 def persist_outbox(
     exchange: Path,
     outbox_path: Path,
@@ -916,6 +1059,7 @@ def validate_batch(
         unknown = sorted(set(intent).difference(ALLOWED_DECISION_FIELDS))
         if unknown:
             raise ValueError(f"intent_unknown_fields:{index}:{','.join(unknown)}")
+        validate_wake_trigger(intent.get("wake_trigger"), index)
         if intent.get("schema_version") != "glitch.intent.v3":
             raise ValueError(f"intent_schema_version_invalid:{index}")
         for field in (
@@ -1319,8 +1463,12 @@ def submit_batch(batch: dict[str, Any], glitch_data: Path, exchange: Path) -> di
     results: list[dict[str, Any]] = []
     complete = True
     for intent in batch["decisions"]:
+        # Keep the trigger in Hermes' outbox/audit trail, but never send this
+        # Hermes-only field across the strict Glitch execution API boundary.
+        wire_intent = dict(intent)
+        wire_intent.pop("wake_trigger", None)
         try:
-            result = post_intent(intent, token)
+            result = post_intent(wire_intent, token)
         except Exception as error:  # network failure is retriable with the same intent IDs
             complete = False
             result = {"transport_error": str(error)}
@@ -1437,6 +1585,7 @@ def build_prompt(
                 "change_condition": "Replace with the concrete reassessment trigger.",
                 "final_choice": action,
             },
+            "wake_trigger": None,
         })
     output_template = {
         "schema_version": "glitch.intent.batch.v1",
@@ -1515,6 +1664,8 @@ def build_prompt(
         "A stop may tighten or move farther away when current evidence supports it; Glitch independently enforces native identity and protective market side. "
         "A MOVE_TP target may extend or reduce remaining opportunity but must stay on the live profit side. Echo cycle_id and account/operator_profile exactly. "
         "snapshot_hash must be a JSON string copied exactly from the MNQ market snapshot, even when it contains only digits. "
+        "Optionally include wake_trigger as {type: \"PRICE_CROSS\", direction: \"ABOVE\"|\"BELOW\", price: number} "
+        "when the change_condition is a concrete one-sided price crossing that should cause Hermes to re-invoke the next-minute worker early; omit it for prose-only conditions. "
         "Use the top-level key decisions, never intents. Close every intent object before closing the decisions "
         "array. Before returning, silently verify that the entire response is one syntactically valid JSON object "
         "that a strict JSON parser can load. Return no markdown fences, commentary, or trailing text. "
@@ -1567,6 +1718,72 @@ def packet_is_current(packet: dict[str, Any], max_age_seconds: int | None = None
     return -60 <= age <= max_age_seconds
 
 
+def market_snapshot_age_seconds(packet: dict[str, Any]) -> float | None:
+    """Return age of the newest embedded market observation, not the wrapper packet."""
+    frames = packet.get("frames")
+    if not isinstance(frames, list) or not frames:
+        return None
+    latest = frames[-1] if isinstance(frames[-1], dict) else {}
+    snapshot = latest.get("market_snapshot")
+    instruments = snapshot.get("instruments") if isinstance(snapshot, dict) else None
+    if not isinstance(instruments, list) or not instruments:
+        return None
+    timestamps: list[datetime] = []
+    for instrument in instruments:
+        if not isinstance(instrument, dict):
+            continue
+        candidates = [instrument.get("timestamp_utc")]
+        candidates.extend(
+            bar.get("utc_time")
+            for bar in instrument.get("timeframe_bars", [])
+            if isinstance(bar, dict)
+        )
+        for raw in candidates:
+            if not raw:
+                continue
+            try:
+                timestamps.append(datetime.fromisoformat(str(raw).replace("Z", "+00:00")).astimezone(timezone.utc))
+            except (TypeError, ValueError):
+                continue
+    if not timestamps:
+        return None
+    return (datetime.now(timezone.utc) - max(timestamps)).total_seconds()
+
+
+def market_snapshot_is_fresh(packet: dict[str, Any], max_age_seconds: int | None = None) -> bool:
+    if max_age_seconds is None:
+        policy = packet.get("policy")
+        configured = policy.get("snapshot_max_age_seconds", 180) if isinstance(policy, dict) else 180
+        try:
+            max_age_seconds = max(1, int(configured))
+        except (TypeError, ValueError):
+            max_age_seconds = 180
+    age = market_snapshot_age_seconds(packet)
+    return age is None or -60 <= age <= max_age_seconds
+
+
+def feed_observation_is_fresh(glitch_data: Path) -> bool:
+    """Require the current native rail feed-bus verdict; fail closed otherwise."""
+    path = glitch_data / "selfcheck" / "rail.json"
+    if not path.is_file():
+        return False
+    try:
+        rail = read_json(path)
+        created_raw = rail.get("created_utc")
+        created = datetime.fromisoformat(str(created_raw).replace("Z", "+00:00"))
+        age_seconds = (datetime.now(timezone.utc) - created.astimezone(timezone.utc)).total_seconds()
+        feed_bus = rail.get("feed_bus")
+        fresh_count = feed_bus.get("fresh_instrument_count") if isinstance(feed_bus, dict) else None
+        return (
+            -60 <= age_seconds <= 180
+            and isinstance(fresh_count, int)
+            and not isinstance(fresh_count, bool)
+            and fresh_count > 0
+        )
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return False
+
+
 def packet_window_utc(packet: dict[str, Any]) -> datetime:
     raw = str(packet.get("window_close_utc", ""))
     if raw:
@@ -1599,17 +1816,32 @@ def should_invoke_luna(
     exchange: Path,
     directive: dict[str, Any] | None,
 ) -> bool:
+    return invocation_reason(packet, scenario, exchange, directive) is not None
+
+
+def invocation_reason(
+    packet: dict[str, Any],
+    scenario: dict[str, Any],
+    exchange: Path,
+    directive: dict[str, Any] | None,
+) -> str | None:
     window = packet_window_utc(packet)
     positioned = scoped_master_is_positioned(packet, scenario)
-    if directive is not None or positioned:
-        return True
+    if directive is not None:
+        return "operator_directive"
+    if positioned:
+        return "positioned"
+    if wake_trigger_fired(exchange, packet, scenario):
+        return "condition_change"
     prior = latest_prior_attempt(exchange, packet)
     if prior is None:
-        return True
+        return "first_packet"
     prior_window, attempt = prior
     if attempt.get("status") in {"started", "failed", "execution_failed", "delivery_incomplete"}:
-        return True
-    return (window - prior_window).total_seconds() >= 300
+        return "retry_after_failure"
+    if (window - prior_window).total_seconds() >= 300:
+        return "scheduled"
+    return None
 
 
 def latest_prior_attempt(
@@ -1672,7 +1904,6 @@ def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int
         raise ValueError("packet_id_missing")
     if not packet_is_current(packet):
         return 0
-
     pending = pending_outbox(exchange)
     if pending is not None:
         pending_id, pending_path = pending
@@ -1681,6 +1912,8 @@ def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int
         original_scenario = build_scenario(original_packet)
         pending_batch = normalize_batch(read_json(pending_path), original_scenario)
         validate_batch(pending_batch, original_scenario)
+        if discard_stale_entry_batch(exchange, events_path, pending_path, pending_id, pending_batch):
+            return 0
         if args.dry_run:
             print(json.dumps({
                 "cycle_id": pending_id,
@@ -1725,8 +1958,29 @@ def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int
     if receipt_path.is_file():
         raise ValueError("receipt_without_outbox")
 
+    if not market_snapshot_is_fresh(packet):
+        append_event(events_path, {
+            "schema_version": "glitch.hermes.cycle_event.v1",
+            "event": "llm_skipped",
+            "reason": "stale_market_snapshot",
+            "market_age_seconds": market_snapshot_age_seconds(packet),
+            "recorded_utc": utc_now(),
+            "cycle_id": packet_id,
+        })
+        return 0
+    if not feed_observation_is_fresh(glitch_data):
+        append_event(events_path, {
+            "schema_version": "glitch.hermes.cycle_event.v1",
+            "event": "llm_skipped",
+            "reason": "stale_feed_observation",
+            "recorded_utc": utc_now(),
+            "cycle_id": packet_id,
+        })
+        return 0
+
     directive = read_operator_directive(exchange)
-    if not should_invoke_luna(packet, scenario, exchange, directive):
+    reason = invocation_reason(packet, scenario, exchange, directive)
+    if reason is None:
         return 0
     attempt_path = model_attempt_path(exchange, packet_id)
     if attempt_path.is_file():
@@ -1759,6 +2013,14 @@ def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int
         batch, output_repair_count = invoke_validated_batch(
             args.profile, prompt, scenario, directive, args.timeout_seconds
         )
+        if discard_stale_entry_batch(exchange, events_path, outbox_path, packet_id, batch):
+            attempt = read_json(attempt_path)
+            attempt["completed_utc"] = utc_now()
+            attempt["status"] = "stale_packet_discarded"
+            attempt["invocation_reason"] = reason
+            write_json_atomic(attempt_path, attempt)
+            return 0
+        persist_wake_triggers(exchange, batch, packet_id)
         persist_outbox(exchange, outbox_path, packet_id, batch, directive)
         write_json_atomic(attempt_path, {
             "schema_version": "glitch.hermes.model_attempt.v1",
@@ -1771,6 +2033,7 @@ def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int
             "hermes_session_source": TRADING_SOURCE,
             "hermes_session_mode": "isolated",
             "output_repair_count": output_repair_count,
+            "invocation_reason": reason,
         })
     except Exception as error:
         attempt = read_json(attempt_path)
@@ -1799,6 +2062,7 @@ def run_once(args: argparse.Namespace, glitch_data: Path, exchange: Path) -> int
         "cycle_id": packet_id,
         "decision_count": len(batch["decisions"]),
         "submitted": not args.dry_run,
+        "invocation_reason": reason,
     })
     if args.dry_run:
         print(json.dumps({"cycle_id": packet_id, "decision_count": len(batch["decisions"]), "submitted": False}))

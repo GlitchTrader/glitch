@@ -374,6 +374,12 @@ class LearningCycleTests(unittest.TestCase):
                 "intent_id": "intent-1", "exit_utc": "2099-01-01T00:00:00Z",
                 "master_learning_eligible": True,
             }) + "\n", encoding="utf-8")
+            rail = glitch_data / "selfcheck" / "rail.json"
+            rail.parent.mkdir(parents=True)
+            rail.write_text(json.dumps({
+                "created_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                "feed_bus": {"fresh_instrument_count": 1},
+            }), encoding="utf-8")
             args = SimpleNamespace(
                 glitch_data=glitch_data, profile="glitch", timeout_seconds=30,
                 dry_run=False, force_loop="debrief",

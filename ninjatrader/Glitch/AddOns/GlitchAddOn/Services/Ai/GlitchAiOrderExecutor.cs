@@ -85,7 +85,10 @@ namespace Glitch.Services
 
             if (order.OrderState == OrderState.Rejected)
             {
-                RecoverGroup(group, "order_update_" + order.OrderState + "_" + account.Name);
+                RecoverGroup(
+                    group,
+                    "order_update_" + order.OrderState + "_" + account.Name
+                        + "_" + BuildNativeOrderEvidence(order));
                 return;
             }
 
@@ -1228,7 +1231,11 @@ namespace Glitch.Services
                 if (createdOrders.Any(IsRejected))
                 {
                     ReleaseProtectionSubmission(group, accountIndex, createdOrders);
-                    return GlitchAiExecutionResult.Failed("group_structural_bracket_rejected", account.Name);
+                    return GlitchAiExecutionResult.Failed(
+                        "group_structural_bracket_rejected",
+                        account.Name + "|orders=" + string.Join(
+                            ",",
+                            createdOrders.Where(IsRejected).Select(BuildNativeOrderEvidence)));
                 }
             }
             catch (Exception ex)
@@ -2881,6 +2888,22 @@ namespace Glitch.Services
         {
             return order != null
                 && (order.OrderState == OrderState.Rejected || order.OrderState == OrderState.Cancelled);
+        }
+
+        private static string BuildNativeOrderEvidence(Order order)
+        {
+            if (order == null)
+                return "order=null";
+
+            return CleanToken(order.Name)
+                + "~state=" + CleanToken(order.OrderState.ToString())
+                + "~type=" + CleanToken(order.OrderType.ToString())
+                + "~action=" + CleanToken(order.OrderAction.ToString())
+                + "~qty=" + order.Quantity.ToString(CultureInfo.InvariantCulture)
+                + "~filled=" + order.Filled.ToString(CultureInfo.InvariantCulture)
+                + "~limit=" + order.LimitPrice.ToString(CultureInfo.InvariantCulture)
+                + "~stop=" + order.StopPrice.ToString(CultureInfo.InvariantCulture)
+                + "~oco=" + CleanToken(order.Oco);
         }
 
         private static void TryCancel(Account account, Order order)

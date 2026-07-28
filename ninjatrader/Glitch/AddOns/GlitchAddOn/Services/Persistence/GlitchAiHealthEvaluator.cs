@@ -93,6 +93,11 @@ namespace Glitch.Services
 
     internal static class GlitchAiHealthEvaluator
     {
+        // The native learning supervisor wakes every 30 minutes. Health must
+        // allow one scheduled interval plus bounded worker/scheduler grace;
+        // it must not interpret a quiet, successful no-op loop as a failure.
+        private const int LearningWorkerStaleAfterSeconds = 2700;
+
         public static GlitchAiHealthSnapshot Evaluate(DateTime nowUtc)
         {
             var result = new GlitchAiHealthSnapshot();
@@ -186,7 +191,8 @@ namespace Glitch.Services
             else if (string.Equals(result.DecisionWorkerStatus, "started", StringComparison.Ordinal)
                 && result.DecisionAttemptAgeSeconds > 360)
                 result.ReasonCodes.Add("decision_worker_stalled");
-            else if (result.Operating && latestAttempt != null && packetWindowUtc != DateTime.MinValue
+            else if (result.Operating && result.FeedAgeSeconds >= 0 && result.FeedAgeSeconds <= 180
+                && latestAttempt != null && packetWindowUtc != DateTime.MinValue
                 && TryParseMinuteId(Path.GetFileNameWithoutExtension(latestAttempt.Name), out DateTime attemptWindowUtc))
             {
                 double elapsedMinutes = (packetWindowUtc - attemptWindowUtc).TotalMinutes;
@@ -201,7 +207,7 @@ namespace Glitch.Services
                 result.ReasonCodes.Add("learning_worker_failed");
             else if (result.Operating && !File.Exists(learningPath))
                 result.ReasonCodes.Add("learning_worker_status_missing");
-            else if (result.Operating && result.LearningWorkerAgeSeconds > 1200)
+            else if (result.Operating && result.LearningWorkerAgeSeconds > LearningWorkerStaleAfterSeconds)
                 result.ReasonCodes.Add("learning_worker_stale");
 
             result.OverallStatus = !result.AiAutoEnabled

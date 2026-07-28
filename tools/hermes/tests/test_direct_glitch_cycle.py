@@ -109,6 +109,46 @@ def decision(route, account, suffix, action="NOTHING"):
 
 
 class DirectCycleTests(unittest.TestCase):
+    def test_utc_now_matches_glitch_round_trip_precision(self):
+        self.assertRegex(MODULE.utc_now(), r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{7}Z$")
+
+    def test_condition_change_wakes_flat_book_on_price_cross(self):
+        value = packet()
+        value["packet_id"] = "20990101T1406Z"
+        value["window_close_utc"] = "2099-01-01T14:06:00Z"
+        prior = json.loads(json.dumps(value))
+        prior["packet_id"] = "20990101T1405Z"
+        prior["window_close_utc"] = "2099-01-01T14:05:00Z"
+        prior["frames"][-1]["market_snapshot"]["instruments"][0]["current_price"] = 19990.0
+        value["frames"][-1]["market_snapshot"]["instruments"][0]["current_price"] = 20010.0
+        with tempfile.TemporaryDirectory() as root:
+            exchange = Path(root)
+            (exchange / "glitch" / "decision-packets").mkdir(parents=True)
+            (exchange / "hermes" / "supervisor").mkdir(parents=True)
+            (exchange / "glitch" / "decision-packets" / "20990101T1405Z.json").write_text(json.dumps(prior), encoding="utf-8")
+            (exchange / "hermes" / "supervisor" / "active-wake-triggers.json").write_text(json.dumps({
+                "triggers": [{"type": "PRICE_CROSS", "direction": "ABOVE", "price": 20000.0}],
+            }), encoding="utf-8")
+            scenario = MODULE.build_scenario(value)
+            self.assertEqual(MODULE.invocation_reason(value, scenario, exchange, None), "condition_change")
+
+    def test_stale_entry_batch_is_discarded_after_newer_packet(self):
+        with tempfile.TemporaryDirectory() as root:
+            exchange = Path(root)
+            (exchange / "glitch").mkdir(parents=True)
+            (exchange / "hermes" / "events").mkdir(parents=True)
+            outbox = exchange / "hermes" / "outbox.json"
+            outbox.write_text(json.dumps({"decisions": [{"action": "ENTER_LONG"}]}), encoding="utf-8")
+            (exchange / "glitch" / "latest-decision-packet.json").write_text(json.dumps({
+                "packet_id": "20990101T1406Z",
+            }), encoding="utf-8")
+            events = exchange / "hermes" / "events" / "cycles.jsonl"
+            self.assertTrue(MODULE.discard_stale_entry_batch(
+                exchange, events, outbox, "20990101T1405Z", {"decisions": [{"action": "ENTER_LONG"}]}
+            ))
+            self.assertFalse(outbox.exists())
+            self.assertIn("intent_discarded_stale_packet", events.read_text(encoding="utf-8"))
+
     def test_minute_cron_launcher_detaches_the_slow_direct_worker(self):
         source = LAUNCHER_SCRIPT.read_text(encoding="utf-8")
         setup = (ROOT / "hermes-profile" / "setup.ps1").read_text(encoding="utf-8")
@@ -147,6 +187,11 @@ class DirectCycleTests(unittest.TestCase):
         (exchange / "glitch" / "latest-decision-packet.json").write_text(
             json.dumps(value or packet()), encoding="utf-8"
         )
+        (glitch_data / "selfcheck").mkdir(parents=True, exist_ok=True)
+        (glitch_data / "selfcheck" / "rail.json").write_text(json.dumps({
+            "created_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "feed_bus": {"fresh_instrument_count": 1},
+        }), encoding="utf-8")
         return glitch_data, exchange
 
     def test_first_available_flat_packet_invokes_without_wall_clock_modulo(self):
@@ -413,7 +458,33 @@ class DirectCycleTests(unittest.TestCase):
         self.assertIn("live in-progress observations", value)
         self.assertIn("Packet evidence may inform an explicit NOTHING", value)
         self.assertIn("deterministic policy does not replace Hermes's decision with an inferred veto", value)
-        self.assertIn('"prompt_version":"direct-v5-local"', value)
+        self.assertIn('"prompt_version":"direct-v6-local"', value)
+
+    def test_feed_observation_uses_fresh_native_rail(self):
+        with tempfile.TemporaryDirectory() as root:
+            glitch_data = Path(root)
+            rail = glitch_data / "selfcheck" / "rail.json"
+            rail.parent.mkdir(parents=True)
+            rail.write_text(json.dumps({
+                "created_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                "feed_bus": {"fresh_instrument_count": 1},
+            }), encoding="utf-8")
+            self.assertTrue(MODULE.feed_observation_is_fresh(glitch_data))
+
+    def test_feed_observation_fails_closed_without_native_rail(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.assertFalse(MODULE.feed_observation_is_fresh(Path(root)))
+
+    def test_feed_observation_rejects_stale_native_rail(self):
+        with tempfile.TemporaryDirectory() as root:
+            glitch_data = Path(root)
+            rail = glitch_data / "selfcheck" / "rail.json"
+            rail.parent.mkdir(parents=True)
+            rail.write_text(json.dumps({
+                "created_utc": "2000-01-01T00:00:00Z",
+                "feed_bus": {"fresh_instrument_count": 1},
+            }), encoding="utf-8")
+            self.assertFalse(MODULE.feed_observation_is_fresh(glitch_data))
 
     def test_prompt_makes_hold_accountable_and_keeps_quantity_adaptive(self):
         value = MODULE.build_prompt(packet(), MODULE.build_scenario(packet()), {})

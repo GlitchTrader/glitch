@@ -61,18 +61,9 @@ namespace Glitch.Services
             GlitchAiHealthSnapshot health = GlitchAiHealthEvaluator.Evaluate(nowUtc);
             GlitchAnalyticsFeedBus.EnsurePersistenceLoaded();
             IReadOnlyList<string> roots = GlitchAnalyticsFeedBus.GetKnownInstrumentRoots() ?? Array.Empty<string>();
-
-            int freshInstrumentCount = 0;
-            for (int i = 0; i < roots.Count; i++)
-            {
-                GlitchIndicatorInstrumentSnapshot snapshot;
-                if (GlitchAnalyticsFeedBus.TryGetSnapshot(roots[i], out snapshot) &&
-                    snapshot != null &&
-                    GlitchAnalyticsFeedBus.IsSnapshotFresh(snapshot, nowUtc, TimeSpan.FromMinutes(5)))
-                {
-                    freshInstrumentCount++;
-                }
-            }
+            int freshInstrumentCount = GlitchAnalyticsFeedBus.CountFreshInstrumentSnapshots(
+                nowUtc,
+                TimeSpan.FromMinutes(5));
 
             string marketPath = GlitchMarketSnapshotWriter.GetLatestSnapshotPath();
             string portfolioPath = GlitchPortfolioSnapshotWriter.GetLatestSnapshotPath();

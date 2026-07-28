@@ -193,7 +193,7 @@ namespace Glitch.Services
                 if (snapshot == null)
                     continue;
 
-                instruments.Add(ToRawInstrumentPayload(snapshot));
+                instruments.Add(ToRawInstrumentPayload(snapshot, nowUtc));
             }
 
             if (instruments.Count == 0)
@@ -206,7 +206,8 @@ namespace Glitch.Services
         }
 
         private static GlitchMarketSnapshotRawJson.RawInstrumentPayload ToRawInstrumentPayload(
-            GlitchIndicatorInstrumentSnapshot snapshot)
+            GlitchIndicatorInstrumentSnapshot snapshot,
+            DateTime nowUtc)
         {
             var bars = new List<GlitchMarketSnapshotRawJson.RawTimeframeBarPayload>();
             if (snapshot.TimeframeReadings != null)
@@ -226,6 +227,7 @@ namespace Glitch.Services
                 InstrumentRoot = snapshot.InstrumentRoot,
                 InstrumentFullName = snapshot.InstrumentFullName,
                 UpdatedUtc = snapshot.UpdatedUtc,
+                IsFresh = GlitchAnalyticsFeedBus.IsSnapshotFresh(snapshot, nowUtc, TimeSpan.FromMinutes(5)),
                 CurrentPrice = snapshot.CurrentPrice,
                 SessionName = snapshot.SessionName,
                 SessionHigh = snapshot.SessionHigh,

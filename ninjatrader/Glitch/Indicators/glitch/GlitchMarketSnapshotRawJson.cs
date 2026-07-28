@@ -66,6 +66,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             public string InstrumentRoot { get; set; }
             public string InstrumentFullName { get; set; }
             public DateTime UpdatedUtc { get; set; }
+            public bool IsFresh { get; set; }
             public double? CurrentPrice { get; set; }
             public string SessionName { get; set; }
             public double? SessionHigh { get; set; }
@@ -86,12 +87,16 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             var instrumentJson = new List<string>(instruments.Count);
             var coverageRows = new List<string>(instruments.Count);
+            int freshInstrumentCount = 0;
 
             for (int i = 0; i < instruments.Count; i++)
             {
                 RawInstrumentPayload instrument = instruments[i];
                 if (instrument == null || string.IsNullOrWhiteSpace(instrument.InstrumentRoot))
                     continue;
+
+                if (instrument.IsFresh)
+                    freshInstrumentCount++;
 
                 var presentMinutes = new HashSet<int>();
                 if (instrument.TimeframeBars != null)
@@ -132,6 +137,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             sb.Append("\"snapshot_id\":").Append(JsonString(snapshotId)).Append(',');
             sb.Append("\"source_mode\":").Append(JsonString(sourceMode)).Append(',');
             sb.Append("\"required_timeframes_minutes\":").Append(JsonIntArray(RequiredTimeframesMinutes)).Append(',');
+            sb.Append("\"fresh_instrument_count\":").Append(freshInstrumentCount.ToString(CultureInfo.InvariantCulture)).Append(',');
             sb.Append("\"instrument_count\":").Append(instrumentJson.Count.ToString(CultureInfo.InvariantCulture)).Append(',');
             sb.Append("\"coverage\":[").Append(string.Join(",", coverageRows)).Append("],");
             sb.Append("\"instruments\":[").Append(string.Join(",", instrumentJson)).Append(']');

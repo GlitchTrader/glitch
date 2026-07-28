@@ -36,6 +36,7 @@ LOOP_SCHEMAS = {
     "hourly": "glitch.hermes.hourly_review.v1",
     "planning": "glitch.hermes.portfolio_plan.v2",
     "daily": "glitch.hermes.daily_journal.v1",
+    "weekly": "glitch.hermes.weekly_skill_proposal.v1",
 }
 
 # Only market/geometry/capacity decisions belong in cognitive evidence. Missing
@@ -134,17 +135,34 @@ def invoke_hermes(profile: str, prompt: str, skills: str, timeout_seconds: int) 
     )
     completed = subprocess.run(
         [resolved_python, "-c", wrapper],
-        input=prompt,
+        input=prompt.encode("utf-8"),
         capture_output=True,
-        text=True,
         timeout=timeout_seconds,
         check=False,
         env=env,
         creationflags=hide_flags(),
     )
+    stdout = (completed.stdout or b"").decode("utf-8", errors="replace")
+    stderr = (completed.stderr or b"").decode("utf-8", errors="replace")
     if completed.returncode != 0:
-        raise RuntimeError(f"hermes_failed:{completed.returncode}:{completed.stderr.strip()[:400]}")
-    return DIRECT.extract_json(completed.stdout, "glitch.hermes.learning_output.v1")
+        detail = (stderr or stdout).strip()[:400] or "no_output"
+        raise RuntimeError(f"hermes_failed:{completed.returncode}:{detail}")
+    return DIRECT.extract_json(stdout, "glitch.hermes.learning_output.v1")
+
+
+def bounded_learning_rows(
+    rows: list[dict[str, Any]], max_rows: int, max_chars: int
+) -> list[dict[str, Any]]:
+    """Keep the newest complete records within the learner prompt budget."""
+    selected: list[dict[str, Any]] = []
+    used_chars = 0
+    for row in reversed(rows):
+        row_chars = len(json.dumps(row, separators=(",", ":"), ensure_ascii=False))
+        if len(selected) >= max_rows or used_chars + row_chars > max_chars:
+            break
+        selected.append(row)
+        used_chars += row_chars
+    return list(reversed(selected))
 
 
 def stable_id(kind: str, value: str) -> str:
@@ -529,7 +547,7 @@ def output_template(loop_id: str, record_ids: list[str], extra: dict[str, Any] |
                 "uncertainties": ["REPLACE"],
             })
         else:
-            id_field = {"hourly": "review_id", "planning": "plan_id", "daily": "journal_id"}[loop_id]
+            id_field = {"hourly": "review_id", "planning": "plan_id", "daily": "journal_id", "weekly": "skill_proposal_id"}[loop_id]
             record = {
                 "schema_version": LOOP_SCHEMAS[loop_id],
                 id_field: record_id,
@@ -557,14 +575,14 @@ def output_template(loop_id: str, record_ids: list[str], extra: dict[str, Any] |
                 })
             elif loop_id == "planning":
                 record.update({
-                    "horizon_minutes": 300,
+                    "horizon_minutes": 360,
                     "performance_objective": "Pursue the proportional target without forcing trades.",
                     "regime_posture": "REPLACE", "objectives": ["REPLACE"],
                     "sizing_guidance": "REPLACE", "geometry_guidance": "REPLACE",
                     "management_guidance": "REPLACE", "experiments": ["REPLACE"],
                     "preservation_conditions": ["REPLACE"], "revision_triggers": ["REPLACE"],
                 })
-            else:
+            elif loop_id == "daily":
                 record.update({
                     "session_date_et": str((extra or {}).get(
                         "session_date_et", datetime.now(EASTERN).date().isoformat()
@@ -586,6 +604,14 @@ def output_template(loop_id: str, record_ids: list[str], extra: dict[str, Any] |
                         "evidence_episode_ids": [], "expected_effect": "REPLACE_OR_EMPTY",
                         "evaluation_metric": "REPLACE_OR_EMPTY", "rollback_condition": "REPLACE_OR_EMPTY",
                     },
+                })
+            else:
+                record.update({
+                    "source_daily_journal_ids": [],
+                    "distilled_lessons": ["REPLACE"],
+                    "contradictions": ["REPLACE_OR_EMPTY"],
+                    "skill_proposals": [],
+                    "evaluation_plan": "REPLACE",
                 })
             records.append(record)
     value = {"schema_version": "glitch.hermes.learning_output.v1", "loop_id": loop_id, "records": records}
@@ -614,7 +640,7 @@ def build_prompt(loop_id: str, evidence: Any, template: dict[str, Any], continui
             "For an active overlay, return promote, continue, or rollback from later comparable completed master evidence."
         ),
         "planning": (
-            "Create the next 300-minute Hermes plan. Hermes owns strategy and master quantity within current master limits. Set questions, hypotheses, sizing/geometry/management posture and experiments without deterministic entry gates. "
+            "Create the next six-hour Hermes plan. Hermes owns strategy and master quantity within current master limits. Set questions, hypotheses, sizing/geometry/management posture and experiments without deterministic entry gates. "
             "Use completed decision episodes to question habitual abstention and rejected geometry, while preserving uncertainty and excluding infrastructure faults from strategy. Decision-only findings are observational and cannot pressure entries or size. "
             "Activity, fear of inactivity, and desire for more data are never evidence; flat counterfactuals remain informational and never count as realized performance. "
             "Do not create a fixed or provisional quantity baseline: calibrate quantity from repeated risk-adjusted outcomes, current edge, structural risk, remaining opportunity, drawdown, and the long-run objective. "
@@ -622,10 +648,14 @@ def build_prompt(loop_id: str, evidence: Any, template: dict[str, Any], continui
             "Follower ratios are user configuration and must not affect the master plan."
         ),
         "daily": (
-            "Write the daily trader journal from completed trades and decision episodes, compare the master against its proportional objective, update native semantic memory from repeated completed evidence, and decide how Hermes should improve. "
+            "Distill the supplied six-hour plans and supervision summaries into a compact maintenance learning journal. Do not reconstruct a whole trading session or consume raw decision history. Compare authoritative aggregate performance, preserve contradictions, update durable lessons only from repeated completed evidence, and decide how Hermes should improve. "
             "You may propose one compact versioned core-prompt change. Use operation=replace, copy one exact current sentence or clause into expected_old_text, and put only its minimal rewording in replacement_text. It must state evidence IDs, expected effect, evaluation metric, and rollback condition. "
             "A proposal is staged and changes no trading cognition until a later independent review activates it with new evidence. "
             "Do not edit Glitch policy, groups, ratios, prop limits, execution, or code."
+        ),
+        "weekly": (
+            "Distill only the supplied daily lessons into compact proposal-only skill language. Preserve contradictions and uncertainty; do not infer new trading rules from a single outcome. "
+            "Each skill proposal must include evidence IDs, expected effect, evaluation metric, and rollback condition. Do not activate, edit, or install skills in this loop."
         ),
     }[loop_id]
     repeated_outcomes = (
@@ -634,7 +664,7 @@ def build_prompt(loop_id: str, evidence: Any, template: dict[str, Any], continui
         and len(evidence["trade_episodes"]) >= 2
     )
     memory_instruction = "Use native memory retrieval exactly once before reasoning. "
-    if loop_id == "daily" and repeated_outcomes:
+    if loop_id in {"daily", "weekly"} and repeated_outcomes:
         memory_instruction += "You may write or revise compact durable memory because at least two attributable completed master outcomes are supplied. "
     else:
         memory_instruction += "Do not write native memory in this loop. "
@@ -744,6 +774,7 @@ def invoke_loop(
         "hourly": "glitch-review-outcomes,glitch-self-learning,glitch-self-heal,glitch-supervisor-ledger,glitch-learning-loop",
         "planning": "glitch-self-learning,glitch-supervisor-ledger,glitch-learning-loop",
         "daily": "glitch-review-outcomes,glitch-self-learning,glitch-supervisor-ledger,glitch-learning-loop",
+        "weekly": "glitch-self-learning,glitch-supervisor-ledger,glitch-learning-loop",
     }[loop_id]
     prompt = build_prompt(loop_id, evidence, template, continuity(supervisor))
     try:
@@ -1027,14 +1058,46 @@ def unjournaled_completed_sessions(
     return [(session_date, by_session[session_date]) for session_date in sorted(by_session)]
 
 
+def recent_learning_rows(
+    rows: list[dict[str, Any]], now: datetime, timestamp_fields: tuple[str, ...], minutes: int = 30
+) -> list[dict[str, Any]]:
+    cutoff = now - timedelta(minutes=minutes)
+    recent = []
+    for row in rows:
+        stamp = None
+        for field in timestamp_fields:
+            try:
+                stamp = parse_utc(row.get(field))
+            except (TypeError, ValueError):
+                continue
+            if stamp is not None:
+                break
+        if stamp is not None and stamp >= cutoff:
+            recent.append(row)
+    return recent
+
+
+def performance_summary(outcomes: list[dict[str, Any]]) -> dict[str, Any]:
+    realized = [row.get("master_realized_pnl_usd") for row in outcomes if isinstance(row.get("master_realized_pnl_usd"), (int, float))]
+    return {
+        "eligible_outcome_count": len(outcomes),
+        "realized_outcome_count": len(realized),
+        "realized_pnl_usd": round(sum(realized), 2),
+        "wins": sum(1 for value in realized if value > 0),
+        "losses": sum(1 for value in realized if value < 0),
+        "flat": sum(1 for value in realized if value == 0),
+    }
+
+
 def run_once(args) -> dict[str, Any]:
     glitch_data = args.glitch_data.resolve()
     exchange = glitch_data / "hermes" / "exchange"
     supervisor = exchange / "hermes" / "supervisor"
     supervisor.mkdir(parents=True, exist_ok=True)
+    feed_fresh = DIRECT.feed_observation_is_fresh(glitch_data)
     state_path = supervisor / "learning-state.json"
     state = DIRECT.read_optional_json(state_path) or {"schema_version": "glitch.hermes.learning_state.v1"}
-    if not args.dry_run:
+    if feed_fresh and not args.dry_run:
         DIRECT.reconcile_completed_outcomes(glitch_data, exchange, timeout_seconds=120)
         decision_episodes = collect_decision_episodes(glitch_data, exchange, supervisor)
     else:
@@ -1055,7 +1118,7 @@ def run_once(args) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     result = {"debriefed": 0, "hourly": False, "planning": False, "daily": False}
 
-    if new_outcomes and args.force_loop in {None, "debrief"}:
+    if feed_fresh and new_outcomes and args.force_loop in {None, "debrief"}:
         ids = [stable_id("episode", str(row["intent_id"])) for row in new_outcomes]
         if not args.dry_run:
             factual_evidence = debrief_evidence(glitch_data, new_outcomes)
@@ -1072,36 +1135,39 @@ def run_once(args) -> dict[str, Any]:
     episodes = read_jsonl(supervisor / "trade-episodes.jsonl")
     episode_ids = cognitive_evidence_ids(supervisor)
     evidence_count = len(episode_ids)
+    supervision_trade_cursor = int(state.get("supervision_trade_count", max(0, len(episodes) - 12)))
+    supervision_decision_cursor = int(state.get("supervision_decision_count", max(0, len(decision_episodes) - 24)))
     hourly_due = (
-        evidence_count > 0
+        (len(episodes) > supervision_trade_cursor or len(decision_episodes) > supervision_decision_cursor)
         and minutes_since(state.get("last_hourly_utc"), now) >= 60
-        and int(state.get("hourly_episode_count", 0)) < evidence_count
     )
-    if (hourly_due or args.force_loop == "hourly") and args.force_loop in {None, "hourly"}:
+    if feed_fresh and (hourly_due or args.force_loop == "hourly") and args.force_loop in {None, "hourly"}:
         review_id = stable_id("hourly-review", now.strftime("%Y%m%dT%H"))
         if not args.dry_run:
             records = invoke_loop(args, "hourly", {
-                "trade_episodes": episodes[-24:],
-                "decision_episodes": decision_episodes[-48:],
+                "trade_episodes": bounded_learning_rows(episodes[supervision_trade_cursor:], 12, 180_000),
+                "decision_episodes": bounded_learning_rows(decision_episodes[supervision_decision_cursor:], 24, 220_000),
+                "scope": {"kind": "supervision_delta", "since_utc": state.get("last_hourly_utc")},
             }, [review_id], supervisor)
             persist_hourly(records[0], supervisor, episode_ids)
             state["last_hourly_utc"] = utc_now()
-            state["hourly_episode_count"] = evidence_count
+            state["supervision_trade_count"] = len(episodes)
+            state["supervision_decision_count"] = len(decision_episodes)
         result["hourly"] = True
 
     reviews = read_jsonl(supervisor / "observations.jsonl")
     planning_due = (
         bool(reviews)
-        and minutes_since(state.get("last_planning_utc"), now) >= 300
+        and minutes_since(state.get("last_planning_utc"), now) >= 360
         and int(state.get("planning_review_count", 0)) < len(reviews)
     )
-    if (planning_due or args.force_loop == "planning") and args.force_loop in {None, "planning"}:
+    if feed_fresh and (planning_due or args.force_loop == "planning") and args.force_loop in {None, "planning"}:
         plan_id = stable_id("plan", now.strftime("%Y%m%dT%H") + f":{now.minute // 5 * 5:02d}")
         if not args.dry_run:
             records = invoke_loop(args, "planning", {
-                "reviews": reviews[-6:],
-                "trade_episodes": episodes[-24:],
-                "decision_episodes": decision_episodes[-48:],
+                "reviews": bounded_learning_rows(reviews, 6, 240_000),
+                "performance_summary": performance_summary(eligible),
+                "active_plan": DIRECT.read_optional_json(supervisor / "current-plan.json"),
             }, [plan_id], supervisor)
             trade_count = len(episodes)
             records[0]["trading_influence"] = "outcome_backed" if trade_count >= 2 else "observational"
@@ -1114,26 +1180,28 @@ def run_once(args) -> dict[str, Any]:
             state["planning_review_count"] = len(reviews)
         result["planning"] = True
 
-    existing_journals = read_jsonl(supervisor / "daily-journal.jsonl")
-    due_sessions = unjournaled_completed_sessions(eligible, episodes, decision_episodes, existing_journals, now)
-    if args.force_loop == "daily" and not due_sessions:
-        completed_through = latest_completed_apex_session_date(now)
-        all_sessions = unjournaled_completed_sessions(eligible, episodes, decision_episodes, [], now)
-        if all_sessions:
-            due_sessions = [next(
-                (item for item in reversed(all_sessions) if item[0] <= completed_through),
-                all_sessions[-1],
-            )]
-    if due_sessions and args.force_loop in {None, "daily"}:
-        session_date, session_evidence = due_sessions[0]
-        journal_id = stable_id("daily-journal", session_date)
+    plans = read_jsonl(supervisor / "plans.jsonl")
+    daily_due = (
+        (not feed_fresh and (
+            len(reviews) > int(state.get("daily_review_count", 0))
+            or len(plans) > int(state.get("daily_plan_count", 0))
+        ))
+        or args.force_loop == "daily"
+    )
+    if daily_due and args.force_loop in {None, "daily"}:
+        session_date = datetime.now(EASTERN).date().isoformat()
+        journal_id = stable_id("daily-distill", f"{len(reviews)}:{len(plans)}")
         if not args.dry_run:
             evidence = {
                 "session_date_et": session_date,
-                "trade_episodes": session_evidence["trade_episodes"],
-                "decision_episodes": session_evidence["decision_episodes"],
-                "reviews": reviews[-12:],
-                "plans": read_jsonl(supervisor / "plans.jsonl")[-4:],
+                "scope": {
+                    "kind": "maintenance_distillation",
+                    "source": "six_hour_plans_plus_supervision_summaries",
+                    "through_utc": now.isoformat(),
+                },
+                "reviews": bounded_learning_rows(reviews, max_rows=12, max_chars=260_000),
+                "plans": bounded_learning_rows(plans, max_rows=4, max_chars=260_000),
+                "performance_summary": performance_summary(eligible),
             }
             records = invoke_loop(
                 args,
@@ -1146,9 +1214,26 @@ def run_once(args) -> dict[str, Any]:
             append_unique(supervisor / "daily-journal.jsonl", records, "journal_id")
             apply_cognitive_decision(records[0], supervisor, episode_ids)
             activate_cognitive_candidate(records[0], supervisor)
-            state["last_daily_session_date_et"] = session_date
+            state["daily_review_count"] = len(reviews)
+            state["daily_plan_count"] = len(plans)
         result["daily"] = True
-        result["daily_session_date_et"] = session_date
+        result["daily_distilled"] = True
+
+    daily_journals = read_jsonl(supervisor / "daily-journal.jsonl")
+    weekly_due = len(daily_journals) - int(state.get("weekly_daily_count", 0)) >= 7
+    if args.force_loop == "weekly":
+        weekly_due = True
+    if weekly_due and args.force_loop in {None, "weekly"}:
+        proposal_id = stable_id("weekly-skill-proposal", f"{len(daily_journals)}")
+        if not args.dry_run:
+            records = invoke_loop(args, "weekly", {
+                "scope": {"kind": "weekly_distillation", "daily_journal_count": len(daily_journals)},
+                "daily_journals": bounded_learning_rows(daily_journals[-7:], 7, 260_000),
+                "recent_plans": bounded_learning_rows(plans[-4:], 4, 160_000),
+            }, [proposal_id], supervisor)
+            append_unique(supervisor / "weekly-skill-proposals.jsonl", records, "skill_proposal_id")
+            state["weekly_daily_count"] = len(daily_journals)
+        result["weekly"] = True
 
     if not args.dry_run:
         state["updated_utc"] = utc_now()
@@ -1166,7 +1251,7 @@ def main() -> int:
     parser.add_argument("--profile", default="glitch")
     parser.add_argument("--timeout-seconds", type=int, default=300)
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--force-loop", choices=("debrief", "hourly", "planning", "daily"))
+    parser.add_argument("--force-loop", choices=("debrief", "hourly", "planning", "daily", "weekly"))
     args = parser.parse_args()
     exchange = args.glitch_data.resolve() / "hermes" / "exchange"
     supervisor = exchange / "hermes" / "supervisor"

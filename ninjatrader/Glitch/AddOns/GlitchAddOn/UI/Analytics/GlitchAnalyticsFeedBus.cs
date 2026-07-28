@@ -145,6 +145,27 @@ namespace Glitch.UI
                 return GetKnownInstrumentRootsUnsafe();
         }
 
+        internal static int CountFreshInstrumentSnapshots(DateTime nowUtc, TimeSpan maxAge)
+        {
+            if (maxAge <= TimeSpan.Zero)
+                return 0;
+
+            EnsurePersistenceLoaded();
+            ImportLegacyBusStateIfNeeded(nowUtc);
+            lock (SyncRoot)
+            {
+                int count = 0;
+                foreach (string root in GetKnownInstrumentRootsUnsafe())
+                {
+                    GlitchIndicatorInstrumentSnapshot snapshot;
+                    if (TryCreateSnapshotUnsafe(root, out snapshot)
+                        && IsSnapshotFresh(snapshot, nowUtc, maxAge))
+                        count++;
+                }
+                return count;
+            }
+        }
+
         // Publication is called on the NinjaTrader dispatcher.  It snapshots the
         // synchronized in-memory analytics bus without triggering persistence IO;
         // the resulting DTOs are safe for the exchange writer's background lane.

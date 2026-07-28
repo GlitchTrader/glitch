@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
+using Glitch.UI;
 
 namespace Glitch.Services
 {
@@ -70,7 +71,9 @@ namespace Glitch.Services
             double portfolioAgeSec = ReadAgeSeconds(portfolioPath, nowUtc);
             bool marketHashOk = marketExists && !string.IsNullOrWhiteSpace(ReadField(marketPath, "snapshot_hash"));
             int instrumentCount = ReadIntField(marketPath, "instrument_count");
-            int freshCount = ReadIntField(marketPath, "fresh_instrument_count");
+            int freshCount = GlitchAnalyticsFeedBus.CountFreshInstrumentSnapshots(
+                nowUtc,
+                TimeSpan.FromMinutes(5));
 
             bool intentUp = GlitchAiIntentServer.IsRunning;
             bool telemetryUp = GlitchExternalTelemetryServer.IsRunning;

@@ -224,6 +224,8 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
             self.assertIn(component, health)
         self.assertIn("decision_worker_overdue", health)
         self.assertIn("operator_job_disabled", health)
+        self.assertIn("LearningWorkerStaleAfterSeconds = 2700", health)
+        self.assertNotIn("LearningWorkerAgeSeconds > 1200", health)
         self.assertIn("EnsureRailInfrastructureIfDue", telemetry)
         self.assertIn("TimeSpan.FromSeconds(30)", telemetry)
         self.assertIn("TelemetryServerUnavailable", telemetry)
