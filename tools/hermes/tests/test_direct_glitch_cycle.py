@@ -85,6 +85,7 @@ def decision(route, account, suffix, action="NOTHING"):
         "snapshot_hash": "12345",
         "model_version": "test",
         "prompt_version": "direct-v1",
+        "wake_triggers": [],
         "reason": "Current evidence does not support entry.",
         "decision_audit": {
             "bull_case": "Bull evidence is limited.",
@@ -151,6 +152,36 @@ class DirectCycleTests(unittest.TestCase):
             }), encoding="utf-8")
             scenario = MODULE.build_scenario(value)
             self.assertEqual(MODULE.invocation_reason(value, scenario, exchange, None), "condition_change")
+
+    def test_concrete_change_condition_requires_all_structured_wake_triggers(self):
+        scenario = MODULE.build_scenario(packet())
+        first = decision("glitch", "Sim101", 1)
+        first["decision_audit"]["change_condition"] = "Reassess long above 20010 or short below 19990."
+        first["wake_triggers"] = [
+            {"type": "PRICE_CROSS", "direction": "ABOVE", "price": 20010.0},
+            {"type": "PRICE_CROSS", "direction": "BELOW", "price": 19990.0},
+        ]
+        second = decision("glitch-second", "Sim201", 2)
+        MODULE.validate_batch({
+            "schema_version": "glitch.intent.batch.v1",
+            "cycle_id": scenario["cycle_id"],
+            "decisions": [first, second],
+        }, scenario)
+        first["wake_triggers"] = []
+        with self.assertRaisesRegex(ValueError, "wake_triggers_missing_for_change_condition"):
+            MODULE.validate_batch({
+                "schema_version": "glitch.intent.batch.v1",
+                "cycle_id": scenario["cycle_id"],
+                "decisions": [first, second],
+            }, scenario)
+
+    def test_legacy_single_wake_trigger_is_migrated_to_array(self):
+        value = decision("glitch", "Sim101", 1)
+        value.pop("wake_triggers")
+        legacy = {"type": "PRICE_CROSS", "direction": "ABOVE", "price": 20010.0}
+        value["wake_trigger"] = legacy
+        normalized = MODULE.normalize_batch({"decisions": [value]}, MODULE.build_scenario(packet()))
+        self.assertEqual(normalized["decisions"][0]["wake_triggers"], [legacy])
 
     def test_stale_entry_batch_is_discarded_after_newer_packet(self):
         with tempfile.TemporaryDirectory() as root:

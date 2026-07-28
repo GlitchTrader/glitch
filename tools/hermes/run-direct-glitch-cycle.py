@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -43,11 +44,10 @@ LEG_UPDATE_FIELDS = {"leg_id", "stop_loss", "take_profit"}
 DECISION_FIELDS = {
     "schema_version", "intent_id", "created_utc", "instrument", "account",
     "operator_profile", "action", "confidence", "snapshot_hash", "model_version",
-    "prompt_version", "reason", "decision_audit",
+    "prompt_version", "reason", "decision_audit", "wake_triggers",
 }
-# Hermes may retain one structured review trigger alongside the intent.  It is
-# control-plane metadata, not part of the Glitch execution intent contract.
-ALLOWED_DECISION_FIELDS = DECISION_FIELDS | ENTRY_FIELDS | {"protection_updates", "wake_trigger"}
+# Hermes-only control-plane metadata; it is stripped before the Glitch API call.
+ALLOWED_DECISION_FIELDS = DECISION_FIELDS | ENTRY_FIELDS | {"protection_updates"}
 DECISION_AUDIT_FIELDS = {
     "bull_case", "bear_case", "flat_case", "aggressive_case", "conservative_case",
     "decisive_evidence", "disconfirming_evidence", "change_condition", "final_choice",
@@ -837,21 +837,39 @@ def wake_trigger_path(exchange: Path) -> Path:
     return exchange / "hermes" / "supervisor" / "active-wake-triggers.json"
 
 
-def validate_wake_trigger(trigger: Any, index: int) -> None:
-    if trigger is None:
-        return
-    if not isinstance(trigger, dict):
-        raise ValueError(f"wake_trigger_invalid:{index}")
-    if set(trigger) != {"type", "direction", "price"}:
-        raise ValueError(f"wake_trigger_fields_invalid:{index}")
-    if trigger.get("type") != "PRICE_CROSS":
-        raise ValueError(f"wake_trigger_type_invalid:{index}")
-    if trigger.get("direction") not in {"ABOVE", "BELOW"}:
-        raise ValueError(f"wake_trigger_direction_invalid:{index}")
-    price = trigger.get("price")
-    if (not isinstance(price, (int, float)) or isinstance(price, bool)
-            or not math.isfinite(float(price))):
-        raise ValueError(f"wake_trigger_price_invalid:{index}")
+def validate_wake_triggers(triggers: Any, index: int) -> None:
+    if not isinstance(triggers, list):
+        raise ValueError(f"wake_triggers_invalid:{index}")
+    for trigger_index, trigger in enumerate(triggers):
+        if not isinstance(trigger, dict):
+            raise ValueError(f"wake_trigger_invalid:{index}:{trigger_index}")
+        if set(trigger) != {"type", "direction", "price"}:
+            raise ValueError(f"wake_trigger_fields_invalid:{index}:{trigger_index}")
+        if trigger.get("type") != "PRICE_CROSS":
+            raise ValueError(f"wake_trigger_type_invalid:{index}:{trigger_index}")
+        if trigger.get("direction") not in {"ABOVE", "BELOW"}:
+            raise ValueError(f"wake_trigger_direction_invalid:{index}:{trigger_index}")
+        price = trigger.get("price")
+        if (not isinstance(price, (int, float)) or isinstance(price, bool)
+                or not math.isfinite(float(price))):
+            raise ValueError(f"wake_trigger_price_invalid:{index}:{trigger_index}")
+
+
+def explicit_price_crosses(condition: str) -> set[tuple[str, float]]:
+    pattern = re.compile(r"\b(above|over|below|under)\s+([0-9]+(?:\.[0-9]+)?)", re.IGNORECASE)
+    crosses: set[tuple[str, float]] = set()
+    for match in pattern.finditer(condition):
+        direction = "ABOVE" if match.group(1).lower() in {"above", "over"} else "BELOW"
+        crosses.add((direction, float(match.group(2))))
+    return crosses
+
+
+def require_explicit_wake_triggers(audit: dict[str, Any], triggers: list[dict[str, Any]], index: int) -> None:
+    expected = explicit_price_crosses(str(audit.get("change_condition", "")))
+    actual = {(str(trigger.get("direction")), float(trigger.get("price"))) for trigger in triggers}
+    missing = sorted(expected.difference(actual))
+    if missing:
+        raise ValueError(f"wake_triggers_missing_for_change_condition:{index}:{missing}")
 
 
 def packet_current_price(packet: dict[str, Any]) -> float | None:
@@ -946,9 +964,8 @@ def wake_trigger_fired(exchange: Path, packet: dict[str, Any], scenario: dict[st
 def persist_wake_triggers(exchange: Path, batch: dict[str, Any], packet_id: str) -> None:
     triggers = []
     for decision in batch.get("decisions", []):
-        trigger = decision.get("wake_trigger") if isinstance(decision, dict) else None
-        if trigger is not None:
-            triggers.append(trigger)
+        if isinstance(decision, dict) and isinstance(decision.get("wake_triggers"), list):
+            triggers.extend(decision["wake_triggers"])
     write_json_atomic(wake_trigger_path(exchange), {
         "schema_version": "glitch.hermes.wake_triggers.v1",
         "cycle_id": packet_id,
@@ -1086,7 +1103,7 @@ def validate_batch(
         unknown = sorted(set(intent).difference(ALLOWED_DECISION_FIELDS))
         if unknown:
             raise ValueError(f"intent_unknown_fields:{index}:{','.join(unknown)}")
-        validate_wake_trigger(intent.get("wake_trigger"), index)
+        validate_wake_triggers(intent.get("wake_triggers"), index)
         if intent.get("schema_version") != "glitch.intent.v3":
             raise ValueError(f"intent_schema_version_invalid:{index}")
         for field in (
@@ -1109,6 +1126,7 @@ def validate_batch(
         if any(not isinstance(audit[field], str) or not audit[field].strip()
                for field in DECISION_AUDIT_FIELDS):
             raise ValueError(f"decision_audit_value_invalid:{index}")
+        require_explicit_wake_triggers(audit, intent["wake_triggers"], index)
         route = intent.get("operator_profile")
         if route in seen_routes:
             raise ValueError("duplicate_route")
@@ -1183,6 +1201,9 @@ def normalize_batch(batch: dict[str, Any], scenario: dict[str, Any] | None = Non
         return batch
     for intent in decisions:
         if isinstance(intent, dict):
+            if "wake_triggers" not in intent and "wake_trigger" in intent:
+                legacy = intent.pop("wake_trigger")
+                intent["wake_triggers"] = [] if legacy is None else [legacy]
             try:
                 uuid.UUID(str(intent.get("intent_id", "")))
             except (ValueError, TypeError, AttributeError):
@@ -1493,7 +1514,7 @@ def submit_batch(batch: dict[str, Any], glitch_data: Path, exchange: Path) -> di
         # Keep the trigger in Hermes' outbox/audit trail, but never send this
         # Hermes-only field across the strict Glitch execution API boundary.
         wire_intent = dict(intent)
-        wire_intent.pop("wake_trigger", None)
+        wire_intent.pop("wake_triggers", None)
         try:
             result = post_intent(wire_intent, token)
         except Exception as error:  # network failure is retriable with the same intent IDs
@@ -1612,7 +1633,7 @@ def build_prompt(
                 "change_condition": "Replace with the concrete reassessment trigger.",
                 "final_choice": action,
             },
-            "wake_trigger": None,
+            "wake_triggers": [],
         })
     output_template = {
         "schema_version": "glitch.intent.batch.v1",
@@ -1691,8 +1712,8 @@ def build_prompt(
         "A stop may tighten or move farther away when current evidence supports it; Glitch independently enforces native identity and protective market side. "
         "A MOVE_TP target may extend or reduce remaining opportunity but must stay on the live profit side. Echo cycle_id and account/operator_profile exactly. "
         "snapshot_hash must be a JSON string copied exactly from the MNQ market snapshot, even when it contains only digits. "
-        "Optionally include wake_trigger as {type: \"PRICE_CROSS\", direction: \"ABOVE\"|\"BELOW\", price: number} "
-        "when the change_condition is a concrete one-sided price crossing that should cause Hermes to re-invoke the next-minute worker early; omit it for prose-only conditions. "
+        "wake_triggers is mandatory and must be an array of {type: \"PRICE_CROSS\", direction: \"ABOVE\"|\"BELOW\", price: number}. "
+        "For every explicit above/over/below/under price level in change_condition, include a matching trigger; use [] only when the condition is not a concrete price crossing. "
         "Use the top-level key decisions, never intents. Close every intent object before closing the decisions "
         "array. Before returning, silently verify that the entire response is one syntactically valid JSON object "
         "that a strict JSON parser can load. Return no markdown fences, commentary, or trailing text. "
