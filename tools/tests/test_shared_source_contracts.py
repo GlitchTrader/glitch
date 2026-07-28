@@ -164,6 +164,15 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("MasterAccountInstance = masterAccount", replication)
         self.assertIn("_copyEngine.Configure(_isReplicatingUi, routes)", replication)
 
+    def test_sim_and_unknown_accounts_use_apex_declared_size_template(self):
+        window = source(ADDON / "UI/MainWindow/GlitchMainWindow.cs")
+        rules = source(ADDON / "UI/MainWindow/GlitchMainWindow.FirmRules.partial.cs")
+        self.assertIn('string ruleFirmId = selectedFirmId;', window)
+        self.assertIn('ruleFirmId = "ApexTraderFunding";', window)
+        self.assertIn('GetRuleForFirmAndSize(ruleFirmId, selectedStatus', window)
+        self.assertIn('AccountSize = 250000, MaxContracts = 27', rules)
+        self.assertIn('AccountSize = 300000, MaxContracts = 35', rules)
+
     def test_manual_follower_divergence_never_blocks_later_execution_deltas(self):
         copy = source(COPY_ENGINE)
         opening = method_body(copy, "private void FanOutOpening", "private void FanOutCompleteClose")
