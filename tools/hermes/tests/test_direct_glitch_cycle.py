@@ -132,6 +132,26 @@ class DirectCycleTests(unittest.TestCase):
             scenario = MODULE.build_scenario(value)
             self.assertEqual(MODULE.invocation_reason(value, scenario, exchange, None), "condition_change")
 
+    def test_condition_change_wakes_on_intrapacket_one_minute_cross(self):
+        value = packet()
+        value["packet_id"] = "20990101T1406Z"
+        prior = json.loads(json.dumps(value))
+        prior["packet_id"] = "20990101T1405Z"
+        prior["frames"][-1]["market_snapshot"]["instruments"][0]["current_price"] = 20010.0
+        instrument = value["frames"][-1]["market_snapshot"]["instruments"][0]
+        instrument["current_price"] = 20005.0
+        instrument["timeframe_bars"] = [{"minutes": 1, "low": 19999.75, "high": 20010.0}]
+        with tempfile.TemporaryDirectory() as root:
+            exchange = Path(root)
+            (exchange / "glitch" / "decision-packets").mkdir(parents=True)
+            (exchange / "hermes" / "supervisor").mkdir(parents=True)
+            (exchange / "glitch" / "decision-packets" / "20990101T1405Z.json").write_text(json.dumps(prior), encoding="utf-8")
+            (exchange / "hermes" / "supervisor" / "active-wake-triggers.json").write_text(json.dumps({
+                "triggers": [{"type": "PRICE_CROSS", "direction": "BELOW", "price": 20000.0}],
+            }), encoding="utf-8")
+            scenario = MODULE.build_scenario(value)
+            self.assertEqual(MODULE.invocation_reason(value, scenario, exchange, None), "condition_change")
+
     def test_stale_entry_batch_is_discarded_after_newer_packet(self):
         with tempfile.TemporaryDirectory() as root:
             exchange = Path(root)
