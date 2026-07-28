@@ -6587,12 +6587,24 @@ namespace Glitch.UI
                     _selectionOverrides[account.Name] = inferredOverride;
             }
 
-            _firmRules.TryGetValue(selectedFirmId, out FirmRuleMetadata selectedFirmRule);
+            // Sim/unknown accounts still need a deterministic contract ceiling for
+            // replication. Keep the displayed identity unchanged, but use Apex's
+            // tier table as the declared-size template when no firm rules exist.
+            string ruleFirmId = selectedFirmId;
+            if (string.Equals(selectedStatus, "Sim", StringComparison.OrdinalIgnoreCase) ||
+                string.IsNullOrWhiteSpace(ruleFirmId) ||
+                string.Equals(ruleFirmId, "None", StringComparison.OrdinalIgnoreCase) ||
+                !_firmRules.ContainsKey(ruleFirmId))
+            {
+                ruleFirmId = "ApexTraderFunding";
+            }
+
+            _firmRules.TryGetValue(ruleFirmId, out FirmRuleMetadata selectedFirmRule);
             double currentEquity = GetCurrentEquity(account, cashValue);
             double effectiveBalance = currentEquity > 0 ? currentEquity : cashValue;
             double tierProfitReference = cashValue > 0 ? cashValue : effectiveBalance;
             double tierProfit = Math.Max(0, tierProfitReference - selectedAccountSize);
-            var tierRule = GetRuleForFirmAndSize(selectedFirmId, selectedStatus, executionProvider, selectedAccountSize, tierProfit);
+            var tierRule = GetRuleForFirmAndSize(ruleFirmId, selectedStatus, executionProvider, selectedAccountSize, tierProfit);
             double profitTarget = tierRule?.ProfitTarget ?? 0;
             double maxDrawdown = tierRule?.MaxDrawdown ?? 0;
             double intratradeDrawdown = tierRule?.IntratradeDrawdown ?? 0;
