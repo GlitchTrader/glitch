@@ -8,16 +8,21 @@ from replication_lifecycle_sim import (
     Instrument,
     Order,
     OrderState,
+    RecoveryCloseState,
     cleanup_flat_follower_orders_current,
     protection_cancelled_at_flat,
     rail_flat_requires_protection_cancel,
     rail_sync_should_reduce_by_delta,
     reconcile_follower_protection_current,
+    reconcile_recovery_fill,
+    recovery_attributable_remaining,
+    release_unreconciled_recovery_pending,
     scale_execution_delta,
     should_cancel_owned_close_remainder,
     simulate_stale_execution_then_flat,
     sync_decide_initial,
     trim_follower_protection_current,
+    uncovered_recovery_delta,
     GlitchSyncInitialAction,
 )
 
@@ -146,6 +151,22 @@ class ReplicationLifecycleRailGapTests(unittest.TestCase):
         self.assertTrue(should_cancel_owned_close_remainder(3, 1, 2, -1, 0))
         self.assertFalse(should_cancel_owned_close_remainder(3, 1, 2, -1, 1))
         self.assertTrue(should_cancel_owned_close_remainder(3, 2, 2, -1, 0))
+
+    def test_master_protection_recovery_uses_uncovered_delta_after_working_oco(self):
+        self.assertEqual(uncovered_recovery_delta(2, 1), 1)
+        self.assertEqual(uncovered_recovery_delta(2, 2), 0)
+        self.assertEqual(uncovered_recovery_delta(4, 1), 3)
+
+    def test_recovery_accounting_reserves_pending_until_fill_and_releases_rejected_remainder(self):
+        state = RecoveryCloseState(pending_quantity=2, submitted_quantity=2)
+        reconcile_recovery_fill(state, 1)
+        self.assertEqual(state.recovered_quantity, 1)
+        self.assertEqual(state.pending_quantity, 1)
+        self.assertEqual(recovery_attributable_remaining(4, state.recovered_quantity, state.pending_quantity), 2)
+
+        release_unreconciled_recovery_pending(state)
+        self.assertEqual(state.pending_quantity, 0)
+        self.assertEqual(recovery_attributable_remaining(4, state.recovered_quantity, state.pending_quantity), 3)
 
 
 if __name__ == "__main__":

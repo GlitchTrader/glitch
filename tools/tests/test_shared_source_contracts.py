@@ -508,6 +508,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             "private FollowerOrderSubmission SubmitFollowerEntry",
         )
         self.assertIn("RecoveryCloseRecoveredQuantity", recovery)
+        self.assertIn("RecoveryClosePendingQuantity", recovery)
         self.assertIn("remaining_qty=", recovery)
         self.assertIn("recovered_qty=", recovery)
         self.assertIn("(followerNet > 0) != lifecycle.IsLong", recovery)
@@ -834,10 +835,41 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("copy_skip|reason=master_native_bracket_owns_exit", recovery)
         self.assertIn("TrySnapshotOrders(route.FollowerAccount, out Order[] followerOrders)", recovery)
         self.assertIn("CountWorkingFollowerExitProtectionQuantity", recovery)
+        self.assertIn("int uncoveredDelta = Math.Max(0, remainingDelta - workingProtection)", recovery)
+        self.assertIn("remainingUncovered", recovery)
         self.assertIn("copy_skip|reason=follower_native_protection_owns_exit", recovery)
         self.assertIn("working_qty=", recovery)
         self.assertIn("lifecycle.ProtectedQuantity < filled", gate)
         self.assertIn("ProtectionFailed", gate)
+
+    def test_recovery_accounting_tracks_pending_fill_and_rejected_remainder(self):
+        copy = source(COPY_ENGINE)
+        recovery = method_body(
+            copy,
+            "private bool TrySubmitAttributedRecoveryClose",
+            "private FollowerOrderSubmission SubmitFollowerEntry",
+        )
+        track = method_body(
+            copy,
+            "private void TrackCloseOrder",
+            "private void TrySubmitAttributedRecoveryClose",
+        )
+        state_update = method_body(
+            copy,
+            "public void ProcessAccountStateUpdate",
+            "public void ProcessFollowerExecution",
+        )
+        self.assertIn("RecoveryClosePendingQuantity", recovery)
+        self.assertIn("- lifecycle.RecoveryClosePendingQuantity", recovery)
+        self.assertNotIn("lifecycle.RecoveryCloseRecoveredQuantity += quantity", recovery)
+        self.assertIn("lifecycle.RecoveryClosePendingQuantity += quantity", recovery)
+        self.assertIn('submission.Result, "submitted"', recovery)
+        self.assertIn("pending_qty=", recovery)
+        self.assertIn("ReconcileAttributedRecoveryCloseFill", track)
+        self.assertIn("ReconcileAttributedRecoveryCloseTerminal", track)
+        self.assertIn("ReconcileAttributedRecoveryCloses(account)", state_update)
+        self.assertIn("AttributedEntrySignal", copy)
+        self.assertIn("ReconciledFillQuantity", copy)
 
     def test_duplicate_entry_suppression_is_execution_scoped(self):
         submit = method_body(

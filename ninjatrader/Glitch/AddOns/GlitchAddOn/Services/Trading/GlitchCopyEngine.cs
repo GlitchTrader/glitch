@@ -446,6 +446,7 @@ namespace Glitch.Services
         {
             if (account == null)
                 return;
+            ReconcileAttributedRecoveryCloses(account);
             ReconcileCloses(account);
             ReconcileFollowerProtection(account);
             CleanupFlatFollowerOrders(account);
@@ -1141,7 +1142,8 @@ namespace Glitch.Services
                     context.Instrument,
                     isLongExposure,
                     followerOrders);
-                if (workingProtection >= remainingDelta)
+                int uncoveredDelta = Math.Max(0, remainingDelta - workingProtection);
+                if (uncoveredDelta <= 0)
                 {
                     Journal?.Invoke(
                         route.FollowerAccount.Name,
@@ -1170,9 +1172,10 @@ namespace Glitch.Services
                         .ToList();
                 }
 
+                int remainingUncovered = uncoveredDelta;
                 foreach (FollowerEntryLifecycle lifecycle in lifecycles)
                 {
-                    if (remainingDelta <= 0)
+                    if (remainingUncovered <= 0)
                         break;
                     if ((followerNet > 0) != lifecycle.IsLong)
                         continue;
@@ -1181,11 +1184,11 @@ namespace Glitch.Services
 
                     if (!TrySubmitAttributedRecoveryClose(
                             lifecycle,
-                            remainingDelta,
+                            remainingUncovered,
                             "master_protection_exit",
-                            out int recovered))
+                            out int submitted))
                         continue;
-                    remainingDelta -= recovered;
+                    remainingUncovered -= submitted;
                 }
             }
         }
@@ -1244,7 +1247,8 @@ namespace Glitch.Services
             OrderAction action,
             int quantity,
             string identity,
-            string signalPrefix)
+            string signalPrefix,
+            string attributedEntrySignal = null)
         {
             string accountToken = GlitchReplicationProtection.StableToken(account?.Name, 6);
             string closeToken = GlitchReplicationProtection.StableToken(identity, 8);
@@ -1280,7 +1284,10 @@ namespace Glitch.Services
                         Order = order,
                         InitialNet = initialNet,
                         TargetNet = initialNet
-                            + (GlitchReplicationEngine.GetOrderActionSign(action) * quantity)
+                            + (GlitchReplicationEngine.GetOrderActionSign(action) * quantity),
+                        AttributedEntrySignal = attributedEntrySignal,
+                        SubmittedQuantity = quantity,
+                        ReconciledFillQuantity = 0
                     };
                 }
                 account.Submit(new[] { order });
@@ -1303,17 +1310,90 @@ namespace Glitch.Services
 
         private void TrackCloseOrder(Account account, Order order, string signal)
         {
-            CloseState lifecycle;
+            CloseState closeState;
             lock (_gate)
             {
-                if (!_closesBySignal.TryGetValue(signal, out lifecycle)
-                    || lifecycle == null
-                    || !string.Equals(lifecycle.Account?.Name, account?.Name, StringComparison.OrdinalIgnoreCase))
+                if (!_closesBySignal.TryGetValue(signal, out closeState)
+                    || closeState == null
+                    || !string.Equals(closeState.Account?.Name, account?.Name, StringComparison.OrdinalIgnoreCase))
                     return;
-                lifecycle.Order = order;
+                closeState.Order = order;
+                ReconcileAttributedRecoveryCloseFill(closeState, order);
                 if (!GlitchReplicationEngine.IsWorkingOrderState(order.OrderState))
+                {
+                    ReconcileAttributedRecoveryCloseTerminal(closeState, order);
                     _closesBySignal.Remove(signal);
+                }
             }
+        }
+
+        private void ReconcileAttributedRecoveryCloses(Account account)
+        {
+            if (account == null)
+                return;
+            List<CloseState> closeStates;
+            lock (_gate)
+            {
+                closeStates = _closesBySignal.Values
+                    .Where(item => item?.Account != null
+                        && string.Equals(item.Account.Name, account.Name, StringComparison.OrdinalIgnoreCase)
+                        && !string.IsNullOrWhiteSpace(item.AttributedEntrySignal))
+                    .ToList();
+            }
+            foreach (CloseState closeState in closeStates)
+            {
+                Order order = closeState.Order;
+                if (order == null)
+                    continue;
+                lock (_gate)
+                {
+                    if (!_closesBySignal.ContainsKey(closeState.Signal))
+                        continue;
+                    ReconcileAttributedRecoveryCloseFill(closeState, order);
+                    if (!GlitchReplicationEngine.IsWorkingOrderState(order.OrderState))
+                    {
+                        ReconcileAttributedRecoveryCloseTerminal(closeState, order);
+                        _closesBySignal.Remove(closeState.Signal);
+                    }
+                }
+            }
+        }
+
+        private void ReconcileAttributedRecoveryCloseFill(CloseState closeState, Order order)
+        {
+            if (closeState == null || order == null || string.IsNullOrWhiteSpace(closeState.AttributedEntrySignal))
+                return;
+            if (!_entriesBySignal.TryGetValue(closeState.AttributedEntrySignal, out FollowerEntryLifecycle lifecycle)
+                || lifecycle == null)
+                return;
+
+            int filled = Math.Max(0, order.Filled);
+            int delta = filled - closeState.ReconciledFillQuantity;
+            if (delta <= 0)
+                return;
+
+            closeState.ReconciledFillQuantity = filled;
+            lifecycle.RecoveryCloseRecoveredQuantity += delta;
+            lifecycle.RecoveryClosePendingQuantity = Math.Max(
+                0,
+                lifecycle.RecoveryClosePendingQuantity - delta);
+        }
+
+        private void ReconcileAttributedRecoveryCloseTerminal(CloseState closeState, Order order)
+        {
+            if (closeState == null || order == null || string.IsNullOrWhiteSpace(closeState.AttributedEntrySignal))
+                return;
+            if (!_entriesBySignal.TryGetValue(closeState.AttributedEntrySignal, out FollowerEntryLifecycle lifecycle)
+                || lifecycle == null)
+                return;
+
+            int unreconciled = Math.Max(0, closeState.SubmittedQuantity - closeState.ReconciledFillQuantity);
+            if (unreconciled <= 0)
+                return;
+
+            lifecycle.RecoveryClosePendingQuantity = Math.Max(
+                0,
+                lifecycle.RecoveryClosePendingQuantity - unreconciled);
         }
 
         private void TrySubmitAttributedRecoveryClose(
@@ -1349,7 +1429,9 @@ namespace Glitch.Services
             {
                 int filled = Math.Max(0, lifecycle.EntryOrder?.Filled ?? 0);
                 int attributable = Math.Min(lifecycle.SubmittedQuantity, filled);
-                int remaining = attributable - lifecycle.RecoveryCloseRecoveredQuantity;
+                int remaining = attributable
+                    - lifecycle.RecoveryCloseRecoveredQuantity
+                    - lifecycle.RecoveryClosePendingQuantity;
                 if (remaining <= 0)
                     return false;
                 recoveryQuantity = Math.Min(requestedQuantity, remaining);
@@ -1383,23 +1465,41 @@ namespace Glitch.Services
                 lifecycle.IsLong ? OrderAction.Sell : OrderAction.BuyToCover,
                 quantity,
                 lifecycle.EntrySignal + "|" + reason,
-                CopySignalName);
+                CopySignalName,
+                lifecycle.EntrySignal);
+            if (!string.Equals(submission.Result, "submitted", StringComparison.OrdinalIgnoreCase))
+            {
+                Journal?.Invoke(
+                    lifecycle.Account.Name,
+                    "follower_recovery|instrument=" + CleanToken(root)
+                    + "|reason=" + CleanToken(reason)
+                    + "|submitted_qty=" + quantity.ToString(CultureInfo.InvariantCulture)
+                    + "|result=" + CleanToken(submission.Result));
+                return false;
+            }
+
             lock (_gate)
-                lifecycle.RecoveryCloseRecoveredQuantity += quantity;
+                lifecycle.RecoveryClosePendingQuantity += quantity;
             recoveredQuantity = quantity;
+            int attributableQty;
             int remainingAttributable;
             lock (_gate)
             {
                 int filled = Math.Max(0, lifecycle.EntryOrder?.Filled ?? 0);
-                int attributable = Math.Min(lifecycle.SubmittedQuantity, filled);
-                remainingAttributable = Math.Max(0, attributable - lifecycle.RecoveryCloseRecoveredQuantity);
+                attributableQty = Math.Min(lifecycle.SubmittedQuantity, filled);
+                remainingAttributable = Math.Max(
+                    0,
+                    attributableQty
+                        - lifecycle.RecoveryCloseRecoveredQuantity
+                        - lifecycle.RecoveryClosePendingQuantity);
             }
             Journal?.Invoke(
                 lifecycle.Account.Name,
                 "follower_recovery|instrument=" + CleanToken(root)
                 + "|reason=" + CleanToken(reason)
-                + "|attributable_qty=" + (recoveredQuantity + remainingAttributable).ToString(CultureInfo.InvariantCulture)
+                + "|attributable_qty=" + attributableQty.ToString(CultureInfo.InvariantCulture)
                 + "|recovered_qty=" + lifecycle.RecoveryCloseRecoveredQuantity.ToString(CultureInfo.InvariantCulture)
+                + "|pending_qty=" + lifecycle.RecoveryClosePendingQuantity.ToString(CultureInfo.InvariantCulture)
                 + "|remaining_qty=" + remainingAttributable.ToString(CultureInfo.InvariantCulture)
                 + "|native_same_side_qty=" + Math.Abs(followerNet).ToString(CultureInfo.InvariantCulture)
                 + "|submitted_qty=" + quantity.ToString(CultureInfo.InvariantCulture)
@@ -2691,6 +2791,9 @@ namespace Glitch.Services
             public int InitialNet { get; set; }
             public int TargetNet { get; set; }
             public bool CancelRequested { get; set; }
+            public string AttributedEntrySignal { get; set; }
+            public int SubmittedQuantity { get; set; }
+            public int ReconciledFillQuantity { get; set; }
         }
 
         private sealed class FollowerEntryLifecycle
@@ -2714,6 +2817,7 @@ namespace Glitch.Services
             public bool ProtectionFailed { get; set; }
             public bool ProtectionAvailable { get; set; }
             public int RecoveryCloseRecoveredQuantity { get; set; }
+            public int RecoveryClosePendingQuantity { get; set; }
             public List<GlitchScaledProtectionLeg> ScaledLegs { get; set; }
             public bool LatePlanWaitLogged { get; set; }
         }

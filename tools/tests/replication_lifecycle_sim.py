@@ -30,6 +30,7 @@ class OrderState(str, Enum):
     Working = "Working"
     Filled = "Filled"
     Cancelled = "Cancelled"
+    Rejected = "Rejected"
 
 
 class SignalKind(str, Enum):
@@ -338,3 +339,40 @@ def protection_cancelled_at_flat(account: AccountSim, root: str) -> bool:
         o.working and parse_signal_kind(o.name) == SignalKind.Protection and o.instrument.root == root
         for o in account.orders
     )
+
+
+def uncovered_recovery_delta(execution_delta: int, working_protection: int) -> int:
+    """Mirror FanOutMasterProtectionExit uncovered delta after working OCO subtraction."""
+    if execution_delta <= 0:
+        return 0
+    return max(0, execution_delta - max(0, working_protection))
+
+
+def recovery_attributable_remaining(attributable: int, recovered: int, pending: int) -> int:
+    return max(0, attributable - max(0, recovered) - max(0, pending))
+
+
+@dataclass
+class RecoveryCloseState:
+    submitted_quantity: int = 0
+    reconciled_fill_quantity: int = 0
+    recovered_quantity: int = 0
+    pending_quantity: int = 0
+
+
+def reconcile_recovery_fill(state: RecoveryCloseState, filled: int) -> RecoveryCloseState:
+    delta = max(0, filled - state.reconciled_fill_quantity)
+    if delta <= 0:
+        return state
+    state.reconciled_fill_quantity = filled
+    state.recovered_quantity += delta
+    state.pending_quantity = max(0, state.pending_quantity - delta)
+    return state
+
+
+def release_unreconciled_recovery_pending(state: RecoveryCloseState) -> RecoveryCloseState:
+    unreconciled = max(0, state.submitted_quantity - state.reconciled_fill_quantity)
+    if unreconciled <= 0:
+        return state
+    state.pending_quantity = max(0, state.pending_quantity - unreconciled)
+    return state
