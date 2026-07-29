@@ -898,6 +898,16 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("if (totalQuantity != requiredMasterQuantity)", resolve)
         self.assertNotIn("if (totalQuantity > requiredMasterQuantity)", resolve)
 
+    def test_operator_directive_json_serializes_portfolio_events_with_comma(self):
+        writer = source(ADDON / "Services/Persistence/GlitchHermesPortfolioEventWriter.cs")
+        serialize = method_body(
+            writer,
+            "private static string Serialize",
+            "private static void Append",
+        )
+        self.assertIn('sb.Append(",\\"portfolio_events\\":[");', serialize)
+        self.assertNotIn('sb.Append("\\"portfolio_events\\":[");', serialize)
+
     def test_fleet_header_uses_realized_pnl(self):
         refresh = source(ADDON / "UI/MainWindow/GlitchMainWindow.RefreshPipeline.partial.cs")
         header = source(ADDON / "UI/MainWindow/GlitchMainWindow.Header.partial.cs")

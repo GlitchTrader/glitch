@@ -158,7 +158,7 @@ namespace Glitch.Services
             Append(sb, "status", Value(directive, "status"));
             Append(sb, "created_utc", Value(directive, "created_utc"));
             Append(sb, "expires_utc", Value(directive, "expires_utc"));
-            sb.Append("\"portfolio_events\":[");
+            sb.Append(",\"portfolio_events\":[");
             List<Dictionary<string, object>> events = ExtractEvents(directive);
             for (int i = 0; i < events.Count; i++)
             {
