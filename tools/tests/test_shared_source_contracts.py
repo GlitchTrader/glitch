@@ -832,6 +832,10 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("master_protection_exit", recovery)
         self.assertIn("TrySubmitAttributedRecoveryClose", recovery)
         self.assertIn("copy_skip|reason=master_native_bracket_owns_exit", recovery)
+        self.assertIn("TrySnapshotOrders(route.FollowerAccount, out Order[] followerOrders)", recovery)
+        self.assertIn("CountWorkingFollowerExitProtectionQuantity", recovery)
+        self.assertIn("copy_skip|reason=follower_native_protection_owns_exit", recovery)
+        self.assertIn("working_qty=", recovery)
         self.assertIn("lifecycle.ProtectedQuantity < filled", gate)
         self.assertIn("ProtectionFailed", gate)
 

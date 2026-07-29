@@ -1071,6 +1071,38 @@ namespace Glitch.Services
             return lifecycle.ProtectedQuantity < filled;
         }
 
+        private int CountWorkingFollowerExitProtectionQuantity(
+            Instrument instrument,
+            bool isLongExposure,
+            Order[] orders)
+        {
+            if (instrument == null || orders == null || orders.Length == 0)
+                return 0;
+
+            string instrumentName = instrument.FullName?.Trim() ?? string.Empty;
+            OrderAction exitAction = isLongExposure ? OrderAction.Sell : OrderAction.BuyToCover;
+            List<Order> protectionOrders = orders
+                .Where(order => order?.Instrument != null
+                    && string.Equals(order.Instrument.FullName, instrumentName, StringComparison.OrdinalIgnoreCase)
+                    && ParseFollowerSignalKind(order.Name) == FollowerSignalKind.Protection
+                    && order.OrderAction == exitAction
+                    && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState))
+                .ToList();
+            if (protectionOrders.Count == 0)
+                return 0;
+
+            int ocoQuantity = protectionOrders
+                .Where(order => !string.IsNullOrWhiteSpace(order.Oco))
+                .GroupBy(order => order.Oco.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Sum(group => group.Max(RemainingQuantity));
+
+            int soloQuantity = protectionOrders
+                .Where(order => string.IsNullOrWhiteSpace(order.Oco))
+                .Sum(RemainingQuantity);
+
+            return ocoQuantity + soloQuantity;
+        }
+
         private void FanOutMasterProtectionExit(
             Account masterAccount,
             GlitchCopyExecutionContext context,
@@ -1100,6 +1132,25 @@ namespace Glitch.Services
                         out int followerNet)
                     || followerNet == 0)
                     continue;
+
+                if (!TrySnapshotOrders(route.FollowerAccount, out Order[] followerOrders))
+                    continue;
+
+                bool isLongExposure = followerNet > 0;
+                int workingProtection = CountWorkingFollowerExitProtectionQuantity(
+                    context.Instrument,
+                    isLongExposure,
+                    followerOrders);
+                if (workingProtection >= remainingDelta)
+                {
+                    Journal?.Invoke(
+                        route.FollowerAccount.Name,
+                        "copy_skip|reason=follower_native_protection_owns_exit"
+                        + "|instrument=" + CleanToken(GlitchReplicationEngine.GetInstrumentRoot(context.Instrument))
+                        + "|working_qty=" + workingProtection.ToString(CultureInfo.InvariantCulture)
+                        + "|requested_delta=" + remainingDelta.ToString(CultureInfo.InvariantCulture));
+                    continue;
+                }
 
                 List<FollowerEntryLifecycle> lifecycles;
                 lock (_gate)
