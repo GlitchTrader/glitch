@@ -228,6 +228,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         helper = method_body(window, "private static bool TryGetTotalAbsoluteOpenContracts", "private static bool HasWorkingProtectiveStop")
         self.assertIn("lock (account.Positions)", helper)
         self.assertIn("ToArray()", helper)
+        self.assertIn("return true;", helper.split("catch", 1)[0])
         self.assertIn("TryGetTotalAbsoluteOpenContracts(liveAccount, out int currentAbsContracts)", window)
 
     def test_manual_follower_divergence_never_blocks_later_execution_deltas(self):
