@@ -868,6 +868,13 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("ReconcileAttributedRecoveryCloseFill", track)
         self.assertIn("ReconcileAttributedRecoveryCloseTerminal", track)
         self.assertIn("ReconcileAttributedRecoveryCloses(account)", state_update)
+        self.assertIn("RetryUnresolvedAttributedRecoveryCloses(account)", state_update)
+        self.assertIn("RecoveryCloseUnresolvedQuantity", recovery)
+        self.assertIn("SignalRecoveryCloseFailure", copy)
+        self.assertIn("FollowerRecoveryUnresolved|", copy)
+        self.assertIn("FollowerRecoveryRetryExhausted|", copy)
+        self.assertIn("MaxRecoveryCloseRetries", copy)
+        self.assertIn("result=terminal_unresolved", copy)
         self.assertIn("AttributedEntrySignal", copy)
         self.assertIn("ReconciledFillQuantity", copy)
 

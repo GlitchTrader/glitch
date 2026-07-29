@@ -376,3 +376,29 @@ def release_unreconciled_recovery_pending(state: RecoveryCloseState) -> Recovery
         return state
     state.pending_quantity = max(0, state.pending_quantity - unreconciled)
     return state
+
+
+def record_recovery_terminal_failure(
+    state: RecoveryCloseState,
+    *,
+    unresolved_quantity: int = 0,
+) -> tuple[RecoveryCloseState, int]:
+    """Mirror ReconcileAttributedRecoveryCloseTerminal unresolved promotion."""
+    unreconciled = max(0, state.submitted_quantity - state.reconciled_fill_quantity)
+    state.pending_quantity = max(0, state.pending_quantity - unreconciled)
+    added = unreconciled
+    unresolved_quantity += added
+    return state, unresolved_quantity
+
+
+def should_retry_unresolved_recovery(
+    unresolved_quantity: int,
+    pending_quantity: int,
+    retry_count: int,
+    max_retries: int,
+) -> bool:
+    return (
+        unresolved_quantity > 0
+        and pending_quantity <= 0
+        and retry_count < max_retries
+    )

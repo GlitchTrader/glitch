@@ -15,10 +15,12 @@ from replication_lifecycle_sim import (
     rail_sync_should_reduce_by_delta,
     reconcile_follower_protection_current,
     reconcile_recovery_fill,
+    record_recovery_terminal_failure,
     recovery_attributable_remaining,
     release_unreconciled_recovery_pending,
     scale_execution_delta,
     should_cancel_owned_close_remainder,
+    should_retry_unresolved_recovery,
     simulate_stale_execution_then_flat,
     sync_decide_initial,
     trim_follower_protection_current,
@@ -167,6 +169,15 @@ class ReplicationLifecycleRailGapTests(unittest.TestCase):
         release_unreconciled_recovery_pending(state)
         self.assertEqual(state.pending_quantity, 0)
         self.assertEqual(recovery_attributable_remaining(4, state.recovered_quantity, state.pending_quantity), 3)
+
+    def test_accepted_then_rejected_recovery_preserves_unresolved_and_retries_from_position_update(self):
+        state = RecoveryCloseState(pending_quantity=2, submitted_quantity=2)
+        state, unresolved = record_recovery_terminal_failure(state, unresolved_quantity=0)
+        self.assertEqual(unresolved, 2)
+        self.assertEqual(state.pending_quantity, 0)
+        self.assertTrue(should_retry_unresolved_recovery(unresolved, state.pending_quantity, retry_count=0, max_retries=3))
+        self.assertFalse(should_retry_unresolved_recovery(unresolved, pending_quantity=1, retry_count=0, max_retries=3))
+        self.assertFalse(should_retry_unresolved_recovery(unresolved, state.pending_quantity, retry_count=3, max_retries=3))
 
 
 if __name__ == "__main__":

@@ -169,6 +169,7 @@ namespace Glitch.Services
     {
         public const string CopySignalName = "GLT-COPY";
         public const string CatchUpSignalName = "GLT-CATCHUP";
+        private const int MaxRecoveryCloseRetries = 3;
         private static int _ocoNonce;
         private static int _syncNonce;
 
@@ -447,6 +448,7 @@ namespace Glitch.Services
             if (account == null)
                 return;
             ReconcileAttributedRecoveryCloses(account);
+            RetryUnresolvedAttributedRecoveryCloses(account);
             ReconcileCloses(account);
             ReconcileFollowerProtection(account);
             CleanupFlatFollowerOrders(account);
@@ -1248,7 +1250,8 @@ namespace Glitch.Services
             int quantity,
             string identity,
             string signalPrefix,
-            string attributedEntrySignal = null)
+            string attributedEntrySignal = null,
+            string recoveryReason = null)
         {
             string accountToken = GlitchReplicationProtection.StableToken(account?.Name, 6);
             string closeToken = GlitchReplicationProtection.StableToken(identity, 8);
@@ -1286,8 +1289,10 @@ namespace Glitch.Services
                         TargetNet = initialNet
                             + (GlitchReplicationEngine.GetOrderActionSign(action) * quantity),
                         AttributedEntrySignal = attributedEntrySignal,
+                        RecoveryReason = recoveryReason,
                         SubmittedQuantity = quantity,
-                        ReconciledFillQuantity = 0
+                        ReconciledFillQuantity = 0,
+                        TerminalFailureRecorded = false
                     };
                 }
                 account.Submit(new[] { order });
@@ -1377,6 +1382,7 @@ namespace Glitch.Services
             lifecycle.RecoveryClosePendingQuantity = Math.Max(
                 0,
                 lifecycle.RecoveryClosePendingQuantity - delta);
+            MaybeResetRecoveryCloseRetryState(lifecycle);
         }
 
         private void ReconcileAttributedRecoveryCloseTerminal(CloseState closeState, Order order)
@@ -1386,14 +1392,161 @@ namespace Glitch.Services
             if (!_entriesBySignal.TryGetValue(closeState.AttributedEntrySignal, out FollowerEntryLifecycle lifecycle)
                 || lifecycle == null)
                 return;
-
-            int unreconciled = Math.Max(0, closeState.SubmittedQuantity - closeState.ReconciledFillQuantity);
-            if (unreconciled <= 0)
+            if (closeState.TerminalFailureRecorded)
                 return;
 
+            int unreconciled = Math.Max(0, closeState.SubmittedQuantity - closeState.ReconciledFillQuantity);
             lifecycle.RecoveryClosePendingQuantity = Math.Max(
                 0,
                 lifecycle.RecoveryClosePendingQuantity - unreconciled);
+            closeState.TerminalFailureRecorded = true;
+
+            if (unreconciled <= 0)
+                return;
+
+            bool terminalFailure = order.OrderState == OrderState.Rejected
+                || order.OrderState == OrderState.Cancelled;
+            if (!terminalFailure)
+                return;
+
+            lifecycle.RecoveryCloseUnresolvedQuantity += unreconciled;
+            if (string.IsNullOrWhiteSpace(lifecycle.RecoveryCloseLastReason))
+                lifecycle.RecoveryCloseLastReason = closeState.RecoveryReason ?? "recovery_failed";
+
+            string root = GlitchReplicationEngine.GetInstrumentRoot(lifecycle.Instrument);
+            Journal?.Invoke(
+                lifecycle.Account.Name,
+                "follower_recovery|instrument=" + CleanToken(root)
+                + "|reason=" + CleanToken(lifecycle.RecoveryCloseLastReason)
+                + "|unresolved_qty=" + lifecycle.RecoveryCloseUnresolvedQuantity.ToString(CultureInfo.InvariantCulture)
+                + "|terminal_qty=" + unreconciled.ToString(CultureInfo.InvariantCulture)
+                + "|order_state=" + CleanToken(order.OrderState.ToString())
+                + "|result=terminal_unresolved");
+            SignalRecoveryCloseFailure(
+                lifecycle,
+                unreconciled,
+                lifecycle.RecoveryCloseLastReason,
+                order.OrderState.ToString());
+        }
+
+        private void RetryUnresolvedAttributedRecoveryCloses(Account account)
+        {
+            if (account == null)
+                return;
+
+            List<FollowerEntryLifecycle> lifecycles;
+            lock (_gate)
+            {
+                lifecycles = _entriesBySignal.Values
+                    .Where(lifecycle => lifecycle?.Account != null
+                        && string.Equals(lifecycle.Account.Name, account.Name, StringComparison.OrdinalIgnoreCase)
+                        && lifecycle.RecoveryCloseUnresolvedQuantity > 0
+                        && lifecycle.RecoveryClosePendingQuantity <= 0)
+                    .ToList();
+            }
+
+            foreach (FollowerEntryLifecycle lifecycle in lifecycles)
+            {
+                int unresolved;
+                string reason;
+                int retryCount;
+                lock (_gate)
+                {
+                    if (lifecycle.RecoveryCloseUnresolvedQuantity <= 0
+                        || lifecycle.RecoveryClosePendingQuantity > 0)
+                        continue;
+                    unresolved = lifecycle.RecoveryCloseUnresolvedQuantity;
+                    reason = lifecycle.RecoveryCloseLastReason ?? "recovery_retry";
+                    retryCount = lifecycle.RecoveryCloseRetryCount;
+                }
+
+                if (retryCount >= MaxRecoveryCloseRetries)
+                {
+                    lock (_gate)
+                    {
+                        if (lifecycle.RecoveryCloseRetryExhaustedSignaled)
+                            continue;
+                        lifecycle.RecoveryCloseRetryExhaustedSignaled = true;
+                    }
+                    string root = GlitchReplicationEngine.GetInstrumentRoot(lifecycle.Instrument);
+                    Journal?.Invoke(
+                        lifecycle.Account.Name,
+                        "follower_recovery|instrument=" + CleanToken(root)
+                        + "|reason=" + CleanToken(reason)
+                        + "|unresolved_qty=" + unresolved.ToString(CultureInfo.InvariantCulture)
+                        + "|retry_count=" + retryCount.ToString(CultureInfo.InvariantCulture)
+                        + "|result=retry_exhausted");
+                    RaiseCritical?.Invoke(
+                        lifecycle.Account.Name,
+                        "Follower recovery retries were exhausted; manual intervention is required for unresolved copied exposure.",
+                        "FollowerRecoveryRetryExhausted|" + root + "|" + unresolved.ToString(CultureInfo.InvariantCulture));
+                    continue;
+                }
+
+                lock (_gate)
+                    lifecycle.RecoveryCloseRetryCount++;
+
+                if (!TrySubmitAttributedRecoveryClose(
+                        lifecycle,
+                        unresolved,
+                        reason + "_retry",
+                        out int submitted))
+                    continue;
+
+                lock (_gate)
+                {
+                    lifecycle.RecoveryCloseUnresolvedQuantity = Math.Max(
+                        0,
+                        lifecycle.RecoveryCloseUnresolvedQuantity - submitted);
+                }
+            }
+        }
+
+        private void SignalRecoveryCloseFailure(
+            FollowerEntryLifecycle lifecycle,
+            int quantity,
+            string reason,
+            string result)
+        {
+            if (lifecycle?.Account == null || lifecycle.Instrument == null || quantity <= 0)
+                return;
+
+            string root = GlitchReplicationEngine.GetInstrumentRoot(lifecycle.Instrument);
+            bool shouldSignal;
+            lock (_gate)
+            {
+                shouldSignal = !lifecycle.RecoveryCloseFailureSignaled;
+                if (shouldSignal)
+                    lifecycle.RecoveryCloseFailureSignaled = true;
+            }
+            if (!shouldSignal)
+                return;
+
+            RaiseCritical?.Invoke(
+                lifecycle.Account.Name,
+                "Follower recovery close failed and remains unresolved; bounded retry will continue from native PositionUpdate.",
+                "FollowerRecoveryUnresolved|" + root + "|" + quantity.ToString(CultureInfo.InvariantCulture)
+                + "|" + CleanToken(reason)
+                + "|" + CleanToken(result));
+        }
+
+        private static void MaybeResetRecoveryCloseRetryState(FollowerEntryLifecycle lifecycle)
+        {
+            if (lifecycle == null)
+                return;
+            int filled = Math.Max(0, lifecycle.EntryOrder?.Filled ?? 0);
+            int attributable = Math.Min(lifecycle.SubmittedQuantity, filled);
+            int remaining = attributable
+                - lifecycle.RecoveryCloseRecoveredQuantity
+                - lifecycle.RecoveryClosePendingQuantity
+                - lifecycle.RecoveryCloseUnresolvedQuantity;
+            if (remaining > 0)
+                return;
+
+            lifecycle.RecoveryCloseRetryCount = 0;
+            lifecycle.RecoveryCloseFailureSignaled = false;
+            lifecycle.RecoveryCloseRetryExhaustedSignaled = false;
+            lifecycle.RecoveryCloseLastReason = null;
         }
 
         private void TrySubmitAttributedRecoveryClose(
@@ -1466,20 +1619,31 @@ namespace Glitch.Services
                 quantity,
                 lifecycle.EntrySignal + "|" + reason,
                 CopySignalName,
-                lifecycle.EntrySignal);
+                lifecycle.EntrySignal,
+                reason);
             if (!string.Equals(submission.Result, "submitted", StringComparison.OrdinalIgnoreCase))
             {
+                lock (_gate)
+                {
+                    lifecycle.RecoveryCloseUnresolvedQuantity += quantity;
+                    lifecycle.RecoveryCloseLastReason = reason;
+                }
                 Journal?.Invoke(
                     lifecycle.Account.Name,
                     "follower_recovery|instrument=" + CleanToken(root)
                     + "|reason=" + CleanToken(reason)
                     + "|submitted_qty=" + quantity.ToString(CultureInfo.InvariantCulture)
+                    + "|unresolved_qty=" + lifecycle.RecoveryCloseUnresolvedQuantity.ToString(CultureInfo.InvariantCulture)
                     + "|result=" + CleanToken(submission.Result));
+                SignalRecoveryCloseFailure(lifecycle, quantity, reason, submission.Result);
                 return false;
             }
 
             lock (_gate)
+            {
                 lifecycle.RecoveryClosePendingQuantity += quantity;
+                lifecycle.RecoveryCloseLastReason = reason;
+            }
             recoveredQuantity = quantity;
             int attributableQty;
             int remainingAttributable;
@@ -1500,6 +1664,7 @@ namespace Glitch.Services
                 + "|attributable_qty=" + attributableQty.ToString(CultureInfo.InvariantCulture)
                 + "|recovered_qty=" + lifecycle.RecoveryCloseRecoveredQuantity.ToString(CultureInfo.InvariantCulture)
                 + "|pending_qty=" + lifecycle.RecoveryClosePendingQuantity.ToString(CultureInfo.InvariantCulture)
+                + "|unresolved_qty=" + lifecycle.RecoveryCloseUnresolvedQuantity.ToString(CultureInfo.InvariantCulture)
                 + "|remaining_qty=" + remainingAttributable.ToString(CultureInfo.InvariantCulture)
                 + "|native_same_side_qty=" + Math.Abs(followerNet).ToString(CultureInfo.InvariantCulture)
                 + "|submitted_qty=" + quantity.ToString(CultureInfo.InvariantCulture)
@@ -2792,8 +2957,10 @@ namespace Glitch.Services
             public int TargetNet { get; set; }
             public bool CancelRequested { get; set; }
             public string AttributedEntrySignal { get; set; }
+            public string RecoveryReason { get; set; }
             public int SubmittedQuantity { get; set; }
             public int ReconciledFillQuantity { get; set; }
+            public bool TerminalFailureRecorded { get; set; }
         }
 
         private sealed class FollowerEntryLifecycle
@@ -2818,6 +2985,11 @@ namespace Glitch.Services
             public bool ProtectionAvailable { get; set; }
             public int RecoveryCloseRecoveredQuantity { get; set; }
             public int RecoveryClosePendingQuantity { get; set; }
+            public int RecoveryCloseUnresolvedQuantity { get; set; }
+            public int RecoveryCloseRetryCount { get; set; }
+            public string RecoveryCloseLastReason { get; set; }
+            public bool RecoveryCloseFailureSignaled { get; set; }
+            public bool RecoveryCloseRetryExhaustedSignaled { get; set; }
             public List<GlitchScaledProtectionLeg> ScaledLegs { get; set; }
             public bool LatePlanWaitLogged { get; set; }
         }
