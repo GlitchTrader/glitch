@@ -62,6 +62,7 @@ namespace Glitch.Services
             public string AccountStatus { get; set; }
             public string PropFirmId { get; set; }
             public double? AccountSize { get; set; }
+            public string AccountSizeSource { get; set; }
             public bool IsManual { get; set; }
         }
 

@@ -188,6 +188,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn('"AccountName"', window)
         self.assertIn('"DefaultTier"', window)
         self.assertIn("sizeSource", state)
+        self.assertIn("public string AccountSizeSource { get; set; }", state)
         self.assertIn('ruleFirmId = "ApexTraderFunding";', window)
         self.assertIn("GetRuleForFirmAndSize(ruleFirmId, selectedStatus", window)
         self.assertIn("public bool IsRiskDataReady", row)
