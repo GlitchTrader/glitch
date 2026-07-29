@@ -908,7 +908,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn('sb.Append(",\\"portfolio_events\\":[");', serialize)
         self.assertNotIn('sb.Append("\\"portfolio_events\\":[");', serialize)
 
-    def test_fleet_header_uses_realized_pnl(self):
+    def test_fleet_header_uses_daily_pnl_total(self):
         refresh = source(ADDON / "UI/MainWindow/GlitchMainWindow.RefreshPipeline.partial.cs")
         header = source(ADDON / "UI/MainWindow/GlitchMainWindow.Header.partial.cs")
         localization = source(LOCALIZATION)
@@ -917,11 +917,12 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             "private void UpdateHeaderMetricsFromRows",
             "private sealed class AccountRefreshBuildResult",
         )
-        self.assertIn("rows.Sum(r => r.RealizedPnlRaw)", metrics)
-        self.assertNotIn("rows.Sum(r => r.TotalPnlRaw)", metrics)
-        self.assertIn("Fleet Realized PnL", header)
-        self.assertIn("Fleet Realized PnL", localization)
-        self.assertIn("PnL Realizado da Frota", localization)
+        self.assertIn("rows.Sum(r => r.TotalPnlRaw)", metrics)
+        self.assertNotIn("rows.Sum(r => r.RealizedPnlRaw)", metrics)
+        self.assertIn("Daily PnL", header)
+        self.assertIn("Daily PnL", localization)
+        self.assertNotIn("Fleet Realized PnL", header)
+        self.assertNotIn("Fleet Realized PnL", localization)
 
 
 if __name__ == "__main__":

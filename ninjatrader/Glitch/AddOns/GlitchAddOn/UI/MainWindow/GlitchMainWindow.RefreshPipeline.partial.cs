@@ -267,13 +267,13 @@ namespace Glitch.UI
                 return;
             }
 
-            double fleetPnl = rows.Sum(r => r.RealizedPnlRaw);
+            double fleetPnl = rows.Sum(r => r.TotalPnlRaw);
             double evalPnl = rows
                 .Where(r => string.Equals(r.AccountStatus, "Eval", StringComparison.OrdinalIgnoreCase))
-                .Sum(r => r.RealizedPnlRaw);
+                .Sum(r => r.TotalPnlRaw);
             double paPnl = rows
                 .Where(r => string.Equals(r.AccountStatus, "AP", StringComparison.OrdinalIgnoreCase))
-                .Sum(r => r.RealizedPnlRaw);
+                .Sum(r => r.TotalPnlRaw);
             UpdatePnlMetricText(_totalPnlValueText, fleetPnl);
             UpdatePnlMetricText(_paPnlValueText, paPnl);
             UpdatePnlMetricText(_evalPnlValueText, evalPnl);

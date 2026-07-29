@@ -138,7 +138,7 @@ header.button.replicate	Replicate	Replicar	Replicar	复制跟单	Répliquer	Ре
 header.button.replicating	Replicating	Replicando	Replicando	复制中	Réplication	Репликация
 header.button.start	Start	Iniciar	Iniciar	开始	Démarrer	Старт
 header.button.stop	Stop	Parar	Detener	停止	Arrêter	Стоп
-header.metric.fleet_upnl	Fleet Realized PnL	PnL Realizado da Frota	PnL Realizado de la Flota	舰队已实现盈亏	PnL Réalisé de la Flotte	Реализ. PnL флота
+header.metric.fleet_upnl	Daily PnL	PnL Diário	PnL Diario	当日盈亏	PnL Journalier	Дневной PnL
 header.metric.eval_pnl	Eval PnL	Eval PnL	Eval PnL	Eval PnL	Eval PnL	Eval PnL
 header.metric.eval_risk	Eval Risk	Risco Eval	Riesgo Eval	Eval 风险	Risque Eval	Eval Риск
 header.metric.global_risk	Global Risk	Risco Global	Riesgo Global	全局风险	Risque Global	Глобальный Риск

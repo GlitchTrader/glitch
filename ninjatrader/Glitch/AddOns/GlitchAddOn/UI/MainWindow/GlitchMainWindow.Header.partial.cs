@@ -63,7 +63,7 @@ namespace Glitch.UI
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Top
             };
-            _headerMetricBoxesPanel.Children.Add(CreateHeaderMetricDataBox(_headerRootGrid, "header.metric.fleet_upnl", "Fleet Realized PnL", out _totalPnlValueText, new Thickness(0)));
+            _headerMetricBoxesPanel.Children.Add(CreateHeaderMetricDataBox(_headerRootGrid, "header.metric.fleet_upnl", "Daily PnL", out _totalPnlValueText, new Thickness(0)));
             _headerMetricBoxesPanel.Children.Add(CreateHeaderMetricDataBox(_headerRootGrid, "header.metric.global_risk", "Global Risk", out _globalHeadroomValueText, new Thickness(0)));
             _headerMetricBoxesPanel.Children.Add(CreateHeaderMetricDataBox(_headerRootGrid, "header.metric.pa_pnl", "PA PnL", out _paPnlValueText, new Thickness(0)));
             _headerMetricBoxesPanel.Children.Add(CreateHeaderMetricDataBox(_headerRootGrid, "header.metric.pa_risk", "PA Risk", out _paHeadroomValueText, new Thickness(0)));
