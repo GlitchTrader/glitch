@@ -139,5 +139,46 @@
         "releaseDate":  "2026-07-24T20:51:35.586Z",
         "status":  "stable",
         "sourceCommit":  "02dc216c73cd0618813171bec3f71dd0951bd169"
+    },
+    {
+        "fileName":  "Glitch_v0.0.2.2.zip",
+        "edition":  "standard",
+        "version":  "0.0.2.2",
+        "releaseDate":  "2026-07-29T06:32:44.370Z",
+        "status":  "stable",
+        "sourceCommit":  "cf207620d838fa3bd2eb88c0ce593d7a5592e8c5"
+    },
+    {
+        "fileName":  "Glitch_v0.0.2.3.zip",
+        "edition":  "standard",
+        "version":  "0.0.2.3",
+        "releaseDate":  "2026-07-29T06:32:44.370Z",
+        "status":  "stable",
+        "sourceCommit":  "cf207620d838fa3bd2eb88c0ce593d7a5592e8c5"
+    },
+    {
+        "fileName":  "Glitch_v0.0.2.4.zip",
+        "edition":  "standard",
+        "version":  "0.0.2.4",
+        "releaseDate":  "2026-07-29T06:32:44.370Z",
+        "status":  "stable",
+        "sourceCommit":  "cf207620d838fa3bd2eb88c0ce593d7a5592e8c5"
+    },
+    {
+        "fileName":  "Glitch_v0.0.2.5.zip",
+        "edition":  "standard",
+        "version":  "0.0.2.5",
+        "releaseDate":  "2026-07-29T06:32:44.370Z",
+        "status":  "stable",
+        "sourceCommit":  "cf207620d838fa3bd2eb88c0ce593d7a5592e8c5"
+    },
+    {
+        "fileName":  "Glitch_AI_v0.0.2.5.zip",
+        "edition":  "ai",
+        "version":  "0.0.2.5",
+        "releaseDate":  "2026-07-29T02:43:42.337Z",
+        "status":  "experimental",
+        "sourceCommit":  "2d5e4197030caf4721bf6e4d072f3cb81f12573b",
+        "hermesProfileVersion":  "0.0.2.13"
     }
 ]
