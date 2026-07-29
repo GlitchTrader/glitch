@@ -505,9 +505,11 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             "private void TrySubmitAttributedRecoveryClose",
             "private FollowerOrderSubmission SubmitFollowerEntry",
         )
-        self.assertIn("RecoveryCloseSubmitted", recovery)
+        self.assertIn("RecoveryCloseRecoveredQuantity", recovery)
+        self.assertIn("remaining_qty=", recovery)
+        self.assertIn("recovered_qty=", recovery)
         self.assertIn("(followerNet > 0) != lifecycle.IsLong", recovery)
-        self.assertIn("Math.Min(attributableQuantity, Math.Abs(followerNet))", recovery)
+        self.assertIn("Math.Min(recoveryQuantity, Math.Abs(followerNet))", recovery)
         self.assertIn("manual_override", recovery)
         self.assertIn("SubmitFollowerClose(", recovery)
 
@@ -805,7 +807,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("return OrderAction.SellShort", normalize)
         self.assertIn("NormalizeMasterExecutionAction(masterAccount, context)", process)
 
-    def test_master_protection_exit_triggers_follower_recovery(self):
+    def test_master_protection_exit_uses_execution_delta_recovery(self):
         copy = source(COPY_ENGINE)
         process = method_body(
             copy,
@@ -817,29 +819,39 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             "private void FanOutMasterProtectionExit",
             "private void FanOutCompleteClose",
         )
+        gate = method_body(
+            copy,
+            "private static bool ShouldRecoverForMasterProtectionExit",
+            "private void FanOutMasterProtectionExit",
+        )
         self.assertIn("FanOutMasterProtectionExit(masterAccount, context, routes)", process)
+        self.assertIn("ScaleExecution(context, route.Ratio)", recovery)
+        self.assertIn("ShouldRecoverForMasterProtectionExit(lifecycle)", recovery)
         self.assertIn("master_protection_exit", recovery)
         self.assertIn("TrySubmitAttributedRecoveryClose", recovery)
         self.assertIn("copy_skip|reason=master_native_bracket_owns_exit", recovery)
+        self.assertIn("lifecycle.ProtectedQuantity < filled", gate)
+        self.assertIn("ProtectionFailed", gate)
 
-    def test_duplicate_entry_suppression_on_same_master_signal(self):
+    def test_duplicate_entry_suppression_is_execution_scoped(self):
         submit = method_body(
             source(COPY_ENGINE),
             "private FollowerOrderSubmission SubmitFollowerEntry",
             "private bool SubmitProtectionUnits",
         )
         self.assertIn("duplicate_entry_suppressed", submit)
-        self.assertIn("existing.MasterEntrySignal", submit)
+        self.assertIn("existing.MasterExecutionIdentity", submit)
+        self.assertNotIn("existing.MasterEntrySignal", submit)
 
-    def test_partial_master_bracket_plan_is_accepted_before_full_quantity(self):
+    def test_master_bracket_plan_requires_complete_native_quantity(self):
         protection = source(PROTECTION)
         resolve = method_body(
             protection,
             "public static bool TryResolveMasterPlan",
             "public static bool TryScalePlan",
         )
-        self.assertIn("if (totalQuantity > requiredMasterQuantity)", resolve)
-        self.assertIn("CanUseFullPositionPlan(", resolve)
+        self.assertIn("if (totalQuantity != requiredMasterQuantity)", resolve)
+        self.assertNotIn("if (totalQuantity > requiredMasterQuantity)", resolve)
 
     def test_fleet_header_uses_realized_pnl(self):
         refresh = source(ADDON / "UI/MainWindow/GlitchMainWindow.RefreshPipeline.partial.cs")

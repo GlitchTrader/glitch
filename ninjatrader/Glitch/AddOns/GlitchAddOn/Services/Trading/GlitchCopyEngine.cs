@@ -1059,12 +1059,24 @@ namespace Glitch.Services
             }
         }
 
+        private static bool ShouldRecoverForMasterProtectionExit(FollowerEntryLifecycle lifecycle)
+        {
+            if (lifecycle == null || lifecycle.ProtectionFailed)
+                return true;
+            if (!lifecycle.ProtectionAvailable)
+                return true;
+            int filled = Math.Max(0, lifecycle.EntryOrder?.Filled ?? 0);
+            if (filled <= 0)
+                return false;
+            return lifecycle.ProtectedQuantity < filled;
+        }
+
         private void FanOutMasterProtectionExit(
             Account masterAccount,
             GlitchCopyExecutionContext context,
             IReadOnlyList<GlitchCopyFollowerRoute> routes)
         {
-            if (masterAccount == null || context?.Instrument == null)
+            if (masterAccount == null || context?.Instrument == null || context.Quantity <= 0)
                 return;
 
             string dedupKey = BuildExecutionDedupKey(masterAccount.Name, context) + "|protection_exit";
@@ -1073,24 +1085,20 @@ namespace Glitch.Services
 
             Journal?.Invoke(masterAccount.Name, "copy_skip|reason=master_native_bracket_owns_exit");
 
-            if (!GlitchReplicationEngine.TryGetNetQuantityForInstrument(
-                    masterAccount,
-                    context.Instrument,
-                    out int masterNet))
-                return;
-
             string masterName = masterAccount.Name?.Trim() ?? string.Empty;
             string instrumentName = context.Instrument.FullName?.Trim() ?? string.Empty;
 
             foreach (GlitchCopyFollowerRoute route in routes)
             {
-                int expectedNet = ScaleSignedQuantity(masterNet, route.Ratio);
+                int remainingDelta = ScaleExecution(context, route.Ratio);
+                if (remainingDelta <= 0)
+                    continue;
+
                 if (!GlitchReplicationEngine.TryGetNetQuantityForInstrument(
                         route.FollowerAccount,
                         context.Instrument,
                         out int followerNet)
-                    || followerNet == 0
-                    || followerNet == expectedNet)
+                    || followerNet == 0)
                     continue;
 
                 List<FollowerEntryLifecycle> lifecycles;
@@ -1113,18 +1121,20 @@ namespace Glitch.Services
 
                 foreach (FollowerEntryLifecycle lifecycle in lifecycles)
                 {
-                    if (lifecycle.RecoveryCloseSubmitted)
-                        continue;
+                    if (remainingDelta <= 0)
+                        break;
                     if ((followerNet > 0) != lifecycle.IsLong)
                         continue;
-
-                    int attributable = Math.Min(
-                        lifecycle.SubmittedQuantity,
-                        Math.Max(0, lifecycle.EntryOrder?.Filled ?? lifecycle.SubmittedQuantity));
-                    if (attributable <= 0)
+                    if (!ShouldRecoverForMasterProtectionExit(lifecycle))
                         continue;
 
-                    TrySubmitAttributedRecoveryClose(lifecycle, attributable, "master_protection_exit");
+                    if (!TrySubmitAttributedRecoveryClose(
+                            lifecycle,
+                            remainingDelta,
+                            "master_protection_exit",
+                            out int recovered))
+                        continue;
+                    remainingDelta -= recovered;
                 }
             }
         }
@@ -1257,12 +1267,22 @@ namespace Glitch.Services
 
         private void TrySubmitAttributedRecoveryClose(
             FollowerEntryLifecycle lifecycle,
-            int attributableQuantity,
+            int requestedQuantity,
             string reason)
         {
+            TrySubmitAttributedRecoveryClose(lifecycle, requestedQuantity, reason, out _);
+        }
+
+        private bool TrySubmitAttributedRecoveryClose(
+            FollowerEntryLifecycle lifecycle,
+            int requestedQuantity,
+            string reason,
+            out int recoveredQuantity)
+        {
+            recoveredQuantity = 0;
             if (lifecycle?.Account == null || lifecycle.Instrument == null)
-                return;
-            if (attributableQuantity <= 0)
+                return false;
+            if (requestedQuantity <= 0)
             {
                 Journal?.Invoke(
                     lifecycle.Account.Name,
@@ -1270,13 +1290,20 @@ namespace Glitch.Services
                     + CleanToken(GlitchReplicationEngine.GetInstrumentRoot(lifecycle.Instrument))
                     + "|reason=" + CleanToken(reason)
                     + "|result=manual_override_unattributed");
-                return;
+                return false;
             }
+
+            int recoveryQuantity;
             lock (_gate)
             {
-                if (lifecycle.RecoveryCloseSubmitted)
-                    return;
-                lifecycle.RecoveryCloseSubmitted = true;
+                int filled = Math.Max(0, lifecycle.EntryOrder?.Filled ?? 0);
+                int attributable = Math.Min(lifecycle.SubmittedQuantity, filled);
+                int remaining = attributable - lifecycle.RecoveryCloseRecoveredQuantity;
+                if (remaining <= 0)
+                    return false;
+                recoveryQuantity = Math.Min(requestedQuantity, remaining);
+                if (recoveryQuantity <= 0)
+                    return false;
             }
 
             string root = GlitchReplicationEngine.GetInstrumentRoot(lifecycle.Instrument);
@@ -1292,10 +1319,13 @@ namespace Glitch.Services
                     "follower_recovery|instrument=" + CleanToken(root)
                     + "|reason=" + CleanToken(reason)
                     + "|result=manual_override");
-                return;
+                return false;
             }
 
-            int quantity = Math.Min(attributableQuantity, Math.Abs(followerNet));
+            int quantity = Math.Min(recoveryQuantity, Math.Abs(followerNet));
+            if (quantity <= 0)
+                return false;
+
             FollowerOrderSubmission submission = SubmitFollowerClose(
                 lifecycle.Account,
                 lifecycle.Instrument,
@@ -1303,14 +1333,27 @@ namespace Glitch.Services
                 quantity,
                 lifecycle.EntrySignal + "|" + reason,
                 CopySignalName);
+            lock (_gate)
+                lifecycle.RecoveryCloseRecoveredQuantity += quantity;
+            recoveredQuantity = quantity;
+            int remainingAttributable;
+            lock (_gate)
+            {
+                int filled = Math.Max(0, lifecycle.EntryOrder?.Filled ?? 0);
+                int attributable = Math.Min(lifecycle.SubmittedQuantity, filled);
+                remainingAttributable = Math.Max(0, attributable - lifecycle.RecoveryCloseRecoveredQuantity);
+            }
             Journal?.Invoke(
                 lifecycle.Account.Name,
                 "follower_recovery|instrument=" + CleanToken(root)
                 + "|reason=" + CleanToken(reason)
-                + "|attributable_qty=" + attributableQuantity.ToString(CultureInfo.InvariantCulture)
+                + "|attributable_qty=" + (recoveredQuantity + remainingAttributable).ToString(CultureInfo.InvariantCulture)
+                + "|recovered_qty=" + lifecycle.RecoveryCloseRecoveredQuantity.ToString(CultureInfo.InvariantCulture)
+                + "|remaining_qty=" + remainingAttributable.ToString(CultureInfo.InvariantCulture)
                 + "|native_same_side_qty=" + Math.Abs(followerNet).ToString(CultureInfo.InvariantCulture)
                 + "|submitted_qty=" + quantity.ToString(CultureInfo.InvariantCulture)
                 + "|result=" + CleanToken(submission.Result));
+            return true;
         }
 
         private FollowerOrderSubmission SubmitFollowerEntry(
@@ -1330,9 +1373,9 @@ namespace Glitch.Services
             if (route?.FollowerAccount == null || instrument == null || quantity <= 0)
                 return new FollowerOrderSubmission { Result = "invalid_request" };
 
-            if (!string.IsNullOrWhiteSpace(masterEntrySignal))
+            if (!string.IsNullOrWhiteSpace(identitySource))
             {
-                string normalizedMasterSignal = masterEntrySignal.Trim();
+                string executionIdentity = identitySource.Trim();
                 bool openingLong = action == OrderAction.Buy;
                 lock (_gate)
                 {
@@ -1343,39 +1386,19 @@ namespace Glitch.Services
                             || existing.IsLong != openingLong
                             || !string.Equals(existing.Account.Name, route.FollowerAccount.Name, StringComparison.OrdinalIgnoreCase)
                             || !string.Equals(existing.Instrument.FullName, instrument.FullName, StringComparison.OrdinalIgnoreCase)
-                            || !string.Equals(existing.MasterEntrySignal, normalizedMasterSignal, StringComparison.OrdinalIgnoreCase))
+                            || !string.Equals(existing.MasterExecutionIdentity, executionIdentity, StringComparison.OrdinalIgnoreCase))
                             continue;
 
-                        Order existingOrder = existing.EntryOrder;
-                        if (existingOrder != null
-                            && GlitchReplicationEngine.IsWorkingOrderState(existingOrder.OrderState)
-                            && existingOrder.Filled < existing.SubmittedQuantity)
+                        Journal?.Invoke(route.FollowerAccount.Name,
+                            "copy_entry|master=" + CleanToken(route.MasterAccount)
+                            + "|follower=" + CleanToken(route.FollowerAccount.Name)
+                            + "|instrument=" + CleanToken(GlitchReplicationEngine.GetInstrumentRoot(instrument))
+                            + "|result=duplicate_entry_suppressed");
+                        return new FollowerOrderSubmission
                         {
-                            Journal?.Invoke(route.FollowerAccount.Name,
-                                "copy_entry|master=" + CleanToken(route.MasterAccount)
-                                + "|follower=" + CleanToken(route.FollowerAccount.Name)
-                                + "|instrument=" + CleanToken(GlitchReplicationEngine.GetInstrumentRoot(instrument))
-                                + "|result=duplicate_entry_suppressed");
-                            return new FollowerOrderSubmission
-                            {
-                                Signal = existing.EntrySignal,
-                                Result = "duplicate_entry_suppressed"
-                            };
-                        }
-
-                        if (existingOrder != null && existingOrder.Filled >= quantity)
-                        {
-                            Journal?.Invoke(route.FollowerAccount.Name,
-                                "copy_entry|master=" + CleanToken(route.MasterAccount)
-                                + "|follower=" + CleanToken(route.FollowerAccount.Name)
-                                + "|instrument=" + CleanToken(GlitchReplicationEngine.GetInstrumentRoot(instrument))
-                                + "|result=duplicate_entry_suppressed");
-                            return new FollowerOrderSubmission
-                            {
-                                Signal = existing.EntrySignal,
-                                Result = "duplicate_entry_suppressed"
-                            };
-                        }
+                            Signal = existing.EntrySignal,
+                            Result = "duplicate_entry_suppressed"
+                        };
                     }
                 }
             }
@@ -1408,6 +1431,7 @@ namespace Glitch.Services
                 ProtectionAvailable = protectionAvailable,
                 MasterAccountName = masterAccount?.Name?.Trim(),
                 MasterEntrySignal = masterEntrySignal?.Trim(),
+                MasterExecutionIdentity = identitySource?.Trim(),
                 MasterEntryQuantity = Math.Max(0, masterEntryQuantity),
                 MasterEntryOrder = masterEntryOrder,
                 RouteRatio = route.Ratio,
@@ -2627,6 +2651,7 @@ namespace Glitch.Services
             public bool IsLong { get; set; }
             public string MasterAccountName { get; set; }
             public string MasterEntrySignal { get; set; }
+            public string MasterExecutionIdentity { get; set; }
             public int MasterEntryQuantity { get; set; }
             public Order MasterEntryOrder { get; set; }
             public double RouteRatio { get; set; }
@@ -2637,7 +2662,7 @@ namespace Glitch.Services
             public bool ProtectionSubmissionInProgress { get; set; }
             public bool ProtectionFailed { get; set; }
             public bool ProtectionAvailable { get; set; }
-            public bool RecoveryCloseSubmitted { get; set; }
+            public int RecoveryCloseRecoveredQuantity { get; set; }
             public List<GlitchScaledProtectionLeg> ScaledLegs { get; set; }
             public bool LatePlanWaitLogged { get; set; }
         }
