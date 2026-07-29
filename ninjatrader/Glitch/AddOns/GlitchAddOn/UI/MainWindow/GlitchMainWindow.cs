@@ -4646,7 +4646,6 @@ namespace Glitch.UI
 
                     total += Math.Abs(position.Quantity);
                 }
-            }
                 return true;
             }
             catch
