@@ -18,12 +18,21 @@ def scale_follower_quantity(master_quantity: int, ratio: float) -> int:
     return int(math.floor(master_quantity * ratio + 0.5))
 
 
-def scale_execution_delta(filled: int, delta: int, ratio: float) -> int:
-    """Current ScaleExecution: per-order fill window only (resets cumulative basis each call)."""
-    if delta <= 0 or ratio <= 0:
-        return 0
-    before = max(0, filled - delta)
-    return scale_follower_quantity(filled, ratio) - scale_follower_quantity(before, ratio)
+@dataclass
+class CumulativeExecutionAllocator:
+    """Selected UCL-01 basis: cumulative exact-contract quantity for one direction."""
+
+    master_quantity: int = 0
+    follower_quantity: int = 0
+
+    def apply(self, delta: int, ratio: float) -> int:
+        if delta <= 0 or ratio <= 0:
+            return 0
+        self.master_quantity += delta
+        target = scale_follower_quantity(self.master_quantity, ratio)
+        follower_delta = max(0, target - self.follower_quantity)
+        self.follower_quantity = target
+        return follower_delta
 
 
 class OrderState(str, Enum):
@@ -60,6 +69,9 @@ class Order:
     oco: str = ""
     remaining: int | None = None
     order_type: str = ""
+    source_token: str = ""
+    stop_price: float = 0.0
+    target_price: float = 0.0
 
     @property
     def working(self) -> bool:
@@ -189,6 +201,73 @@ def trim_follower_protection_current(account: AccountSim) -> None:
             excess -= reduction
         if cancellations:
             account.cancel(cancellations)
+
+
+def trim_follower_protection_by_geometry(
+    account: AccountSim,
+    instrument: Instrument,
+    desired_geometry: list[tuple[str, float, float]],
+) -> bool:
+    """Keep only complete Glitch OCO units matching the surviving master geometry."""
+    working = [
+        order
+        for order in account.orders
+        if order.working
+        and order.instrument.exact_key() == instrument.exact_key()
+        and parse_signal_kind(order.name) == SignalKind.Protection
+        and order.oco
+    ]
+    groups: dict[str, list[Order]] = {}
+    for order in working:
+        groups.setdefault(order.oco, []).append(order)
+
+    units: list[tuple[str, list[Order], str, float, float]] = []
+    for oco, group in groups.items():
+        stops = [order for order in group if order.order_type == "stop"]
+        targets = [order for order in group if order.order_type == "target"]
+        if len(group) != 2 or len(stops) != 1 or len(targets) != 1:
+            return False
+        stop, target = stops[0], targets[0]
+        if (
+            stop.remaining_qty() != 1
+            or target.remaining_qty() != 1
+            or not stop.source_token
+            or stop.source_token != target.source_token
+        ):
+            return False
+        units.append(
+            (
+                oco,
+                group,
+                stop.source_token,
+                stop.stop_price,
+                target.target_price,
+            )
+        )
+
+    units.sort(key=lambda item: item[0])
+    survivors: set[str] = set()
+    for source, stop_price, target_price in desired_geometry:
+        match = next(
+            (
+                unit
+                for unit in units
+                if unit[0] not in survivors
+                and unit[2] == source
+            ),
+            None,
+        )
+        if match is None:
+            return False
+        survivors.add(match[0])
+
+    account.cancel(
+        order
+        for oco, group, _source, _stop, _target in units
+        if oco not in survivors
+        for order in group
+    )
+    return True
 
 
 def cleanup_flat_follower_orders_current(

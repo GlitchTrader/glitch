@@ -137,16 +137,37 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
     def test_live_replication_copies_each_execution_delta_without_position_repair(self):
         copy = source(COPY_ENGINE)
         opening = method_body(copy, "private void FanOutOpening", "private void FanOutCompleteClose")
-        scale = method_body(copy, "private static int ScaleExecution", "private static bool TrySnapshotOrders")
-        self.assertIn("ScaleExecution(context, route.Ratio)", opening)
-        self.assertIn("ScaleFollowerQuantity(filled, ratio)", scale)
-        self.assertIn("ScaleFollowerQuantity(before, ratio)", scale)
+        scale = method_body(copy, "private ExecutionAllocation AllocateExecutionDelta", "private static string BuildAllocationRouteKey")
+        self.assertIn("AllocateExecutionDelta(route, context, true)", opening)
+        self.assertIn("state.MasterQuantity += context.Quantity", scale)
+        self.assertIn("ScaleFollowerQuantity(state.MasterQuantity, route.Ratio)", scale)
+        self.assertIn("targetFollowerQuantity - state.FollowerQuantity", scale)
         self.assertNotIn("ResolveContextMasterQuantity(context)", opening)
         self.assertNotIn("expected", opening)
         self.assertNotIn("actual", opening)
         self.assertNotIn("inFlight", opening)
         self.assertNotIn("GetEntryDenialReason", copy)
         self.assertNotIn("TryGetInFlightOpeningQuantity", copy)
+
+    def test_fractional_allocation_epoch_is_future_only_and_configuration_safe(self):
+        copy = source(COPY_ENGINE)
+        configure = method_body(copy, "public void Configure", "public void ProcessMasterExecution")
+        epochs = method_body(
+            copy,
+            "private void ReconcileAllocationEpochs",
+            "private ExecutionAllocation AllocateExecutionDelta",
+        )
+        tooltip = method_body(
+            source(ADDON / "UI/MainWindow/GlitchMainWindow.cs"),
+            "private string BuildFollowerRatioMathTooltip",
+            "private static Style CreateEditableRatioTextBoxStyle",
+        )
+        self.assertIn("ReconcileAllocationEpochs(nextEnabled, nextRouteSignatures)", configure)
+        self.assertIn("if (!nextEnabled || !_enabled)", epochs)
+        self.assertIn("_allocationByRouteDirection.Clear()", epochs)
+        self.assertIn("changedRoutes.Contains(item.Value.RouteKey)", epochs)
+        self.assertNotIn("Submit", epochs)
+        self.assertIn("dashboard.group.ratio_allocation_policy", tooltip)
 
     def test_user_sync_uses_the_configured_route_without_a_route_cap_admission(self):
         copy = source(COPY_ENGINE)
@@ -319,7 +340,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         copy = source(COPY_ENGINE)
         opening = method_body(copy, "private void FanOutOpening", "private void FanOutCompleteClose")
         sync = method_body(copy, "public void SyncFollower", "private void FanOutOpening")
-        self.assertIn("ScaleExecution(context, route.Ratio)", opening)
+        self.assertIn("AllocateExecutionDelta(route, context, true)", opening)
         self.assertIn("int expected =", sync)
         self.assertIn("SubmitFollowerEntry", sync)
         for forbidden in (
@@ -340,7 +361,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             "private void TrySubmitAttributedRecoveryClose",
         )
         state = method_body(copy, "public void ProcessAccountStateUpdate", "public void ProcessFollowerExecution")
-        self.assertIn("ScaleExecution(context, route.Ratio)", close)
+        self.assertIn("AllocateExecutionDelta(route, context, false)", close)
         self.assertIn("TryGetNetQuantityForInstrument(route.FollowerAccount, context.Instrument", close)
         self.assertIn("Math.Min(requested, closable)", close)
         self.assertIn("SubmitFollowerClose", close)
@@ -379,6 +400,12 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         )
         self.assertIn("QuantityChanged", trim)
         self.assertIn("account.Change(changes.ToArray())", trim)
+        self.assertIn("TryResolveMasterPlan(", trim)
+        self.assertIn("TryResolveSingleOvercoveredMasterGeometry(", trim)
+        self.assertIn("ResolveProtectionMasterAccount(account, instrument, units)", trim)
+        self.assertIn("ProtectionGeometryMatches(unit, desired)", trim)
+        self.assertIn("ReportProtectionAmbiguity(", trim)
+        self.assertNotIn("ThenByDescending(unit => unit.Orders[0].Oco", trim)
         self.assertIn("FollowerSignalKind.Protection", flat)
         self.assertIn("FollowerSignalKind.Close", flat)
         self.assertNotIn("ParseFollowerSignalKind(order.Name) != FollowerSignalKind.None", flat)
@@ -515,6 +542,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("BitConverter.DoubleToInt64Bits(route.Ratio)", recovery)
         self.assertIn("TryScalePlanSlice(", recovery)
         self.assertIn("followerAllocationOffset", recovery)
+        self.assertIn("followerPlanQuantity", recovery)
         self.assertIn("ambiguous_allocation_metadata_recovered", recovery)
         self.assertIn("ambiguous_route_recovered", recovery)
         self.assertIn("ambiguous_route_ratio_changed_recovered", recovery)
@@ -525,9 +553,11 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         copy = source(COPY_ENGINE)
         replication = source(REPLICATION_UI)
         self.assertIn("EntryOrderFilledQuantity", copy)
+        self.assertIn("EntryOrderQuantity", copy)
+        self.assertIn("OrderIdentity", copy)
         self.assertIn("context.EntryOrder?.Filled", copy)
-        self.assertIn("ScaleFollowerQuantity(filled, ratio)", copy)
-        self.assertIn("ResolveFollowerAllocationOffset(context, route.Ratio)", copy)
+        self.assertIn("AllocateExecutionDelta(route, context, true)", copy)
+        self.assertIn("orderState.AllocatedFollowerQuantity", copy)
         self.assertNotIn("Math.Abs(currentMasterNet) < copyMasterQuantity", copy)
         self.assertNotIn("Math.Abs(masterNet) < copyMasterQuantity", copy)
         self.assertIn('TryGetNestedPropertyValueAsString(executionObject, "ExecutionId")', replication)
@@ -548,10 +578,12 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         )
         self.assertIn("FollowerAllocationOffset", copy)
         self.assertIn("RouteRatio", copy)
-        self.assertIn("ResolveFollowerAllocationOffset(context, route.Ratio)", opening)
+        self.assertIn("allocation.FollowerOrderOffset", opening)
+        self.assertIn("allocation.FollowerOrderPlanQuantity", opening)
         self.assertIn("Math.Abs(actual)", sync)
         self.assertIn("TryScalePlanSlice(", attach)
         self.assertIn("lifecycle.FollowerAllocationOffset", attach)
+        self.assertIn("lifecycle.FollowerPlanQuantity", attach)
         self.assertIn("ScaleFollowerQuantity(plan.MasterQuantity, ratio)", slicing)
         self.assertIn("TryScalePlan(plan, aggregateFollowerQuantity", slicing)
         self.assertIn("Math.Min(sliceEnd, sourceEnd)", slicing)
