@@ -256,17 +256,38 @@ namespace Glitch.Services
 
         public static Dictionary<string, SelectionOverrideRecord> LoadSelectionOverrides(string filePath, Func<string, string> normalizeStatus)
         {
+            bool recoveredFromBackup;
+            return LoadSelectionOverrides(filePath, normalizeStatus, out recoveredFromBackup);
+        }
+
+        public static Dictionary<string, SelectionOverrideRecord> LoadSelectionOverrides(
+            string filePath,
+            Func<string, string> normalizeStatus,
+            out bool recoveredFromBackup)
+        {
+            return LoadValidatedWithBackup(
+                filePath,
+                lines => ParseSelectionOverrides(lines, normalizeStatus),
+                out recoveredFromBackup);
+        }
+
+        private static Dictionary<string, SelectionOverrideRecord> ParseSelectionOverrides(
+            IEnumerable<string> dataLines,
+            Func<string, string> normalizeStatus)
+        {
             var results = new Dictionary<string, SelectionOverrideRecord>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (string rawLine in ReadAllDataLines(filePath))
+            foreach (string rawLine in dataLines ?? Array.Empty<string>())
             {
                 string[] parts = rawLine.Split('\t');
                 if (parts.Length < 3)
-                    continue;
+                    throw new InvalidDataException("AccountOverrides.tsv contains a structurally invalid row.");
 
                 string accountName = parts[0]?.Trim();
                 if (string.IsNullOrWhiteSpace(accountName))
-                    continue;
+                    throw new InvalidDataException("AccountOverrides.tsv contains a row without an account name.");
+                if (results.ContainsKey(accountName))
+                    throw new InvalidDataException("AccountOverrides.tsv contains a duplicate account row: " + accountName);
 
                 string status = parts[1];
                 status = normalizeStatus != null ? normalizeStatus(status) : (status ?? string.Empty).Trim();
@@ -274,14 +295,18 @@ namespace Glitch.Services
                 string firmId = string.IsNullOrWhiteSpace(parts[2]) ? "None" : parts[2].Trim();
 
                 double? accountSize = null;
-                if (parts.Length >= 4 &&
-                    double.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out double parsedSize) &&
-                    parsedSize > 0)
+                if (parts.Length >= 4 && !string.IsNullOrWhiteSpace(parts[3]))
                 {
+                    if (!double.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out double parsedSize)
+                        || parsedSize <= 0)
+                        throw new InvalidDataException("AccountOverrides.tsv contains an invalid account size for: " + accountName);
                     accountSize = parsedSize;
                 }
 
-                bool isManual = parts.Length >= 5 && ParseBooleanToken(parts[4]);
+                bool isManual = false;
+                if (parts.Length >= 5 && !string.IsNullOrWhiteSpace(parts[4])
+                    && !TryParsePersistedBoolean(parts[4], out isManual))
+                    throw new InvalidDataException("AccountOverrides.tsv contains an invalid manual flag for: " + accountName);
                 string accountSizeSource = parts.Length >= 6 ? parts[5]?.Trim() : string.Empty;
 
                 results[accountName] = new SelectionOverrideRecord
@@ -329,28 +354,41 @@ namespace Glitch.Services
 
         public static List<AccountGroupRecord> LoadAccountGroups(string filePath)
         {
+            bool recoveredFromBackup;
+            return LoadAccountGroups(filePath, out recoveredFromBackup);
+        }
+
+        public static List<AccountGroupRecord> LoadAccountGroups(string filePath, out bool recoveredFromBackup)
+        {
+            return LoadValidatedWithBackup(filePath, ParseAccountGroups, out recoveredFromBackup);
+        }
+
+        private static List<AccountGroupRecord> ParseAccountGroups(IEnumerable<string> dataLines)
+        {
             var groupsById = new Dictionary<string, AccountGroupRecord>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (string rawLine in ReadAllDataLines(filePath))
+            foreach (string rawLine in dataLines ?? Array.Empty<string>())
             {
                 string[] parts = rawLine.Split('\t');
                 if (parts.Length < 2)
-                    continue;
+                    throw new InvalidDataException("AccountGroups.tsv contains a structurally invalid row.");
 
                 string recordType = parts[0]?.Trim();
                 if (string.Equals(recordType, "G", StringComparison.OrdinalIgnoreCase))
                 {
                     if (parts.Length < 4)
-                        continue;
+                        throw new InvalidDataException("AccountGroups.tsv contains an incomplete group row.");
 
                     string groupId = parts[1]?.Trim();
                     string masterAccount = parts[2]?.Trim();
                     if (string.IsNullOrWhiteSpace(groupId) || string.IsNullOrWhiteSpace(masterAccount))
-                        continue;
+                        throw new InvalidDataException("AccountGroups.tsv contains a group without identity.");
+                    if (groupsById.ContainsKey(groupId))
+                        throw new InvalidDataException("AccountGroups.tsv contains a duplicate group: " + groupId);
 
-                    double masterSize = 0;
-                    if (double.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out double parsedMaster) && parsedMaster > 0)
-                        masterSize = parsedMaster;
+                    if (!double.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out double masterSize)
+                        || masterSize <= 0)
+                        throw new InvalidDataException("AccountGroups.tsv contains an invalid master size for: " + groupId);
 
                     groupsById[groupId] = new AccountGroupRecord
                     {
@@ -363,31 +401,37 @@ namespace Glitch.Services
                 else if (string.Equals(recordType, "M", StringComparison.OrdinalIgnoreCase))
                 {
                     if (parts.Length < 6)
-                        continue;
+                        throw new InvalidDataException("AccountGroups.tsv contains an incomplete member row.");
 
                     string groupId = parts[1]?.Trim();
                     if (string.IsNullOrWhiteSpace(groupId))
-                        continue;
+                        throw new InvalidDataException("AccountGroups.tsv contains a member without a group id.");
                     if (!groupsById.TryGetValue(groupId, out AccountGroupRecord group) || group == null)
-                        continue;
+                        throw new InvalidDataException("AccountGroups.tsv contains a member before or without its group: " + groupId);
 
                     string followerAccount = parts[2]?.Trim();
                     if (string.IsNullOrWhiteSpace(followerAccount))
-                        continue;
+                        throw new InvalidDataException("AccountGroups.tsv contains a member without an account.");
+                    if (group.Members.Any(member => string.Equals(
+                        member?.FollowerAccount,
+                        followerAccount,
+                        StringComparison.OrdinalIgnoreCase)))
+                        throw new InvalidDataException("AccountGroups.tsv contains a duplicate follower in group: " + followerAccount);
 
-                    double followerSize = 0;
-                    if (double.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out double parsedFollower) && parsedFollower > 0)
-                        followerSize = parsedFollower;
+                    if (!double.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out double followerSize)
+                        || followerSize <= 0)
+                        throw new InvalidDataException("AccountGroups.tsv contains an invalid follower size for: " + followerAccount);
+                    if (!double.TryParse(parts[4], NumberStyles.Float, CultureInfo.InvariantCulture, out double ratio)
+                        || ratio <= 0)
+                        throw new InvalidDataException("AccountGroups.tsv contains an invalid ratio for: " + followerAccount);
+                    if (!double.TryParse(parts[5], NumberStyles.Float, CultureInfo.InvariantCulture, out double masterSize)
+                        || masterSize <= 0)
+                        throw new InvalidDataException("AccountGroups.tsv contains an invalid master size for: " + followerAccount);
 
-                    double ratio = 0;
-                    if (double.TryParse(parts[4], NumberStyles.Float, CultureInfo.InvariantCulture, out double parsedRatio) && parsedRatio > 0)
-                        ratio = parsedRatio;
-
-                    double masterSize = 0;
-                    if (double.TryParse(parts[5], NumberStyles.Float, CultureInfo.InvariantCulture, out double parsedMasterSize) && parsedMasterSize > 0)
-                        masterSize = parsedMasterSize;
-
-                    bool isEnabled = parts.Length >= 7 ? ParseBooleanToken(parts[6]) : true;
+                    bool isEnabled = true;
+                    if (parts.Length >= 7 && !string.IsNullOrWhiteSpace(parts[6])
+                        && !TryParsePersistedBoolean(parts[6], out isEnabled))
+                        throw new InvalidDataException("AccountGroups.tsv contains an invalid enabled flag for: " + followerAccount);
 
                     group.Members.Add(new AccountGroupMemberRecord
                     {
@@ -397,6 +441,10 @@ namespace Glitch.Services
                         MasterSize = masterSize,
                         IsEnabled = isEnabled
                     });
+                }
+                else
+                {
+                    throw new InvalidDataException("AccountGroups.tsv contains an unknown record type.");
                 }
             }
 
@@ -729,23 +777,87 @@ namespace Glitch.Services
             return normalized == "1" || normalized.Equals("yes", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static IEnumerable<string> ReadAllDataLines(string filePath)
+        private static bool TryParsePersistedBoolean(string value, out bool parsed)
         {
-            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
-                return Array.Empty<string>();
+            parsed = false;
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+            if (bool.TryParse(value.Trim(), out parsed))
+                return true;
+
+            string normalized = value.Trim();
+            if (normalized == "1" || normalized.Equals("yes", StringComparison.OrdinalIgnoreCase))
+            {
+                parsed = true;
+                return true;
+            }
+            if (normalized == "0" || normalized.Equals("no", StringComparison.OrdinalIgnoreCase))
+                return true;
+            return false;
+        }
+
+        private static T LoadValidatedWithBackup<T>(
+            string filePath,
+            Func<IEnumerable<string>, T> parser,
+            out bool recoveredFromBackup)
+        {
+            recoveredFromBackup = false;
+            if (parser == null)
+                throw new ArgumentNullException(nameof(parser));
+            if (string.IsNullOrWhiteSpace(filePath))
+                return parser(Array.Empty<string>());
+
+            string backupPath = filePath + ".bak";
+            if (!File.Exists(filePath))
+            {
+                if (!File.Exists(backupPath))
+                    return parser(Array.Empty<string>());
+                recoveredFromBackup = true;
+                return parser(ReadAllDataLinesFromPath(backupPath));
+            }
 
             try
             {
-                return File.ReadAllLines(filePath)
-                    .Select(NormalizeTabEscapes)
-                    .Where(line => !string.IsNullOrWhiteSpace(line))
-                    .Where(line => !line.StartsWith("#", StringComparison.Ordinal))
-                    .ToList();
+                return parser(ReadAllDataLinesFromPath(filePath));
             }
             catch
             {
-                return Array.Empty<string>();
+                if (!File.Exists(backupPath))
+                    throw;
+                T recovered = parser(ReadAllDataLinesFromPath(backupPath));
+                recoveredFromBackup = true;
+                return recovered;
             }
+        }
+
+        private static IEnumerable<string> ReadAllDataLines(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+                return Array.Empty<string>();
+
+            string backupPath = filePath + ".bak";
+            if (!File.Exists(filePath))
+                return File.Exists(backupPath) ? ReadAllDataLinesFromPath(backupPath) : Array.Empty<string>();
+
+            try
+            {
+                return ReadAllDataLinesFromPath(filePath);
+            }
+            catch
+            {
+                if (!File.Exists(backupPath))
+                    throw;
+                return ReadAllDataLinesFromPath(backupPath);
+            }
+        }
+
+        private static List<string> ReadAllDataLinesFromPath(string filePath)
+        {
+            return File.ReadAllLines(filePath)
+                .Select(NormalizeTabEscapes)
+                .Where(line => !string.IsNullOrWhiteSpace(line))
+                .Where(line => !line.StartsWith("#", StringComparison.Ordinal))
+                .ToList();
         }
 
         private static void WriteAllLines(string filePath, IEnumerable<string> lines)
