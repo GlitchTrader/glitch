@@ -84,6 +84,19 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertNotIn("HasExactReconciledEntryExposure", executor)
         self.assertIn("reconcile_entry_recovery_close_submitted", executor)
 
+    def test_license_gate_applies_only_to_new_entries(self):
+        firewall = source(FIREWALL)
+        validate = method_body(
+            firewall,
+            "public static GlitchAiRiskDecision Validate",
+            "private static GlitchAiRiskDecision Reject",
+        )
+        self.assertIn(
+            "if (isEnter && policy.RequireValidLicense && !IsLicenseValid(nowUtc))",
+            validate,
+        )
+        self.assertIn("15_compliance:pass_risk_reducing_or_noop", validate)
+
     def test_intent_body_limit_uses_raw_utf8_bytes(self):
         server = source(INTENT_SERVER)
         body = method_body(server, "private static string ReadRequestBody", "private static string BuildHealthJson")
