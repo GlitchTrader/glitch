@@ -52,6 +52,16 @@ class GlitchAiUiContractTests(unittest.TestCase):
         self.assertIn('L("ai.snapshots.supporting", "Supporting Snapshots")', source)
         self.assertIn('GetAiJsonString(value, "instrument"), "MNQ"', source)
 
+    def test_ai_cadence_warning_follows_worker_health_not_decision_age(self):
+        source = (UI / "GlitchMainWindow.AiTab.partial.cs").read_text(encoding="utf-8")
+        self.assertIn("IsAiDecisionWorkerUnhealthy(health)", source)
+        self.assertIn('code.StartsWith("decision_worker_", StringComparison.Ordinal)', source)
+        self.assertNotIn(
+            "nowUtc - latestDecisionUtc.Value > TimeSpan.FromMinutes(12)",
+            source,
+        )
+        self.assertNotIn("if (age <= TimeSpan.FromMinutes(12))", source)
+
     def test_ai_feed_joins_decisions_to_their_source_packet_by_snapshot_hash(self):
         source = (UI / "GlitchMainWindow.AiTab.partial.cs").read_text(encoding="utf-8")
         self.assertIn('ReadAiPacketFinalSnapshotHash(packetFile.FullName)', source)

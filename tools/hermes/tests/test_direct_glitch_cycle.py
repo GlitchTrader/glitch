@@ -184,22 +184,12 @@ class DirectCycleTests(unittest.TestCase):
         normalized = MODULE.normalize_batch({"decisions": [value]}, MODULE.build_scenario(packet()))
         self.assertEqual(normalized["decisions"][0]["wake_triggers"], [legacy])
 
-    def test_stale_entry_batch_is_discarded_after_newer_packet(self):
-        with tempfile.TemporaryDirectory() as root:
-            exchange = Path(root)
-            (exchange / "glitch").mkdir(parents=True)
-            (exchange / "hermes" / "events").mkdir(parents=True)
-            outbox = exchange / "hermes" / "outbox.json"
-            outbox.write_text(json.dumps({"decisions": [{"action": "ENTER_LONG"}]}), encoding="utf-8")
-            (exchange / "glitch" / "latest-decision-packet.json").write_text(json.dumps({
-                "packet_id": "20990101T1406Z",
-            }), encoding="utf-8")
-            events = exchange / "hermes" / "events" / "cycles.jsonl"
-            self.assertTrue(MODULE.discard_stale_entry_batch(
-                exchange, events, outbox, "20990101T1405Z", {"decisions": [{"action": "ENTER_LONG"}]}
-            ))
-            self.assertFalse(outbox.exists())
-            self.assertIn("intent_discarded_stale_packet", events.read_text(encoding="utf-8"))
+    def test_completed_entry_intent_is_not_revoked_by_packet_rollover(self):
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertNotIn("discard_stale_entry_batch", source)
+        self.assertNotIn("intent_discarded_stale_packet", source)
+        self.assertNotIn("stale_packet_discarded", source)
+        self.assertIn("persist_outbox(exchange, outbox_path, packet_id, batch, directive)", source)
 
     def test_minute_cron_launcher_detaches_the_slow_direct_worker(self):
         source = LAUNCHER_SCRIPT.read_text(encoding="utf-8")

@@ -173,7 +173,8 @@ namespace Glitch.UI
                 currentFrames,
                 latest?.DecisionUtc,
                 aiAutoOn,
-                nowUtc));
+                nowUtc,
+                health));
 
             if (latest == null)
             {
@@ -307,7 +308,8 @@ namespace Glitch.UI
             int frameCount,
             DateTime? latestDecisionUtc,
             bool aiAutoOn,
-            DateTime nowUtc)
+            DateTime nowUtc,
+            GlitchAiHealthSnapshot health)
         {
             Border card = CreateAiCard();
             card.Margin = new Thickness(0, 12, 0, 0);
@@ -328,7 +330,8 @@ namespace Glitch.UI
             });
             layout.Children.Add(left);
 
-            string cadence = DescribeAiDecisionCadence(aiAutoOn, latestDecisionUtc, nowUtc);
+            bool decisionWorkerUnhealthy = IsAiDecisionWorkerUnhealthy(health);
+            string cadence = DescribeAiDecisionCadence(aiAutoOn, latestDecisionUtc, nowUtc, health);
             var right = new StackPanel { HorizontalAlignment = HorizontalAlignment.Right };
             right.Children.Add(new TextBlock
             {
@@ -343,7 +346,7 @@ namespace Glitch.UI
             {
                 Text = cadence,
                 Margin = new Thickness(0, 4, 0, 0),
-                Foreground = aiAutoOn && latestDecisionUtc.HasValue && nowUtc - latestDecisionUtc.Value > TimeSpan.FromMinutes(12)
+                Foreground = aiAutoOn && decisionWorkerUnhealthy
                     ? OrangeAccentBrush
                     : null,
                 Opacity = 0.78,
@@ -355,12 +358,18 @@ namespace Glitch.UI
             return card;
         }
 
-        private string DescribeAiDecisionCadence(bool aiAutoOn, DateTime? latestDecisionUtc, DateTime nowUtc)
+        private string DescribeAiDecisionCadence(
+            bool aiAutoOn,
+            DateTime? latestDecisionUtc,
+            DateTime nowUtc,
+            GlitchAiHealthSnapshot health)
         {
             if (!aiAutoOn)
                 return L("ai.cadence.paused", "Scheduled calls are paused");
             if (!latestDecisionUtc.HasValue)
                 return L("ai.status.waiting_first", "Waiting for the first completed decision");
+            if (IsAiDecisionWorkerUnhealthy(health))
+                return L("ai.cadence.overdue", "Decision overdue - inspect the background worker");
 
             TimeSpan age = nowUtc - latestDecisionUtc.Value;
             if (age < TimeSpan.Zero)
@@ -373,9 +382,15 @@ namespace Glitch.UI
                     "Next decision in about {0}m",
                     Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes)));
             }
-            if (age <= TimeSpan.FromMinutes(12))
-                return L("ai.cadence.due", "Decision due; waiting for the completed result");
-            return L("ai.cadence.overdue", "Decision overdue - inspect the background worker");
+            return L("ai.cadence.due", "Decision due; waiting for the completed result");
+        }
+
+        private static bool IsAiDecisionWorkerUnhealthy(GlitchAiHealthSnapshot health)
+        {
+            return health != null
+                && health.ReasonCodes.Any(code =>
+                    code != null
+                    && code.StartsWith("decision_worker_", StringComparison.Ordinal));
         }
 
         private void AddLatestAiDecision(AiDecisionFeedItem item)
