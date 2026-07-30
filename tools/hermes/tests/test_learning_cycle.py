@@ -320,7 +320,168 @@ class LearningCycleTests(unittest.TestCase):
 
             result = MODULE.run_once(args)
 
-            self.assertEqual(result["selected_intent_ids"], [f"intent-{index}" for index in range(9, 1, -1)])
+            self.assertEqual(result["selected_intent_ids"], ["intent-9"])
+
+    def test_hourly_reviews_oldest_unreviewed_batch_and_checkpoints_ids(self):
+        with tempfile.TemporaryDirectory() as root:
+            glitch_data = Path(root)
+            supervisor = (
+                glitch_data / "hermes" / "exchange" / "hermes" / "supervisor"
+            )
+            episodes_path = supervisor / "trade-episodes.jsonl"
+            for index in range(30):
+                MODULE.DIRECT.append_event(episodes_path, {
+                    "schema_version": "glitch.hermes.trade_episode.v2",
+                    "episode_id": f"episode-{index:02d}",
+                    "recorded_utc": f"2099-01-01T00:{index:02d}:00Z",
+                    "intent_id": f"intent-{index:02d}",
+                    "entry_assessment": "assessment",
+                    "facts": {"market_path": ["x" * 100_000]},
+                })
+            args = SimpleNamespace(
+                glitch_data=glitch_data,
+                profile="glitch",
+                timeout_seconds=30,
+                dry_run=False,
+                force_loop="hourly",
+            )
+
+            def hourly_result(_args, loop_id, evidence, ids, _supervisor):
+                self.assertEqual(loop_id, "hourly")
+                self.assertEqual(
+                    [row["episode_id"] for row in evidence["episodes"]],
+                    [f"episode-{index:02d}" for index in range(24)],
+                )
+                self.assertNotIn("market_path", evidence["episodes"][0])
+                return MODULE.output_template("hourly", ids)["records"]
+
+            with mock.patch.object(MODULE.DIRECT, "feed_observation_is_fresh", return_value=True), \
+                    mock.patch.object(MODULE.DIRECT, "reconcile_completed_outcomes"), \
+                    mock.patch.object(MODULE, "collect_decision_episodes", return_value=[]), \
+                    mock.patch.object(MODULE, "invoke_loop", side_effect=hourly_result) as invoke:
+                result = MODULE.run_once(args)
+
+            self.assertTrue(result["hourly"])
+            self.assertEqual(invoke.call_count, 1)
+            state = MODULE.DIRECT.read_json(supervisor / "learning-state.json")
+            self.assertEqual(
+                state["hourly_reviewed_episode_ids"],
+                [f"episode-{index:02d}" for index in range(24)],
+            )
+
+    def test_hourly_migrates_legacy_unified_count_without_replaying_reviewed_evidence(self):
+        with tempfile.TemporaryDirectory() as root:
+            glitch_data = Path(root)
+            supervisor = (
+                glitch_data / "hermes" / "exchange" / "hermes" / "supervisor"
+            )
+            for index in range(8):
+                MODULE.DIRECT.append_event(
+                    supervisor / "decision-episodes.jsonl",
+                    {
+                        "episode_id": f"episode-{index}",
+                        "recorded_utc": f"2099-01-01T00:0{index}:00Z",
+                        "intent_id": f"intent-{index}",
+                        "action": "NOTHING",
+                    },
+                )
+            MODULE.DIRECT.write_json_atomic(
+                supervisor / "learning-state.json",
+                {
+                    "schema_version": "glitch.hermes.learning_state.v1",
+                    "hourly_episode_count": 5,
+                },
+            )
+            args = SimpleNamespace(
+                glitch_data=glitch_data,
+                profile="glitch",
+                timeout_seconds=30,
+                dry_run=False,
+                force_loop="hourly",
+            )
+
+            def hourly_result(_args, _loop_id, evidence, ids, _supervisor):
+                self.assertEqual(
+                    [row["episode_id"] for row in evidence["episodes"]],
+                    ["episode-5", "episode-6", "episode-7"],
+                )
+                return MODULE.output_template("hourly", ids)["records"]
+
+            with mock.patch.object(MODULE.DIRECT, "feed_observation_is_fresh", return_value=True), \
+                    mock.patch.object(MODULE.DIRECT, "reconcile_completed_outcomes"), \
+                    mock.patch.object(MODULE, "collect_decision_episodes", return_value=[
+                        {
+                            "episode_id": f"episode-{index}",
+                            "recorded_utc": f"2099-01-01T00:0{index}:00Z",
+                            "intent_id": f"intent-{index}",
+                            "action": "NOTHING",
+                        }
+                        for index in range(8)
+                    ]), mock.patch.object(
+                        MODULE, "invoke_loop", side_effect=hourly_result
+                    ):
+                MODULE.run_once(args)
+
+            state = MODULE.DIRECT.read_json(supervisor / "learning-state.json")
+            self.assertEqual(
+                state["hourly_reviewed_episode_ids"],
+                [f"episode-{index}" for index in range(8)],
+            )
+
+    def test_one_scheduler_invocation_runs_only_the_highest_priority_due_loop(self):
+        with tempfile.TemporaryDirectory() as root:
+            glitch_data = Path(root)
+            outcomes = glitch_data / "intents" / "hermes-trade-outcomes.jsonl"
+            outcomes.parent.mkdir(parents=True)
+            outcomes.write_text(json.dumps({
+                "intent_id": "intent-new",
+                "exit_utc": "2099-01-01T00:00:00Z",
+                "master_learning_eligible": True,
+            }) + "\n", encoding="utf-8")
+            args = SimpleNamespace(
+                glitch_data=glitch_data,
+                profile="glitch",
+                timeout_seconds=30,
+                dry_run=False,
+                force_loop=None,
+            )
+
+            def loop_result(_args, loop_id, _evidence, ids, _supervisor):
+                records = MODULE.output_template(loop_id, ids)["records"]
+                if loop_id == "debrief":
+                    records[0]["intent_id"] = "intent-new"
+                    records[0]["master_account"] = ""
+                return records
+
+            with mock.patch.object(MODULE.DIRECT, "feed_observation_is_fresh", return_value=True), \
+                    mock.patch.object(MODULE.DIRECT, "reconcile_completed_outcomes"), \
+                    mock.patch.object(MODULE, "collect_decision_episodes", return_value=[]), \
+                    mock.patch.object(MODULE, "debrief_evidence", return_value=[{}]), \
+                    mock.patch.object(MODULE, "invoke_loop", side_effect=loop_result) as invoke:
+                result = MODULE.run_once(args)
+
+            self.assertEqual(result["debriefed"], 1)
+            self.assertFalse(result["hourly"])
+            self.assertEqual(invoke.call_count, 1)
+            self.assertTrue(
+                (glitch_data / "hermes" / "exchange" / "hermes" / "supervisor"
+                 / "learning-state.json").is_file()
+            )
+
+    def test_prompt_guard_rejects_oversized_learning_input_before_model_call(self):
+        with tempfile.TemporaryDirectory() as root:
+            supervisor = Path(root)
+            args = SimpleNamespace(profile="glitch", timeout_seconds=30)
+            with mock.patch.object(MODULE, "invoke_hermes") as invoke:
+                with self.assertRaisesRegex(ValueError, "learning_prompt_too_large"):
+                    MODULE.invoke_loop(
+                        args,
+                        "hourly",
+                        {"payload": "x" * MODULE.MAX_PROMPT_CHARS},
+                        ["review-1"],
+                        supervisor,
+                    )
+            invoke.assert_not_called()
 
     def test_malformed_old_outcome_cannot_block_newest_selection(self):
         self.assertLess(
@@ -364,6 +525,12 @@ class LearningCycleTests(unittest.TestCase):
         invalid["records"][0].pop("quantity_assessment")
         with self.assertRaisesRegex(ValueError, "learning_output_shape_invalid"):
             MODULE.validate_output(invalid, "debrief", [record_id])
+
+    def test_learning_record_identity_is_restored_from_system_owned_window(self):
+        expected_id = MODULE.stable_id("hourly-review", "evidence-window")
+        value = MODULE.output_template("hourly", ["model-echo"])
+        records = MODULE.validate_output(value, "hourly", [expected_id])
+        self.assertEqual(records[0]["review_id"], expected_id)
 
     def test_second_learning_validation_failure_leaves_evidence_unprocessed(self):
         with tempfile.TemporaryDirectory() as root:

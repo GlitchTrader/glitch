@@ -32,6 +32,27 @@ def ledger_row(account, entry_utc, exit_utc, entry_price, exit_price, correlatio
 
 
 class DirectOutcomeReconcileTests(unittest.TestCase):
+    def test_durable_decision_log_survives_outbox_consumption(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            decision_log = Path(temporary) / "decisions.jsonl"
+            decision_log.write_text(
+                json.dumps({
+                    "schema_version": "glitch.intent.decision.v1",
+                    "cycle_id": "cycle-1",
+                    "intent": {
+                        "schema_version": "glitch.intent.v3",
+                        "intent_id": "durable-intent",
+                        "action": "ENTER_LONG",
+                    },
+                }) + "\n",
+                encoding="utf-8",
+            )
+
+            intents = MODULE.find_intents(decision_log=decision_log)
+
+            self.assertEqual(intents["durable-intent"]["action"], "ENTER_LONG")
+            self.assertEqual(intents["durable-intent"]["_cycle_id"], "cycle-1")
+
     def test_incomplete_trailing_jsonl_is_preserved_and_fails_visibly(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "events.jsonl"

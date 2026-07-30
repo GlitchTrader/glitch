@@ -813,22 +813,23 @@ namespace Glitch.Services
             if (!TryGetFreshExecutionPrice(instrument, DateTime.UtcNow, out liveExecutionPrice, out livePriceFailure))
                 return GlitchAiExecutionResult.Failed("group_live_price_invalid", livePriceFailure);
 
-            // Market intents necessarily permit movement between observation and
-            // submission. Hermes owns whether the stated absolute geometry expresses
-            // its thesis; Glitch only verifies that the live bracket remains
-            // executable and inside authoritative account-survival boundaries.
-            if (!IsExecutableBracketPrice(isLong, liveExecutionPrice, stopLoss, takeProfit1))
-                return GlitchAiExecutionResult.Failed("group_structural_prices_crossed_before_entry", "leg=1");
+            // Hermes states bracket geometry against the authoritative decision
+            // snapshot. A market entry necessarily accepts movement before its
+            // native fill, so live drift cannot become a second trading decision.
+            // Validate the original thesis here; after fill, translate every leg by
+            // the same fill delta to preserve all distances and risk/reward.
+            if (!IsExecutableBracketPrice(isLong, snapshotMarketPrice, stopLoss, takeProfit1))
+                return GlitchAiExecutionResult.Failed("group_structural_geometry_invalid_at_decision", "leg=1");
             if (hasSecondTarget
-                && !IsExecutableBracketPrice(isLong, liveExecutionPrice, hasSecondStop ? stopLoss2 : stopLoss, takeProfit2))
-                return GlitchAiExecutionResult.Failed("group_structural_prices_crossed_before_entry", "leg=2");
+                && !IsExecutableBracketPrice(isLong, snapshotMarketPrice, hasSecondStop ? stopLoss2 : stopLoss, takeProfit2))
+                return GlitchAiExecutionResult.Failed("group_structural_geometry_invalid_at_decision", "leg=2");
             if (hasThirdTarget
                 && !IsExecutableBracketPrice(
                     isLong,
-                    liveExecutionPrice,
+                    snapshotMarketPrice,
                     hasThirdStop ? stopLoss3 : hasSecondStop ? stopLoss2 : stopLoss,
                     takeProfit3))
-                return GlitchAiExecutionResult.Failed("group_structural_prices_crossed_before_entry", "leg=3");
+                return GlitchAiExecutionResult.Failed("group_structural_geometry_invalid_at_decision", "leg=3");
 
             int masterQuantity = (int)Math.Round(quantityValue, MidpointRounding.AwayFromZero);
             if (Math.Abs(quantityValue - masterQuantity) > 0.0000001d)
@@ -930,6 +931,7 @@ namespace Glitch.Services
                 ProtectionSubmitted = new bool[1],
                 PointValue = metadata.PointValue,
                 TickSize = metadata.TickSize,
+                DecisionReferencePrice = snapshotMarketPrice,
                 EntrySubmittedUtc = DateTime.UtcNow
             };
 
@@ -992,11 +994,11 @@ namespace Glitch.Services
                     + "|live_price=" + liveExecutionPrice.ToString(CultureInfo.InvariantCulture)
                     + "|point_value_usd=" + metadata.PointValue.ToString(CultureInfo.InvariantCulture)
                     + "|tick_size=" + metadata.TickSize.ToString(CultureInfo.InvariantCulture)
-                    + "|stop_price=" + stopLoss.ToString(CultureInfo.InvariantCulture)
-                    + "|target_price=" + takeProfit1.ToString(CultureInfo.InvariantCulture)
+                    + "|decision_stop_price=" + stopLoss.ToString(CultureInfo.InvariantCulture)
+                    + "|decision_target_price=" + takeProfit1.ToString(CultureInfo.InvariantCulture)
                     + "|protection_legs=" + protectionLegs.Count.ToString(CultureInfo.InvariantCulture)
                     + "|quantity_tp1=" + quantityTp1.ToString(CultureInfo.InvariantCulture)
-                    + "|structural_prices=preserved");
+                    + "|geometry_mode=fill_anchored_offsets");
         }
 
         private static bool TryGetFreshExecutionPrice(
@@ -1168,7 +1170,11 @@ namespace Glitch.Services
             OrderAction exitAction = group.IsLong ? OrderAction.Sell : OrderAction.BuyToCover;
             foreach (StructuralProtectionLeg leg in group.ProtectionLegs)
             {
-                if (!IsExecutableBracketPrice(group.IsLong, fillPrice, leg.StopPrice, leg.TargetPrice))
+                double stopPrice = AnchorBracketPrice(
+                    fillPrice, group.DecisionReferencePrice, leg.StopPrice, group.TickSize);
+                double targetPrice = AnchorBracketPrice(
+                    fillPrice, group.DecisionReferencePrice, leg.TargetPrice, group.TickSize);
+                if (!IsExecutableBracketPrice(group.IsLong, fillPrice, stopPrice, targetPrice))
                     return GlitchAiExecutionResult.Failed("group_structural_geometry_invalid_at_fill");
             }
 
@@ -1193,8 +1199,10 @@ namespace Glitch.Services
                 for (int legIndex = 0; legIndex < group.ProtectionLegs.Count; legIndex++)
                 {
                     StructuralProtectionLeg leg = group.ProtectionLegs[legIndex];
-                    double stopPrice = leg.StopPrice;
-                    double targetPrice = leg.TargetPrice;
+                    double stopPrice = AnchorBracketPrice(
+                        fillPrice, group.DecisionReferencePrice, leg.StopPrice, group.TickSize);
+                    double targetPrice = AnchorBracketPrice(
+                        fillPrice, group.DecisionReferencePrice, leg.TargetPrice, group.TickSize);
                     string legToken = (legIndex + 1).ToString(CultureInfo.InvariantCulture);
                     string oco = "GLTAI" + group.Correlation
                         + accountIndex.ToString(CultureInfo.InvariantCulture)
@@ -1278,6 +1286,15 @@ namespace Glitch.Services
             if (tickSize <= 0)
                 return price;
             return Math.Round(price / tickSize, MidpointRounding.AwayFromZero) * tickSize;
+        }
+
+        private static double AnchorBracketPrice(
+            double fillPrice,
+            double decisionReferencePrice,
+            double decisionPrice,
+            double tickSize)
+        {
+            return RoundToTick(fillPrice + (decisionPrice - decisionReferencePrice), tickSize);
         }
 
         private static GlitchAiExecutionResult TryExecuteGroupExit(
@@ -2965,6 +2982,7 @@ namespace Glitch.Services
             public bool TradeClosedRecorded { get; set; }
             public double PointValue { get; set; }
             public double TickSize { get; set; }
+            public double DecisionReferencePrice { get; set; }
             public DateTime EntrySubmittedUtc { get; set; }
         }
 

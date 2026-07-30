@@ -1,4 +1,5 @@
 import importlib.util
+import contextlib
 import json
 import sys
 import tempfile
@@ -364,9 +365,14 @@ class DirectCycleTests(unittest.TestCase):
                 stdout=json.dumps(batch),
                 stderr="",
             )
-            with mock.patch.object(MODULE.shutil, "which", return_value=str(hermes)), mock.patch.object(
-                MODULE.subprocess, "run", return_value=completed
-            ) as run:
+            with mock.patch.object(MODULE.shutil, "which", return_value=str(hermes)), \
+                    mock.patch.object(
+                        MODULE,
+                        "hermes_profile_lock",
+                        return_value=contextlib.nullcontext(),
+                    ), mock.patch.object(
+                        MODULE.subprocess, "run", return_value=completed
+                    ) as run:
                 actual = MODULE.invoke_hermes("glitch", "large prompt", 30)
 
         self.assertEqual(actual, batch)

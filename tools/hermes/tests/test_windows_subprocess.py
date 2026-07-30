@@ -65,6 +65,31 @@ class WindowsSubprocessTests(unittest.TestCase):
         self.assertEqual(executable, "/usr/bin/python3")
         self.assertEqual(overlay, {})
 
+    def test_operator_profile_lock_publishes_and_cleans_priority_marker(self):
+        with tempfile.TemporaryDirectory() as root, mock.patch.object(
+            MODULE.Path, "home", return_value=Path(root)
+        ):
+            runtime = (
+                Path(root) / "AppData" / "Local" / "hermes" / "profiles"
+                / "glitch" / "runtime"
+            )
+            with MODULE.hermes_profile_lock("glitch", priority="operator"):
+                self.assertTrue((runtime / "hermes-cli.lock").is_file())
+                self.assertEqual(
+                    len(list(runtime.glob("hermes-cli.operator-waiting.*"))),
+                    1,
+                )
+            self.assertFalse((runtime / "hermes-cli.lock").exists())
+            self.assertEqual(
+                list(runtime.glob("hermes-cli.operator-waiting.*")),
+                [],
+            )
+
+    def test_profile_lock_rejects_unknown_priority(self):
+        with self.assertRaisesRegex(ValueError, "priority_invalid"):
+            with MODULE.hermes_profile_lock("glitch", priority="urgent"):
+                pass
+
 
 if __name__ == "__main__":
     unittest.main()

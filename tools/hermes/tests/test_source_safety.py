@@ -556,12 +556,18 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
             self.assertIn("File.Delete(temporary)", plan)
             self.assertLess(plan.index("stream.Flush(true)"), plan.index("File.Move(temporary, path)"))
 
-    def test_ai_preserves_absolute_structural_prices_without_arbitrary_slippage_veto(self):
+    def test_ai_preserves_structural_offsets_without_arbitrary_drift_veto(self):
         executor = source(EXECUTOR)
         self.assertIn("public double StopPrice", executor)
         self.assertIn("public double TargetPrice", executor)
-        self.assertIn("structural_prices=preserved", executor)
+        self.assertIn("public double DecisionReferencePrice", executor)
+        self.assertIn("geometry_mode=fill_anchored_offsets", executor)
+        self.assertIn("AnchorBracketPrice", executor)
+        self.assertIn("fillPrice + (decisionPrice - decisionReferencePrice)", executor)
         self.assertIn("IsExecutableBracketPrice", executor)
+        self.assertIn("IsExecutableBracketPrice(isLong, snapshotMarketPrice", executor)
+        self.assertNotIn("IsExecutableBracketPrice(isLong, liveExecutionPrice", executor)
+        self.assertNotIn("group_structural_prices_crossed_before_entry", executor)
         self.assertNotIn("group_entry_geometry_changed_reassess", executor)
         self.assertNotIn("liveGeometryWorsened", executor)
         self.assertIn("liveExecutionPrice", executor)
@@ -569,7 +575,15 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertNotIn("ValidateProposedStopState", executor)
         self.assertNotIn("public double StopDistance", executor)
         self.assertNotIn("public double TargetDistance", executor)
-        self.assertNotIn("re-anchor", executor)
+
+    def test_live_operator_has_profile_lock_priority_over_background_learning(self):
+        direct = source(ROOT / "tools/hermes/run-direct-glitch-cycle.py")
+        learning = source(ROOT / "tools/hermes/run-hermes-learning-cycle.py")
+        subprocess_helpers = source(ROOT / "tools/hermes/win_subprocess.py")
+        self.assertIn('priority="operator"', direct)
+        self.assertIn('priority="background"', learning)
+        self.assertIn("hermes-cli.operator-waiting.", subprocess_helpers)
+        self.assertIn("if priority == \"background\"", subprocess_helpers)
 
     def test_ai_uses_authoritative_account_and_native_state_without_inferred_capacity_vetoes(self):
         executor = source(EXECUTOR)
