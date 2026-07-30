@@ -99,6 +99,7 @@ dashboard.column.pnl	PnL	PnL	PnL	PnL	PnL	PnL
 dashboard.column.realized_pnl	R PnL	R PnL	R PnL	R PnL	R PnL	R PnL
 dashboard.column.risk	Risk	Risco	Riesgo	风险	Risque	Риск
 dashboard.column.size	Size	Tamanho	Tamaño	规模	Taille	Размер
+dashboard.column.source	Source	Fonte	Fuente	来源	Source	Источник
 dashboard.column.status	Status	Status	Estado	状态	Statut	Статус
 dashboard.column.unrealized_pnl	U PnL	U PnL	U PnL	U PnL	U PnL	U PnL
 dashboard.connected_accounts	Connected Accounts	Contas Conectadas	Cuentas Conectadas	已连接账户	Comptes Connectés	Подключенные Счета

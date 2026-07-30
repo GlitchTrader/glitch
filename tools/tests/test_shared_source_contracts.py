@@ -213,6 +213,24 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("private void QueueAccountRefreshFromRuntimeEvent(Account account, object eventArgs)", refresh)
         self.assertIn("sequence < Interlocked.Read(ref _accountRefreshSequence)", refresh)
 
+    def test_inferred_account_identity_is_observational_only(self):
+        window = source(MAIN_WINDOW)
+        compliance = source(ADDON / "Services/Risk/GlitchComplianceEngine.cs")
+        mitigation = source(ADDON / "Services/Risk/GlitchRiskMitigationEngine.cs")
+        runtime_policy = source(POLICY_STORE)
+        dashboard = source(ADDON / "UI/MainWindow/GlitchMainWindow.DashboardTab.partial.cs")
+        actions = method_body(window, "private void ApplyEnabledRiskActions", "private void ClearComplianceEnforcementRuntimeState")
+        normalize = method_body(compliance, "public static string NormalizeAccountStatus", "public static string InferPropFirmId")
+        infer = method_body(compliance, "public static string InferAccountStatus", "public static string GetExecutionProviderHint")
+        self.assertIn('return "Unknown";', normalize)
+        self.assertIn('return "Unknown";', infer)
+        self.assertIn("if (!row.IsManualSelection)", actions)
+        self.assertIn("GlitchComplianceEngine.NormalizeAccountStatus(accountStatus)", mitigation)
+        self.assertIn("GlitchComplianceEngine.NormalizeAccountStatus(accountStatus)", runtime_policy)
+        self.assertIn('new List<string> { "Unknown", "Sim", "Eval", "AP" }', window)
+        self.assertIn("nameof(AccountGridRow.AccountSizeSource)", dashboard)
+        self.assertIn("dashboard.column.source", source(LOCALIZATION))
+
     def test_current_accounts_follow_native_account_connection_status(self):
         window = source(MAIN_WINDOW)
         active = method_body(window, "private static bool IsActiveAccount(Account account)", "private static bool IsFlattenEligibleAccount")

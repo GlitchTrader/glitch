@@ -263,7 +263,7 @@ namespace Glitch.UI
             _firmIdToDisplay = BuildFirmIdToDisplayMap(_firmRules);
             _firmDisplayToId = BuildFirmDisplayToIdMap(_firmIdToDisplay);
             _propFirmDisplayOptions = BuildPropFirmDisplayOptions(_firmRules, _firmIdToDisplay);
-            _accountStatusOptions = new List<string> { "Sim", "Eval", "AP" };
+            _accountStatusOptions = new List<string> { "Unknown", "Sim", "Eval", "AP" };
             _globalAccountSizeOptions = BuildGlobalAccountSizeOptions(_firmRules);
             _accountGroups = new ObservableCollection<AccountGroupDefinition>();
             _overridesFilePath = GetOverridesFilePath();
@@ -4249,6 +4249,8 @@ namespace Glitch.UI
                 if (row == null || string.IsNullOrWhiteSpace(row.DisplayName))
                     continue;
                 if (!row.IsRiskDataReady)
+                    continue;
+                if (!row.IsManualSelection)
                     continue;
 
                 string accountName = row.DisplayName.Trim();
