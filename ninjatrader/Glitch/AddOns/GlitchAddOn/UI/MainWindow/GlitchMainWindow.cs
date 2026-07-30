@@ -5412,8 +5412,9 @@ namespace Glitch.UI
         {
             try
             {
-                _accountGroups.Clear();
-                List<GlitchStateStore.AccountGroupRecord> persistedGroups = GlitchStateStore.LoadAccountGroups(_accountGroupsFilePath);
+                List<GlitchStateStore.AccountGroupRecord> persistedGroups =
+                    GlitchStateStore.LoadAccountGroups(_accountGroupsFilePath, out bool recoveredFromBackup);
+                var loadedGroups = new List<AccountGroupDefinition>();
                 foreach (GlitchStateStore.AccountGroupRecord persisted in persistedGroups)
                 {
                     if (persisted == null || string.IsNullOrWhiteSpace(persisted.GroupId) || string.IsNullOrWhiteSpace(persisted.MasterAccount))
@@ -5467,11 +5468,28 @@ namespace Glitch.UI
                         }
                     }
 
-                    _accountGroups.Add(group);
+                    loadedGroups.Add(group);
                 }
+
+                _accountGroups.Clear();
+                foreach (AccountGroupDefinition group in loadedGroups)
+                    _accountGroups.Add(group);
+
+                if (recoveredFromBackup)
+                    RaiseCriticalWarning(
+                        "System",
+                        "Account groups were recovered from the last valid backup; the primary file requires inspection.",
+                        "AccountGroupsRecovered",
+                        unlocksTrading: false);
             }
-            catch
+            catch (Exception ex)
             {
+                RecordSubsystemFault("account_group_load", ex);
+                RaiseCriticalWarning(
+                    "System",
+                    "Account groups could not be loaded safely; the existing in-memory configuration was preserved.",
+                    "AccountGroupsLoadFailed",
+                    unlocksTrading: false);
             }
         }
 
@@ -6559,7 +6577,10 @@ namespace Glitch.UI
             try
             {
                 Dictionary<string, GlitchStateStore.SelectionOverrideRecord> persisted =
-                    GlitchStateStore.LoadSelectionOverrides(_overridesFilePath, NormalizeAccountStatus);
+                    GlitchStateStore.LoadSelectionOverrides(
+                        _overridesFilePath,
+                        NormalizeAccountStatus,
+                        out bool recoveredFromBackup);
 
                 foreach (var kvp in persisted)
                 {
@@ -6580,9 +6601,22 @@ namespace Glitch.UI
                         IsManual = persistedRow.IsManual
                     };
                 }
+
+                if (recoveredFromBackup)
+                    RaiseCriticalWarning(
+                        "System",
+                        "Account overrides were recovered from the last valid backup; the primary file requires inspection.",
+                        "AccountOverridesRecovered",
+                        unlocksTrading: false);
             }
-            catch
+            catch (Exception ex)
             {
+                RecordSubsystemFault("account_override_load", ex);
+                RaiseCriticalWarning(
+                    "System",
+                    "Account overrides could not be loaded safely; no persisted row was silently substituted.",
+                    "AccountOverridesLoadFailed",
+                    unlocksTrading: false);
             }
         }
 

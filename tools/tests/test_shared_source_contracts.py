@@ -290,6 +290,23 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn('RecordSubsystemFault("audit_persistence", ex)', window)
         self.assertIn('RecordSubsystemFault("account_group_persistence", ex)', window)
         self.assertIn('RecordSubsystemFault("account_override_persistence", ex)', window)
+        self.assertIn("LoadValidatedWithBackup", state)
+        self.assertIn("throw new InvalidDataException", state)
+        group_load = method_body(
+            window,
+            "private void LoadAccountGroupsFromDisk",
+            "private void SaveAccountGroupsToDisk",
+        )
+        self.assertLess(group_load.index("LoadAccountGroups("), group_load.index("_accountGroups.Clear()"))
+        self.assertIn('"AccountGroupsRecovered"', group_load)
+        self.assertIn('"AccountGroupsLoadFailed"', group_load)
+        override_load = method_body(
+            window,
+            "private void LoadSelectionOverridesFromDisk",
+            "private void SaveSelectionOverridesToDisk",
+        )
+        self.assertIn('"AccountOverridesRecovered"', override_load)
+        self.assertIn('"AccountOverridesLoadFailed"', override_load)
 
     def test_max_contracts_risk_read_uses_locked_snapshot_and_fails_closed(self):
         window = source(ADDON / "UI/MainWindow/GlitchMainWindow.cs")
