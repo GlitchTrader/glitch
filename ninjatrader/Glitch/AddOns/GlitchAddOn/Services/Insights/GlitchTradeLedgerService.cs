@@ -177,7 +177,7 @@ namespace Glitch.Services
                     if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
                         Directory.CreateDirectory(directory);
 
-                    File.WriteAllLines(_filePath, GlitchStateStore.WithTsvBanner(new[] { LedgerHeaderLine }));
+                    GlitchStateStore.WriteAllLinesAtomic(_filePath, GlitchStateStore.WithTsvBanner(new[] { LedgerHeaderLine }));
                     _lastWriteUtc = nowUtc;
                 }
                 catch
@@ -250,7 +250,7 @@ namespace Glitch.Services
                     lines.Add(ToLine(trade));
                 }
 
-                File.WriteAllLines(_filePath, GlitchStateStore.WithTsvBanner(lines));
+                GlitchStateStore.WriteAllLinesAtomic(_filePath, GlitchStateStore.WithTsvBanner(lines));
                 _dirty = false;
                 _lastWriteUtc = nowUtc;
             }

@@ -123,14 +123,7 @@ namespace Glitch.Services
 
         private static string NormalizeComplianceAccountStatus(string accountStatus)
         {
-            string token = (accountStatus ?? string.Empty).Trim();
-            if (token.Length == 0)
-                return "Sim";
-
-            if (token.Equals("PA", StringComparison.OrdinalIgnoreCase))
-                return "AP";
-
-            return token;
+            return GlitchComplianceEngine.NormalizeAccountStatus(accountStatus);
         }
     }
 
@@ -422,7 +415,7 @@ namespace Glitch.Services
                 if (!string.IsNullOrWhiteSpace(directory))
                     Directory.CreateDirectory(directory);
 
-                File.WriteAllLines(path, GlitchStateStore.WithTsvBanner(lines), Utf8NoBom);
+                GlitchStateStore.WriteAllLinesAtomic(path, GlitchStateStore.WithTsvBanner(lines), Utf8NoBom);
             }
             catch
             {

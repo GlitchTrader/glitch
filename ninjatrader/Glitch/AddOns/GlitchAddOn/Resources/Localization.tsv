@@ -99,6 +99,7 @@ dashboard.column.pnl	PnL	PnL	PnL	PnL	PnL	PnL
 dashboard.column.realized_pnl	R PnL	R PnL	R PnL	R PnL	R PnL	R PnL
 dashboard.column.risk	Risk	Risco	Riesgo	风险	Risque	Риск
 dashboard.column.size	Size	Tamanho	Tamaño	规模	Taille	Размер
+dashboard.column.source	Source	Fonte	Fuente	来源	Source	Источник
 dashboard.column.status	Status	Status	Estado	状态	Statut	Статус
 dashboard.column.unrealized_pnl	U PnL	U PnL	U PnL	U PnL	U PnL	U PnL
 dashboard.connected_accounts	Connected Accounts	Contas Conectadas	Cuentas Conectadas	已连接账户	Comptes Connectés	Подключенные Счета
@@ -121,6 +122,7 @@ dashboard.group.remove_group	Remove Group	Remover Grupo	Quitar Grupo	移除分�
 dashboard.group.ratio_edit_hint	Double-click to edit ratio	Clique duas vezes para editar o ratio	Doble clic para editar el ratio	双击编辑比例	Double-cliquez pour modifier le ratio	Двойной щелчок для редактирования коэффициента
 dashboard.group.ratio_math	Follower contracts = master contracts × ratio	Contratos follower = contratos master × ratio	Contratos follower = contratos master × ratio	跟随合约 = 主账户合约 × 比例	Contrats follower = contrats master × ratio	Контракты follower = контракты master × коэффициент
 dashboard.group.ratio_math_format	master {0} × ratio {1} ⇒ follower {2} contracts	master {0} × ratio {1} ⇒ follower {2} contratos	master {0} × ratio {1} ⇒ follower {2} contratos	主账户 {0} × 比例 {1} ⇒ 跟随 {2} 合约	master {0} × ratio {1} ⇒ follower {2} contrats	master {0} × ratio {1} ⇒ follower {2} контрактов
+dashboard.group.ratio_allocation_policy	Separate executions share one cumulative exact-contract rounding basis per route, contract, and direction. Route, ratio, or AddOn restart changes start a new future-only basis.	Execuções separadas compartilham uma base cumulativa de arredondamento por rota, contrato e direção. Alterar a rota, a proporção ou reiniciar o AddOn inicia uma nova base apenas para execuções futuras.	Las ejecuciones separadas comparten una base acumulativa de redondeo por ruta, contrato y dirección. Cambiar la ruta, la proporción o reiniciar el AddOn inicia una base nueva solo para ejecuciones futuras.	独立成交按每条路由、精确合约和方向共享同一累计取整基准。更改路由、比例或重启 AddOn 只会为后续成交开始新的基准。	Les exécutions séparées partagent une base d’arrondi cumulative par route, contrat exact et direction. Un changement de route, de ratio ou un redémarrage de l’AddOn démarre une nouvelle base uniquement pour les exécutions futures.	Отдельные исполнения используют единую накопительную базу округления для каждого маршрута, точного контракта и направления. Изменение маршрута, коэффициента или перезапуск AddOn создаёт новую базу только для будущих исполнений.
 dashboard.group.sync	Sync	Sincronizar	Sincronizar	同步	Synchroniser	Синхронизировать
 dashboard.group.sync_tooltip	Sync enabled followers to the master now	Sincronizar agora os seguidores ativados com o master	Sincronizar ahora los seguidores activados con el maestro	立即将已启用的跟随账户同步到主账户	Synchroniser maintenant les suiveurs activés avec le master	Синхронизировать включённых последователей с мастером сейчас
 dialog.add_follower.prompt	Pick a follower account:	Escolha uma conta follower:	Elige una cuenta follower:	选择一个跟随账户：	Choisissez un compte follower :	Выберите счет follower:
@@ -136,6 +138,7 @@ header.button.flatten_all	Flatten All	Zerar Tudo	Cerrar Todo	全部平仓	Tout A
 header.button.flattened	Flattened!	Zerado!	Cerrado!	已平仓！	Aplati !	Закрыто!
 header.button.replicate	Replicate	Replicar	Replicar	复制跟单	Répliquer	Реплицировать
 header.button.replicating	Replicating	Replicando	Replicando	复制中	Réplication	Репликация
+header.button.replication_on	Replication On	Replicação ligada	Replicación activa	复制已开启	Réplication activée	Репликация включена
 header.button.start	Start	Iniciar	Iniciar	开始	Démarrer	Старт
 header.button.stop	Stop	Parar	Detener	停止	Arrêter	Стоп
 header.metric.fleet_upnl	Daily PnL	PnL Diário	PnL Diario	当日盈亏	PnL Journalier	Дневной PnL

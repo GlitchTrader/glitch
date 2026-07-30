@@ -5,6 +5,7 @@ import unittest
 from replication_lifecycle_sim import (
     AccountSim,
     can_attach_unlinked_full_position_plan,
+    CumulativeExecutionAllocator,
     Instrument,
     Order,
     OrderState,
@@ -13,11 +14,11 @@ from replication_lifecycle_sim import (
     rail_flat_requires_protection_cancel,
     rail_sync_should_reduce_by_delta,
     reconcile_follower_protection_current,
-    scale_execution_delta,
     should_cancel_owned_close_remainder,
     simulate_stale_execution_then_flat,
     sync_decide_initial,
     trim_follower_protection_current,
+    trim_follower_protection_by_geometry,
     GlitchSyncInitialAction,
 )
 
@@ -122,14 +123,106 @@ class ReplicationLifecycleRailGapTests(unittest.TestCase):
         self.assertEqual(account.net_exact(jun), 0)
         self.assertFalse(account.orders[1].working)
 
-    def test_fractional_two_separate_closes_reset_cumulative_basis(self):
+    def test_fractional_separate_orders_share_one_directional_cumulative_basis(self):
         ratio = 0.5
-        first = scale_execution_delta(filled=1, delta=1, ratio=ratio)
-        second = scale_execution_delta(filled=1, delta=1, ratio=ratio)
+        allocator = CumulativeExecutionAllocator()
+        first = allocator.apply(delta=1, ratio=ratio)
+        second = allocator.apply(delta=1, ratio=ratio)
         self.assertEqual(first, 1)
-        self.assertEqual(second, 1)
-        cumulative_single = scale_execution_delta(filled=2, delta=2, ratio=ratio)
-        self.assertEqual(cumulative_single, 1)
+        self.assertEqual(second, 0)
+        self.assertEqual(first + second, 1)
+
+    def test_fractional_carry_can_cross_threshold_on_a_later_master_order(self):
+        allocator = CumulativeExecutionAllocator()
+        self.assertEqual(
+            [allocator.apply(delta=1, ratio=0.4) for _ in range(3)],
+            [0, 1, 0],
+        )
+
+    def test_partial_close_keeps_the_oco_matching_current_master_geometry(self):
+        inst = Instrument("MNQ", "202609")
+        account = AccountSim("Sim102")
+        account.set_net(inst, 1)
+        account.orders = [
+            Order(
+                "GLT-COPY-S-a-entry-01",
+                inst,
+                1,
+                oco="oco-a",
+                order_type="stop",
+                source_token="a",
+                stop_price=28000,
+            ),
+            Order(
+                "GLT-COPY-T-a-entry-01",
+                inst,
+                1,
+                oco="oco-a",
+                order_type="target",
+                source_token="a",
+                target_price=28100,
+            ),
+            Order(
+                "GLT-COPY-S-b-entry-01",
+                inst,
+                1,
+                oco="oco-b",
+                order_type="stop",
+                source_token="b",
+                stop_price=28020,
+            ),
+            Order(
+                "GLT-COPY-T-b-entry-01",
+                inst,
+                1,
+                oco="oco-b",
+                order_type="target",
+                source_token="b",
+                target_price=28120,
+            ),
+        ]
+
+        self.assertTrue(
+            trim_follower_protection_by_geometry(
+                account,
+                inst,
+                [("b", 28020, 28120)],
+            )
+        )
+        self.assertFalse(any(order.working and order.oco == "oco-a" for order in account.orders))
+        self.assertTrue(all(order.working for order in account.orders if order.oco == "oco-b"))
+
+    def test_ambiguous_partial_close_geometry_leaves_all_oco_orders_unchanged(self):
+        inst = Instrument("MNQ", "202609")
+        account = AccountSim("Sim102")
+        account.orders = [
+            Order(
+                "GLT-COPY-S-a-entry-01",
+                inst,
+                1,
+                oco="oco-a",
+                order_type="stop",
+                source_token="a",
+                stop_price=28000,
+            ),
+            Order(
+                "GLT-COPY-T-a-entry-01",
+                inst,
+                1,
+                oco="oco-a",
+                order_type="target",
+                source_token="a",
+                target_price=28100,
+            ),
+        ]
+        self.assertFalse(
+            trim_follower_protection_by_geometry(
+                account,
+                inst,
+                [("missing", 27900, 28200)],
+            )
+        )
+        self.assertTrue(all(order.working for order in account.orders))
 
     def test_concurrent_protective_fill_should_cancel_excess_close_remainder(self):
         inst = Instrument("MNQ", "202509")

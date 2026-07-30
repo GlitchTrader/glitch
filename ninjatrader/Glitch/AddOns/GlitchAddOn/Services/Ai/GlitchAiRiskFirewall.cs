@@ -30,7 +30,7 @@ namespace Glitch.Services
 
             trail.Add("02_ai_auto:pass");
 
-            if (policy.RequireValidLicense && !IsLicenseValid(nowUtc))
+            if (isEnter && policy.RequireValidLicense && !IsLicenseValid(nowUtc))
                 return Reject(trail, 2, "license_invalid", "Valid license required for AI bridge");
 
             trail.Add("02_bridge_available:pass");

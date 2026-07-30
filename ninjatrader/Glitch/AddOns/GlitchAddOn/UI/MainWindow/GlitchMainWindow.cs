@@ -106,6 +106,7 @@ namespace Glitch.UI
         private readonly string _licenseCacheFilePath;
         private GlitchRuntimePolicySettings _runtimePolicySettings;
         private GlitchLicenseCacheState _licenseCacheState;
+        private string _lastPlanLimitWarningSignature;
         private readonly DispatcherTimer _refreshTimer;
         private readonly ConcurrentDictionary<string, PeakState> _peakStatesByAccount;
         private readonly Dictionary<string, List<EventBridgeSubscription>> _accountEventSubscriptions;
@@ -263,7 +264,7 @@ namespace Glitch.UI
             _firmIdToDisplay = BuildFirmIdToDisplayMap(_firmRules);
             _firmDisplayToId = BuildFirmDisplayToIdMap(_firmIdToDisplay);
             _propFirmDisplayOptions = BuildPropFirmDisplayOptions(_firmRules, _firmIdToDisplay);
-            _accountStatusOptions = new List<string> { "Sim", "Eval", "AP" };
+            _accountStatusOptions = new List<string> { "Unknown", "Sim", "Eval", "AP" };
             _globalAccountSizeOptions = BuildGlobalAccountSizeOptions(_firmRules);
             _accountGroups = new ObservableCollection<AccountGroupDefinition>();
             _overridesFilePath = GetOverridesFilePath();
@@ -610,6 +611,13 @@ namespace Glitch.UI
             runningTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             style.Triggers.Add(runningTrigger);
 
+            var armedTrigger = new Trigger { Property = FrameworkElement.TagProperty, Value = "Armed" };
+            armedTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, L("header.button.replication_on", "Replication On")));
+            armedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, OrangeAccentBrush));
+            armedTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, OrangeAccentBrush));
+            armedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
+            style.Triggers.Add(armedTrigger);
+
             var hoverStopped = new MultiTrigger();
             hoverStopped.Conditions.Add(new Condition(UIElement.IsMouseOverProperty, true));
             hoverStopped.Conditions.Add(new Condition(FrameworkElement.TagProperty, "Stopped"));
@@ -627,6 +635,15 @@ namespace Glitch.UI
             hoverRunning.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             hoverRunning.Setters.Add(new Setter(ContentControl.ContentProperty, L("header.button.stop", "Stop")));
             style.Triggers.Add(hoverRunning);
+
+            var hoverArmed = new MultiTrigger();
+            hoverArmed.Conditions.Add(new Condition(UIElement.IsMouseOverProperty, true));
+            hoverArmed.Conditions.Add(new Condition(FrameworkElement.TagProperty, "Armed"));
+            hoverArmed.Setters.Add(new Setter(Control.BackgroundProperty, OrangeAccentBrush));
+            hoverArmed.Setters.Add(new Setter(Control.BorderBrushProperty, OrangeAccentBrush));
+            hoverArmed.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
+            hoverArmed.Setters.Add(new Setter(ContentControl.ContentProperty, L("header.button.stop", "Stop")));
+            style.Triggers.Add(hoverArmed);
 
             return style;
         }
@@ -781,7 +798,7 @@ namespace Glitch.UI
 
         private void OnReplicateButtonClick(object sender, RoutedEventArgs e)
         {
-            SetReplicationFromExternalSurface(!IsReplicationEnabledFromExternalSurface(), "user_click");
+            SetReplicationFromExternalSurface(!_isReplicatingUi, "user_click");
         }
 
         internal bool SetReplicationFromExternalSurface(bool enabled, string origin)
@@ -826,7 +843,7 @@ namespace Glitch.UI
             UpdateRefreshTimerCadence();
             PersistReplicationUiState();
             PublishGlitchShellState();
-            return !enabled || (_copyEngine?.IsEnabled == true);
+            return _isReplicatingUi == enabled;
         }
 
         internal void ToggleReplicationFromExternalSurface()
@@ -840,6 +857,9 @@ namespace Glitch.UI
         }
 
         internal bool IsReplicationEnabledFromExternalSurface() =>
+            _isReplicatingUi;
+
+        internal bool IsReplicationEffectivelyActiveFromExternalSurface() =>
             _isReplicatingUi && _copyEngine?.IsEnabled == true;
 
         private void UpdateHermesModeUi(bool paused)
@@ -985,8 +1005,8 @@ namespace Glitch.UI
             if (_replicateButton == null)
                 return;
 
-            _replicateButton.Tag = _isReplicatingUi && _copyEngine?.IsEnabled == true
-                ? "Running"
+            _replicateButton.Tag = _isReplicatingUi
+                ? (_copyEngine?.IsEnabled == true ? "Running" : "Armed")
                 : "Stopped";
         }
 
@@ -1337,46 +1357,30 @@ namespace Glitch.UI
         private void ApplyPlanLimitsToAccountGroups(string source)
         {
             if (!IsFreeLitePlan() || _accountGroups == null)
+            {
+                _lastPlanLimitWarningSignature = null;
                 return;
+            }
 
             int maxGroups = Math.Max(1, _licenseCacheState?.MaxGroups ?? 1);
             int maxFollowers = Math.Max(1, _licenseCacheState?.MaxFollowersPerGroup ?? 2);
-            bool changed = false;
-
-            for (int groupIndex = 0; groupIndex < _accountGroups.Count; groupIndex++)
+            bool groupsOverLimit = CountConfiguredGroups() > maxGroups;
+            bool followersOverLimit = AnyGroupHasEnabledFollowersOverLimit(maxFollowers);
+            if (!groupsOverLimit && !followersOverLimit)
             {
-                AccountGroupDefinition group = _accountGroups[groupIndex];
-                if (group?.Members == null)
-                    continue;
-
-                if (groupIndex >= maxGroups)
-                {
-                    foreach (AccountGroupMemberRow member in group.Members.Where(member => member != null && member.IsEnabled))
-                    {
-                        member.IsEnabled = false;
-                        changed = true;
-                    }
-
-                    continue;
-                }
-
-                var enabledMembers = group.Members.Where(member => member != null && member.IsEnabled).ToList();
-                for (int i = maxFollowers; i < enabledMembers.Count; i++)
-                {
-                    enabledMembers[i].IsEnabled = false;
-                    changed = true;
-                }
+                _lastPlanLimitWarningSignature = null;
+                return;
             }
 
-            if (!changed)
+            string signature = $"{maxGroups}|{maxFollowers}|{groupsOverLimit}|{followersOverLimit}";
+            if (string.Equals(signature, _lastPlanLimitWarningSignature, StringComparison.Ordinal))
                 return;
 
+            _lastPlanLimitWarningSignature = signature;
             AppendJournal(
                 "System",
                 "Policy",
-                $"Plan limits applied ({source}). Free Lite caps: maxGroups={maxGroups}, maxFollowersPerGroup={maxFollowers}. Extras were safely disabled.");
-            SaveAccountGroupsToDisk();
-            RebuildAccountGroupsUi();
+                $"Plan limits require operator selection ({source}). Free Lite caps: maxGroups={maxGroups}, maxFollowersPerGroup={maxFollowers}. Saved group and follower settings were preserved; replication remains unavailable until the configured selection is within the active plan.");
         }
 
         private void MaybeRunLicenseHeartbeat(DateTime nowUtc)
@@ -1656,8 +1660,14 @@ namespace Glitch.UI
 
                 return complete;
             }
-            catch
+            catch (Exception ex)
             {
+                RecordSubsystemFault("flatten_all", ex);
+                RaiseCriticalWarning(
+                    "System",
+                    "Flatten All failed before native flat/order-free completion could be verified.",
+                    "FlattenAllFailed",
+                    unlocksTrading: false);
                 return false;
             }
             finally
@@ -2400,12 +2410,17 @@ namespace Glitch.UI
 
             int exampleMaster = 2;
             int exampleFollower = Math.Max(1, (int)Math.Round(exampleMaster * ratio, MidpointRounding.AwayFromZero));
-            return Lf(
+            string example = Lf(
                 "dashboard.group.ratio_math_format",
                 "master {0} × ratio {1} ⇒ follower {2} contracts",
                 exampleMaster.ToString(CultureInfo.CurrentCulture),
                 ratio.ToString("0.####", CultureInfo.CurrentCulture),
                 exampleFollower.ToString(CultureInfo.CurrentCulture));
+            return example
+                + Environment.NewLine
+                + L(
+                    "dashboard.group.ratio_allocation_policy",
+                    "Separate executions share one cumulative exact-contract rounding basis per route, contract, and direction. Route, ratio, or AddOn restart changes start a new future-only basis.");
         }
 
         private static Style CreateEditableRatioTextBoxStyle(FrameworkElement context)
@@ -4250,6 +4265,8 @@ namespace Glitch.UI
                     continue;
                 if (!row.IsRiskDataReady)
                     continue;
+                if (!row.IsManualSelection)
+                    continue;
 
                 string accountName = row.DisplayName.Trim();
                 seenAccounts.Add(accountName);
@@ -5389,8 +5406,10 @@ namespace Glitch.UI
                 _hasPendingAuditWrite = false;
                 _lastAuditWriteUtc = now;
             }
-            catch
+            catch (Exception ex)
             {
+                _hasPendingAuditWrite = true;
+                RecordSubsystemFault("audit_persistence", ex);
             }
         }
 
@@ -5398,8 +5417,9 @@ namespace Glitch.UI
         {
             try
             {
-                _accountGroups.Clear();
-                List<GlitchStateStore.AccountGroupRecord> persistedGroups = GlitchStateStore.LoadAccountGroups(_accountGroupsFilePath);
+                List<GlitchStateStore.AccountGroupRecord> persistedGroups =
+                    GlitchStateStore.LoadAccountGroups(_accountGroupsFilePath, out bool recoveredFromBackup);
+                var loadedGroups = new List<AccountGroupDefinition>();
                 foreach (GlitchStateStore.AccountGroupRecord persisted in persistedGroups)
                 {
                     if (persisted == null || string.IsNullOrWhiteSpace(persisted.GroupId) || string.IsNullOrWhiteSpace(persisted.MasterAccount))
@@ -5453,11 +5473,28 @@ namespace Glitch.UI
                         }
                     }
 
-                    _accountGroups.Add(group);
+                    loadedGroups.Add(group);
                 }
+
+                _accountGroups.Clear();
+                foreach (AccountGroupDefinition group in loadedGroups)
+                    _accountGroups.Add(group);
+
+                if (recoveredFromBackup)
+                    RaiseCriticalWarning(
+                        "System",
+                        "Account groups were recovered from the last valid backup; the primary file requires inspection.",
+                        "AccountGroupsRecovered",
+                        unlocksTrading: false);
             }
-            catch
+            catch (Exception ex)
             {
+                RecordSubsystemFault("account_group_load", ex);
+                RaiseCriticalWarning(
+                    "System",
+                    "Account groups could not be loaded safely; the existing in-memory configuration was preserved.",
+                    "AccountGroupsLoadFailed",
+                    unlocksTrading: false);
             }
         }
 
@@ -5503,8 +5540,9 @@ namespace Glitch.UI
                 GlitchStateStore.SaveAccountGroups(_accountGroupsFilePath, records);
                 ReconcileAiTradingScopeWithGroups();
             }
-            catch
+            catch (Exception ex)
             {
+                RecordSubsystemFault("account_group_persistence", ex);
             }
 
             PublishGlitchShellState();
@@ -5792,27 +5830,56 @@ namespace Glitch.UI
             if (_isWindowClosed)
                 return;
 
+            Account accountSnapshot = sender as Account ?? TryExtractAccountFromEventArgs(eventArgs);
+            GlitchCopyExecutionContext executionSnapshot = null;
+            if (string.Equals(eventName, "ExecutionUpdate", StringComparison.OrdinalIgnoreCase))
+                TryBuildCopyExecutionContext(eventArgs, out executionSnapshot);
+            Order orderSnapshot = string.Equals(eventName, "OrderUpdate", StringComparison.OrdinalIgnoreCase)
+                ? TryGetNestedPropertyValue(eventArgs, "Order") as Order
+                : null;
+
             if (!Dispatcher.CheckAccess())
             {
                 Dispatcher.BeginInvoke(
-                    new Action(() => OnAccountRuntimeEventBridgeCore(eventName, sender, eventArgs)),
+                    new Action(() => OnAccountRuntimeEventBridgeCore(
+                        eventName,
+                        accountSnapshot,
+                        eventArgs,
+                        executionSnapshot,
+                        orderSnapshot)),
                     System.Windows.Threading.DispatcherPriority.Normal);
                 return;
             }
 
-            OnAccountRuntimeEventBridgeCore(eventName, sender, eventArgs);
+            OnAccountRuntimeEventBridgeCore(
+                eventName,
+                accountSnapshot,
+                eventArgs,
+                executionSnapshot,
+                orderSnapshot);
         }
 
-        private void OnAccountRuntimeEventBridgeCore(string eventName, object sender, object eventArgs)
+        private void OnAccountRuntimeEventBridgeCore(
+            string eventName,
+            Account account,
+            object eventArgs,
+            GlitchCopyExecutionContext executionSnapshot,
+            Order orderSnapshot)
         {
             try
             {
-                Account account = sender as Account ?? TryExtractAccountFromEventArgs(eventArgs);
                 if (account == null || string.IsNullOrWhiteSpace(account.Name))
                     return;
 
                 DateTime nowUtc = DateTime.UtcNow;
                 bool isAccountItemUpdate = string.Equals(eventName, "AccountItemUpdate", StringComparison.OrdinalIgnoreCase);
+                bool isAccountStatusUpdate = string.Equals(eventName, "AccountStatusUpdate", StringComparison.OrdinalIgnoreCase);
+                if (isAccountStatusUpdate)
+                {
+                    _activeAccountCache.Remove(account.Name.Trim());
+                    QueueBackgroundAccountRefresh(GetActiveAccountsSnapshot(), heavyTabWork: true);
+                }
+
                 if (isAccountItemUpdate)
                 {
                     if (ShouldThrottleAccountItemUpdate(account.Name, nowUtc))
@@ -5838,8 +5905,8 @@ namespace Glitch.UI
                 }
 
                 TryAppendRuntimeEventJournalEntry(eventName, account, eventArgs);
-                TryProcessCopyExecutionFromRuntimeEvent(eventName, account, eventArgs);
-                TryProcessReplicationOrderStateFromRuntimeEvent(eventName, account, eventArgs);
+                TryProcessCopyExecutionFromRuntimeEvent(eventName, account, eventArgs, executionSnapshot);
+                TryProcessReplicationOrderStateFromRuntimeEvent(eventName, account, eventArgs, orderSnapshot);
             }
             catch (Exception ex)
             {
@@ -6537,7 +6604,10 @@ namespace Glitch.UI
             try
             {
                 Dictionary<string, GlitchStateStore.SelectionOverrideRecord> persisted =
-                    GlitchStateStore.LoadSelectionOverrides(_overridesFilePath, NormalizeAccountStatus);
+                    GlitchStateStore.LoadSelectionOverrides(
+                        _overridesFilePath,
+                        NormalizeAccountStatus,
+                        out bool recoveredFromBackup);
 
                 foreach (var kvp in persisted)
                 {
@@ -6558,9 +6628,22 @@ namespace Glitch.UI
                         IsManual = persistedRow.IsManual
                     };
                 }
+
+                if (recoveredFromBackup)
+                    RaiseCriticalWarning(
+                        "System",
+                        "Account overrides were recovered from the last valid backup; the primary file requires inspection.",
+                        "AccountOverridesRecovered",
+                        unlocksTrading: false);
             }
-            catch
+            catch (Exception ex)
             {
+                RecordSubsystemFault("account_override_load", ex);
+                RaiseCriticalWarning(
+                    "System",
+                    "Account overrides could not be loaded safely; no persisted row was silently substituted.",
+                    "AccountOverridesLoadFailed",
+                    unlocksTrading: false);
             }
         }
 
@@ -6583,8 +6666,9 @@ namespace Glitch.UI
 
                 GlitchStateStore.SaveSelectionOverrides(_overridesFilePath, records);
             }
-            catch
+            catch (Exception ex)
             {
+                RecordSubsystemFault("account_override_persistence", ex);
             }
         }
 
@@ -6727,6 +6811,17 @@ namespace Glitch.UI
                 if (isConnected.HasValue && !isConnected.Value)
                     return false;
 
+                PropertyInfo accountConnectionStatusProperty = accountType.GetProperty("ConnectionStatus");
+                if (accountConnectionStatusProperty != null)
+                {
+                    object accountConnectionStatus = accountConnectionStatusProperty.GetValue(account, null);
+                    if (accountConnectionStatus == null ||
+                        !string.Equals(accountConnectionStatus.ToString(), "Connected", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return false;
+                    }
+                }
+
                 var connectionProperty = accountType.GetProperty("Connection");
                 var connection = connectionProperty?.GetValue(account, null);
                 if (connection != null)
@@ -6772,6 +6867,17 @@ namespace Glitch.UI
                 bool? isConnected = TryGetBoolProperty(account, accountType, "IsConnected", "Connected");
                 if (isConnected.HasValue && !isConnected.Value)
                     return false;
+
+                PropertyInfo accountConnectionStatusProperty = accountType.GetProperty("ConnectionStatus");
+                if (accountConnectionStatusProperty != null)
+                {
+                    object accountConnectionStatus = accountConnectionStatusProperty.GetValue(account, null);
+                    if (accountConnectionStatus == null ||
+                        !string.Equals(accountConnectionStatus.ToString(), "Connected", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return false;
+                    }
+                }
 
                 object connection = accountType.GetProperty("Connection")?.GetValue(account, null);
                 if (connection != null)

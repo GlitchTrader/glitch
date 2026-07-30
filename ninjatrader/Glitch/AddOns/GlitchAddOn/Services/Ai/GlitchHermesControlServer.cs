@@ -1,9 +1,10 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Glitch.Services
 {
@@ -50,39 +51,8 @@ namespace Glitch.Services
             lock (SyncRoot)
             {
                 string path = GetPath();
-                Directory.CreateDirectory(Path.GetDirectoryName(path));
                 state.UpdatedUtc = DateTime.UtcNow;
-                File.WriteAllText(path, BuildJson(state), new UTF8Encoding(false));
-            }
-        }
-
-        public static void AppendCommand(string commandId, string action, string status)
-        {
-            lock (SyncRoot)
-            {
-                string path = GlitchStateStore.GetDefaultPath(Path.Combine("hermes", "control-commands.jsonl"));
-                Directory.CreateDirectory(Path.GetDirectoryName(path));
-                string line = "{\"schema_version\":\"glitch.control.receipt.v1\",\"recorded_utc\":"
-                    + Quote(DateTime.UtcNow.ToString("o")) + ",\"command_id\":" + Quote(commandId)
-                    + ",\"action\":" + Quote(action) + ",\"status\":" + Quote(status) + "}";
-                File.AppendAllText(path, line + Environment.NewLine, new UTF8Encoding(false));
-            }
-        }
-
-        public static bool HasCommandId(string commandId)
-        {
-            if (string.IsNullOrWhiteSpace(commandId))
-                return false;
-            lock (SyncRoot)
-            {
-                string path = GlitchStateStore.GetDefaultPath(Path.Combine("hermes", "control-commands.jsonl"));
-                if (!File.Exists(path))
-                    return false;
-                string needle = "\"command_id\":" + Quote(commandId);
-                foreach (string line in File.ReadLines(path))
-                    if (line.IndexOf(needle, StringComparison.Ordinal) >= 0)
-                        return true;
-                return false;
+                GlitchStateStore.WriteAllTextAtomic(path, BuildJson(state), new UTF8Encoding(false));
             }
         }
 
@@ -106,6 +76,123 @@ namespace Glitch.Services
         }
     }
 
+    internal sealed class GlitchHermesControlReceipt
+    {
+        public string CommandId { get; set; }
+        public string Action { get; set; }
+        public string Status { get; set; }
+        public string Message { get; set; }
+        public DateTime UpdatedUtc { get; set; }
+    }
+
+    internal static class GlitchHermesControlReceiptStore
+    {
+        private static readonly object SyncRoot = new object();
+        private static readonly Encoding Utf8NoBom = new UTF8Encoding(false);
+
+        public static bool TryBegin(string commandId, string action, out GlitchHermesControlReceipt receipt)
+        {
+            lock (SyncRoot)
+            {
+                if (TryLoadUnsafe(commandId, out receipt))
+                    return false;
+
+                receipt = new GlitchHermesControlReceipt
+                {
+                    CommandId = commandId,
+                    Action = action,
+                    Status = "applying",
+                    UpdatedUtc = DateTime.UtcNow
+                };
+                string path = GetPath(commandId);
+                try
+                {
+                    GlitchStateStore.WriteAllTextAtomic(path, BuildJson(receipt), Utf8NoBom);
+                    return true;
+                }
+                catch (IOException)
+                {
+                    if (TryLoadUnsafe(commandId, out receipt))
+                        return false;
+                    throw;
+                }
+            }
+        }
+
+        public static GlitchHermesControlReceipt Complete(
+            GlitchHermesControlReceipt receipt,
+            string status,
+            string message)
+        {
+            if (receipt == null)
+                throw new ArgumentNullException(nameof(receipt));
+
+            lock (SyncRoot)
+            {
+                receipt.Status = status;
+                receipt.Message = message;
+                receipt.UpdatedUtc = DateTime.UtcNow;
+                GlitchStateStore.WriteAllTextAtomic(GetPath(receipt.CommandId), BuildJson(receipt), Utf8NoBom);
+                return receipt;
+            }
+        }
+
+        private static bool TryLoadUnsafe(string commandId, out GlitchHermesControlReceipt receipt)
+        {
+            receipt = null;
+            string path = GetPath(commandId);
+            if (!File.Exists(path))
+                return false;
+
+            string json = File.ReadAllText(path, Encoding.UTF8);
+            string storedCommandId = GlitchAiJsonFields.ExtractString(json, "command_id");
+            string action = GlitchAiJsonFields.ExtractString(json, "action");
+            string status = GlitchAiJsonFields.ExtractString(json, "status");
+            if (!string.Equals(storedCommandId, commandId, StringComparison.Ordinal)
+                || string.IsNullOrWhiteSpace(action)
+                || string.IsNullOrWhiteSpace(status))
+            {
+                throw new InvalidDataException("The durable control receipt is invalid.");
+            }
+
+            receipt = new GlitchHermesControlReceipt
+            {
+                CommandId = storedCommandId,
+                Action = action,
+                Status = status,
+                Message = GlitchAiJsonFields.ExtractString(json, "message"),
+                UpdatedUtc = File.GetLastWriteTimeUtc(path)
+            };
+            return true;
+        }
+
+        private static string GetPath(string commandId)
+        {
+            byte[] bytes = Encoding.UTF8.GetBytes(commandId ?? string.Empty);
+            string fileName;
+            using (SHA256 sha = SHA256.Create())
+            {
+                byte[] hash = sha.ComputeHash(bytes);
+                var builder = new StringBuilder(hash.Length * 2);
+                foreach (byte value in hash)
+                    builder.Append(value.ToString("x2"));
+                fileName = builder.ToString() + ".json";
+            }
+            return GlitchStateStore.GetDefaultPath(Path.Combine("hermes", "control-receipts", fileName));
+        }
+
+        private static string BuildJson(GlitchHermesControlReceipt receipt)
+        {
+            return "{\"schema_version\":\"glitch.control.receipt.v2\",\"command_id\":"
+                + GlitchHermesControlStateStore.Quote(receipt.CommandId)
+                + ",\"action\":" + GlitchHermesControlStateStore.Quote(receipt.Action)
+                + ",\"status\":" + GlitchHermesControlStateStore.Quote(receipt.Status)
+                + ",\"message\":" + GlitchHermesControlStateStore.Quote(receipt.Message)
+                + ",\"updated_utc\":" + GlitchHermesControlStateStore.Quote(receipt.UpdatedUtc.ToString("o"))
+                + "}";
+        }
+    }
+
     internal static class GlitchHermesControlServer
     {
         public const string BindAddress = "http://127.0.0.1:8789/";
@@ -117,8 +204,10 @@ namespace Glitch.Services
 
         public static Func<bool, bool> SetReplication;
         public static Func<bool> GetReplication;
-        public static Func<bool> FlattenAll;
+        public static Func<bool> GetReplicationEffective;
+        public static Func<Task<bool>> FlattenAllAsync;
         public static Action<bool> TradingModeChanged;
+        public static Action<string, string> CommandFailed;
 
         public static bool IsRunning => Interlocked.CompareExchange(ref _isRunning, 0, 0) == 1;
 
@@ -183,6 +272,8 @@ namespace Glitch.Services
 
         private static void HandleRequest(HttpListenerContext context)
         {
+            string commandId = null;
+            string action = null;
             try
             {
                 string path = context.Request.Url == null ? "/" : context.Request.Url.AbsolutePath;
@@ -209,8 +300,8 @@ namespace Glitch.Services
                     Write(context, 413, Error("payload_too_large"));
                     return;
                 }
-                string commandId = GlitchAiJsonFields.ExtractString(body, "command_id");
-                string action = GlitchAiJsonFields.ExtractString(body, "action");
+                commandId = GlitchAiJsonFields.ExtractString(body, "command_id");
+                action = GlitchAiJsonFields.ExtractString(body, "action");
                 string schemaVersion = GlitchAiJsonFields.ExtractString(body, "schema_version");
                 if (!string.Equals(schemaVersion, "glitch.control.command.v1", StringComparison.Ordinal)
                     || string.IsNullOrWhiteSpace(commandId) || string.IsNullOrWhiteSpace(action))
@@ -218,36 +309,52 @@ namespace Glitch.Services
                     Write(context, 400, Error("command_contract_invalid"));
                     return;
                 }
-                lock (SyncRoot)
+                string normalized = action.Trim().ToUpperInvariant();
+                GlitchHermesControlReceipt receipt;
+                if (!GlitchHermesControlReceiptStore.TryBegin(commandId, normalized, out receipt))
                 {
-                    GlitchHermesControlState state = GlitchHermesControlStateStore.Load();
-                    if (string.Equals(state.LastCommandId, commandId, StringComparison.Ordinal)
-                        || GlitchHermesControlStateStore.HasCommandId(commandId))
-                    {
-                        Write(context, 200, StatusJson(true));
-                        return;
-                    }
-                    string normalized = action.Trim().ToUpperInvariant();
-                    if (!Execute(normalized, state))
-                    {
-                        GlitchHermesControlStateStore.AppendCommand(commandId, normalized, "rejected");
-                        Write(context, 409, Error("command_not_applied"));
-                        return;
-                    }
-                    state.LastCommandId = commandId;
-                    GlitchHermesControlStateStore.Save(state);
-                    GlitchHermesControlStateStore.AppendCommand(commandId, normalized, "applied");
-                    Write(context, 200, StatusJson(false));
+                    int duplicateStatus = string.Equals(receipt.Status, "applied", StringComparison.Ordinal) ? 200 : 409;
+                    Write(context, duplicateStatus, StatusJson(true, receipt));
+                    return;
                 }
+
+                GlitchHermesControlState state = GlitchHermesControlStateStore.Load();
+                string failure;
+                bool applied = Execute(normalized, state, out failure);
+                if (!applied)
+                {
+                    receipt = GlitchHermesControlReceiptStore.Complete(
+                        receipt,
+                        string.Equals(failure, "unsupported_action", StringComparison.Ordinal) ? "rejected" : "failed",
+                        failure);
+                    if (string.Equals(receipt.Status, "failed", StringComparison.Ordinal))
+                        NotifyFailure(commandId, failure);
+                    Write(context, 409, StatusJson(false, receipt));
+                    return;
+                }
+
+                state.LastCommandId = commandId;
+                GlitchHermesControlStateStore.Save(state);
+                receipt = GlitchHermesControlReceiptStore.Complete(receipt, "applied", null);
+                Write(context, 200, StatusJson(false, receipt));
             }
             catch (Exception ex)
             {
+                NotifyFailure(commandId, ex.Message);
                 Write(context, 500, "{\"error\":\"control_failed\",\"message\":" + GlitchHermesControlStateStore.Quote(ex.Message) + "}");
             }
         }
 
-        private static bool Execute(string action, GlitchHermesControlState state)
+        private static void NotifyFailure(string commandId, string message)
         {
+            Action<string, string> failed = CommandFailed;
+            if (failed != null)
+                failed(commandId, message);
+        }
+
+        private static bool Execute(string action, GlitchHermesControlState state, out string failure)
+        {
+            failure = null;
             if (action == "TRADING_OFF" || action == "TRADING_ON"
                 || action == "TRADING_PAUSE" || action == "TRADING_RESUME")
             {
@@ -259,41 +366,81 @@ namespace Glitch.Services
             if (action == "REPLICATE_ON" || action == "REPLICATE_OFF")
             {
                 Func<bool, bool> setter = SetReplication;
-                return setter != null && setter(action == "REPLICATE_ON");
+                if (setter == null)
+                {
+                    failure = "replication_surface_unavailable";
+                    return false;
+                }
+                if (!setter(action == "REPLICATE_ON"))
+                {
+                    failure = "replication_request_denied";
+                    return false;
+                }
+                return true;
             }
             if (action == "FLATTEN_ALL")
             {
                 state.TradingPaused = true;
+                GlitchHermesControlStateStore.Save(state);
                 Action<bool> changed = TradingModeChanged;
                 if (changed != null) changed(true);
-                Func<bool> flatten = FlattenAll;
-                return flatten != null && flatten();
+                Func<Task<bool>> flatten = FlattenAllAsync;
+                if (flatten == null)
+                {
+                    failure = "flatten_surface_unavailable";
+                    return false;
+                }
+                Task<bool> completion = flatten();
+                if (completion == null || !completion.GetAwaiter().GetResult())
+                {
+                    failure = "flatten_incomplete";
+                    return false;
+                }
+                return true;
             }
+            failure = "unsupported_action";
             return false;
         }
 
-        private static string StatusJson(bool duplicate)
+        private static string StatusJson(bool duplicate, GlitchHermesControlReceipt receipt = null)
         {
             GlitchHermesControlState state = GlitchHermesControlStateStore.Load();
             GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
             Func<bool> getReplication = GetReplication;
-            bool replication = getReplication != null && getReplication();
+            Func<bool> getReplicationEffective = GetReplicationEffective;
+            bool replicationDesired = getReplication != null && getReplication();
+            bool replicationEffective = getReplicationEffective != null && getReplicationEffective();
             return "{\"schema_version\":\"glitch.control.status.v1\",\"trading_paused\":"
                 + (state.TradingPaused ? "true" : "false") + ",\"trading_enabled\":"
                 + (state.TradingPaused ? "false" : "true") + ",\"policy_valid\":"
                 + (policy != null && policy.IsValid ? "true" : "false") + ",\"execution_enabled\":"
                 + (GlitchAiOrderExecutor.IsExecutionEnabled(policy) ? "true" : "false")
-                + ",\"replication_enabled\":"
-                + (replication ? "true" : "false") + ",\"duplicate\":" + (duplicate ? "true" : "false") + "}";
+                + ",\"replication_enabled\":" + (replicationDesired ? "true" : "false")
+                + ",\"replication_effective\":" + (replicationEffective ? "true" : "false")
+                + ",\"duplicate\":" + (duplicate ? "true" : "false")
+                + ",\"command_id\":" + GlitchHermesControlStateStore.Quote(receipt?.CommandId)
+                + ",\"command_action\":" + GlitchHermesControlStateStore.Quote(receipt?.Action)
+                + ",\"command_status\":" + GlitchHermesControlStateStore.Quote(receipt?.Status)
+                + ",\"command_message\":" + GlitchHermesControlStateStore.Quote(receipt?.Message)
+                + "}";
         }
 
         private static string ReadBody(HttpListenerRequest request)
         {
-            if (request.ContentLength64 > MaxBodyBytes) return null;
-            using (var reader = new StreamReader(request.InputStream, request.ContentEncoding ?? Encoding.UTF8))
+            if (request.ContentLength64 > MaxBodyBytes)
+                return null;
+
+            using (var buffer = new MemoryStream())
             {
-                string body = reader.ReadToEnd();
-                return Encoding.UTF8.GetByteCount(body) <= MaxBodyBytes ? body : null;
+                var chunk = new byte[4096];
+                int read;
+                while ((read = request.InputStream.Read(chunk, 0, chunk.Length)) > 0)
+                {
+                    if (buffer.Length + read > MaxBodyBytes)
+                        return null;
+                    buffer.Write(chunk, 0, read);
+                }
+                return (request.ContentEncoding ?? Encoding.UTF8).GetString(buffer.ToArray());
             }
         }
 

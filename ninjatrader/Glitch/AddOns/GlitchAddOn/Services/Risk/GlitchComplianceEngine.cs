@@ -74,14 +74,18 @@ namespace Glitch.Services
         public static string NormalizeAccountStatus(string status)
         {
             if (string.IsNullOrWhiteSpace(status))
-                return "Eval";
+                return "Unknown";
 
             string value = status.Trim();
             if (value.Equals("Sim", StringComparison.OrdinalIgnoreCase))
                 return "Sim";
+            if (value.Equals("Eval", StringComparison.OrdinalIgnoreCase))
+                return "Eval";
             if (value.Equals("AP", StringComparison.OrdinalIgnoreCase) || value.Equals("Approved", StringComparison.OrdinalIgnoreCase))
                 return "AP";
-            return "Eval";
+            if (value.Equals("PA", StringComparison.OrdinalIgnoreCase))
+                return "AP";
+            return "Unknown";
         }
 
         public static string InferPropFirmId(Account account, out string confidence)
@@ -138,7 +142,7 @@ namespace Glitch.Services
         {
             confidence = "Low";
             if (account == null)
-                return "Eval";
+                return "Unknown";
 
             string accountName = (account.Name ?? string.Empty).Trim();
             string upperName = accountName.ToUpperInvariant();
@@ -169,7 +173,7 @@ namespace Glitch.Services
                 return "Eval";
             }
 
-            return "Eval";
+            return "Unknown";
         }
 
         public static string GetExecutionProviderHint(Account account)
