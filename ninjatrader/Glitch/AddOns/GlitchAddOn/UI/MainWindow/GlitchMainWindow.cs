@@ -106,6 +106,7 @@ namespace Glitch.UI
         private readonly string _licenseCacheFilePath;
         private GlitchRuntimePolicySettings _runtimePolicySettings;
         private GlitchLicenseCacheState _licenseCacheState;
+        private string _lastPlanLimitWarningSignature;
         private readonly DispatcherTimer _refreshTimer;
         private readonly ConcurrentDictionary<string, PeakState> _peakStatesByAccount;
         private readonly Dictionary<string, List<EventBridgeSubscription>> _accountEventSubscriptions;
@@ -1218,46 +1219,30 @@ namespace Glitch.UI
         private void ApplyPlanLimitsToAccountGroups(string source)
         {
             if (!IsFreeLitePlan() || _accountGroups == null)
+            {
+                _lastPlanLimitWarningSignature = null;
                 return;
+            }
 
             int maxGroups = Math.Max(1, _licenseCacheState?.MaxGroups ?? 1);
             int maxFollowers = Math.Max(1, _licenseCacheState?.MaxFollowersPerGroup ?? 2);
-            bool changed = false;
-
-            for (int groupIndex = 0; groupIndex < _accountGroups.Count; groupIndex++)
+            bool groupsOverLimit = CountConfiguredGroups() > maxGroups;
+            bool followersOverLimit = AnyGroupHasEnabledFollowersOverLimit(maxFollowers);
+            if (!groupsOverLimit && !followersOverLimit)
             {
-                AccountGroupDefinition group = _accountGroups[groupIndex];
-                if (group?.Members == null)
-                    continue;
-
-                if (groupIndex >= maxGroups)
-                {
-                    foreach (AccountGroupMemberRow member in group.Members.Where(member => member != null && member.IsEnabled))
-                    {
-                        member.IsEnabled = false;
-                        changed = true;
-                    }
-
-                    continue;
-                }
-
-                var enabledMembers = group.Members.Where(member => member != null && member.IsEnabled).ToList();
-                for (int i = maxFollowers; i < enabledMembers.Count; i++)
-                {
-                    enabledMembers[i].IsEnabled = false;
-                    changed = true;
-                }
+                _lastPlanLimitWarningSignature = null;
+                return;
             }
 
-            if (!changed)
+            string signature = $"{maxGroups}|{maxFollowers}|{groupsOverLimit}|{followersOverLimit}";
+            if (string.Equals(signature, _lastPlanLimitWarningSignature, StringComparison.Ordinal))
                 return;
 
+            _lastPlanLimitWarningSignature = signature;
             AppendJournal(
                 "System",
                 "Policy",
-                $"Plan limits applied ({source}). Free Lite caps: maxGroups={maxGroups}, maxFollowersPerGroup={maxFollowers}. Extras were safely disabled.");
-            SaveAccountGroupsToDisk();
-            RebuildAccountGroupsUi();
+                $"Plan limits require operator selection ({source}). Free Lite caps: maxGroups={maxGroups}, maxFollowersPerGroup={maxFollowers}. Saved group and follower settings were preserved; replication remains unavailable until the configured selection is within the active plan.");
         }
 
         private void MaybeRunLicenseHeartbeat(DateTime nowUtc)
