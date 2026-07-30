@@ -5631,22 +5631,44 @@ namespace Glitch.UI
             if (_isWindowClosed)
                 return;
 
+            Account accountSnapshot = sender as Account ?? TryExtractAccountFromEventArgs(eventArgs);
+            GlitchCopyExecutionContext executionSnapshot = null;
+            if (string.Equals(eventName, "ExecutionUpdate", StringComparison.OrdinalIgnoreCase))
+                TryBuildCopyExecutionContext(eventArgs, out executionSnapshot);
+            Order orderSnapshot = string.Equals(eventName, "OrderUpdate", StringComparison.OrdinalIgnoreCase)
+                ? TryGetNestedPropertyValue(eventArgs, "Order") as Order
+                : null;
+
             if (!Dispatcher.CheckAccess())
             {
                 Dispatcher.BeginInvoke(
-                    new Action(() => OnAccountRuntimeEventBridgeCore(eventName, sender, eventArgs)),
+                    new Action(() => OnAccountRuntimeEventBridgeCore(
+                        eventName,
+                        accountSnapshot,
+                        eventArgs,
+                        executionSnapshot,
+                        orderSnapshot)),
                     System.Windows.Threading.DispatcherPriority.Normal);
                 return;
             }
 
-            OnAccountRuntimeEventBridgeCore(eventName, sender, eventArgs);
+            OnAccountRuntimeEventBridgeCore(
+                eventName,
+                accountSnapshot,
+                eventArgs,
+                executionSnapshot,
+                orderSnapshot);
         }
 
-        private void OnAccountRuntimeEventBridgeCore(string eventName, object sender, object eventArgs)
+        private void OnAccountRuntimeEventBridgeCore(
+            string eventName,
+            Account account,
+            object eventArgs,
+            GlitchCopyExecutionContext executionSnapshot,
+            Order orderSnapshot)
         {
             try
             {
-                Account account = sender as Account ?? TryExtractAccountFromEventArgs(eventArgs);
                 if (account == null || string.IsNullOrWhiteSpace(account.Name))
                     return;
 
@@ -5684,8 +5706,8 @@ namespace Glitch.UI
                 }
 
                 TryAppendRuntimeEventJournalEntry(eventName, account, eventArgs);
-                TryProcessCopyExecutionFromRuntimeEvent(eventName, account, eventArgs);
-                TryProcessReplicationOrderStateFromRuntimeEvent(eventName, account, eventArgs);
+                TryProcessCopyExecutionFromRuntimeEvent(eventName, account, eventArgs, executionSnapshot);
+                TryProcessReplicationOrderStateFromRuntimeEvent(eventName, account, eventArgs, orderSnapshot);
             }
             catch (Exception ex)
             {

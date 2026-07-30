@@ -1110,7 +1110,8 @@ namespace Glitch.Services
             OrderAction action,
             int quantity,
             string identity,
-            string signalPrefix)
+            string signalPrefix,
+            FollowerEntryLifecycle recoveryOwner = null)
         {
             string accountToken = GlitchReplicationProtection.StableToken(account?.Name, 6);
             string closeToken = GlitchReplicationProtection.StableToken(identity, 8);
@@ -1144,6 +1145,7 @@ namespace Glitch.Services
                         Account = account,
                         Instrument = instrument,
                         Order = order,
+                        RecoveryOwner = recoveryOwner,
                         InitialNet = initialNet,
                         TargetNet = initialNet
                             + (GlitchReplicationEngine.GetOrderActionSign(action) * quantity)
@@ -1170,6 +1172,8 @@ namespace Glitch.Services
         private void TrackCloseOrder(Account account, Order order, string signal)
         {
             CloseState lifecycle;
+            bool terminalFailure = false;
+            int unfilledQuantity = 0;
             lock (_gate)
             {
                 if (!_closesBySignal.TryGetValue(signal, out lifecycle)
@@ -1178,8 +1182,30 @@ namespace Glitch.Services
                     return;
                 lifecycle.Order = order;
                 if (!GlitchReplicationEngine.IsWorkingOrderState(order.OrderState))
+                {
+                    unfilledQuantity = RemainingQuantity(order);
+                    terminalFailure = unfilledQuantity > 0
+                        && (order.OrderState == OrderState.Rejected || order.OrderState == OrderState.Cancelled);
+                    if (terminalFailure && lifecycle.RecoveryOwner != null)
+                        lifecycle.RecoveryOwner.RecoveryCloseSubmitted = false;
                     _closesBySignal.Remove(signal);
+                }
             }
+            if (!terminalFailure)
+                return;
+
+            Journal?.Invoke(
+                account.Name,
+                "follower_close|signal=" + CleanToken(signal)
+                + "|state=" + CleanToken(order.OrderState.ToString())
+                + "|unfilled_qty=" + unfilledQuantity.ToString(CultureInfo.InvariantCulture)
+                + "|result=terminal_unresolved");
+            RaiseCritical?.Invoke(
+                account.Name,
+                "A Glitch-owned follower close ended before its full quantity executed.",
+                "FollowerCloseTerminalUnresolved|"
+                    + CleanToken(order.Instrument?.FullName)
+                    + "|" + CleanToken(signal));
         }
 
         private void TrySubmitAttributedRecoveryClose(
@@ -1199,13 +1225,6 @@ namespace Glitch.Services
                     + "|result=manual_override_unattributed");
                 return;
             }
-            lock (_gate)
-            {
-                if (lifecycle.RecoveryCloseSubmitted)
-                    return;
-                lifecycle.RecoveryCloseSubmitted = true;
-            }
-
             string root = GlitchReplicationEngine.GetInstrumentRoot(lifecycle.Instrument);
             if (!GlitchReplicationEngine.TryGetNetQuantityForInstrument(
                     lifecycle.Account,
@@ -1223,13 +1242,25 @@ namespace Glitch.Services
             }
 
             int quantity = Math.Min(attributableQuantity, Math.Abs(followerNet));
+            lock (_gate)
+            {
+                if (lifecycle.RecoveryCloseSubmitted)
+                    return;
+                lifecycle.RecoveryCloseSubmitted = true;
+            }
             FollowerOrderSubmission submission = SubmitFollowerClose(
                 lifecycle.Account,
                 lifecycle.Instrument,
                 lifecycle.IsLong ? OrderAction.Sell : OrderAction.BuyToCover,
                 quantity,
                 lifecycle.EntrySignal + "|" + reason,
-                CopySignalName);
+                CopySignalName,
+                lifecycle);
+            if (!string.Equals(submission.Result, "submitted", StringComparison.OrdinalIgnoreCase))
+            {
+                lock (_gate)
+                    lifecycle.RecoveryCloseSubmitted = false;
+            }
             Journal?.Invoke(
                 lifecycle.Account.Name,
                 "follower_recovery|instrument=" + CleanToken(root)
@@ -2466,6 +2497,7 @@ namespace Glitch.Services
             public Account Account { get; set; }
             public Instrument Instrument { get; set; }
             public Order Order { get; set; }
+            public FollowerEntryLifecycle RecoveryOwner { get; set; }
             public int InitialNet { get; set; }
             public int TargetNet { get; set; }
             public bool CancelRequested { get; set; }

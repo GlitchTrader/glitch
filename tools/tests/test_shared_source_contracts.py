@@ -704,6 +704,38 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("|result=manual_override_unattributed", copy_engine)
         self.assertNotIn("account.Flatten", copy_engine)
 
+    def test_replication_snapshots_execution_before_dispatch_and_tracks_close_failures(self):
+        window = source(MAIN_WINDOW)
+        replication = source(REPLICATION_UI)
+        copy_engine = source(COPY_ENGINE)
+        bridge = method_body(
+            window,
+            "private void OnAccountRuntimeEventBridge",
+            "private void OnAccountRuntimeEventBridgeCore",
+        )
+        self.assertLess(
+            bridge.index("TryBuildCopyExecutionContext(eventArgs, out executionSnapshot)"),
+            bridge.index("Dispatcher.BeginInvoke"),
+        )
+        self.assertIn("GlitchCopyExecutionContext executionSnapshot", replication)
+        recovery = method_body(
+            copy_engine,
+            "private void TrySubmitAttributedRecoveryClose",
+            "private FollowerOrderSubmission SubmitFollowerEntry",
+        )
+        self.assertLess(
+            recovery.index("TryGetNetQuantityForInstrument"),
+            recovery.index("lifecycle.RecoveryCloseSubmitted = true"),
+        )
+        self.assertIn('submission.Result, "submitted"', recovery)
+        close_tracking = method_body(
+            copy_engine,
+            "private void TrackCloseOrder",
+            "private void TrySubmitAttributedRecoveryClose",
+        )
+        self.assertIn("FollowerCloseTerminalUnresolved", close_tracking)
+        self.assertIn("lifecycle.RecoveryOwner.RecoveryCloseSubmitted = false", close_tracking)
+
     def test_replication_state_is_truthful_and_reload_is_observe_only(self):
         window = source(MAIN_WINDOW)
         performance = source(ADDON / "UI/MainWindow/GlitchMainWindow.Performance.partial.cs")
