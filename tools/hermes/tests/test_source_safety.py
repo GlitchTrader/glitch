@@ -22,6 +22,7 @@ EXCHANGE_WRITER = ADDON / "Services/Persistence/GlitchHermesExchangeWriter.cs"
 HEALTH = ADDON / "Services/Persistence/GlitchAiHealthEvaluator.cs"
 STATE_STORE = ADDON / "Services/Ai/GlitchAiIntentStateStore.cs"
 INTENT_SERVER = ADDON / "Services/Ai/GlitchAiIntentServer.cs"
+CONTROL_SERVER = ADDON / "Services/Ai/GlitchHermesControlServer.cs"
 MAIN_WINDOW = ADDON / "UI/MainWindow/GlitchMainWindow.cs"
 ADDON_SHELL = ADDON / "GlitchAddOn.cs"
 OUTCOME_RECONCILER = ROOT / "tools/hermes/reconcile-hermes-outcomes.py"
@@ -104,6 +105,36 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("total > MaxBodyBytes", body)
         self.assertNotIn("StreamReader", body)
         self.assertNotIn("char[] buffer", body)
+
+    def test_control_receipts_are_durable_bounded_and_native_complete(self):
+        control = source(CONTROL_SERVER)
+        main = source(MAIN_WINDOW)
+        telemetry = source(TELEMETRY_UI)
+        handler = method_body(
+            control,
+            "private static void HandleRequest",
+            "private static void NotifyFailure",
+        )
+        body = method_body(
+            control,
+            "private static string ReadBody",
+            "private static string Error",
+        )
+        self.assertIn("glitch.control.receipt.v2", control)
+        self.assertIn('Status = "applying"', control)
+        self.assertIn("GlitchStateStore.WriteAllTextAtomic", control)
+        self.assertIn("GlitchHermesControlReceiptStore.TryBegin", handler)
+        self.assertNotIn("lock (SyncRoot)", handler)
+        self.assertNotIn("HasCommandId", handler)
+        self.assertIn("FlattenAllAsync", control)
+        self.assertIn("completion.GetAwaiter().GetResult()", control)
+        self.assertIn("TryExecuteFlattenAllAsync()", telemetry)
+        self.assertIn("replication_effective", control)
+        self.assertIn("return _isReplicatingUi == enabled;", main)
+        self.assertIn("return null;", body)
+        self.assertIn("buffer.Length + read > MaxBodyBytes", body)
+        self.assertNotIn("ReadToEnd", body)
+        self.assertIn("CommandFailed", telemetry)
 
     def test_restart_reconciles_without_time_created_replay_authority(self):
         server = source(INTENT_SERVER)
