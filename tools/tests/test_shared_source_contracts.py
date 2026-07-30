@@ -19,6 +19,7 @@ LOCALIZATION = ADDON / "Resources/Localization.tsv"
 POLICY_STORE = ADDON / "Services/Persistence/GlitchRuntimePolicyStore.cs"
 TRADE_INSIGHTS = ADDON / "Services/Insights/GlitchTradeInsightsService.cs"
 SUMMARY_TAB = ADDON / "UI/MainWindow/GlitchMainWindow.SummaryTab.partial.cs"
+JOURNAL_TAB = ADDON / "UI/MainWindow/GlitchMainWindow.JournalTab.partial.cs"
 METADATA = ADDON / "Services/Trading/GlitchInstrumentMetadataService.cs"
 FEED_BUS = ADDON / "UI/Analytics/GlitchAnalyticsFeedBus.cs"
 ANALYTICS_BRIDGE = INDICATORS / "GlitchAnalyticsBridge.cs"
@@ -205,8 +206,19 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         callback = method_body(window, "private void OnAccountRuntimeEventBridgeCore", "private static bool IsReplicationInternalSignal")
         self.assertNotIn("RefreshAccountData(", callback)
         self.assertIn("QueueAccountRefreshFromRuntimeEvent(account, eventArgs);", callback)
+        self.assertIn("_activeAccountCache.Remove(account.Name.Trim());", callback)
+        self.assertIn("QueueBackgroundAccountRefresh(GetActiveAccountsSnapshot(), heavyTabWork: true);", callback)
         self.assertIn("private void QueueAccountRefreshFromRuntimeEvent(Account account, object eventArgs)", refresh)
         self.assertIn("sequence < Interlocked.Read(ref _accountRefreshSequence)", refresh)
+
+    def test_current_accounts_follow_native_account_connection_status(self):
+        window = source(MAIN_WINDOW)
+        active = method_body(window, "private static bool IsActiveAccount(Account account)", "private static bool IsFlattenEligibleAccount")
+        flatten = method_body(window, "private static bool IsFlattenEligibleAccount(Account account)", "private static bool? TryGetBoolProperty")
+        for method in (active, flatten):
+            self.assertIn('accountType.GetProperty("ConnectionStatus")', method)
+            self.assertIn('accountConnectionStatus.ToString(), "Connected"', method)
+            self.assertNotIn("GetAccountSizeFromNt", method)
 
     def test_group_refresh_is_projection_only_and_persistence_keeps_route_authority(self):
         window = source(ADDON / "UI/MainWindow/GlitchMainWindow.cs")
@@ -762,12 +774,39 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
 
     def test_journal_scope_and_card_units_are_explicit(self):
         summary = source(SUMMARY_TAB)
+        journal = source(JOURNAL_TAB)
         self.assertIn('ItemsSource = new[] { "Master", "Group", "Fleet" }', summary)
         self.assertIn('"Logical Trades"', summary)
         self.assertIn('"Account Trades"', summary)
         self.assertIn("ApplySummaryScope", summary)
         self.assertNotIn("_summaryFleetTradesValueText.Text = FormatSignedCurrency", summary)
         self.assertNotIn("_summaryAccountsValueText.Text = FormatSignedCurrency", summary)
+        for field in (
+            "_journalTradesValueText",
+            "_journalNetPnlValueText",
+            "_journalWinRateValueText",
+            "_journalAvgWinValueText",
+            "_journalAvgLossValueText",
+            "_journalProfitFactorValueText",
+            "_journalAsOfText",
+            "_journalCardsPanel",
+        ):
+            self.assertIn(field, journal)
+        for summary_field in (
+            "_summaryTradesValueText",
+            "_summaryNetPointsValueText",
+            "_summaryWinRateValueText",
+            "_summaryFleetTradesValueText",
+            "_summaryAccountsValueText",
+            "_summaryProfitFactorValueText",
+            "_summaryAsOfText",
+            "_summaryCardsPanel",
+            "_summaryPerformanceGrid",
+        ):
+            self.assertNotIn(f"out {summary_field}", journal)
+            self.assertNotIn(f"{summary_field} =", journal)
+        self.assertIn("_journalAvgWinValueText.Text = FormatSignedCurrency(snapshot.All.AvgWinningTradePoints)", summary)
+        self.assertIn("_journalAvgLossValueText.Text = FormatSignedCurrency(snapshot.All.AvgLosingTradePoints)", summary)
 
     def test_analytics_observations_are_live_and_rich(self):
         bridge = source(ANALYTICS_BRIDGE)
