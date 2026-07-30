@@ -5619,6 +5619,13 @@ namespace Glitch.UI
 
                 DateTime nowUtc = DateTime.UtcNow;
                 bool isAccountItemUpdate = string.Equals(eventName, "AccountItemUpdate", StringComparison.OrdinalIgnoreCase);
+                bool isAccountStatusUpdate = string.Equals(eventName, "AccountStatusUpdate", StringComparison.OrdinalIgnoreCase);
+                if (isAccountStatusUpdate)
+                {
+                    _activeAccountCache.Remove(account.Name.Trim());
+                    QueueBackgroundAccountRefresh(GetActiveAccountsSnapshot(), heavyTabWork: true);
+                }
+
                 if (isAccountItemUpdate)
                 {
                     if (ShouldThrottleAccountItemUpdate(account.Name, nowUtc))
@@ -6511,6 +6518,17 @@ namespace Glitch.UI
                 if (isConnected.HasValue && !isConnected.Value)
                     return false;
 
+                PropertyInfo accountConnectionStatusProperty = accountType.GetProperty("ConnectionStatus");
+                if (accountConnectionStatusProperty != null)
+                {
+                    object accountConnectionStatus = accountConnectionStatusProperty.GetValue(account, null);
+                    if (accountConnectionStatus == null ||
+                        !string.Equals(accountConnectionStatus.ToString(), "Connected", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return false;
+                    }
+                }
+
                 var connectionProperty = accountType.GetProperty("Connection");
                 var connection = connectionProperty?.GetValue(account, null);
                 if (connection != null)
@@ -6556,6 +6574,17 @@ namespace Glitch.UI
                 bool? isConnected = TryGetBoolProperty(account, accountType, "IsConnected", "Connected");
                 if (isConnected.HasValue && !isConnected.Value)
                     return false;
+
+                PropertyInfo accountConnectionStatusProperty = accountType.GetProperty("ConnectionStatus");
+                if (accountConnectionStatusProperty != null)
+                {
+                    object accountConnectionStatus = accountConnectionStatusProperty.GetValue(account, null);
+                    if (accountConnectionStatus == null ||
+                        !string.Equals(accountConnectionStatus.ToString(), "Connected", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return false;
+                    }
+                }
 
                 object connection = accountType.GetProperty("Connection")?.GetValue(account, null);
                 if (connection != null)

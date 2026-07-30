@@ -47,6 +47,14 @@ namespace Glitch.UI
         private ICollectionView _journalEntriesView;
         private Grid _journalLicenseGateOverlay;
         private TextBlock _journalLicenseGateMessageText;
+        private TextBlock _journalTradesValueText;
+        private TextBlock _journalNetPnlValueText;
+        private TextBlock _journalWinRateValueText;
+        private TextBlock _journalAvgWinValueText;
+        private TextBlock _journalAvgLossValueText;
+        private TextBlock _journalProfitFactorValueText;
+        private TextBlock _journalAsOfText;
+        private UniformGrid _journalCardsPanel;
 
         private UIElement CreateJournalTabImpl()
         {
@@ -73,14 +81,14 @@ namespace Glitch.UI
             ApplySkinResource(title, TextBlock.ForegroundProperty, "FontControlBrush", "FontHeaderLevel3Brush", "FontHeaderLevel4Brush", "FontTableBrush");
             header.Children.Add(title);
 
-            _summaryAsOfText = new TextBlock
+            _journalAsOfText = new TextBlock
             {
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            ApplySkinResource(_summaryAsOfText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
-            Grid.SetColumn(_summaryAsOfText, 1);
-            header.Children.Add(_summaryAsOfText);
+            ApplySkinResource(_journalAsOfText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
+            Grid.SetColumn(_journalAsOfText, 1);
+            header.Children.Add(_journalAsOfText);
 
             var resetDataButton = new Button
             {
@@ -104,18 +112,17 @@ namespace Glitch.UI
                 Margin = new Thickness(0, 0, 0, 12),
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
-            cards.Children.Add(CreateSummaryCard(root, "journal.card.total_trades", "Total Trades", out _summaryTradesValueText));
-            cards.Children.Add(CreateSummaryCard(root, "summary.card.net_pnl", "Net PnL", out _summaryNetPointsValueText));
-            cards.Children.Add(CreateSummaryCard(root, "summary.card.win_rate", "Win Rate", out _summaryWinRateValueText));
-            cards.Children.Add(CreateSummaryCard(root, "journal.card.avg_win", "Avg Win", out _summaryFleetTradesValueText));
-            cards.Children.Add(CreateSummaryCard(root, "journal.card.avg_loss", "Avg Loss", out _summaryAccountsValueText));
-            cards.Children.Add(CreateSummaryCard(root, "summary.card.profit_factor", "Profit Factor", out _summaryProfitFactorValueText));
-            _summaryCardsPanel = cards;
+            cards.Children.Add(CreateSummaryCard(root, "journal.card.total_trades", "Total Trades", out _journalTradesValueText));
+            cards.Children.Add(CreateSummaryCard(root, "summary.card.net_pnl", "Net PnL", out _journalNetPnlValueText));
+            cards.Children.Add(CreateSummaryCard(root, "summary.card.win_rate", "Win Rate", out _journalWinRateValueText));
+            cards.Children.Add(CreateSummaryCard(root, "journal.card.avg_win", "Avg Win", out _journalAvgWinValueText));
+            cards.Children.Add(CreateSummaryCard(root, "journal.card.avg_loss", "Avg Loss", out _journalAvgLossValueText));
+            cards.Children.Add(CreateSummaryCard(root, "summary.card.profit_factor", "Profit Factor", out _journalProfitFactorValueText));
+            _journalCardsPanel = cards;
             Grid.SetRow(cards, 1);
             root.Children.Add(cards);
 
             var metricsGrid = CreateSummaryPerformanceGrid(root);
-            _summaryPerformanceGrid = metricsGrid;
             ClearGridAccordionHeightConstraints(metricsGrid);
             ConfigureDataGridForPageScroll(metricsGrid);
 
@@ -517,7 +524,7 @@ namespace Glitch.UI
                             _journalLicenseGateOverlay.Margin = new Thickness(-margin.Left, -margin.Top, -margin.Right, -margin.Bottom);
                         }
 
-                        UpdateSummaryCardsPanelLayout(usableWidth);
+                        UpdateCardsPanelLayout(_journalCardsPanel, usableWidth);
                     }
                     finally
                     {
