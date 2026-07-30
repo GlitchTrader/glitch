@@ -27,6 +27,8 @@ PROP_RULES = ADDON / "Resources/PropFirmRules.json"
 PROP_RULE_BUNDLE = ADDON / "UI/MainWindow/GlitchMainWindow.PropFirmRulesBundle.generated.cs"
 PROP_RULE_GENERATOR = ROOT / "scripts/generate_bundled_prop_rules.ps1"
 FUNDAMENTAL_ANALYSIS = ADDON / "Services/FundamentalAnalysis/GlitchFundamentalAnalysisService.cs"
+ANALYTICS_LOGIC = ADDON / "UI/Analytics/GlitchAnalyticsLogic.cs"
+ANALYTICS_TAB = ADDON / "UI/MainWindow/GlitchMainWindow.AnalyticsTab.partial.cs"
 DOWNLOAD_APP = ROOT / "apps/download"
 RELEASE_CATALOG = DOWNLOAD_APP / "src/lib/release-catalog.json"
 RELEASE_CHECKSUMS = DOWNLOAD_APP / "public/files/checksums.json"
@@ -827,6 +829,34 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("clone.Open = NormalizePositiveFinite", feed)
         self.assertIn("clone.Volume = NormalizeFinite", feed)
         self.assertRegex(bridge, r"UtcTime\s*=\s*(?:DateTime\.UtcNow|nowUtc|readingUtc)")
+
+    def test_fundamental_influence_uses_only_fresh_technical_readings(self):
+        logic = source(ANALYTICS_LOGIC)
+        tab = source(ANALYTICS_TAB)
+        self.assertIn("public DateTime UtcTime { get; set; }", logic)
+        self.assertIn("UtcTime = source.UtcTime", logic)
+        freshness = method_body(
+            logic,
+            "internal static bool IsReadingFresh(GlitchTimeframeReading reading, DateTime nowUtc)",
+            "public IReadOnlyList<string> BuildInstrumentOptions",
+        )
+        self.assertIn("reading.UtcTime != default", freshness)
+        self.assertIn("(nowUtc - reading.UtcTime) <= MaxFeedAge", freshness)
+        influence = method_body(tab, "private void ApplyMag7Influence", "private static double ResolveMag7InfluenceWeight")
+        self.assertIn("GlitchAnalyticsEngine.IsReadingFresh(x, nowUtc)", influence)
+        self.assertNotIn("x.AveragePrice.HasValue || x.AtrProxy.HasValue || x.AdxProxy.HasValue", influence)
+
+    def test_macro_headlines_flow_through_one_immutable_snapshot(self):
+        fundamentals = source(FUNDAMENTAL_ANALYSIS)
+        snapshot = method_body(fundamentals, "private GlitchFundamentalAnalysisSnapshot BuildSnapshot", "private sealed class SnapshotScratch")
+        scratch = method_body(fundamentals, "private SnapshotScratch CaptureSnapshotScratch", "private void CommitSnapshotCarryForward")
+        latest = method_body(fundamentals, "private static List<string> BuildLatestHeadlineLines", "private static string NormalizeHeadlineTitle")
+        self.assertIn("scratch.MacroHeadlines", snapshot)
+        self.assertNotIn("scratch.HeadlinesBySymbol,\n                null,", snapshot)
+        self.assertIn("headline.Clone()", scratch)
+        self.assertIn("MacroHeadlines = _macroHeadlines", scratch)
+        self.assertNotIn("_headlinesBySymbol", latest)
+        self.assertNotIn("_macroHeadlines", latest)
 
 
 if __name__ == "__main__":
