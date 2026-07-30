@@ -325,6 +325,7 @@ namespace Glitch.UI
             snapshot = new GlitchShellSnapshot
             {
                 IsReplicating = IsReplicationEnabledFromExternalSurface(),
+                IsReplicationEffective = IsReplicationEffectivelyActiveFromExternalSurface(),
                 GroupsByMaster = BuildGlitchShellGroupSummaries(rows)
             };
 
@@ -344,10 +345,13 @@ namespace Glitch.UI
         private static string BuildShellSnapshotFingerprint(GlitchShellSnapshot snapshot)
         {
             if (snapshot?.GroupsByMaster == null || snapshot.GroupsByMaster.Count == 0)
-                return snapshot != null && snapshot.IsReplicating ? "R" : "0";
+                return snapshot != null && snapshot.IsReplicating
+                    ? (snapshot.IsReplicationEffective ? "R1" : "R0")
+                    : "0";
 
             var parts = new List<string>(snapshot.GroupsByMaster.Count + 1);
             parts.Add(snapshot.IsReplicating ? "1" : "0");
+            parts.Add(snapshot.IsReplicationEffective ? "1" : "0");
             foreach (KeyValuePair<string, GlitchGroupRuntimeSummary> entry in snapshot.GroupsByMaster)
             {
                 if (entry.Value == null)

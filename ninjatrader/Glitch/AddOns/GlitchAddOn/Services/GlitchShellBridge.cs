@@ -38,6 +38,7 @@ namespace Glitch.Services
     internal sealed class GlitchShellSnapshot
     {
         public bool IsReplicating { get; set; }
+        public bool IsReplicationEffective { get; set; }
         public IReadOnlyDictionary<string, GlitchGroupRuntimeSummary> GroupsByMaster { get; set; }
 
         public static GlitchShellSnapshot Empty()
@@ -45,6 +46,7 @@ namespace Glitch.Services
             return new GlitchShellSnapshot
             {
                 IsReplicating = false,
+                IsReplicationEffective = false,
                 GroupsByMaster = new Dictionary<string, GlitchGroupRuntimeSummary>(StringComparer.OrdinalIgnoreCase)
             };
         }
@@ -153,6 +155,7 @@ namespace Glitch.Services
                 return clone;
 
             clone.IsReplicating = snapshot.IsReplicating;
+            clone.IsReplicationEffective = snapshot.IsReplicationEffective;
             var summaries = new Dictionary<string, GlitchGroupRuntimeSummary>(StringComparer.OrdinalIgnoreCase);
             foreach (KeyValuePair<string, GlitchGroupRuntimeSummary> kvp in snapshot.GroupsByMaster ?? Enumerable.Empty<KeyValuePair<string, GlitchGroupRuntimeSummary>>())
             {
@@ -178,6 +181,8 @@ namespace Glitch.Services
             if (left == null || right == null)
                 return false;
             if (left.IsReplicating != right.IsReplicating)
+                return false;
+            if (left.IsReplicationEffective != right.IsReplicationEffective)
                 return false;
 
             IReadOnlyDictionary<string, GlitchGroupRuntimeSummary> leftGroups = left.GroupsByMaster;
