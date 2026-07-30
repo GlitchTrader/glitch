@@ -415,7 +415,7 @@ namespace Glitch.Services
                 if (!string.IsNullOrWhiteSpace(directory))
                     Directory.CreateDirectory(directory);
 
-                File.WriteAllLines(path, GlitchStateStore.WithTsvBanner(lines), Utf8NoBom);
+                GlitchStateStore.WriteAllLinesAtomic(path, GlitchStateStore.WithTsvBanner(lines), Utf8NoBom);
             }
             catch
             {

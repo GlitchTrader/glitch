@@ -18,6 +18,7 @@ REPLICATION_UI = ADDON / "UI/MainWindow/GlitchMainWindow.Replication.partial.cs"
 LOCALIZATION = ADDON / "Resources/Localization.tsv"
 POLICY_STORE = ADDON / "Services/Persistence/GlitchRuntimePolicyStore.cs"
 TRADE_INSIGHTS = ADDON / "Services/Insights/GlitchTradeInsightsService.cs"
+TRADE_LEDGER = ADDON / "Services/Insights/GlitchTradeLedgerService.cs"
 SUMMARY_TAB = ADDON / "UI/MainWindow/GlitchMainWindow.SummaryTab.partial.cs"
 JOURNAL_TAB = ADDON / "UI/MainWindow/GlitchMainWindow.JournalTab.partial.cs"
 METADATA = ADDON / "Services/Trading/GlitchInstrumentMetadataService.cs"
@@ -264,6 +265,31 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertNotIn("member.IsEnabled =", limits)
         self.assertNotIn("SaveAccountGroupsToDisk(", limits)
         self.assertNotIn("RebuildAccountGroupsUi(", limits)
+
+    def test_authoritative_writes_are_durable_atomic_and_visible_on_failure(self):
+        state = source(ADDON / "Services/Persistence/GlitchStateStore.cs")
+        runtime = source(POLICY_STORE)
+        analytics_cache = source(ADDON / "Services/Persistence/GlitchAnalyticsBridgeCacheStore.cs")
+        fundamentals = source(FUNDAMENTAL_ANALYSIS)
+        trade_ledger = source(TRADE_LEDGER)
+        risk_ledger = source(ADDON / "Services/Insights/GlitchRiskLockLedgerService.cs")
+        window = source(MAIN_WINDOW)
+        for token in (
+            "FileOptions.WriteThrough",
+            "stream.Flush(true)",
+            "File.Replace(tempPath, fullPath, backupPath, true)",
+            'fullPath + ".tmp." + Guid.NewGuid().ToString("N")',
+        ):
+            self.assertIn(token, state)
+        self.assertIn("GlitchStateStore.WriteAllLinesAtomic", runtime)
+        self.assertIn("GlitchStateStore.WriteAllTextAtomic", analytics_cache)
+        self.assertIn("GlitchStateStore.WriteAllLinesAtomic", fundamentals)
+        self.assertIn("GlitchStateStore.WriteAllLinesAtomic", trade_ledger)
+        self.assertIn("GlitchStateStore.WriteAllLinesAtomic", risk_ledger)
+        self.assertNotIn("File.Delete(path)", analytics_cache)
+        self.assertIn('RecordSubsystemFault("audit_persistence", ex)', window)
+        self.assertIn('RecordSubsystemFault("account_group_persistence", ex)', window)
+        self.assertIn('RecordSubsystemFault("account_override_persistence", ex)', window)
 
     def test_max_contracts_risk_read_uses_locked_snapshot_and_fails_closed(self):
         window = source(ADDON / "UI/MainWindow/GlitchMainWindow.cs")

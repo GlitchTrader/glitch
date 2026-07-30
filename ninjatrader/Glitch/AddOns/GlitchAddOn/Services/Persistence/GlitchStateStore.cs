@@ -26,6 +26,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 
 namespace Glitch.Services
 {
@@ -760,7 +761,78 @@ namespace Glitch.Services
             if (string.Equals(Path.GetExtension(filePath), ".tsv", StringComparison.OrdinalIgnoreCase))
                 outputLines = WithTsvBanner(outputLines);
 
-            File.WriteAllLines(filePath, outputLines);
+            WriteAllLinesAtomic(filePath, outputLines, new UTF8Encoding(false));
+        }
+
+        public static void WriteAllLinesAtomic(string filePath, IEnumerable<string> lines, Encoding encoding = null)
+        {
+            WriteAtomic(filePath, stream =>
+            {
+                using (var writer = new StreamWriter(stream, encoding ?? new UTF8Encoding(false), 4096, true))
+                {
+                    foreach (string line in lines ?? Array.Empty<string>())
+                        writer.WriteLine(line ?? string.Empty);
+                    writer.Flush();
+                }
+            });
+        }
+
+        public static void WriteAllTextAtomic(string filePath, string content, Encoding encoding = null)
+        {
+            WriteAtomic(filePath, stream =>
+            {
+                using (var writer = new StreamWriter(stream, encoding ?? new UTF8Encoding(false), 4096, true))
+                {
+                    writer.Write(content ?? string.Empty);
+                    writer.Flush();
+                }
+            });
+        }
+
+        private static void WriteAtomic(string filePath, Action<FileStream> writeContent)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+                throw new ArgumentException("A persistence path is required.", nameof(filePath));
+            if (writeContent == null)
+                throw new ArgumentNullException(nameof(writeContent));
+
+            string fullPath = Path.GetFullPath(filePath);
+            string directory = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrWhiteSpace(directory))
+                Directory.CreateDirectory(directory);
+
+            string tempPath = fullPath + ".tmp." + Guid.NewGuid().ToString("N");
+            string backupPath = fullPath + ".bak";
+            try
+            {
+                using (var stream = new FileStream(
+                    tempPath,
+                    FileMode.CreateNew,
+                    FileAccess.Write,
+                    FileShare.None,
+                    4096,
+                    FileOptions.WriteThrough))
+                {
+                    writeContent(stream);
+                    stream.Flush(true);
+                }
+
+                if (File.Exists(fullPath))
+                {
+                    if (File.Exists(backupPath))
+                        File.Delete(backupPath);
+                    File.Replace(tempPath, fullPath, backupPath, true);
+                }
+                else
+                {
+                    File.Move(tempPath, fullPath);
+                }
+            }
+            finally
+            {
+                if (File.Exists(tempPath))
+                    File.Delete(tempPath);
+            }
         }
 
         internal static string[] WithTsvBanner(IEnumerable<string> lines)

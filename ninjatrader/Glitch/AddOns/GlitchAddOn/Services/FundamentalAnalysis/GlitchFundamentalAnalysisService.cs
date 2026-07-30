@@ -2691,7 +2691,7 @@ namespace Glitch.Services
                 if (!string.IsNullOrWhiteSpace(directory))
                     Directory.CreateDirectory(directory);
 
-                File.WriteAllLines(_cacheFilePath, GlitchStateStore.WithTsvBanner(lines));
+                GlitchStateStore.WriteAllLinesAtomic(_cacheFilePath, GlitchStateStore.WithTsvBanner(lines));
             }
             catch
             {

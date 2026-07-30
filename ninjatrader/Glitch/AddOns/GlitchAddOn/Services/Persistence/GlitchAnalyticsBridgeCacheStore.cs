@@ -80,16 +80,8 @@ namespace Glitch.Services
                 return;
 
             string path = GetCacheFilePath();
-            string directory = Path.GetDirectoryName(path);
-            if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
-                Directory.CreateDirectory(directory);
-
-            string tempPath = path + ".tmp";
             string json = SerializeJson(new PersistedFeedDocument { Instruments = list });
-            File.WriteAllText(tempPath, json);
-            if (File.Exists(path))
-                File.Delete(path);
-            File.Move(tempPath, path);
+            GlitchStateStore.WriteAllTextAtomic(path, json);
         }
 
         private static string SerializeJson(object value)
