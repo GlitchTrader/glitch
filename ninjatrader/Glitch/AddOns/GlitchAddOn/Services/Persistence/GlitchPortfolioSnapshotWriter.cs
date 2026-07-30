@@ -64,6 +64,7 @@ namespace Glitch.Services
     internal sealed class GlitchPortfolioSnapshotCapture
     {
         public bool IsReplicating { get; set; }
+        public bool IsReplicationEffective { get; set; }
         public string PropFirmRulesSchemaVersion { get; set; }
         public string PropFirmRulesUpdatedAtUtc { get; set; }
         public List<GlitchPortfolioSnapshotAccountRecord> Accounts { get; set; }
@@ -217,6 +218,7 @@ namespace Glitch.Services
             sb.Append("\"pnl_basis\":\"nt_account_items\",");
             sb.Append("\"pnl_commission_note\":\"NT RealizedProfitLoss is treated as net of commissions; trade-level commission detail lives in TradeLedger.\",");
             sb.Append("\"is_replicating\":").Append(GlitchSnapshotJson.Bool(capture.IsReplicating)).Append(',');
+            sb.Append("\"is_replication_effective\":").Append(GlitchSnapshotJson.Bool(capture.IsReplicationEffective)).Append(',');
             sb.Append("\"policy\":{");
             sb.Append("\"prop_firm_rules_schema_version\":").Append(GlitchSnapshotJson.String(capture.PropFirmRulesSchemaVersion)).Append(',');
             sb.Append("\"prop_firm_rules_updated_at_utc\":").Append(GlitchSnapshotJson.String(capture.PropFirmRulesUpdatedAtUtc));

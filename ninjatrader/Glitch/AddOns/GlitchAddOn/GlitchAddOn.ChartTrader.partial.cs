@@ -378,7 +378,9 @@ namespace NinjaTrader.NinjaScript.AddOns
             var snapshot = GlitchShellBridge.GetSnapshot();
             if (host.ReplicateButton.Style == null)
                 host.ReplicateButton.Style = CreateChartTraderReplicateButtonStyle(host.WidgetRoot);
-            host.ReplicateButton.Tag = snapshot.IsReplicating ? "Running" : "Stopped";
+            host.ReplicateButton.Tag = snapshot.IsReplicating
+                ? (snapshot.IsReplicationEffective ? "Running" : "Armed")
+                : "Stopped";
 
             string selectedAccount = ResolveChartTraderSelectedAccount(host.AccountCombo);
             if (!string.IsNullOrWhiteSpace(selectedAccount) &&
@@ -688,6 +690,13 @@ namespace NinjaTrader.NinjaScript.AddOns
             runningTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, ChartTraderTealBrush));
             runningTrigger.Setters.Add(new Setter(Control.ForegroundProperty, ChartTraderAccentForegroundBrush));
             style.Triggers.Add(runningTrigger);
+
+            var armedTrigger = new Trigger { Property = FrameworkElement.TagProperty, Value = "Armed" };
+            armedTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, Translate("header.button.replication_on", "Replication On")));
+            armedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, ChartTraderOrangeBrush));
+            armedTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, ChartTraderOrangeBrush));
+            armedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, ChartTraderAccentForegroundBrush));
+            style.Triggers.Add(armedTrigger);
 
             var hoverStopped = new MultiTrigger();
             hoverStopped.Conditions.Add(new System.Windows.Condition(UIElement.IsMouseOverProperty, true));

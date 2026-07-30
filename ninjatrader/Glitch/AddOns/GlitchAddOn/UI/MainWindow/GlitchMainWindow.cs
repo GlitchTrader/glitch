@@ -611,6 +611,13 @@ namespace Glitch.UI
             runningTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             style.Triggers.Add(runningTrigger);
 
+            var armedTrigger = new Trigger { Property = FrameworkElement.TagProperty, Value = "Armed" };
+            armedTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, L("header.button.replication_on", "Replication On")));
+            armedTrigger.Setters.Add(new Setter(Control.BackgroundProperty, OrangeAccentBrush));
+            armedTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, OrangeAccentBrush));
+            armedTrigger.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
+            style.Triggers.Add(armedTrigger);
+
             var hoverStopped = new MultiTrigger();
             hoverStopped.Conditions.Add(new Condition(UIElement.IsMouseOverProperty, true));
             hoverStopped.Conditions.Add(new Condition(FrameworkElement.TagProperty, "Stopped"));
@@ -628,6 +635,15 @@ namespace Glitch.UI
             hoverRunning.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
             hoverRunning.Setters.Add(new Setter(ContentControl.ContentProperty, L("header.button.stop", "Stop")));
             style.Triggers.Add(hoverRunning);
+
+            var hoverArmed = new MultiTrigger();
+            hoverArmed.Conditions.Add(new Condition(UIElement.IsMouseOverProperty, true));
+            hoverArmed.Conditions.Add(new Condition(FrameworkElement.TagProperty, "Armed"));
+            hoverArmed.Setters.Add(new Setter(Control.BackgroundProperty, OrangeAccentBrush));
+            hoverArmed.Setters.Add(new Setter(Control.BorderBrushProperty, OrangeAccentBrush));
+            hoverArmed.Setters.Add(new Setter(Control.ForegroundProperty, AccentOnColorForegroundBrush));
+            hoverArmed.Setters.Add(new Setter(ContentControl.ContentProperty, L("header.button.stop", "Stop")));
+            style.Triggers.Add(hoverArmed);
 
             return style;
         }
@@ -782,7 +798,7 @@ namespace Glitch.UI
 
         private void OnReplicateButtonClick(object sender, RoutedEventArgs e)
         {
-            SetReplicationFromExternalSurface(!IsReplicationEnabledFromExternalSurface(), "user_click");
+            SetReplicationFromExternalSurface(!_isReplicatingUi, "user_click");
         }
 
         internal bool SetReplicationFromExternalSurface(bool enabled, string origin)
@@ -827,7 +843,7 @@ namespace Glitch.UI
             UpdateRefreshTimerCadence();
             PersistReplicationUiState();
             PublishGlitchShellState();
-            return !enabled || (_copyEngine?.IsEnabled == true);
+            return _isReplicatingUi == enabled;
         }
 
         internal void ToggleReplicationFromExternalSurface()
@@ -841,6 +857,9 @@ namespace Glitch.UI
         }
 
         internal bool IsReplicationEnabledFromExternalSurface() =>
+            _isReplicatingUi;
+
+        internal bool IsReplicationEffectivelyActiveFromExternalSurface() =>
             _isReplicatingUi && _copyEngine?.IsEnabled == true;
 
         private void UpdateHermesModeUi(bool paused)
@@ -986,8 +1005,8 @@ namespace Glitch.UI
             if (_replicateButton == null)
                 return;
 
-            _replicateButton.Tag = _isReplicatingUi && _copyEngine?.IsEnabled == true
-                ? "Running"
+            _replicateButton.Tag = _isReplicatingUi
+                ? (_copyEngine?.IsEnabled == true ? "Running" : "Armed")
                 : "Stopped";
         }
 
@@ -1641,8 +1660,14 @@ namespace Glitch.UI
 
                 return complete;
             }
-            catch
+            catch (Exception ex)
             {
+                RecordSubsystemFault("flatten_all", ex);
+                RaiseCriticalWarning(
+                    "System",
+                    "Flatten All failed before native flat/order-free completion could be verified.",
+                    "FlattenAllFailed",
+                    unlocksTrading: false);
                 return false;
             }
             finally

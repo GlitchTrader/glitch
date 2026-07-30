@@ -44,6 +44,7 @@ namespace Glitch.UI
             return new GlitchPortfolioSnapshotCapture
             {
                 IsReplicating = IsReplicationEnabledFromExternalSurface(),
+                IsReplicationEffective = IsReplicationEffectivelyActiveFromExternalSurface(),
                 PropFirmRulesSchemaVersion = rulesSchema,
                 PropFirmRulesUpdatedAtUtc = rulesUpdatedAt,
                 Accounts = records

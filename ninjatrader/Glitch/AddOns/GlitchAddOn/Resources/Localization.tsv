@@ -137,6 +137,7 @@ header.button.flatten_all	Flatten All	Zerar Tudo	Cerrar Todo	全部平仓	Tout A
 header.button.flattened	Flattened!	Zerado!	Cerrado!	已平仓！	Aplati !	Закрыто!
 header.button.replicate	Replicate	Replicar	Replicar	复制跟单	Répliquer	Реплицировать
 header.button.replicating	Replicating	Replicando	Replicando	复制中	Réplication	Репликация
+header.button.replication_on	Replication On	Replicação ligada	Replicación activa	复制已开启	Réplication activée	Репликация включена
 header.button.start	Start	Iniciar	Iniciar	开始	Démarrer	Старт
 header.button.stop	Stop	Parar	Detener	停止	Arrêter	Стоп
 header.metric.fleet_upnl	Daily PnL	PnL Diário	PnL Diario	当日盈亏	PnL Journalier	Дневной PnL
