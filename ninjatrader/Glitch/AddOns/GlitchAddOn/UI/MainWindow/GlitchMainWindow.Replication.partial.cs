@@ -401,6 +401,28 @@ namespace Glitch.UI
                 return false;
             }
 
+            int entryOrderFilledQuantity = order == null
+                ? quantity
+                : Math.Max(quantity, Math.Max(0, order.Filled));
+            int entryOrderQuantity = order == null
+                ? quantity
+                : Math.Max(quantity, Math.Max(0, order.Quantity));
+            if (order == null)
+            {
+                if (int.TryParse(
+                        TryGetNestedPropertyValueAsString(executionObject, "Order.Filled", "OrderFilled"),
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out int nestedFilled))
+                    entryOrderFilledQuantity = Math.Max(quantity, Math.Max(0, nestedFilled));
+                if (int.TryParse(
+                        TryGetNestedPropertyValueAsString(executionObject, "Order.Quantity", "OrderQuantity"),
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out int nestedQuantity))
+                    entryOrderQuantity = Math.Max(quantity, Math.Max(0, nestedQuantity));
+            }
+
             context = new GlitchCopyExecutionContext
             {
                 ExecutionId = executionId,
@@ -408,10 +430,14 @@ namespace Glitch.UI
                 Action = action,
                 OrderType = order?.OrderType ?? OrderType.Market,
                 Quantity = quantity,
-                EntryOrderFilledQuantity = order == null
-                    ? quantity
-                    : Math.Max(quantity, Math.Max(0, order.Filled)),
+                EntryOrderFilledQuantity = entryOrderFilledQuantity,
+                EntryOrderQuantity = entryOrderQuantity,
                 EntryOrder = order,
+                OrderIdentity = TryGetNestedPropertyValueAsString(
+                    executionObject,
+                    "Order.OrderId",
+                    "Order.Id",
+                    "OrderId"),
                 OrderSignalName = signalName,
                 Oco = order?.Oco,
                 ExecutionTimeUtc = TryReadExecutionTimeUtc(executionObject)

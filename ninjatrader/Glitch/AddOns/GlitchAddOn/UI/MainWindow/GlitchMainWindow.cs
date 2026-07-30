@@ -2291,12 +2291,17 @@ namespace Glitch.UI
 
             int exampleMaster = 2;
             int exampleFollower = Math.Max(1, (int)Math.Round(exampleMaster * ratio, MidpointRounding.AwayFromZero));
-            return Lf(
+            string example = Lf(
                 "dashboard.group.ratio_math_format",
                 "master {0} × ratio {1} ⇒ follower {2} contracts",
                 exampleMaster.ToString(CultureInfo.CurrentCulture),
                 ratio.ToString("0.####", CultureInfo.CurrentCulture),
                 exampleFollower.ToString(CultureInfo.CurrentCulture));
+            return example
+                + Environment.NewLine
+                + L(
+                    "dashboard.group.ratio_allocation_policy",
+                    "Separate executions share one cumulative exact-contract rounding basis per route, contract, and direction. Route, ratio, or AddOn restart changes start a new future-only basis.");
         }
 
         private static Style CreateEditableRatioTextBoxStyle(FrameworkElement context)
