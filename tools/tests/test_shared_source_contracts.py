@@ -255,6 +255,16 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("MasterSize = masterSize", persistence)
         self.assertIn("IsEnabled = member.IsEnabled", persistence)
 
+    def test_plan_limits_never_mutate_or_persist_user_group_intent(self):
+        window = source(MAIN_WINDOW)
+        limits = method_body(window, "private void ApplyPlanLimitsToAccountGroups", "private void MaybeRunLicenseHeartbeat")
+        self.assertIn("CountConfiguredGroups() > maxGroups", limits)
+        self.assertIn("AnyGroupHasEnabledFollowersOverLimit(maxFollowers)", limits)
+        self.assertIn("Saved group and follower settings were preserved", limits)
+        self.assertNotIn("member.IsEnabled =", limits)
+        self.assertNotIn("SaveAccountGroupsToDisk(", limits)
+        self.assertNotIn("RebuildAccountGroupsUi(", limits)
+
     def test_max_contracts_risk_read_uses_locked_snapshot_and_fails_closed(self):
         window = source(ADDON / "UI/MainWindow/GlitchMainWindow.cs")
         helper = method_body(window, "private static bool TryGetTotalAbsoluteOpenContracts", "private static bool HasWorkingProtectiveStop")
