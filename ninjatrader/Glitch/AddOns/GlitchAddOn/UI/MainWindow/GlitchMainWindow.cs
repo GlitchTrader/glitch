@@ -5183,8 +5183,10 @@ namespace Glitch.UI
                 _hasPendingAuditWrite = false;
                 _lastAuditWriteUtc = now;
             }
-            catch
+            catch (Exception ex)
             {
+                _hasPendingAuditWrite = true;
+                RecordSubsystemFault("audit_persistence", ex);
             }
         }
 
@@ -5296,8 +5298,9 @@ namespace Glitch.UI
 
                 GlitchStateStore.SaveAccountGroups(_accountGroupsFilePath, records);
             }
-            catch
+            catch (Exception ex)
             {
+                RecordSubsystemFault("account_group_persistence", ex);
             }
 
             PublishGlitchShellState();
@@ -6361,8 +6364,9 @@ namespace Glitch.UI
 
                 GlitchStateStore.SaveSelectionOverrides(_overridesFilePath, records);
             }
-            catch
+            catch (Exception ex)
             {
+                RecordSubsystemFault("account_override_persistence", ex);
             }
         }
 
