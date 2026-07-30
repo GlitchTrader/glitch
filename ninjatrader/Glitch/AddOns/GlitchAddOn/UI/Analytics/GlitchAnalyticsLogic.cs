@@ -45,6 +45,13 @@ namespace Glitch.UI
             return ComputeWeightedCompositeScore(readings);
         }
 
+        internal static bool IsReadingFresh(GlitchTimeframeReading reading, DateTime nowUtc)
+        {
+            return reading != null &&
+                reading.UtcTime != default &&
+                (nowUtc - reading.UtcTime) <= MaxFeedAge;
+        }
+
         public IReadOnlyList<string> BuildInstrumentOptions(IEnumerable<Account> accounts, string selectedInstrument)
         {
             DateTime nowUtc = DateTime.UtcNow;
@@ -327,6 +334,7 @@ namespace Glitch.UI
             return new GlitchTimeframeReading
             {
                 Minutes = timeframeMinutes,
+                UtcTime = source.UtcTime,
                 AveragePrice = source.AveragePrice,
                 AtrProxy = source.Atr,
                 AdxProxy = source.Adx,
@@ -588,6 +596,7 @@ namespace Glitch.UI
     internal sealed class GlitchTimeframeReading
     {
         public int Minutes { get; set; }
+        public DateTime UtcTime { get; set; }
         public double? AveragePrice { get; set; }
         public double? AtrProxy { get; set; }
         public double? AdxProxy { get; set; }
