@@ -155,7 +155,7 @@ namespace Glitch.Services
                     if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
                         Directory.CreateDirectory(directory);
 
-                    File.WriteAllLines(
+                    GlitchStateStore.WriteAllLinesAtomic(
                         _filePath,
                         GlitchStateStore.WithTsvBanner(
                             new[]
@@ -249,7 +249,7 @@ namespace Glitch.Services
                         CleanToken(evt.Message)));
                 }
 
-                File.WriteAllLines(_filePath, GlitchStateStore.WithTsvBanner(lines));
+                GlitchStateStore.WriteAllLinesAtomic(_filePath, GlitchStateStore.WithTsvBanner(lines));
                 _dirty = false;
                 _lastWriteUtc = nowUtc;
             }

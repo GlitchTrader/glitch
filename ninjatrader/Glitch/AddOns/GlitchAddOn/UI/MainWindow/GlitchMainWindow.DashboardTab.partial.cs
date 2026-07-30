@@ -143,6 +143,16 @@ namespace Glitch.UI
             BindLocalizedColumnHeader(sizeColumn, "dashboard.column.size", "Size");
             grid.Columns.Add(sizeColumn);
 
+            var sizeSourceColumn = CreateTextColumn(
+                L("dashboard.column.source", "Source"),
+                nameof(AccountGridRow.AccountSizeSource),
+                centerTextStyle,
+                centerHeaderStyle);
+            sizeSourceColumn.IsReadOnly = true;
+            sizeSourceColumn.MinWidth = 86;
+            BindLocalizedColumnHeader(sizeSourceColumn, "dashboard.column.source", "Source");
+            grid.Columns.Add(sizeSourceColumn);
+
             var balanceColumn = CreateTextColumn(L("dashboard.column.equity", "Equity"), nameof(AccountGridRow.CashValue), equityTextStyle, centerHeaderStyle);
             balanceColumn.IsReadOnly = true;
             balanceColumn.MinWidth = 82;

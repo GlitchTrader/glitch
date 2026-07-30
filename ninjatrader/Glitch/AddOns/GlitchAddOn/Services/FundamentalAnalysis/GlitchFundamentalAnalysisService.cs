@@ -796,7 +796,7 @@ namespace Glitch.Services
             NewsComposite composite = BuildNewsComposite(
                 scratch.SymbolWeights,
                 scratch.HeadlinesBySymbol,
-                null,
+                scratch.MacroHeadlines,
                 scratch.Carry,
                 nowUtc);
             QuoteComposite quoteComposite = BuildQuoteComposite(
@@ -823,7 +823,11 @@ namespace Glitch.Services
                 scratch.HasFinnhub,
                 scratch.Profile.SupportsEarnings);
             List<string> mag7ScoreLines = BuildMag7ScoreLines(scratch.SymbolWeights, composite, quoteComposite);
-            List<string> latestHeadlineLines = BuildLatestHeadlineLines(scratch.SymbolWeights, nowUtc);
+            List<string> latestHeadlineLines = BuildLatestHeadlineLines(
+                scratch.SymbolWeights,
+                scratch.HeadlinesBySymbol,
+                scratch.MacroHeadlines,
+                nowUtc);
 
             string newsSentimentText = BuildNewsSentimentText(
                 scratch.Profile.CompositeLabel,
@@ -867,6 +871,7 @@ namespace Glitch.Services
             public CarryForwardState Carry;
             public CarryForwardState QuoteCarry;
             public Dictionary<string, List<NewsHeadline>> HeadlinesBySymbol;
+            public List<NewsHeadline> MacroHeadlines;
             public Dictionary<string, SymbolQuoteState> QuotesBySymbol;
             public Dictionary<string, ValuationMetrics> ValuationBySymbol;
             public Dictionary<string, EarningsEvent> NextEarningsBySymbol;
@@ -897,7 +902,16 @@ namespace Glitch.Services
                     SymbolWeights = new Dictionary<string, double>(profile.SymbolWeights, StringComparer.OrdinalIgnoreCase),
                     Carry = carry,
                     QuoteCarry = quoteCarry,
-                    HeadlinesBySymbol = new Dictionary<string, List<NewsHeadline>>(_headlinesBySymbol, StringComparer.OrdinalIgnoreCase),
+                    HeadlinesBySymbol = _headlinesBySymbol.ToDictionary(
+                        pair => pair.Key,
+                        pair => pair.Value == null
+                            ? new List<NewsHeadline>()
+                            : pair.Value.Where(headline => headline != null).Select(headline => headline.Clone()).ToList(),
+                        StringComparer.OrdinalIgnoreCase),
+                    MacroHeadlines = _macroHeadlines
+                        .Where(headline => headline != null)
+                        .Select(headline => headline.Clone())
+                        .ToList(),
                     QuotesBySymbol = new Dictionary<string, SymbolQuoteState>(_quotesBySymbol, StringComparer.OrdinalIgnoreCase),
                     ValuationBySymbol = new Dictionary<string, ValuationMetrics>(_valuationBySymbol, StringComparer.OrdinalIgnoreCase),
                     NextEarningsBySymbol = new Dictionary<string, EarningsEvent>(_nextEarningsBySymbol, StringComparer.OrdinalIgnoreCase),
@@ -1453,7 +1467,11 @@ namespace Glitch.Services
             return lines;
         }
 
-        private List<string> BuildLatestHeadlineLines(Dictionary<string, double> symbolWeights, DateTime nowUtc)
+        private static List<string> BuildLatestHeadlineLines(
+            Dictionary<string, double> symbolWeights,
+            Dictionary<string, List<NewsHeadline>> headlinesBySymbol,
+            List<NewsHeadline> macroHeadlines,
+            DateTime nowUtc)
         {
             var symbols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (symbolWeights != null)
@@ -1468,12 +1486,14 @@ namespace Glitch.Services
             var pool = new List<NewsHeadline>();
             foreach (string symbol in symbols)
             {
-                if (_headlinesBySymbol.TryGetValue(symbol, out List<NewsHeadline> list) && list != null)
+                if (headlinesBySymbol != null &&
+                    headlinesBySymbol.TryGetValue(symbol, out List<NewsHeadline> list) &&
+                    list != null)
                     pool.AddRange(list.Where(x => x != null));
             }
 
-            if (pool.Count == 0 && _macroHeadlines != null && _macroHeadlines.Count > 0)
-                pool.AddRange(_macroHeadlines.Where(x => x != null));
+            if (pool.Count == 0 && macroHeadlines != null && macroHeadlines.Count > 0)
+                pool.AddRange(macroHeadlines.Where(x => x != null));
 
             DateTime cutoff = nowUtc.AddDays(-MaxHeadlineAgeDays);
             var dedupe = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -2671,7 +2691,7 @@ namespace Glitch.Services
                 if (!string.IsNullOrWhiteSpace(directory))
                     Directory.CreateDirectory(directory);
 
-                File.WriteAllLines(_cacheFilePath, GlitchStateStore.WithTsvBanner(lines));
+                GlitchStateStore.WriteAllLinesAtomic(_cacheFilePath, GlitchStateStore.WithTsvBanner(lines));
             }
             catch
             {

@@ -188,6 +188,70 @@ namespace Glitch.Services
             return scaled.Sum(leg => leg.Quantity) == followerQuantity;
         }
 
+        public static bool TryResolveSingleOvercoveredMasterGeometry(
+            Account masterAccount,
+            Instrument instrument,
+            int requiredMasterQuantity,
+            bool isLong,
+            out GlitchReplicationProtectionPlan plan)
+        {
+            plan = null;
+            if (masterAccount == null || instrument == null || requiredMasterQuantity <= 0)
+                return false;
+
+            string instrumentName = instrument.FullName?.Trim() ?? string.Empty;
+            OrderAction exitAction = isLong ? OrderAction.Sell : OrderAction.BuyToCover;
+            List<IGrouping<string, Order>> groups = SnapshotOrders(masterAccount)
+                .Where(order =>
+                    order?.Instrument != null
+                    && string.Equals(
+                        order.Instrument.FullName,
+                        instrumentName,
+                        StringComparison.OrdinalIgnoreCase)
+                    && order.OrderAction == exitAction
+                    && GlitchReplicationEngine.IsWorkingOrderState(order.OrderState)
+                    && !string.IsNullOrWhiteSpace(order.Oco))
+                .GroupBy(order => order.Oco.Trim(), StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (groups.Count != 1)
+                return false;
+
+            List<Order> stops = groups[0].Where(GlitchReplicationEngine.IsStopLikeOrder).ToList();
+            List<Order> targets = groups[0].Where(order => order.OrderType == OrderType.Limit).ToList();
+            if (stops.Count != 1 || targets.Count != 1)
+                return false;
+
+            Order stop = stops[0];
+            Order target = targets[0];
+            int nativeProtectionQuantity = Math.Min(
+                RemainingQuantity(stop),
+                RemainingQuantity(target));
+            if (nativeProtectionQuantity < requiredMasterQuantity
+                || stop.StopPrice <= 0
+                || target.LimitPrice <= 0
+                || (isLong && stop.StopPrice >= target.LimitPrice)
+                || (!isLong && stop.StopPrice <= target.LimitPrice))
+                return false;
+
+            plan = new GlitchReplicationProtectionPlan
+            {
+                IsLong = isLong,
+                MasterQuantity = requiredMasterQuantity,
+                TickSize = instrument.MasterInstrument?.TickSize ?? 0,
+                Legs = new List<GlitchReplicationProtectionLeg>
+                {
+                    new GlitchReplicationProtectionLeg
+                    {
+                        MasterQuantity = requiredMasterQuantity,
+                        StopPrice = stop.StopPrice,
+                        TargetPrice = target.LimitPrice,
+                        SourceToken = BuildSourceToken(stop.Name, stop.Oco)
+                    }
+                }
+            };
+            return true;
+        }
+
         public static int ScaleFollowerQuantity(int masterQuantity, double ratio)
         {
             if (masterQuantity <= 0 || ratio <= 0 || double.IsNaN(ratio) || double.IsInfinity(ratio))
@@ -202,12 +266,32 @@ namespace Glitch.Services
             int followerQuantity,
             out List<GlitchScaledProtectionLeg> scaled)
         {
-            scaled = new List<GlitchScaledProtectionLeg>();
-            if (plan == null || followerAllocationOffset < 0 || followerQuantity <= 0)
+            if (plan == null)
+            {
+                scaled = new List<GlitchScaledProtectionLeg>();
                 return false;
-
+            }
             int aggregateFollowerQuantity = ScaleFollowerQuantity(plan.MasterQuantity, ratio);
-            if (aggregateFollowerQuantity <= 0
+            return TryScalePlanSlice(
+                plan,
+                aggregateFollowerQuantity,
+                followerAllocationOffset,
+                followerQuantity,
+                out scaled);
+        }
+
+        public static bool TryScalePlanSlice(
+            GlitchReplicationProtectionPlan plan,
+            int aggregateFollowerQuantity,
+            int followerAllocationOffset,
+            int followerQuantity,
+            out List<GlitchScaledProtectionLeg> scaled)
+        {
+            scaled = new List<GlitchScaledProtectionLeg>();
+            if (plan == null
+                || aggregateFollowerQuantity <= 0
+                || followerAllocationOffset < 0
+                || followerQuantity <= 0
                 || followerAllocationOffset > aggregateFollowerQuantity - followerQuantity
                 || !TryScalePlan(plan, aggregateFollowerQuantity, out List<GlitchScaledProtectionLeg> aggregate))
                 return false;

@@ -396,7 +396,7 @@ namespace Glitch.UI
 
         private void RefreshSummaryInsightsIfNeeded(DateTime nowUtc, bool force = false)
         {
-            if (_summaryAsOfText == null)
+            if (_summaryAsOfText == null && _journalAsOfText == null)
                 return;
 
             var executionEntries = (_journalEntries ?? new ObservableCollection<JournalEntry>())
@@ -492,6 +492,31 @@ namespace Glitch.UI
             _summaryProfitFactorValueText.Text = snapshot.All.ProfitFactor > 0 ? snapshot.All.ProfitFactor.ToString("N2", CultureInfo.CurrentCulture) : "-";
             _summaryAccountsValueText.Text = distinctAccountsTraded.ToString("N0", CultureInfo.CurrentCulture);
             _summaryAsOfText.Text = L("summary.updated", "Updated") + ": " + nowUtc.ToLocalTime().ToString("MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
+
+            if (_journalTradesValueText != null)
+                _journalTradesValueText.Text = snapshot.All.Trades.ToString("N0", CultureInfo.CurrentCulture);
+            if (_journalWinRateValueText != null)
+                _journalWinRateValueText.Text = snapshot.All.WinRate.ToString("P1", CultureInfo.CurrentCulture);
+            if (_journalNetPnlValueText != null)
+            {
+                FrameworkElement journalSkinContext = (FrameworkElement)_journalRootGrid ?? _journalNetPnlValueText;
+                _journalNetPnlValueText.Text = FormatSignedCurrency(snapshot.All.NetPoints);
+                _journalNetPnlValueText.Foreground = ResolveSignedBrush(snapshot.All.NetPoints, journalSkinContext);
+            }
+            if (_journalAvgWinValueText != null)
+            {
+                _journalAvgWinValueText.Text = FormatSignedCurrency(snapshot.All.AvgWinningTradePoints);
+                _journalAvgWinValueText.Foreground = ResolveSignedBrush(snapshot.All.AvgWinningTradePoints, (FrameworkElement)_journalRootGrid ?? _journalAvgWinValueText);
+            }
+            if (_journalAvgLossValueText != null)
+            {
+                _journalAvgLossValueText.Text = FormatSignedCurrency(snapshot.All.AvgLosingTradePoints);
+                _journalAvgLossValueText.Foreground = ResolveSignedBrush(snapshot.All.AvgLosingTradePoints, (FrameworkElement)_journalRootGrid ?? _journalAvgLossValueText);
+            }
+            if (_journalProfitFactorValueText != null)
+                _journalProfitFactorValueText.Text = snapshot.All.ProfitFactor > 0 ? snapshot.All.ProfitFactor.ToString("N2", CultureInfo.CurrentCulture) : "-";
+            if (_journalAsOfText != null)
+                _journalAsOfText.Text = L("summary.updated", "Updated") + ": " + nowUtc.ToLocalTime().ToString("MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
 
             _summaryMetricRows.Clear();
             _summaryMetricRows.Add(new SummaryMetricRow { Metric = L("summary.total_trades", "Total Trades"), All = snapshot.All.Trades.ToString("N0"), Long = snapshot.Long.Trades.ToString("N0"), Short = snapshot.Short.Trades.ToString("N0") });
@@ -663,10 +688,15 @@ namespace Glitch.UI
 
         private void UpdateSummaryCardsPanelLayout(double usableWidth)
         {
-            if (_summaryCardsPanel == null)
+            UpdateCardsPanelLayout(_summaryCardsPanel, usableWidth);
+        }
+
+        private static void UpdateCardsPanelLayout(UniformGrid cardsPanel, double usableWidth)
+        {
+            if (cardsPanel == null)
                 return;
 
-            int cardCount = _summaryCardsPanel.Children.Count;
+            int cardCount = cardsPanel.Children.Count;
             if (cardCount <= 0)
                 return;
 
@@ -674,12 +704,12 @@ namespace Glitch.UI
             const double gap = 8.0;
             int columns = (int)Math.Floor((usableWidth + gap) / (minCardWidth + gap));
             columns = Math.Max(1, Math.Min(columns, cardCount));
-            _summaryCardsPanel.Columns = columns;
+            cardsPanel.Columns = columns;
 
             int totalRows = (int)Math.Ceiling(cardCount / (double)columns);
             for (int i = 0; i < cardCount; i++)
             {
-                if (!(_summaryCardsPanel.Children[i] is FrameworkElement item))
+                if (!(cardsPanel.Children[i] is FrameworkElement item))
                     continue;
 
                 int rowIndex = i / columns;

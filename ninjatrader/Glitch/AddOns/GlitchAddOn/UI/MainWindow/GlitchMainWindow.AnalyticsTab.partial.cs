@@ -1927,7 +1927,7 @@ namespace Glitch.UI
                                 snapshot.Mag7ScoreLines = fundamentals.Mag7ScoreLines;
                                 snapshot.LatestHeadlineLines = fundamentals.LatestHeadlineLines;
                                 snapshot.OfficialNewsLines = fundamentals.OfficialNewsLines;
-                                ApplyMag7Influence(snapshot, fundamentals.Mag7InfluenceScore);
+                                ApplyMag7Influence(snapshot, fundamentals.Mag7InfluenceScore, nowUtc);
                             }
                         }
                         catch (Exception ex)
@@ -1948,7 +1948,10 @@ namespace Glitch.UI
                     ApplyAnalyticsSnapshot(snapshot);
                 }
         
-                private void ApplyMag7Influence(GlitchAnalyticsSnapshot snapshot, double mag7InfluenceScore)
+                private void ApplyMag7Influence(
+                    GlitchAnalyticsSnapshot snapshot,
+                    double mag7InfluenceScore,
+                    DateTime nowUtc)
                 {
                     if (snapshot == null)
                             return;
@@ -1964,7 +1967,7 @@ namespace Glitch.UI
                             return;
         
                     List<GlitchTimeframeReading> activeReadings = readings
-                        .Where(x => x.AveragePrice.HasValue || x.AtrProxy.HasValue || x.AdxProxy.HasValue)
+                        .Where(x => GlitchAnalyticsEngine.IsReadingFresh(x, nowUtc))
                         .ToList();
                     if (activeReadings.Count == 0)
                             return;

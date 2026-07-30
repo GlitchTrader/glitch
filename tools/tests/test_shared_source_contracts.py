@@ -20,6 +20,7 @@ POLICY_STORE = ADDON / "Services/Persistence/GlitchRuntimePolicyStore.cs"
 TRADE_INSIGHTS = ADDON / "Services/Insights/GlitchTradeInsightsService.cs"
 TRADE_LEDGER = ADDON / "Services/Insights/GlitchTradeLedgerService.cs"
 SUMMARY_TAB = ADDON / "UI/MainWindow/GlitchMainWindow.SummaryTab.partial.cs"
+JOURNAL_TAB = ADDON / "UI/MainWindow/GlitchMainWindow.JournalTab.partial.cs"
 METADATA = ADDON / "Services/Trading/GlitchInstrumentMetadataService.cs"
 FEED_BUS = ADDON / "UI/Analytics/GlitchAnalyticsFeedBus.cs"
 ANALYTICS_BRIDGE = INDICATORS / "GlitchAnalyticsBridge.cs"
@@ -27,6 +28,8 @@ PROP_RULES = ADDON / "Resources/PropFirmRules.json"
 PROP_RULE_BUNDLE = ADDON / "UI/MainWindow/GlitchMainWindow.PropFirmRulesBundle.generated.cs"
 PROP_RULE_GENERATOR = ROOT / "scripts/generate_bundled_prop_rules.ps1"
 FUNDAMENTAL_ANALYSIS = ADDON / "Services/FundamentalAnalysis/GlitchFundamentalAnalysisService.cs"
+ANALYTICS_LOGIC = ADDON / "UI/Analytics/GlitchAnalyticsLogic.cs"
+ANALYTICS_TAB = ADDON / "UI/MainWindow/GlitchMainWindow.AnalyticsTab.partial.cs"
 DOWNLOAD_APP = ROOT / "apps/download"
 RELEASE_CATALOG = DOWNLOAD_APP / "src/lib/release-catalog.json"
 RELEASE_CHECKSUMS = DOWNLOAD_APP / "public/files/checksums.json"
@@ -136,16 +139,37 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
     def test_live_replication_copies_each_execution_delta_without_position_repair(self):
         copy = source(COPY_ENGINE)
         opening = method_body(copy, "private void FanOutOpening", "private void FanOutCompleteClose")
-        scale = method_body(copy, "private static int ScaleExecution", "private static bool TrySnapshotOrders")
-        self.assertIn("ScaleExecution(context, route.Ratio)", opening)
-        self.assertIn("ScaleFollowerQuantity(filled, ratio)", scale)
-        self.assertIn("ScaleFollowerQuantity(before, ratio)", scale)
+        scale = method_body(copy, "private ExecutionAllocation AllocateExecutionDelta", "private static string BuildAllocationRouteKey")
+        self.assertIn("AllocateExecutionDelta(route, context, true)", opening)
+        self.assertIn("state.MasterQuantity += context.Quantity", scale)
+        self.assertIn("ScaleFollowerQuantity(state.MasterQuantity, route.Ratio)", scale)
+        self.assertIn("targetFollowerQuantity - state.FollowerQuantity", scale)
         self.assertNotIn("ResolveContextMasterQuantity(context)", opening)
         self.assertNotIn("expected", opening)
         self.assertNotIn("actual", opening)
         self.assertNotIn("inFlight", opening)
         self.assertNotIn("GetEntryDenialReason", copy)
         self.assertNotIn("TryGetInFlightOpeningQuantity", copy)
+
+    def test_fractional_allocation_epoch_is_future_only_and_configuration_safe(self):
+        copy = source(COPY_ENGINE)
+        configure = method_body(copy, "public void Configure", "public void ProcessMasterExecution")
+        epochs = method_body(
+            copy,
+            "private void ReconcileAllocationEpochs",
+            "private ExecutionAllocation AllocateExecutionDelta",
+        )
+        tooltip = method_body(
+            source(ADDON / "UI/MainWindow/GlitchMainWindow.cs"),
+            "private string BuildFollowerRatioMathTooltip",
+            "private static Style CreateEditableRatioTextBoxStyle",
+        )
+        self.assertIn("ReconcileAllocationEpochs(nextEnabled, nextRouteSignatures)", configure)
+        self.assertIn("if (!nextEnabled || !_enabled)", epochs)
+        self.assertIn("_allocationByRouteDirection.Clear()", epochs)
+        self.assertIn("changedRoutes.Contains(item.Value.RouteKey)", epochs)
+        self.assertNotIn("Submit", epochs)
+        self.assertIn("dashboard.group.ratio_allocation_policy", tooltip)
 
     def test_user_sync_uses_the_configured_route_without_a_route_cap_admission(self):
         copy = source(COPY_ENGINE)
@@ -208,8 +232,37 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         callback = method_body(window, "private void OnAccountRuntimeEventBridgeCore", "private static bool IsReplicationInternalSignal")
         self.assertNotIn("RefreshAccountData(", callback)
         self.assertIn("QueueAccountRefreshFromRuntimeEvent(account, eventArgs);", callback)
+        self.assertIn("_activeAccountCache.Remove(account.Name.Trim());", callback)
+        self.assertIn("QueueBackgroundAccountRefresh(GetActiveAccountsSnapshot(), heavyTabWork: true);", callback)
         self.assertIn("private void QueueAccountRefreshFromRuntimeEvent(Account account, object eventArgs)", refresh)
         self.assertIn("sequence < Interlocked.Read(ref _accountRefreshSequence)", refresh)
+
+    def test_inferred_account_identity_is_observational_only(self):
+        window = source(MAIN_WINDOW)
+        compliance = source(ADDON / "Services/Risk/GlitchComplianceEngine.cs")
+        mitigation = source(ADDON / "Services/Risk/GlitchRiskMitigationEngine.cs")
+        runtime_policy = source(POLICY_STORE)
+        dashboard = source(ADDON / "UI/MainWindow/GlitchMainWindow.DashboardTab.partial.cs")
+        actions = method_body(window, "private void ApplyEnabledRiskActions", "private void ClearComplianceEnforcementRuntimeState")
+        normalize = method_body(compliance, "public static string NormalizeAccountStatus", "public static string InferPropFirmId")
+        infer = method_body(compliance, "public static string InferAccountStatus", "public static string GetExecutionProviderHint")
+        self.assertIn('return "Unknown";', normalize)
+        self.assertIn('return "Unknown";', infer)
+        self.assertIn("if (!row.IsManualSelection)", actions)
+        self.assertIn("GlitchComplianceEngine.NormalizeAccountStatus(accountStatus)", mitigation)
+        self.assertIn("GlitchComplianceEngine.NormalizeAccountStatus(accountStatus)", runtime_policy)
+        self.assertIn('new List<string> { "Unknown", "Sim", "Eval", "AP" }', window)
+        self.assertIn("nameof(AccountGridRow.AccountSizeSource)", dashboard)
+        self.assertIn("dashboard.column.source", source(LOCALIZATION))
+
+    def test_current_accounts_follow_native_account_connection_status(self):
+        window = source(MAIN_WINDOW)
+        active = method_body(window, "private static bool IsActiveAccount(Account account)", "private static bool IsFlattenEligibleAccount")
+        flatten = method_body(window, "private static bool IsFlattenEligibleAccount(Account account)", "private static bool? TryGetBoolProperty")
+        for method in (active, flatten):
+            self.assertIn('accountType.GetProperty("ConnectionStatus")', method)
+            self.assertIn('accountConnectionStatus.ToString(), "Connected"', method)
+            self.assertNotIn("GetAccountSizeFromNt", method)
 
     def test_group_refresh_is_projection_only_and_persistence_keeps_route_authority(self):
         window = source(ADDON / "UI/MainWindow/GlitchMainWindow.cs")
@@ -226,6 +279,58 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("MasterSize = masterSize", persistence)
         self.assertIn("IsEnabled = member.IsEnabled", persistence)
 
+    def test_plan_limits_never_mutate_or_persist_user_group_intent(self):
+        window = source(MAIN_WINDOW)
+        limits = method_body(window, "private void ApplyPlanLimitsToAccountGroups", "private void MaybeRunLicenseHeartbeat")
+        self.assertIn("CountConfiguredGroups() > maxGroups", limits)
+        self.assertIn("AnyGroupHasEnabledFollowersOverLimit(maxFollowers)", limits)
+        self.assertIn("Saved group and follower settings were preserved", limits)
+        self.assertNotIn("member.IsEnabled =", limits)
+        self.assertNotIn("SaveAccountGroupsToDisk(", limits)
+        self.assertNotIn("RebuildAccountGroupsUi(", limits)
+
+    def test_authoritative_writes_are_durable_atomic_and_visible_on_failure(self):
+        state = source(ADDON / "Services/Persistence/GlitchStateStore.cs")
+        runtime = source(POLICY_STORE)
+        analytics_cache = source(ADDON / "Services/Persistence/GlitchAnalyticsBridgeCacheStore.cs")
+        fundamentals = source(FUNDAMENTAL_ANALYSIS)
+        trade_ledger = source(TRADE_LEDGER)
+        risk_ledger = source(ADDON / "Services/Insights/GlitchRiskLockLedgerService.cs")
+        window = source(MAIN_WINDOW)
+        for token in (
+            "FileOptions.WriteThrough",
+            "stream.Flush(true)",
+            "File.Replace(tempPath, fullPath, backupPath, true)",
+            'fullPath + ".tmp." + Guid.NewGuid().ToString("N")',
+        ):
+            self.assertIn(token, state)
+        self.assertIn("GlitchStateStore.WriteAllLinesAtomic", runtime)
+        self.assertIn("GlitchStateStore.WriteAllTextAtomic", analytics_cache)
+        self.assertIn("GlitchStateStore.WriteAllLinesAtomic", fundamentals)
+        self.assertIn("GlitchStateStore.WriteAllLinesAtomic", trade_ledger)
+        self.assertIn("GlitchStateStore.WriteAllLinesAtomic", risk_ledger)
+        self.assertNotIn("File.Delete(path)", analytics_cache)
+        self.assertIn('RecordSubsystemFault("audit_persistence", ex)', window)
+        self.assertIn('RecordSubsystemFault("account_group_persistence", ex)', window)
+        self.assertIn('RecordSubsystemFault("account_override_persistence", ex)', window)
+        self.assertIn("LoadValidatedWithBackup", state)
+        self.assertIn("throw new InvalidDataException", state)
+        group_load = method_body(
+            window,
+            "private void LoadAccountGroupsFromDisk",
+            "private void SaveAccountGroupsToDisk",
+        )
+        self.assertLess(group_load.index("LoadAccountGroups("), group_load.index("_accountGroups.Clear()"))
+        self.assertIn('"AccountGroupsRecovered"', group_load)
+        self.assertIn('"AccountGroupsLoadFailed"', group_load)
+        override_load = method_body(
+            window,
+            "private void LoadSelectionOverridesFromDisk",
+            "private void SaveSelectionOverridesToDisk",
+        )
+        self.assertIn('"AccountOverridesRecovered"', override_load)
+        self.assertIn('"AccountOverridesLoadFailed"', override_load)
+
     def test_max_contracts_risk_read_uses_locked_snapshot_and_fails_closed(self):
         window = source(ADDON / "UI/MainWindow/GlitchMainWindow.cs")
         helper = method_body(window, "private static bool TryGetTotalAbsoluteOpenContracts", "private static bool HasWorkingProtectiveStop")
@@ -237,7 +342,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         copy = source(COPY_ENGINE)
         opening = method_body(copy, "private void FanOutOpening", "private void FanOutCompleteClose")
         sync = method_body(copy, "public void SyncFollower", "private void FanOutOpening")
-        self.assertIn("ScaleExecution(context, route.Ratio)", opening)
+        self.assertIn("AllocateExecutionDelta(route, context, true)", opening)
         self.assertIn("int expected =", sync)
         self.assertIn("SubmitFollowerEntry", sync)
         for forbidden in (
@@ -258,7 +363,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             "private void TrySubmitAttributedRecoveryClose",
         )
         state = method_body(copy, "public void ProcessAccountStateUpdate", "public void ProcessFollowerExecution")
-        self.assertIn("ScaleExecution(context, route.Ratio)", close)
+        self.assertIn("AllocateExecutionDelta(route, context, false)", close)
         self.assertIn("TryGetNetQuantityForInstrument(route.FollowerAccount, context.Instrument", close)
         self.assertIn("Math.Min(requested, closable)", close)
         self.assertIn("SubmitFollowerClose", close)
@@ -297,6 +402,12 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         )
         self.assertIn("QuantityChanged", trim)
         self.assertIn("account.Change(changes.ToArray())", trim)
+        self.assertIn("TryResolveMasterPlan(", trim)
+        self.assertIn("TryResolveSingleOvercoveredMasterGeometry(", trim)
+        self.assertIn("ResolveProtectionMasterAccount(account, instrument, units)", trim)
+        self.assertIn("ProtectionGeometryMatches(unit, desired)", trim)
+        self.assertIn("ReportProtectionAmbiguity(", trim)
+        self.assertNotIn("ThenByDescending(unit => unit.Orders[0].Oco", trim)
         self.assertIn("FollowerSignalKind.Protection", flat)
         self.assertIn("FollowerSignalKind.Close", flat)
         self.assertNotIn("ParseFollowerSignalKind(order.Name) != FollowerSignalKind.None", flat)
@@ -433,6 +544,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("BitConverter.DoubleToInt64Bits(route.Ratio)", recovery)
         self.assertIn("TryScalePlanSlice(", recovery)
         self.assertIn("followerAllocationOffset", recovery)
+        self.assertIn("followerPlanQuantity", recovery)
         self.assertIn("ambiguous_allocation_metadata_recovered", recovery)
         self.assertIn("ambiguous_route_recovered", recovery)
         self.assertIn("ambiguous_route_ratio_changed_recovered", recovery)
@@ -443,9 +555,11 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         copy = source(COPY_ENGINE)
         replication = source(REPLICATION_UI)
         self.assertIn("EntryOrderFilledQuantity", copy)
+        self.assertIn("EntryOrderQuantity", copy)
+        self.assertIn("OrderIdentity", copy)
         self.assertIn("context.EntryOrder?.Filled", copy)
-        self.assertIn("ScaleFollowerQuantity(filled, ratio)", copy)
-        self.assertIn("ResolveFollowerAllocationOffset(context, route.Ratio)", copy)
+        self.assertIn("AllocateExecutionDelta(route, context, true)", copy)
+        self.assertIn("orderState.AllocatedFollowerQuantity", copy)
         self.assertNotIn("Math.Abs(currentMasterNet) < copyMasterQuantity", copy)
         self.assertNotIn("Math.Abs(masterNet) < copyMasterQuantity", copy)
         self.assertIn('TryGetNestedPropertyValueAsString(executionObject, "ExecutionId")', replication)
@@ -466,10 +580,12 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         )
         self.assertIn("FollowerAllocationOffset", copy)
         self.assertIn("RouteRatio", copy)
-        self.assertIn("ResolveFollowerAllocationOffset(context, route.Ratio)", opening)
+        self.assertIn("allocation.FollowerOrderOffset", opening)
+        self.assertIn("allocation.FollowerOrderPlanQuantity", opening)
         self.assertIn("Math.Abs(actual)", sync)
         self.assertIn("TryScalePlanSlice(", attach)
         self.assertIn("lifecycle.FollowerAllocationOffset", attach)
+        self.assertIn("lifecycle.FollowerPlanQuantity", attach)
         self.assertIn("ScaleFollowerQuantity(plan.MasterQuantity, ratio)", slicing)
         self.assertIn("TryScalePlan(plan, aggregateFollowerQuantity", slicing)
         self.assertIn("Math.Min(sliceEnd, sourceEnd)", slicing)
@@ -620,13 +736,48 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("|result=manual_override_unattributed", copy_engine)
         self.assertNotIn("account.Flatten", copy_engine)
 
+    def test_replication_snapshots_execution_before_dispatch_and_tracks_close_failures(self):
+        window = source(MAIN_WINDOW)
+        replication = source(REPLICATION_UI)
+        copy_engine = source(COPY_ENGINE)
+        bridge = method_body(
+            window,
+            "private void OnAccountRuntimeEventBridge",
+            "private void OnAccountRuntimeEventBridgeCore",
+        )
+        self.assertLess(
+            bridge.index("TryBuildCopyExecutionContext(eventArgs, out executionSnapshot)"),
+            bridge.index("Dispatcher.BeginInvoke"),
+        )
+        self.assertIn("GlitchCopyExecutionContext executionSnapshot", replication)
+        recovery = method_body(
+            copy_engine,
+            "private void TrySubmitAttributedRecoveryClose",
+            "private FollowerOrderSubmission SubmitFollowerEntry",
+        )
+        self.assertLess(
+            recovery.index("TryGetNetQuantityForInstrument"),
+            recovery.index("lifecycle.RecoveryCloseSubmitted = true"),
+        )
+        self.assertIn('submission.Result, "submitted"', recovery)
+        close_tracking = method_body(
+            copy_engine,
+            "private void TrackCloseOrder",
+            "private void TrySubmitAttributedRecoveryClose",
+        )
+        self.assertIn("FollowerCloseTerminalUnresolved", close_tracking)
+        self.assertIn("lifecycle.RecoveryOwner.RecoveryCloseSubmitted = false", close_tracking)
+
     def test_replication_state_is_truthful_and_reload_is_observe_only(self):
         window = source(MAIN_WINDOW)
         performance = source(ADDON / "UI/MainWindow/GlitchMainWindow.Performance.partial.cs")
         chart_trader = source(ADDON / "GlitchAddOn.ChartTrader.partial.cs")
         self.assertIn("_isReplicatingUi && _copyEngine?.IsEnabled == true", window)
-        self.assertIn("SetReplicationFromExternalSurface(!IsReplicationEnabledFromExternalSurface()", window)
+        self.assertIn("SetReplicationFromExternalSurface(!_isReplicatingUi", window)
+        self.assertIn("return _isReplicatingUi == enabled;", window)
         self.assertIn("IsReplicating = IsReplicationEnabledFromExternalSurface()", performance)
+        self.assertIn("IsReplicationEffective = IsReplicationEffectivelyActiveFromExternalSurface()", performance)
+        self.assertIn('"Armed"', chart_trader)
         self.assertIn("GlitchShellBridge.ToggleReplication()", chart_trader)
         self.assertNotIn("UseLegacyReplicationEngine", window + source(POLICY_STORE))
         self.assertNotIn('SyncGroupFollowers("startup")', window)
@@ -775,12 +926,39 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
 
     def test_journal_scope_and_card_units_are_explicit(self):
         summary = source(SUMMARY_TAB)
+        journal = source(JOURNAL_TAB)
         self.assertIn('ItemsSource = new[] { "Master", "Group", "Fleet" }', summary)
         self.assertIn('"Logical Trades"', summary)
         self.assertIn('"Account Trades"', summary)
         self.assertIn("ApplySummaryScope", summary)
         self.assertNotIn("_summaryFleetTradesValueText.Text = FormatSignedCurrency", summary)
         self.assertNotIn("_summaryAccountsValueText.Text = FormatSignedCurrency", summary)
+        for field in (
+            "_journalTradesValueText",
+            "_journalNetPnlValueText",
+            "_journalWinRateValueText",
+            "_journalAvgWinValueText",
+            "_journalAvgLossValueText",
+            "_journalProfitFactorValueText",
+            "_journalAsOfText",
+            "_journalCardsPanel",
+        ):
+            self.assertIn(field, journal)
+        for summary_field in (
+            "_summaryTradesValueText",
+            "_summaryNetPointsValueText",
+            "_summaryWinRateValueText",
+            "_summaryFleetTradesValueText",
+            "_summaryAccountsValueText",
+            "_summaryProfitFactorValueText",
+            "_summaryAsOfText",
+            "_summaryCardsPanel",
+            "_summaryPerformanceGrid",
+        ):
+            self.assertNotIn(f"out {summary_field}", journal)
+            self.assertNotIn(f"{summary_field} =", journal)
+        self.assertIn("_journalAvgWinValueText.Text = FormatSignedCurrency(snapshot.All.AvgWinningTradePoints)", summary)
+        self.assertIn("_journalAvgLossValueText.Text = FormatSignedCurrency(snapshot.All.AvgLosingTradePoints)", summary)
 
     def test_analytics_observations_are_live_and_rich(self):
         bridge = source(ANALYTICS_BRIDGE)
@@ -812,6 +990,34 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         )
         initialize = method_body(bridge, "private void InitializeIndicators", "private void InitializeColorPalettes")
         self.assertIn("if (!IsTrackedMinutesForBip(bip))", initialize)
+
+    def test_fundamental_influence_uses_only_fresh_technical_readings(self):
+        logic = source(ANALYTICS_LOGIC)
+        tab = source(ANALYTICS_TAB)
+        self.assertIn("public DateTime UtcTime { get; set; }", logic)
+        self.assertIn("UtcTime = source.UtcTime", logic)
+        freshness = method_body(
+            logic,
+            "internal static bool IsReadingFresh(GlitchTimeframeReading reading, DateTime nowUtc)",
+            "public IReadOnlyList<string> BuildInstrumentOptions",
+        )
+        self.assertIn("reading.UtcTime != default", freshness)
+        self.assertIn("(nowUtc - reading.UtcTime) <= MaxFeedAge", freshness)
+        influence = method_body(tab, "private void ApplyMag7Influence", "private static double ResolveMag7InfluenceWeight")
+        self.assertIn("GlitchAnalyticsEngine.IsReadingFresh(x, nowUtc)", influence)
+        self.assertNotIn("x.AveragePrice.HasValue || x.AtrProxy.HasValue || x.AdxProxy.HasValue", influence)
+
+    def test_macro_headlines_flow_through_one_immutable_snapshot(self):
+        fundamentals = source(FUNDAMENTAL_ANALYSIS)
+        snapshot = method_body(fundamentals, "private GlitchFundamentalAnalysisSnapshot BuildSnapshot", "private sealed class SnapshotScratch")
+        scratch = method_body(fundamentals, "private SnapshotScratch CaptureSnapshotScratch", "private void CommitSnapshotCarryForward")
+        latest = method_body(fundamentals, "private static List<string> BuildLatestHeadlineLines", "private static string NormalizeHeadlineTitle")
+        self.assertIn("scratch.MacroHeadlines", snapshot)
+        self.assertNotIn("scratch.HeadlinesBySymbol,\n                null,", snapshot)
+        self.assertIn("headline.Clone()", scratch)
+        self.assertIn("MacroHeadlines = _macroHeadlines", scratch)
+        self.assertNotIn("_headlinesBySymbol", latest)
+        self.assertNotIn("_macroHeadlines", latest)
 
 
 if __name__ == "__main__":
