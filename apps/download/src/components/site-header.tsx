@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 type SiteHeaderProps = {
   websiteUrl: string;
@@ -13,6 +14,10 @@ type SiteHeaderProps = {
   startFreeUrl: string;
   memberHubUrl: string;
   goProUrl: string;
+  labels: { home: string; pricing: string; affiliate: string; docs: string; guide: string; startFree: string; memberHub: string; goPro: string };
+  languageLabel: string;
+  locale: string;
+  languageLinks: Array<{ locale: string; label: string; languageTag: string; href: string }>;
 };
 
 const navLinkClass = "text-white hover:text-white/80";
@@ -54,6 +59,10 @@ export function SiteHeaderClient({
   startFreeUrl,
   memberHubUrl,
   goProUrl,
+  labels,
+  languageLabel,
+  locale,
+  languageLinks,
 }: SiteHeaderProps) {
   const [open, setOpen] = useState(false);
 
@@ -87,29 +96,30 @@ export function SiteHeaderClient({
 
         <nav className="hidden items-center gap-6 text-sm md:flex">
           <a href={homeUrl} className={navLinkClass}>
-            Home
+            {labels.home}
           </a>
           <a href={pricingUrl} className={navLinkClass}>
-            Pricing
+            {labels.pricing}
           </a>
           <a href={affiliateUrl} className={navLinkClass}>
-            Affiliate
+            {labels.affiliate}
           </a>
           <a href={docsUrl} className={navLinkClass}>
-            Docs
+            {labels.docs}
           </a>
           <a href={guideUrl} className={navLinkClass}>
-            Guide
+            {labels.guide}
           </a>
           <a href={startFreeUrl} className={navLinkClass}>
-            Start Free
+            {labels.startFree}
           </a>
           <a href={memberHubUrl} className={memberHubClass}>
-            Member Hub
+            {labels.memberHub}
           </a>
           <a href={goProUrl} className={goProClass}>
-            Go Pro
+            {labels.goPro}
           </a>
+          <LanguageSwitcher locale={locale} label={languageLabel} options={languageLinks} />
         </nav>
       </div>
 
@@ -130,29 +140,33 @@ export function SiteHeaderClient({
           <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6">
             <nav className="flex flex-col gap-2">
               <a href={homeUrl} className={`${mobileItemClass} ${mobileNeutralTextClass}`} onClick={closeMenu}>
-                <span>Home</span>
+                <span>{labels.home}</span>
               </a>
               <a href={pricingUrl} className={`${mobileItemClass} ${mobileNeutralTextClass}`} onClick={closeMenu}>
-                <span>Pricing</span>
+                <span>{labels.pricing}</span>
               </a>
               <a href={affiliateUrl} className={`${mobileItemClass} ${mobileNeutralTextClass}`} onClick={closeMenu}>
-                <span>Affiliate</span>
+                <span>{labels.affiliate}</span>
               </a>
               <a href={docsUrl} className={`${mobileItemClass} ${mobileNeutralTextClass}`} onClick={closeMenu}>
-                <span>Docs</span>
+                <span>{labels.docs}</span>
               </a>
               <a href={guideUrl} className={`${mobileItemClass} ${mobileNeutralTextClass}`} onClick={closeMenu}>
-                <span>Guide</span>
+                <span>{labels.guide}</span>
               </a>
               <a href={startFreeUrl} className={`${mobileItemClass} ${mobileNeutralTextClass}`} onClick={closeMenu}>
-                <span>Start Free</span>
+                <span>{labels.startFree}</span>
               </a>
               <a href={memberHubUrl} className={`${mobileItemClass} ${memberHubClass}`} onClick={closeMenu}>
-                <span>Member Hub</span>
+                <span>{labels.memberHub}</span>
               </a>
               <a href={goProUrl} className={`${mobileItemClass} ${goProClass}`} onClick={closeMenu}>
-                <span>Go Pro</span>
+                <span>{labels.goPro}</span>
               </a>
+              <div className={`${mobileItemClass} ${mobileNeutralTextClass}`}>
+                <span>{languageLabel}</span>
+                <LanguageSwitcher locale={locale} label={languageLabel} options={languageLinks} />
+              </div>
             </nav>
           </div>
         </div>

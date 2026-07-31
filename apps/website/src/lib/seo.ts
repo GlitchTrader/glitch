@@ -47,6 +47,8 @@ export function buildPageMetadata({ title, description, path, locale }: PageMeta
         {
           url: socialImagePath,
           alt: "Glitch trading assistant banner",
+          width: 1536,
+          height: 1024,
         },
       ],
     },

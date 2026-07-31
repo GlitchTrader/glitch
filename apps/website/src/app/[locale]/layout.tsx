@@ -9,6 +9,8 @@ import { absoluteUrl, resolveSiteUrl, siteDescription, siteName } from "@/lib/si
 import { routing } from "@/i18n/routing";
 
 const socialImagePath = "/images/Glitch%20Banner.png";
+const faviconPath = "/images/Glitch%20Favicon.png";
+const appIconPath = "/images/branding/Glitch%20Icon.png";
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -31,6 +33,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     metadataBase: resolveSiteUrl(),
     applicationName: siteName,
+    manifest: "/manifest.webmanifest",
     title: `${siteName} - Risk-First NinjaTrader AddOn for Prop Traders`,
     description: ui.site.description ?? siteDescription,
     keywords: [
@@ -54,6 +57,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         {
           url: socialImagePath,
           alt: "Glitch trading assistant banner",
+          width: 1536,
+          height: 1024,
         },
       ],
       type: "website",
@@ -65,9 +70,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       images: [socialImagePath],
     },
     icons: {
-      icon: "/images/Glitch%20Favicon.png",
-      shortcut: "/images/Glitch%20Favicon.png",
-      apple: "/images/Glitch%20Favicon.png",
+      icon: [
+        { url: "/favicon.ico", sizes: "32x32", type: "image/x-icon" },
+        { url: faviconPath, sizes: "32x32", type: "image/png" },
+      ],
+      shortcut: faviconPath,
+      apple: [{ url: appIconPath, sizes: "512x512", type: "image/png" }],
     },
   };
 }

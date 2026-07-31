@@ -30,6 +30,7 @@ $filesDirectory = Join-Path $repoRoot 'apps\download\public\files'
 $catalogPath = Join-Path $repoRoot 'apps\download\src\lib\release-catalog.json'
 $checksumsPath = Join-Path $filesDirectory 'checksums.json'
 $fileName = if ($Edition -eq 'ai') { "Glitch_AI_v$Version.zip" } else { "Glitch_v$Version.zip" }
+$expectedAssemblyName = if ($Edition -eq 'ai') { 'Glitch_AI' } else { 'Glitch' }
 $destinationPath = Join-Path $filesDirectory $fileName
 $status = if ($Edition -eq 'ai') { 'experimental' } else { 'stable' }
 $resolvedSource = (Resolve-Path -LiteralPath $SourceZip).Path
@@ -122,7 +123,7 @@ try {
 
     [System.IO.Compression.ZipFileExtensions]::ExtractToFile($dllEntry[0], $temporaryDll, $false)
     $assemblyName = [Reflection.AssemblyName]::GetAssemblyName($temporaryDll)
-    if ($assemblyName.Name -ne 'Glitch') {
+    if ($assemblyName.Name -ne $expectedAssemblyName) {
         throw "Unexpected assembly name: $($assemblyName.Name)"
     }
     if ($assemblyName.Version.ToString() -ne $Version) {
@@ -140,7 +141,10 @@ $catalogRaw = [IO.File]::ReadAllText($catalogPath)
 $checksumsRaw = [IO.File]::ReadAllText($checksumsPath)
 $destinationCreated = $false
 try {
-    $catalog = @($catalogRaw | ConvertFrom-Json)
+    # Windows PowerShell 5.1 preserves a top-level JSON array as one nested
+    # object when ConvertFrom-Json is used in a pipeline. Cast explicitly so
+    # every release remains a catalog entry on all supported PowerShell hosts.
+    $catalog = [array](ConvertFrom-Json -InputObject $catalogRaw)
     if ($catalog | Where-Object { $_.fileName -eq $fileName -or ($_.edition -eq $Edition -and $_.version -eq $Version) }) {
         throw "Release is already registered: $Edition $Version"
     }

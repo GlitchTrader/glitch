@@ -3,12 +3,14 @@ import ReactMarkdown from "react-markdown";
 import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
 import { resolveMarkdownHref } from "@/lib/docs";
+import type { DocsLocale } from "@/lib/docs-locales";
 
 type DocsMarkdownProps = {
   content: string;
+  locale: DocsLocale;
 };
 
-export function DocsMarkdown({ content }: DocsMarkdownProps) {
+export function DocsMarkdown({ content, locale }: DocsMarkdownProps) {
   return (
     <article className="docs-prose">
       <ReactMarkdown
@@ -16,7 +18,7 @@ export function DocsMarkdown({ content }: DocsMarkdownProps) {
         rehypePlugins={[rehypeSlug]}
         components={{
           a({ href, children, ...props }) {
-            const resolvedHref = resolveMarkdownHref(href);
+            const resolvedHref = resolveMarkdownHref(href, locale);
 
             if (!resolvedHref) {
               return <span className="text-zinc-400">{children}</span>;

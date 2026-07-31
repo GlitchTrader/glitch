@@ -1,52 +1,14 @@
-import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { DocsMarkdown } from "@/components/docs-markdown";
 import { DocsShell } from "@/components/docs-shell";
 import { JsonLd } from "@/components/json-ld";
-import { getAdjacentDocs, getDocPage, getDocSummaries } from "@/lib/docs";
+import { getAdjacentDocs, type DocPage } from "@/lib/docs";
+import { docsLocaleDetails, type DocsLocale } from "@/lib/docs-locales";
 import { docsSiteUrl, resolveSiteUrl, websiteUrl } from "@/lib/site";
 
-type DocPageProps = {
-  params: Promise<{
-    slug: string;
-  }>;
-};
-
-export const dynamicParams = false;
-
-export async function generateStaticParams() {
-  return getDocSummaries().map((doc) => ({ slug: doc.slug }));
-}
-
-export async function generateMetadata({ params }: DocPageProps): Promise<Metadata> {
-  const { slug } = await params;
-  const doc = getDocPage(slug);
-
-  if (!doc) {
-    return {
-      title: "Not Found",
-    };
-  }
-
-  return {
-    title: doc.title,
-    description: doc.summary,
-    alternates: {
-      canonical: doc.href,
-    },
-  };
-}
-
-export default async function DocPage({ params }: DocPageProps) {
-  const { slug } = await params;
-  const doc = getDocPage(slug);
-
-  if (!doc) {
-    notFound();
-  }
-
-  const adjacent = getAdjacentDocs(slug);
+export function DocPageContent({ doc, locale = "en" }: { doc: DocPage; locale?: DocsLocale }) {
+  const adjacent = getAdjacentDocs(doc.slug, locale);
+  const localeDetails = docsLocaleDetails[locale];
   const docsOrigin = resolveSiteUrl("NEXT_PUBLIC_DOCS_URL", docsSiteUrl).toString().replace(/\/$/, "");
   const pageUrl = `${docsOrigin}${doc.href}`;
 
@@ -58,7 +20,7 @@ export default async function DocPage({ params }: DocPageProps) {
       description: doc.summary,
       url: pageUrl,
       mainEntityOfPage: pageUrl,
-      inLanguage: "en-US",
+      inLanguage: localeDetails.languageTag,
       author: {
         "@type": "Organization",
         name: "Glitch",
@@ -73,7 +35,7 @@ export default async function DocPage({ params }: DocPageProps) {
         name: "Glitch Docs",
         url: docsOrigin,
       },
-      about: [doc.section, "NinjaTrader", "Glitch AddOn", "GlitchAnalyticsBridge"],
+      about: [doc.section, "NinjaTrader", "Glitch AddOn", "GlitchAnalyticsBridge", "Hermes"],
     },
     {
       "@context": "https://schema.org",
@@ -96,9 +58,9 @@ export default async function DocPage({ params }: DocPageProps) {
   ];
 
   return (
-    <DocsShell activeSlug={doc.slug}>
+    <DocsShell activeSlug={doc.slug} locale={locale}>
       <JsonLd data={jsonLd} />
-      <div className="space-y-6">
+      <div className="space-y-6" lang={localeDetails.languageTag}>
         <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-7 shadow-[0_30px_90px_rgba(0,0,0,0.22)] sm:p-9">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-glitch-teal">{doc.section}</p>
           <h1 className="mt-4 text-4xl font-bold tracking-tight text-white sm:text-5xl">{doc.title}</h1>
@@ -108,13 +70,15 @@ export default async function DocPage({ params }: DocPageProps) {
 
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_250px]">
           <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_30px_90px_rgba(0,0,0,0.18)] sm:p-8">
-            <DocsMarkdown content={doc.content} />
+            <DocsMarkdown content={doc.content} locale={locale} />
           </div>
 
           <aside className="space-y-4">
             {doc.headings.length > 0 ? (
               <div className="xl:sticky xl:top-24 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-glitch-teal">On this page</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-glitch-teal">
+                  {localeDetails.ui.onThisPage}
+                </p>
                 <div className="mt-4 space-y-2">
                   {doc.headings.map((heading) => (
                     <a
@@ -139,7 +103,9 @@ export default async function DocPage({ params }: DocPageProps) {
               href={adjacent.previous.href}
               className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-5 transition hover:border-white/20 hover:bg-white/[0.05]"
             >
-              <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Previous</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                {localeDetails.ui.previous}
+              </p>
               <p className="mt-2 text-lg font-semibold text-white">{adjacent.previous.navTitle}</p>
             </Link>
           ) : (
@@ -151,7 +117,7 @@ export default async function DocPage({ params }: DocPageProps) {
               href={adjacent.next.href}
               className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-5 text-left transition hover:border-white/20 hover:bg-white/[0.05] sm:ml-auto"
             >
-              <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Next</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">{localeDetails.ui.next}</p>
               <p className="mt-2 text-lg font-semibold text-white">{adjacent.next.navTitle}</p>
             </Link>
           ) : (

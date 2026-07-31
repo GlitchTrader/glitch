@@ -6,6 +6,7 @@ type LatestLinkCardProps = {
   latestUrl: string;
   label?: string;
   note?: string;
+  copiedLabel?: string;
 };
 
 function fallbackCopyToClipboard(value: string): boolean {
@@ -32,6 +33,7 @@ export function LatestLinkCard({
   latestUrl,
   label = "Latest link",
   note = "Bookmark this URL for the newest release.",
+  copiedLabel = "Copied!",
 }: LatestLinkCardProps) {
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<number | null>(null);
@@ -86,7 +88,7 @@ export function LatestLinkCard({
         <span
           className={`pointer-events-none absolute inset-0 flex items-center justify-center text-glitch-teal transition-opacity ${copied ? "opacity-100" : "opacity-0"}`}
         >
-          Copied!
+          {copiedLabel}
         </span>
       </button>
       <p className="text-xs text-zinc-400">{note}</p>
