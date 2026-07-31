@@ -2,7 +2,7 @@
 
 **Reconciled:** 2026-07-22
 
-This contract defines the local Experimental AI v0.0.2.2 operator. It does not authorize unattended, PA, or live trading.
+This contract defines the local Experimental AI v0.0.2.6 operator. It does not authorize unattended, PA, or live trading.
 
 ## Authority
 

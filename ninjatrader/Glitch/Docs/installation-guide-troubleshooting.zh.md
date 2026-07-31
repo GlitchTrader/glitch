@@ -10,7 +10,7 @@
 
 ## 1) 选择一个版本
 
-当前 Glitch 通道提供两个完整且互斥的安装包：Standard v0.0.2.0 与 Experimental AI v0.0.2.2。
+当前 Glitch 通道提供两个完整且互斥的安装包：Standard v0.0.2.5 与 Experimental AI v0.0.2.6。AI v0.0.2.6 是目前在 `main` 上暂时推广的主产品版本。
 
 | 版本 | 下载 | 适用场景 |
 |---|---|---|
@@ -124,7 +124,7 @@ Standard 用户跳过本节。
 
 要求：
 
-- 已在 NinjaTrader 安装 `Glitch_AI_v0.0.2.2.zip`；
+- 已在 NinjaTrader 安装 `Glitch_AI_v0.0.2.6.zip`；
 - Hermes `0.18.2` 或更高版本；
 - 用户通过 OAuth 授权的 OpenAI Codex 账户。
 

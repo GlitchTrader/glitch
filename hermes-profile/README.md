@@ -6,7 +6,7 @@ Glitch/NinjaTrader remains the market, account, risk, execution, bracket, replic
 
 ## Requirements
 
-- Windows with NinjaTrader 8 and the matching Glitch AI `v0.0.2.3` AddOn installed.
+- Windows with NinjaTrader 8 and the matching Glitch AI `v0.0.2.6` AddOn installed.
 - Hermes `0.18.2` or newer.
 - An OpenAI Codex OAuth account authorized by the user.
 

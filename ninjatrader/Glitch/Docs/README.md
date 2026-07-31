@@ -2,7 +2,7 @@
 
 Technical product documentation for the live Glitch NinjaTrader AddOn and the GlitchAnalyticsBridge indicator.
 
-The six reference pages below describe the official Standard v0.0.2.0 source. Each page is published in English, Brazilian Portuguese, Spanish, Simplified Chinese, French, and Russian. Locale files use `.pt.md`, `.es.md`, `.zh.md`, `.fr.md`, and `.ru.md` beside the English source.
+The six reference pages below describe the official Standard v0.0.2.5 source. The current temporary main-product promotion is Experimental AI v0.0.2.6 with Hermes profile v0.0.2.17; its separate installation guide and profile docs are linked from the download channel. Each page is published in English, Brazilian Portuguese, Spanish, Simplified Chinese, French, and Russian. Locale files use `.pt.md`, `.es.md`, `.zh.md`, `.fr.md`, and `.ru.md` beside the English source.
 
 ## Public documentation
 

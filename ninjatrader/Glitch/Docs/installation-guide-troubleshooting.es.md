@@ -10,7 +10,7 @@ Esta es la guía canónica para configurar ambas ediciones de Glitch en NinjaTra
 
 ## 1) Elige una edición
 
-Los canales actuales de Glitch ofrecen dos paquetes completos y alternativos: Standard v0.0.2.0 y AI Experimental v0.0.2.2.
+Los canales actuales de Glitch ofrecen dos paquetes completos y alternativos: Standard v0.0.2.5 y AI Experimental v0.0.2.6. La versión AI v0.0.2.6 es la promoción temporal actual del producto principal en `main`.
 
 | Edición | Descarga | Cuándo usarla |
 |---|---|---|
@@ -124,7 +124,7 @@ Omite esta sección para Standard.
 
 Requisitos:
 
-- `Glitch_AI_v0.0.2.2.zip` instalado;
+- `Glitch_AI_v0.0.2.6.zip` instalado;
 - Hermes `0.18.2` o posterior;
 - una cuenta OpenAI Codex autorizada mediante OAuth por el usuario.
 

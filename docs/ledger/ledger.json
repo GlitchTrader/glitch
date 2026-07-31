@@ -1,7 +1,7 @@
 {
   "schema_version": "1.1",
   "project": "glitch",
-  "updated": "2026-07-23",
+  "updated": "2026-07-30",
   "roadmap_ref": "docs/ai-program/roadmap.md",
   "items": [
     {
@@ -560,7 +560,7 @@
       "reviewer_role": "code-reviewer",
       "acceptance": [
         "Internal rail, public AddOn documentation, public Hermes profile facts, and ABKB all state the same human > AI > determinism hierarchy and explicit catch-up/compliance semantics.",
-        "The AI rail states Hermes profile v0.0.2.10 and the 30-minute learning cadence proven by distribution source.",
+        "The AI rail states current Experimental AI v0.0.2.6, paired Hermes profile v0.0.2.17, and the 30-minute learning cadence proven by distribution source.",
         "A drift check detects synthetic version, cadence, or shared replication-contract mismatch.",
         "Public and internal docs define Fleet Flatten as every eligible NinjaTrader account the AddOn can positively resolve, and distinguish it from configured-route Sync.",
         "ABKB overview, AI roadmap/rail, project profile, repo-local AGENTS/skills, and runtime adapters point to the current maintained lanes, canonical ledger, source root, and Hermes profile without legacy now.md/backlog.md or D:\\click-blue routing.",
@@ -583,7 +583,8 @@
         "Public Hermes v0.0.2.10 commit glitch-hermes-profile@4e3a12a and tag v0.0.2.10 are pushed; installed profile passes 28/28 distribution-owned hash parity.",
         "Hermes plugin and supervised gateway are present; both persisted jobs and Glitch AI remain paused.",
         "Historical independent documentation review approved the inspected synchronization subset only; current drift acceptance remains open and the ticket remains in progress.",
-        "Current drift is narrower than the original audit: ABKB project_profile.md is current, but projects/glitch/overview.md and docs/ai-program/roadmap.md still name profile 0.0.2.4; the repo-local AddOn workflow skill still routes source through D:\\click-blue."
+        "Current drift is narrower than the original audit: ABKB project_profile.md is current, but projects/glitch/overview.md and docs/ai-program/roadmap.md still name profile 0.0.2.4; the repo-local AddOn workflow skill still routes source through D:\\click-blue.",
+        "2026-07-30 current release reconciliation: AI v0.0.2.6 and Hermes profile v0.0.2.17 are registered in the release catalog and promoted to main at e35f93a; Standard v0.0.2.5 remains the stable default channel."
       ],
       "sources": [
         "docs/ledger/north-star.md",
@@ -600,7 +601,7 @@
       "spec_kit": {
         "user_story": "As an operator and maintainer, I need one current explanation of what Glitch may do and which component owns each decision.",
         "scenarios": [
-          "Given public profile v0.0.2.10, when docs are checked, then version and 30-minute cadence agree everywhere.",
+          "Given current public profile v0.0.2.17, when docs are checked, then the v0.0.2.6 AI release, profile version, and 30-minute cadence agree everywhere.",
           "Given a replication or compliance behavior change, when docs are reconciled, then internal, public, and ABKB authority text agrees.",
           "Given Fleet Flatten or source-root documentation, when docs are checked, then the literal fleet scope and current D:\\ab maintained lanes/canonical ledger agree across runtime adapters.",
           "Given a synthetic mismatch, when the drift check runs, then it fails before merge."
@@ -619,7 +620,7 @@
           "Every operational claim links to source or bounded evidence."
         ],
         "assumptions": [
-          "Public profile commit 4e3a12a and tag v0.0.2.10 are current profile source truth.",
+          "The v0.0.2.6 AI release and v0.0.2.17 profile registered at main commit e35f93a are current release-documentation source truth.",
           "This task changes source and documentation, not release artifacts."
         ],
         "tasks": [

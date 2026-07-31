@@ -10,8 +10,8 @@ Hermes decides; Glitch validates, executes, protects, replicates, reconciles, an
 
 ## Current product lines
 
-- Standard v0.0.2.0 is the official default download.
-- Experimental AI v0.0.2.2 is separate, uses public Hermes profile v0.0.2.4, and carries no profitability, unattended-operation, PA, or live-readiness claim.
+- Standard v0.0.2.5 is the official stable default download.
+- Experimental AI v0.0.2.6, paired with Hermes profile v0.0.2.17, is the current temporary main-product promotion at `e35f93a`. It remains separate and carries no profitability, unattended-operation, PA, or live-readiness claim.
 - `main` owns the explicit release catalog. A ZIP is not a release until the catalog and checksum register it.
 
 ## Invariants

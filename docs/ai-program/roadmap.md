@@ -1,8 +1,12 @@
 # Glitch AI Roadmap
 
-**Reconciled:** 2026-07-22
+**Reconciled:** 2026-07-30
 
 Hermes owns cognition and master decisions. Glitch owns factual state, deterministic safety, native protection, replication, attribution, and evidence. NinjaTrader owns the native book.
+
+## Current promotion
+
+AI v0.0.2.6 with Hermes profile v0.0.2.17 is the current temporary main-product promotion, registered and promoted on `main` at `e35f93a`. It remains Experimental; this promotion is not a profitability, unattended-operation, PA, or live-readiness claim.
 
 | Release | Delivered |
 |---|---|
@@ -14,7 +18,7 @@ Hermes owns cognition and master decisions. Glitch owns factual state, determini
 
 ## Current verification lane
 
-1. Prove the v0.0.2.2 lifecycle in bounded Sim.
+1. Prove the v0.0.2.6 lifecycle in bounded Sim.
 2. Verify selected-leg changes leave siblings unchanged and mirror follower-native protection.
 3. Verify widening inside Apex capacity and zero mutation outside it.
 4. Verify hidden runtime, next-packet retry, stale-lock recovery, and crash reconciliation.

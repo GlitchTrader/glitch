@@ -10,7 +10,7 @@ Ce guide est la référence pour configurer les deux éditions de Glitch dans Ni
 
 ## 1) Choisissez une édition
 
-Les canaux Glitch actuels proposent deux paquets complets et alternatifs : Standard v0.0.2.0 et AI Expérimentale v0.0.2.2.
+Les canaux Glitch actuels proposent deux paquets complets et alternatifs : Standard v0.0.2.5 et AI Expérimentale v0.0.2.6. La version AI v0.0.2.6 est la promotion temporaire actuelle du produit principal sur `main`.
 
 | Édition | Téléchargement | Quand l’utiliser |
 |---|---|---|
@@ -124,7 +124,7 @@ Ignorez cette section pour Standard.
 
 Prérequis :
 
-- `Glitch_AI_v0.0.2.2.zip` installé ;
+- `Glitch_AI_v0.0.2.6.zip` installé ;
 - Hermes `0.18.2` ou plus récent ;
 - un compte OpenAI Codex autorisé par OAuth par l’utilisateur.
 

@@ -42,7 +42,7 @@ When a bounded patch should be visible: skill `ab-patch-finish` → `abkb/projec
 
 - **`main`:** production web surfaces, explicit release catalog, and the canonical work ledger.
 - **`standard/20`:** maintained Standard v0.0.2.0 source.
-- **`ai/22`:** this maintained Experimental AI v0.0.2.2 source and bounded follow-on verification.
+- **`fix/runtime-health-ai`:** source of the promoted Experimental AI v0.0.2.6 release; the release is currently on `main`.
 - The old `glitch/ai-rail` branch is historical. Do not put new work there.
 - Confirm `git branch --show-current` before editing AddOn/Indicator code.
 

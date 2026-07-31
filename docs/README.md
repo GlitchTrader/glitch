@@ -27,9 +27,9 @@ glitch_hermes_docs/ private Glitch/Hermes runtime contracts
 
 ## Current truth
 
-- Standard v0.0.2.0 is `/latest`.
-- Experimental AI v0.0.2.2 is `/latest/ai` and uses public Hermes profile v0.0.2.4.
-- `standard/20` and `ai/22` are the maintained source lanes.
+- Standard v0.0.2.5 remains `/latest` as the stable channel.
+- Experimental AI v0.0.2.6 is `/latest/ai`, paired with Hermes profile v0.0.2.17, and is the current temporary main-product promotion at `e35f93a`.
+- The v26 source is `fix/runtime-health-ai`; its promoted release state is on `main`.
 - The release catalog, not filenames, chooses latest.
 - The current customer distribution is a local installable/updateable Hermes profile, not a required centralized VPS.
 - Historical audits remain immutable evidence; `docs/ledger/ledger.json` on `main` is the one current work handoff.

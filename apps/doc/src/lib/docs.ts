@@ -30,7 +30,7 @@ const publicDocDefinitions: DocDefinition[] = [
 const summaryCopy: Record<DocsLocale, Record<string, string>> = {
   en: {
     [installationGuideSlug]: "Install or upgrade Standard and Experimental AI editions without mixing packages or losing local state.",
-    architecture: "See the Standard AddOn, bridge indicator, replication boundary, and separate data paths as they exist in v0.0.2.0.",
+    architecture: "See the Standard AddOn, bridge indicator, replication boundary, and separate data paths as they exist in v0.0.2.5.",
     addon: "Understand the four-tab operating window, Chart Trader widget, execution-driven replication, risk controls, and licensing.",
     indicator: "Review the GlitchAnalyticsBridge timeframes, public parameters, publishing contract, freshness, and recovery behavior.",
     "data-flow-and-bridge": "Follow analytics, shell actions, and native executions through separate, auditable runtime paths.",
@@ -39,7 +39,7 @@ const summaryCopy: Record<DocsLocale, Record<string, string>> = {
   },
   pt: {
     [installationGuideSlug]: "Instale ou atualize Standard e AI Experimental sem misturar pacotes nem perder o estado local.",
-    architecture: "Veja o AddOn Standard, o indicador bridge, o limite de replicação e os fluxos separados do v0.0.2.0.",
+    architecture: "Veja o AddOn Standard, o indicador bridge, o limite de replicação e os fluxos separados do v0.0.2.5.",
     addon: "Entenda a janela de quatro abas, Chart Trader, replicação por execução, controles de risco e licença.",
     indicator: "Revise timeframes, parâmetros, publicação, freshness e recuperação do GlitchAnalyticsBridge.",
     "data-flow-and-bridge": "Acompanhe analytics, ações da interface e execuções nativas em fluxos separados e auditáveis.",
@@ -48,7 +48,7 @@ const summaryCopy: Record<DocsLocale, Record<string, string>> = {
   },
   es: {
     [installationGuideSlug]: "Instala o actualiza Standard y AI Experimental sin mezclar paquetes ni perder estado local.",
-    architecture: "Conoce el AddOn Standard, el indicador bridge, el límite de replicación y los flujos separados de v0.0.2.0.",
+    architecture: "Conoce el AddOn Standard, el indicador bridge, el límite de replicación y los flujos separados de v0.0.2.5.",
     addon: "Entiende la ventana de cuatro pestañas, Chart Trader, replicación por ejecución, riesgo y licencia.",
     indicator: "Revisa marcos, parámetros, publicación, frescura y recuperación de GlitchAnalyticsBridge.",
     "data-flow-and-bridge": "Sigue analytics, acciones de UI y ejecuciones nativas por rutas separadas y auditables.",
@@ -57,7 +57,7 @@ const summaryCopy: Record<DocsLocale, Record<string, string>> = {
   },
   zh: {
     [installationGuideSlug]: "安装或升级 Standard 与 Experimental AI，避免混装并保留本地状态。",
-    architecture: "了解 v0.0.2.0 的 Standard AddOn、Bridge 指标、复制边界和独立数据路径。",
+    architecture: "了解 v0.0.2.5 的 Standard AddOn、Bridge 指标、复制边界和独立数据路径。",
     addon: "了解四标签页主窗口、Chart Trader、成交驱动复制、风险控制和许可。",
     indicator: "查看 GlitchAnalyticsBridge 的周期、参数、发布、新鲜度和恢复行为。",
     "data-flow-and-bridge": "沿独立且可审计的路径追踪 analytics、界面动作和原生成交。",
@@ -66,7 +66,7 @@ const summaryCopy: Record<DocsLocale, Record<string, string>> = {
   },
   fr: {
     [installationGuideSlug]: "Installez ou mettez à niveau Standard et AI Expérimentale sans mélanger les paquets ni perdre l’état local.",
-    architecture: "Découvrez l’AddOn Standard, l’indicateur bridge, la limite de réplication et les flux séparés de v0.0.2.0.",
+    architecture: "Découvrez l’AddOn Standard, l’indicateur bridge, la limite de réplication et les flux séparés de v0.0.2.5.",
     addon: "Comprenez la fenêtre à quatre onglets, Chart Trader, la réplication par exécution, le risque et la licence.",
     indicator: "Consultez timeframes, paramètres, publication, fraîcheur et récupération de GlitchAnalyticsBridge.",
     "data-flow-and-bridge": "Suivez analytics, actions UI et exécutions natives dans des chemins séparés et auditables.",
@@ -75,7 +75,7 @@ const summaryCopy: Record<DocsLocale, Record<string, string>> = {
   },
   ru: {
     [installationGuideSlug]: "Установите или обновите Standard и Experimental AI без смешивания пакетов и потери локальных данных.",
-    architecture: "Изучите Standard AddOn, bridge-индикатор, границу репликации и отдельные пути v0.0.2.0.",
+    architecture: "Изучите Standard AddOn, bridge-индикатор, границу репликации и отдельные пути v0.0.2.5.",
     addon: "Изучите четыре вкладки, Chart Trader, репликацию по исполнениям, риск и лицензию.",
     indicator: "Параметры, таймфреймы, публикация, свежесть и восстановление GlitchAnalyticsBridge.",
     "data-flow-and-bridge": "Проследите analytics, действия UI и нативные исполнения по отдельным аудируемым путям.",
@@ -85,12 +85,12 @@ const summaryCopy: Record<DocsLocale, Record<string, string>> = {
 };
 
 const leadCopy: Record<DocsLocale, { intro: string; secondary: string }> = {
-  en: { intro: "Code-grounded documentation for Standard Glitch v0.0.2.0 and its NinjaTrader runtime.", secondary: "Start with Architecture, then use the focused pages for the AddOn, indicator, data paths, persistence, and internal contracts." },
-  pt: { intro: "Documentação baseada no código do Glitch Standard v0.0.2.0 e seu runtime NinjaTrader.", secondary: "Comece por Arquitetura e use as páginas específicas para AddOn, indicador, fluxos, persistência e contratos internos." },
-  es: { intro: "Documentación basada en código de Glitch Standard v0.0.2.0 y su runtime NinjaTrader.", secondary: "Empieza por Arquitectura y usa las páginas específicas para AddOn, indicador, flujos, persistencia y contratos internos." },
-  zh: { intro: "基于源代码的 Glitch Standard v0.0.2.0 与 NinjaTrader 运行时文档。", secondary: "先阅读架构，再按需查看 AddOn、指标、数据路径、持久化和内部契约。" },
-  fr: { intro: "Documentation fondée sur le code de Glitch Standard v0.0.2.0 et de son runtime NinjaTrader.", secondary: "Commencez par Architecture, puis consultez les pages AddOn, indicateur, flux, persistance et contrats internes." },
-  ru: { intro: "Документация Glitch Standard v0.0.2.0 и runtime NinjaTrader, основанная на исходном коде.", secondary: "Начните с архитектуры, затем используйте страницы AddOn, индикатора, потоков, хранения и внутренних контрактов." },
+  en: { intro: "Code-grounded documentation for Standard Glitch v0.0.2.5 and its NinjaTrader runtime.", secondary: "Start with Architecture, then use the focused pages for the AddOn, indicator, data paths, persistence, and internal contracts." },
+  pt: { intro: "Documentação baseada no código do Glitch Standard v0.0.2.5 e seu runtime NinjaTrader.", secondary: "Comece por Arquitetura e use as páginas específicas para AddOn, indicador, fluxos, persistência e contratos internos." },
+  es: { intro: "Documentación basada en código de Glitch Standard v0.0.2.5 y su runtime NinjaTrader.", secondary: "Empieza por Arquitectura y usa las páginas específicas para AddOn, indicador, flujos, persistencia y contratos internos." },
+  zh: { intro: "基于源代码的 Glitch Standard v0.0.2.5 与 NinjaTrader 运行时文档。", secondary: "先阅读架构，再按需查看 AddOn、指标、数据路径、持久化和内部契约。" },
+  fr: { intro: "Documentation fondée sur le code de Glitch Standard v0.0.2.5 et de son runtime NinjaTrader.", secondary: "Commencez par Architecture, puis consultez les pages AddOn, indicateur, flux, persistance et contrats internes." },
+  ru: { intro: "Документация Glitch Standard v0.0.2.5 и runtime NinjaTrader, основанная на исходном коде.", secondary: "Начните с архитектуры, затем используйте страницы AddOn, индикатора, потоков, хранения и внутренних контрактов." },
 };
 
 export type DocSummary = {
