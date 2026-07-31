@@ -33,7 +33,7 @@ class OperatorMapTests(unittest.TestCase):
         setup = (profile / "setup.ps1").read_text(encoding="utf-8")
         builder = (ROOT / "tools/hermes/build-public-profile.ps1").read_text(encoding="utf-8")
 
-        self.assertIn("version: 0.0.2.16", distribution)
+        self.assertIn("version: 0.0.2.17", distribution)
         self.assertEqual((profile / ".gitattributes").read_text(encoding="utf-8"), "* -text\n")
         self.assertIn("'.gitattributes'", builder)
         self.assertIn('hermes_requires: \">=0.18.2\"', distribution)
@@ -131,22 +131,26 @@ class OperatorMapTests(unittest.TestCase):
         self.assertNotIn("no match → nothing", lowered)
         self.assertNotIn("statuses are law", lowered)
 
-    def test_self_learning_and_self_heal_are_installed_capabilities(self):
+    def test_cognition_is_consolidated_into_non_overlapping_capabilities(self):
         installed = self.operator["skills"]["installed_overlay"]
         required = self.operator["skills"]["required_before_supervisory_activation"]
-        self.assertIn("glitch-self-learning", installed)
-        self.assertIn("glitch-self-heal", installed)
-        self.assertIn("glitch-learning-loop", installed)
-        self.assertNotIn("glitch-self-heal", required)
+        self.assertEqual(installed, [
+            "glitch-trade-mnq",
+            "glitch-build-intent",
+            "glitch-learn",
+            "glitch-runtime",
+        ])
         self.assertEqual(required, [])
 
-        heal = (ROOT / "hermes-profile/skills/glitch-self-heal/SKILL.md").read_text(encoding="utf-8")
-        learn = (ROOT / "hermes-profile/skills/glitch-self-learning/SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("Never reset an account", heal)
-        self.assertIn("Never fabricate a fill", heal)
-        self.assertIn("self-heal does not wait", heal)
-        self.assertIn("Never erase the earlier lesson", learn)
-        self.assertIn("memory as interpretations", learn)
+        trade = (ROOT / "hermes-profile/skills/glitch-trade-mnq/SKILL.md").read_text(encoding="utf-8")
+        learn = (ROOT / "hermes-profile/skills/glitch-learn/SKILL.md").read_text(encoding="utf-8")
+        runtime = (ROOT / "hermes-profile/skills/glitch-runtime/SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("Directional impulse", trade)
+        self.assertIn("Rotation/chop", trade)
+        self.assertIn("25k master: at most 1 contract", trade)
+        self.assertIn("250k master: at most 10 contracts", trade)
+        self.assertIn("One outcome remains episodic", learn)
+        self.assertIn("fabricate a fill", runtime)
 
 
 if __name__ == "__main__":

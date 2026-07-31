@@ -3999,13 +3999,36 @@ namespace Glitch.UI
                 {
                     GlitchPortfolioSnapshotCapture portfolioCapture = null;
                     string marketSnapshotJson = null;
+                    GlitchFundamentalAnalysisSnapshot fundamentalSnapshot = null;
                     bool captureReady = true;
                     if (needsPortfolioCapture)
                     {
                         portfolioCapture = BuildPortfolioSnapshotCapture();
+                        if (_fundamentalAnalysisService != null)
+                        {
+                            try
+                            {
+                                fundamentalSnapshot = _fundamentalAnalysisService.GetSnapshot(
+                                    "MNQ",
+                                    nowUtc,
+                                    _runtimePolicySettings?.LicenseApiBaseUrl,
+                                    _runtimePolicySettings?.LicenseKey,
+                                    _runtimePolicySettings?.InstallationId,
+                                    _licenseDeviceFingerprintHash,
+                                    CurrentClientVersion);
+                            }
+                            catch (Exception error)
+                            {
+                                RecordSubsystemFault("ai_fundamental_capture", error);
+                            }
+                        }
                         string minuteId = nowUtc.ToString("yyyyMMdd'T'HHmm'Z'", System.Globalization.CultureInfo.InvariantCulture);
                         captureReady = portfolioCapture != null
-                            && GlitchMarketSnapshotWriter.TryCaptureSnapshotJson(nowUtc, minuteId, out marketSnapshotJson);
+                            && GlitchMarketSnapshotWriter.TryCaptureSnapshotJson(
+                                nowUtc,
+                                minuteId,
+                                fundamentalSnapshot,
+                                out marketSnapshotJson);
                     }
                     if (captureReady)
                     {

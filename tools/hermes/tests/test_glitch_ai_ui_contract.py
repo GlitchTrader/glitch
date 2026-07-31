@@ -91,6 +91,21 @@ class GlitchAiUiContractTests(unittest.TestCase):
         self.assertIn('ReplaceStringArray(json, "account_allowlist"', source)
         self.assertNotIn("AiAccountGroup", source)
 
+    def test_journal_refresh_does_not_require_removed_summary_tab_controls(self):
+        source = (UI / "GlitchMainWindow.SummaryTab.partial.cs").read_text(encoding="utf-8")
+        refresh = source[source.index("private void RefreshSummaryInsightsCore"):]
+        for control in (
+            "_summaryTradesValueText",
+            "_summaryWinRateValueText",
+            "_summaryNetPointsValueText",
+            "_summaryProfitFactorValueText",
+            "_summaryAccountsValueText",
+            "_summaryAsOfText",
+        ):
+            self.assertIn(f"if ({control} != null)", refresh)
+        self.assertIn("if (_journalTradesValueText != null)", refresh)
+        self.assertIn("_summaryMetricRows.Clear();", refresh)
+
     def test_ai_switch_owns_the_native_job_without_running_a_model(self):
         main = (UI / "GlitchMainWindow.cs").read_text(encoding="utf-8")
         bridge = AI_AUTO.read_text(encoding="utf-8")

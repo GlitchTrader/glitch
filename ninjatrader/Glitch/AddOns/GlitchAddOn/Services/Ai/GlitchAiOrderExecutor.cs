@@ -112,6 +112,9 @@ namespace Glitch.Services
 
         public static GlitchAiExecutionResult TryReconcileStartedIntent(string rawJson, DateTime nowUtc)
         {
+            if (TryGetLiveEntryExecutionResult(rawJson, out GlitchAiExecutionResult liveEntry))
+                return liveEntry;
+
             GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
             if (policy == null || !policy.IsValid)
                 return GlitchAiExecutionResult.Failed("reconcile_policy_invalid", policy?.ValidationError);
@@ -124,6 +127,55 @@ namespace Glitch.Services
             catch (Exception ex)
             {
                 return GlitchAiExecutionResult.Failed("reconcile_exception", ex.Message);
+            }
+        }
+
+        private static bool TryGetLiveEntryExecutionResult(
+            string rawJson,
+            out GlitchAiExecutionResult result)
+        {
+            result = null;
+            string intentId = GlitchAiJsonFields.ExtractString(rawJson, "intent_id");
+            if (string.IsNullOrWhiteSpace(intentId))
+                return false;
+
+            lock (GroupSync)
+            {
+                ExecutionGroupContext group = GroupsBySignal.Values
+                    .Distinct()
+                    .FirstOrDefault(item => item != null
+                        && string.Equals(item.IntentId, intentId, StringComparison.OrdinalIgnoreCase));
+                if (group == null)
+                    return false;
+
+                string evidence = "group=" + CleanToken(group.GroupId)
+                    + "|correlation=" + group.Correlation
+                    + "|owner=current_process_execution_group";
+                if (group.RecoveryStarted)
+                {
+                    result = GlitchAiExecutionResult.Pending(
+                        "group_entry_recovery_in_progress",
+                        evidence);
+                }
+                else if (group.OpenProtectedRecorded)
+                {
+                    result = GlitchAiExecutionResult.Succeeded(
+                        "group_entry_open_protected",
+                        evidence + "|state=positions_exact_and_brackets_working");
+                }
+                else if (group.EntryFilledRecorded)
+                {
+                    result = GlitchAiExecutionResult.Pending(
+                        "group_entry_protection_pending",
+                        evidence);
+                }
+                else
+                {
+                    result = GlitchAiExecutionResult.Pending(
+                        "group_entry_execution_in_progress",
+                        evidence);
+                }
+                return true;
             }
         }
 

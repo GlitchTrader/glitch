@@ -482,16 +482,27 @@ namespace Glitch.UI
                 .Count();
             FleetTradeGroupStats fleetTradeGroups = ComputeFleetTradeGroupStats(fleetTrades);
 
-            _summaryTradesValueText.Text = snapshot.All.Trades.ToString("N0", CultureInfo.CurrentCulture);
+            // The Summary tab is not part of the current shell. Keep this refresh
+            // routine shared with the Journal tab, but never let its optional
+            // controls abort the Journal update when they are not instantiated.
+            if (_summaryTradesValueText != null)
+                _summaryTradesValueText.Text = snapshot.All.Trades.ToString("N0", CultureInfo.CurrentCulture);
             if (_summaryFleetTradesValueText != null)
                 _summaryFleetTradesValueText.Text = accountSnapshot.All.Trades.ToString("N0", CultureInfo.CurrentCulture);
-            _summaryWinRateValueText.Text = snapshot.All.WinRate.ToString("P1", CultureInfo.CurrentCulture);
-            FrameworkElement summarySkinContext = (FrameworkElement)_summaryRootGrid ?? _summaryNetPointsValueText;
-            _summaryNetPointsValueText.Text = FormatSignedCurrency(snapshot.All.NetPoints);
-            _summaryNetPointsValueText.Foreground = ResolveSignedBrush(snapshot.All.NetPoints, summarySkinContext);
-            _summaryProfitFactorValueText.Text = snapshot.All.ProfitFactor > 0 ? snapshot.All.ProfitFactor.ToString("N2", CultureInfo.CurrentCulture) : "-";
-            _summaryAccountsValueText.Text = distinctAccountsTraded.ToString("N0", CultureInfo.CurrentCulture);
-            _summaryAsOfText.Text = L("summary.updated", "Updated") + ": " + nowUtc.ToLocalTime().ToString("MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
+            if (_summaryWinRateValueText != null)
+                _summaryWinRateValueText.Text = snapshot.All.WinRate.ToString("P1", CultureInfo.CurrentCulture);
+            if (_summaryNetPointsValueText != null)
+            {
+                FrameworkElement summarySkinContext = (FrameworkElement)_summaryRootGrid ?? _summaryNetPointsValueText;
+                _summaryNetPointsValueText.Text = FormatSignedCurrency(snapshot.All.NetPoints);
+                _summaryNetPointsValueText.Foreground = ResolveSignedBrush(snapshot.All.NetPoints, summarySkinContext);
+            }
+            if (_summaryProfitFactorValueText != null)
+                _summaryProfitFactorValueText.Text = snapshot.All.ProfitFactor > 0 ? snapshot.All.ProfitFactor.ToString("N2", CultureInfo.CurrentCulture) : "-";
+            if (_summaryAccountsValueText != null)
+                _summaryAccountsValueText.Text = distinctAccountsTraded.ToString("N0", CultureInfo.CurrentCulture);
+            if (_summaryAsOfText != null)
+                _summaryAsOfText.Text = L("summary.updated", "Updated") + ": " + nowUtc.ToLocalTime().ToString("MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
 
             if (_journalTradesValueText != null)
                 _journalTradesValueText.Text = snapshot.All.Trades.ToString("N0", CultureInfo.CurrentCulture);

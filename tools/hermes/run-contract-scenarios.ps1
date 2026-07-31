@@ -30,7 +30,7 @@ foreach ($item in $all) {
     $prompt = @"
 Run one Glitch decision cycle. Read /opt/glitch-data/tests/active-scenario.json and apply the preloaded Glitch skills in this order: observe market, assess risk, form thesis, build intent. Treat the scenario as the complete authoritative cycle bundle. Return exactly one glitch.intent.v2 JSON object and nothing else. Do not call any order endpoint.
 "@
-    $output = & python $hermes -p glitch --skills 'glitch-observe-market,glitch-assess-risk,glitch-form-thesis,glitch-build-intent' --usage-file $usagePath -z $prompt
+    $output = & python $hermes -p glitch --skills 'glitch-trade-mnq,glitch-build-intent' --usage-file $usagePath -z $prompt
     if ($LASTEXITCODE -ne 0) { throw "Hermes failed for $($item.name) with exit code $LASTEXITCODE" }
     $output | Set-Content -LiteralPath $outputPath
 

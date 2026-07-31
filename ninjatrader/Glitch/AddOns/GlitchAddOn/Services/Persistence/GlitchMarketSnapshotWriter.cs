@@ -76,12 +76,21 @@ namespace Glitch.Services
         // this immutable string. Background publication must never query the bus.
         public static bool TryCaptureSnapshotJson(DateTime nowUtc, string snapshotId, out string json)
         {
+            return TryCaptureSnapshotJson(nowUtc, snapshotId, null, out json);
+        }
+
+        public static bool TryCaptureSnapshotJson(
+            DateTime nowUtc,
+            string snapshotId,
+            GlitchFundamentalAnalysisSnapshot fundamentals,
+            out string json)
+        {
             json = null;
             try
             {
                 IReadOnlyList<GlitchIndicatorInstrumentSnapshot> snapshots =
                     GlitchAnalyticsFeedBus.CaptureSnapshotsForPublication();
-                json = BuildSnapshotJson(nowUtc, snapshotId, snapshots);
+                json = BuildSnapshotJson(nowUtc, snapshotId, snapshots, fundamentals);
                 return !string.IsNullOrWhiteSpace(json);
             }
             catch
@@ -185,7 +194,8 @@ namespace Glitch.Services
         private static string BuildSnapshotJson(
             DateTime nowUtc,
             string snapshotId,
-            IEnumerable<GlitchIndicatorInstrumentSnapshot> snapshots)
+            IEnumerable<GlitchIndicatorInstrumentSnapshot> snapshots,
+            GlitchFundamentalAnalysisSnapshot fundamentals = null)
         {
             var instruments = new List<GlitchMarketSnapshotRawJson.RawInstrumentPayload>();
             foreach (GlitchIndicatorInstrumentSnapshot snapshot in snapshots ?? Enumerable.Empty<GlitchIndicatorInstrumentSnapshot>())
@@ -202,7 +212,79 @@ namespace Glitch.Services
             if (string.IsNullOrWhiteSpace(snapshotId))
                 snapshotId = nowUtc.ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
 
-            return GlitchMarketSnapshotRawJson.BuildSnapshotJson("live", nowUtc, snapshotId, instruments);
+            string json = GlitchMarketSnapshotRawJson.BuildSnapshotJson(
+                "live",
+                nowUtc,
+                snapshotId,
+                instruments);
+            return InjectFundamentalContext(json, fundamentals, nowUtc);
+        }
+
+        private static string InjectFundamentalContext(
+            string json,
+            GlitchFundamentalAnalysisSnapshot snapshot,
+            DateTime nowUtc)
+        {
+            if (string.IsNullOrWhiteSpace(json) || snapshot == null || json[json.Length - 1] != '}')
+                return json;
+
+            string context = "{"
+                + "\"recorded_utc\":" + JsonString(GlitchSnapshotJson.FormatUtc(nowUtc)) + ","
+                + "\"mag7_influence_score\":" + JsonNumber(snapshot.Mag7InfluenceScore) + ","
+                + "\"mag7_score_lines\":" + JsonStringArray(BoundedLines(snapshot.Mag7ScoreLines, 7, 240)) + ","
+                + "\"news_sentiment\":" + JsonString(BoundedText(snapshot.NewsSentiment, 600)) + ","
+                + "\"is_news_lockout_active\":" + (snapshot.IsNewsLockoutActive ? "true" : "false") + ","
+                + "\"news_lockout_text\":" + JsonString(BoundedText(snapshot.NewsLockoutText, 300)) + ","
+                + "\"latest_headline_lines\":" + JsonStringArray(BoundedLines(snapshot.LatestHeadlineLines, 5, 300)) + ","
+                + "\"official_news_lines\":" + JsonStringArray(BoundedLines(snapshot.OfficialNewsLines, 5, 300))
+                + "}";
+            return json.Substring(0, json.Length - 1)
+                + ",\"fundamental_context\":" + context + "}";
+        }
+
+        private static string JsonString(string value)
+        {
+            return GlitchSnapshotJson.String(value);
+        }
+
+        private static string JsonNumber(double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value))
+                return "null";
+            return value.ToString("R", CultureInfo.InvariantCulture);
+        }
+
+        private static string JsonStringArray(IReadOnlyList<string> values)
+        {
+            if (values == null || values.Count == 0)
+                return "[]";
+            return "[" + string.Join(",", values.Select(JsonString)) + "]";
+        }
+
+        private static List<string> BoundedLines(
+            IReadOnlyList<string> values,
+            int maximumCount,
+            int maximumLength)
+        {
+            var bounded = new List<string>();
+            if (values == null)
+                return bounded;
+
+            for (int i = 0; i < values.Count && bounded.Count < maximumCount; i++)
+            {
+                string value = BoundedText(values[i], maximumLength);
+                if (!string.IsNullOrWhiteSpace(value))
+                    bounded.Add(value);
+            }
+            return bounded;
+        }
+
+        private static string BoundedText(string value, int maximumLength)
+        {
+            string normalized = (value ?? string.Empty).Trim();
+            if (normalized.Length <= maximumLength)
+                return normalized;
+            return normalized.Substring(0, maximumLength);
         }
 
         private static GlitchMarketSnapshotRawJson.RawInstrumentPayload ToRawInstrumentPayload(

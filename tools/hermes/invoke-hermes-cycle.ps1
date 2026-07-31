@@ -71,7 +71,7 @@ function Invoke-HermesBounded {
 
     $arguments = @(
         ('"' + $Hermes + '"'), '-p', $ProfileName,
-        '--skills', 'glitch-observe-market,glitch-form-thesis,glitch-build-intent',
+        '--skills', 'glitch-trade-mnq,glitch-build-intent',
         '--usage-file', ('"' + $Usage + '"'), '-z', ('"' + $Prompt.Replace('"', '\"') + '"')
     ) -join ' '
     $start = New-Object System.Diagnostics.ProcessStartInfo
@@ -282,7 +282,7 @@ $stderrPath = Join-Path $evidence 'hermes.stderr.txt'
 $validationCycle | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $fixture
 Copy-Item -LiteralPath $active -Destination $modelFixture
 
-$prompt = "Read /opt/glitch-data/tests/active-cycle-$safeProfile.json as the complete privacy-redacted MNQ entry-decision cycle. You are profile $Profile, permanently bound to master $MasterAccount. Read only recent matching records from /opt/glitch-data/journal/nt as bounded trading-journal evidence. Echo operator_profile=$Profile and account=$MasterAccount exactly. The local_safety_attestation is authoritative: private account details are intentionally absent and must not be treated as invalid input. Apply glitch-observe-market, glitch-form-thesis, then glitch-build-intent. Steelman bull, bear, flat, aggressive, and conservative cases; record only their compact factual summaries in decision_audit, not private chain-of-thought. In paper exploration, take a clear falsifiable entry when multi-timeframe direction, invalidation, and reward/risk support it; otherwise emit NOTHING with a specific market reason. Return exactly one glitch.intent.v2 JSON object and nothing else. Do not call or describe any order endpoint."
+$prompt = "Read /opt/glitch-data/tests/active-cycle-$safeProfile.json as the complete privacy-redacted MNQ entry-decision cycle. You are profile $Profile, permanently bound to master $MasterAccount. Read only recent matching records from /opt/glitch-data/journal/nt as bounded trading-journal evidence. Echo operator_profile=$Profile and account=$MasterAccount exactly. The local_safety_attestation is authoritative: private account details are intentionally absent and must not be treated as invalid input. Apply glitch-trade-mnq, then glitch-build-intent. Steelman bull, bear, flat, aggressive, and conservative cases; record only their compact factual summaries in decision_audit, not private chain-of-thought. Return exactly one glitch.intent.v2 JSON object and nothing else. Do not call or describe any order endpoint."
 if ($PrepareOnly) {
     Remove-Item -LiteralPath $active -Force -ErrorAction SilentlyContinue
     [ordered]@{

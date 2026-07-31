@@ -372,7 +372,9 @@ class DirectCycleTests(unittest.TestCase):
         self.assertIn("'--provider', 'openai-codex'", wrapper)
         self.assertIn("'--max-turns', '4'", wrapper)
         self.assertIn("'--toolsets', 'memory'", wrapper)
-        self.assertIn("glitch-self-learning", wrapper)
+        self.assertIn("glitch-trade-mnq", wrapper)
+        self.assertIn("glitch-build-intent", wrapper)
+        self.assertNotIn("glitch-learn", wrapper)
         self.assertIn("['-q',prompt]", wrapper)
         self.assertIn("'--source', 'trading'", wrapper)
         self.assertNotIn("'--resume'", wrapper)
@@ -396,16 +398,16 @@ class DirectCycleTests(unittest.TestCase):
             template["decisions"][0]["decision_audit"]["final_choice"],
             template["decisions"][0]["action"],
         )
-        self.assertIn("final_choice is forbidden as a direct field", prompt)
+        self.assertIn("final_choice is forbidden at the decision root", prompt)
         MODULE.validate_batch(template, MODULE.build_scenario(packet()))
 
     def test_prompt_keeps_glitch_truth_above_memory_and_forbids_coverups(self):
         value = MODULE.build_prompt(packet(), MODULE.build_scenario(packet()), {})
-        self.assertIn("authoritative facts", value)
+        self.assertIn("are authoritative", value)
         self.assertIn("Never fabricate missing facts", value)
         self.assertIn("hide a loss", value)
-        self.assertIn("reset a performance baseline", value)
-        self.assertIn("append-only corrections", value)
+        self.assertIn("reset a baseline", value)
+        self.assertIn("rewrite history", value)
         self.assertIn(
             "snapshot_hash must be a JSON string copied exactly",
             value,
@@ -484,28 +486,16 @@ class DirectCycleTests(unittest.TestCase):
             decisions = MODULE.journal_tail(Path(root))["decisions"]
         self.assertEqual([row["intent_id"] for row in decisions], ["current"])
 
-    def test_prompt_uses_probabilistic_confirmation_and_short_decision_horizons(self):
+    def test_prompt_uses_regime_adaptive_horizons_without_scalp_bias(self):
         value = MODULE.build_prompt(packet(), MODULE.build_scenario(packet()), {})
-        self.assertIn("bounded experimentation", value)
-        self.assertIn("most likely next-five-minute path", value)
-        self.assertIn("Missing order flow is neutral", value)
-        self.assertIn("Predict and trade the most likely next five minutes", value)
-        self.assertIn("predict the most likely next one-minute candle", value)
-        self.assertIn("immediate and next one-minute movement as the primary timing object", value)
-        self.assertIn("flat is the current state, not the preferred decision", value)
-        self.assertIn("observations, not conclusions or vetoes", value)
-        self.assertIn("A retest is one possible entry, not a requirement", value)
-        self.assertIn("NOTHING carries the same burden of proof", value)
-        self.assertIn("nearest local structure that genuinely invalidates", value)
-        self.assertIn("activity, fear of inactivity, and desire for more data are never evidence", value)
-        self.assertIn("missed directional participation", value)
-        self.assertNotIn("cannot rescue a locally late", value)
-        self.assertNotIn("Prefer early participation or a favorable retest", value)
-        self.assertNotIn("Avoid staying idle for too long", value)
-        self.assertIn("live in-progress observations", value)
-        self.assertIn("Packet evidence may inform an explicit NOTHING", value)
-        self.assertIn("deterministic policy does not replace Hermes's decision with an inferred veto", value)
-        self.assertIn('"prompt_version":"direct-v6-local"', value)
+        self.assertIn("multi-timeframe regime", value)
+        self.assertIn("Mag7, and news", value)
+        self.assertIn("review intervals, not trade horizons", value)
+        self.assertIn("Do not reduce a directional or rotational thesis to the next candle", value)
+        self.assertIn("account for snapshot-to-fill drift", value)
+        self.assertNotIn("Predict and trade the most likely next five minutes", value)
+        self.assertNotIn("predict the most likely next one-minute candle", value)
+        self.assertIn('"prompt_version":"direct-v7-regime"', value)
 
     def test_feed_observation_uses_fresh_native_rail(self):
         with tempfile.TemporaryDirectory() as root:
@@ -533,17 +523,13 @@ class DirectCycleTests(unittest.TestCase):
             }), encoding="utf-8")
             self.assertFalse(MODULE.feed_observation_is_fresh(glitch_data))
 
-    def test_prompt_makes_hold_accountable_and_keeps_quantity_adaptive(self):
+    def test_prompt_makes_management_accountable_and_applies_capacity_mandate(self):
         value = MODULE.build_prompt(packet(), MODULE.build_scenario(packet()), {})
-        self.assertIn("HOLD is not the default", value)
-        self.assertIn("prior change_condition is an accountable forecast", value)
-        self.assertIn("do not silently move the threshold", value)
-        self.assertIn("Do not inherit any fixed or provisional quantity baseline", value)
-        self.assertIn("master-quantity calibration", value)
-        self.assertIn("compare one protected tranche, a multi-leg entry", value)
-        self.assertIn("reserving capacity for later evidence", value)
-        self.assertIn("do not mechanically maximize size or default to one contract", value)
-        self.assertIn("current acceptance, rejection, structure, excursion, and changed evidence outrank", value)
+        self.assertIn("A prior change_condition is accountable", value)
+        self.assertIn("same-direction protected addition", value)
+        self.assertIn("Apply the operator capacity mandate", value)
+        self.assertIn("Do not manufacture edge", value)
+        self.assertIn("mechanically maximize quantity", value)
         self.assertNotIn("1/2/4/10", value)
 
     def test_obsolete_supervisor_quantity_artifacts_are_not_sent_to_luna(self):
@@ -745,15 +731,16 @@ class DirectCycleTests(unittest.TestCase):
 
     def test_prompt_exposes_optional_three_leg_native_scale_out(self):
         value = MODULE.build_prompt(packet(), MODULE.build_scenario(packet()), {})
+        trade_skill = (
+            ROOT / "hermes-profile/skills/glitch-trade-mnq/SKILL.md"
+        ).read_text(encoding="utf-8")
         self.assertIn("take_profit_2", value)
         self.assertIn("quantity_tp1", value)
         self.assertIn("take_profit_3", value)
         self.assertIn("quantity_tp2", value)
         self.assertIn("independent native OCO pair", value)
-        self.assertIn("current scale-out mechanism", value)
-        self.assertIn("there is no partial-reduction action", value)
-        self.assertIn("favorable or adverse prices", value)
-        self.assertIn("mechanical grid or martingale rule", value)
+        self.assertIn("TP1/TP2/TP3 scale-out", trade_skill)
+        self.assertIn("Never grid, martingale", trade_skill)
 
     def test_strict_batch_rejects_unknown_fields_and_incomplete_audit(self):
         value = packet()
@@ -805,6 +792,27 @@ class DirectCycleTests(unittest.TestCase):
         self.assertTrue(account["entry_window_open"])
         self.assertEqual(account["must_flat_utc"], "2099-01-01T21:59:00Z")
 
+    def test_model_packet_preserves_mag7_and_news_context_for_every_frame(self):
+        value = packet()
+        for index, frame in enumerate(value["frames"]):
+            frame["market_snapshot"]["fundamental_context"] = {
+                "recorded_utc": f"2099-01-01T14:0{index + 1}:00Z",
+                "mag7_influence_score": 0.25 + index,
+                "mag7_score_lines": ["NVDA +1.2%"],
+                "news_sentiment": "Mixed",
+                "is_news_lockout_active": False,
+                "latest_headline_lines": ["Headline"],
+                "official_news_lines": [],
+            }
+
+        model_packet = MODULE.packet_for_model(value, MODULE.build_scenario(value))
+
+        self.assertEqual(len(model_packet["frames"]), 5)
+        for index, frame in enumerate(model_packet["frames"]):
+            context = frame["market_snapshot"]["fundamental_context"]
+            self.assertEqual(context["mag7_influence_score"], 0.25 + index)
+            self.assertEqual(context["news_sentiment"], "Mixed")
+
     def test_prompt_supports_read_only_native_memory_canary(self):
         value = MODULE.build_prompt(
             packet(),
@@ -813,8 +821,8 @@ class DirectCycleTests(unittest.TestCase):
             {"schema_version": "glitch.operator.directive.v1", "directive_type": "native_tool_canary"},
         )
         self.assertIn("directive_type=native_tool_canary", value)
-        self.assertIn("invoke native memory retrieval exactly once", value)
-        self.assertIn("without writing memory", value)
+        self.assertIn("Invoke native memory retrieval exactly once", value)
+        self.assertIn("do not write memory", value)
 
     def test_groups_and_ratios_come_from_glitch_packet(self):
         scenario = MODULE.build_scenario(packet())
@@ -1090,7 +1098,10 @@ class DirectCycleTests(unittest.TestCase):
         self.assertNotIn("ai_enabled", model_packet["policy"])
         self.assertNotIn("mode", model_packet["policy"])
         self.assertEqual(model_packet["observation_contract"]["missing_order_flow"], "neutral_not_bearish_or_bullish")
-        self.assertEqual(model_packet["observation_contract"]["decision_horizon"], "next_5m_when_flat; next_1m_when_positioned")
+        self.assertEqual(
+            model_packet["observation_contract"]["decision_horizon"],
+            "regime_and_thesis_adaptive; 5m_flat_review; 1m_positioned_review",
+        )
         self.assertEqual(model_packet["policy"]["profile_account_bindings"], ["glitch=Sim101"])
         self.assertEqual(model_packet["policy"]["account_allowlist"], ["Sim101", "Sim102"])
 

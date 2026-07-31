@@ -140,7 +140,7 @@ function Invoke-HermesBounded {
     $arguments = @(
         ('"' + $Hermes + '"'), '-p', $ProfileName,
         '--toolsets', 'clarify',
-        '--skills', 'glitch-observe-market,glitch-form-thesis,glitch-build-intent',
+        '--skills', 'glitch-trade-mnq,glitch-build-intent',
         '--usage-file', ('"' + $Usage + '"'), '-z', ('"' + $Prompt.Replace('"', '\"') + '"')
     ) -join ' '
     $start = New-Object Diagnostics.ProcessStartInfo

@@ -16,7 +16,7 @@ Hermes remains free to interpret context probabilistically: direction, regime, o
 
 Archetypes, mined patterns, adversarial bull/bear cases, and historical statistics are evidence. They are not entry gates, whitelists, or substitutes for current judgment. `no_archetype_match` is never by itself a reason to return `NOTHING`.
 
-## 2. One persistent agent, four cognitive loops
+## 2. One persistent agent, five cognitive loops
 
 All loops belong to the same `glitch` profile and share native Hermes memory, bounded Glitch evidence, and the Hermes-owned knowledge base. Every LLM-driven scheduled call uses an isolated session tagged for its trading lane and receives explicit bounded continuity. They are different jobs, not different agents or personalities.
 
@@ -109,25 +109,20 @@ Verified observations and episodic lessons may enter Hermes memory automatically
 
 The Glitch skills are an overlay on Hermes’s native skills, memory, sessions, search, file, terminal, planning, and upkeep capabilities. Installation must not prune or replace native Hermes capabilities.
 
-Existing Glitch overlay:
+The v7 Glitch overlay is deliberately consolidated:
 
 | Skill | Purpose |
 |---|---|
-| `glitch-observe-market` | Read packet and market structure without forcing a named setup |
-| `glitch-assess-risk` | Understand portfolio and trade risk inside Glitch limits |
-| `glitch-form-thesis` | Form falsifiable discretionary or pattern-supported hypotheses |
-| `glitch-build-intent` | Convert a chosen decision into the strict protected intent contract |
-| `glitch-submit-intent` | Keep interactive chat on directives; only the worker may validate and deliver intents |
-| `glitch-review-outcomes` | Attribute Glitch-recorded outcomes and generate lessons |
-| `glitch-self-learning` | Promote attributable outcomes into append-only episodic and durable lessons without turning memory into truth |
-| `glitch-self-heal` | Reconcile Hermes-owned state to Glitch truth, append the correction, and resume safe operation |
-| `glitch-supervisor-ledger` | Maintain append-only observations, guidance, lessons, and build requests |
-| `glitch-learning-loop` | Debrief master trades, supervise hourly, plan every 300 minutes, update daily memory, and evaluate one reversible cognitive overlay |
-| `glitch-escalate-to-codex` | Propose bounded source work without scheduling or operating Codex |
+| `glitch-trade-mnq` | Read the multi-timeframe sequence; classify regime; reason about liquidity, order flow, Mag7/news, geometry, exposure, and management |
+| `glitch-build-intent` | Encode a chosen decision into the strict protected intent contract without adding strategy |
+| `glitch-learn` | Debrief, supervise, plan, maintain memory, and evaluate reversible evidence-linked guidance |
+| `glitch-runtime` | Reconcile Hermes-owned runtime state and formulate bounded source-defect escalations |
 
-`glitch-learning-loop` is the intentionally small supervisory overlay. It reuses
-the existing outcome, self-learning, self-heal, and supervisor-ledger skills
-instead of splitting read, write, planning, and upkeep into six thin wrappers.
+The direct operator loads only `glitch-trade-mnq` and
+`glitch-build-intent`. Learning loops load only `glitch-learn`.
+`glitch-runtime` remains available to interactive diagnosis and recovery rather
+than consuming every trading decision. SOUL carries durable identity and truth
+rules; it does not duplicate the procedural skills.
 
 Skills teach procedures and expose resources. They do not encode a deterministic trading strategy, require an archetype match, force a trade quota, or silently become policy.
 

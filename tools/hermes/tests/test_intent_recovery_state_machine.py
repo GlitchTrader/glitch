@@ -17,7 +17,9 @@ class IntentRecoveryHarness:
 
     def retry(self, named_entry=False, filled=0, net=0, protected=False,
               entry_direction=1, terminal=False, protection_submit_ok=True,
-              elapsed_seconds=0):
+              elapsed_seconds=0, current_process_owned=False):
+        if current_process_owned:
+            return "entry_execution_in_progress"
         if self.phase == "pending":
             return self.reconcile(named_entry, filled, net, protected,
                                   entry_direction, terminal, protection_submit_ok)
@@ -235,6 +237,23 @@ class EntryBaselineRecoveryHarness:
 
 
 class IntentRecoveryStateMachineTests(unittest.TestCase):
+    def test_same_process_pending_retry_cannot_enter_restart_recovery(self):
+        intent = IntentRecoveryHarness("pending")
+        self.assertEqual(
+            "entry_execution_in_progress",
+            intent.retry(
+                named_entry=True,
+                filled=1,
+                net=-1,
+                protected=False,
+                entry_direction=-1,
+                current_process_owned=True,
+            ),
+        )
+        self.assertEqual("pending", intent.phase)
+        self.assertEqual(0, intent.owned_close_quantity)
+        self.assertEqual(0, intent.submits)
+
     def test_crash_boundary_never_uses_absence_or_elapsed_time_to_resubmit(self):
         intent = IntentRecoveryHarness("execution_started")
         self.assertEqual("visibility_observed", intent.retry(named_entry=False))

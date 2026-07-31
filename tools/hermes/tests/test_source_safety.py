@@ -19,6 +19,7 @@ RUNTIME_POLICY = ADDON / "Services/Persistence/GlitchRuntimePolicyStore.cs"
 LOCALIZATION = ADDON / "Resources/Localization.tsv"
 PORTFOLIO_WRITER = ADDON / "Services/Persistence/GlitchPortfolioSnapshotWriter.cs"
 EXCHANGE_WRITER = ADDON / "Services/Persistence/GlitchHermesExchangeWriter.cs"
+MARKET_WRITER = ADDON / "Services/Persistence/GlitchMarketSnapshotWriter.cs"
 HEALTH = ADDON / "Services/Persistence/GlitchAiHealthEvaluator.cs"
 STATE_STORE = ADDON / "Services/Ai/GlitchAiIntentStateStore.cs"
 INTENT_SERVER = ADDON / "Services/Ai/GlitchAiIntentServer.cs"
@@ -138,6 +139,7 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
 
     def test_restart_reconciles_without_time_created_replay_authority(self):
         server = source(INTENT_SERVER)
+        executor = source(EXECUTOR)
         self.assertIn("resumeReceivedClaim", server)
         self.assertIn("continueApprovedClaim", server)
         self.assertIn("reconcileExistingClaim", server)
@@ -158,7 +160,27 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertNotIn("TryExecuteApprovedIntent", reconciliation)
         self.assertNotIn("NativeOrderVisibilitySettleInterval", reconciliation)
         self.assertIn("native_visibility_unresolved", reconciliation)
-        self.assertIn("ConnectionStatus.Connected", source(EXECUTOR))
+        self.assertIn("ConnectionStatus.Connected", executor)
+
+        executor_reconciliation = method_body(
+            executor,
+            "public static GlitchAiExecutionResult TryReconcileStartedIntent",
+            "private static GlitchAiExecutionResult ReconcileStartedIntentOnUiThread",
+        )
+        self.assertIn("TryGetLiveEntryExecutionResult", executor_reconciliation)
+        self.assertLess(
+            executor_reconciliation.index("TryGetLiveEntryExecutionResult"),
+            executor_reconciliation.index("ReconcileStartedIntentOnUiThread"),
+        )
+        live_entry = method_body(
+            executor,
+            "private static bool TryGetLiveEntryExecutionResult",
+            "private static GlitchAiExecutionResult ReconcileStartedIntentOnUiThread",
+        )
+        self.assertIn("GroupsBySignal.Values", live_entry)
+        self.assertIn("group_entry_execution_in_progress", live_entry)
+        self.assertNotIn("TryRecoverReconciledEntryProtection", live_entry)
+        self.assertNotIn("TryCloseReconciledEntryDelta", live_entry)
 
         resume = method_body(
             server,
@@ -211,7 +233,7 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("TryBeginMinutePublish(", main)
         self.assertIn("out bool preflightOnly", main)
         self.assertIn("RecordDispatcherCaptureDuration", main)
-        self.assertIn("TryCaptureSnapshotJson(nowUtc, minuteId, out marketSnapshotJson)", main)
+        self.assertIn("fundamentalSnapshot,\n                                out marketSnapshotJson", main)
         self.assertIn("QueuePublishMinute(", main)
         self.assertIn("ReleaseMinutePublishOwnership", main)
         self.assertIn("CachedMinuteUtc == minuteUtc && CachedPacketComplete", publisher)
@@ -628,6 +650,33 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         policy = source(POLICY)
         self.assertIn("SnapshotMaxAgeSeconds { get; set; } = 300", policy)
         self.assertIn('"snapshot_max_age_seconds\\\":300', policy)
+
+    def test_ai_market_packet_includes_bounded_mag7_and_news_context_without_credentials(self):
+        main = source(MAIN_WINDOW)
+        writer = source(MARKET_WRITER)
+
+        self.assertIn('GetSnapshot(\n                                    "MNQ"', main)
+        self.assertIn("fundamentalSnapshot", main)
+        self.assertIn("InjectFundamentalContext", writer)
+        self.assertIn("BoundedLines(snapshot.Mag7ScoreLines, 7, 240)", writer)
+        self.assertIn("BoundedLines(snapshot.LatestHeadlineLines, 5, 300)", writer)
+        self.assertIn("fundamental_context", writer)
+        for field in (
+            "mag7_influence_score",
+            "mag7_score_lines",
+            "news_sentiment",
+            "is_news_lockout_active",
+            "latest_headline_lines",
+            "official_news_lines",
+        ):
+            self.assertIn(field, writer)
+        for secret_field in (
+            "LicenseKey",
+            "InstallationId",
+            "DeviceFingerprint",
+            "ApiBaseUrl",
+        ):
+            self.assertNotIn(secret_field, writer)
 
     def test_ai_contract_supports_three_native_protection_legs(self):
         executor = source(EXECUTOR)

@@ -53,7 +53,7 @@ foreach ($name in $workerNames) {
 }
 
 $skillCount = @(Get-ChildItem -LiteralPath (Join-Path $target 'skills') -Directory).Count
-if ($skillCount -ne 11) { throw "Expected 11 Glitch skills; found $skillCount." }
+if ($skillCount -ne 4) { throw "Expected four Glitch skills; found $skillCount." }
 $scriptCount = @(Get-ChildItem -LiteralPath (Join-Path $target 'scripts') -File).Count
 if ($scriptCount -ne 8) { throw "Expected eight runtime scripts; found $scriptCount." }
 
@@ -103,7 +103,7 @@ if ($unexpectedAfter.Count -gt 0) { throw "Public profile gained unexpected path
 [ordered]@{
     schema_version = 'glitch.hermes.public_profile_build.v1'
     target = $target
-    version = '0.0.2.16'
+    version = '0.0.2.17'
     skills = $skillCount
     scripts = $scriptCount
     files = $textFiles.Count + 1

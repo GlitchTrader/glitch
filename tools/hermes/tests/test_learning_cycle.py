@@ -605,7 +605,8 @@ class LearningCycleTests(unittest.TestCase):
         self.assertIn("rather than waiting for the daily loop", hourly)
         self.assertIn("Label the actual outcome no trade", hourly)
         self.assertIn("Do not create a fixed or provisional quantity baseline", planning)
-        self.assertIn("master-quantity calibration", planning)
+        self.assertIn("calibrate quantity from repeated risk-adjusted outcomes", planning)
+        self.assertIn("250k at no more than ten total contracts", planning)
         self.assertIn("flat counterfactuals remain informational", planning)
 
     def test_supervisor_quantity_contract_is_versioned(self):
