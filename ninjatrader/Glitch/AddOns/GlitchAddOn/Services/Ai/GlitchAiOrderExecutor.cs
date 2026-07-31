@@ -85,6 +85,16 @@ namespace Glitch.Services
 
             if (order.OrderState == OrderState.Rejected)
             {
+                // A rejected protection leg on a filled entry is first repaired
+                // in place: one bounded resubmission of the same leg with the
+                // same price, quantity, OCO, and signal. This executes the
+                // original intent against a transient native fault instead of
+                // converting it into an exit Hermes never requested (2026-07-30:
+                // a target rejected out of a native CancelPending race while the
+                // stop was working, and the whole group was flattened). Entry
+                // rejections and failed repairs still use full group recovery.
+                if (TryRepairRejectedProtectionLeg(group, account, order))
+                    return;
                 RecoverGroup(
                     group,
                     "order_update_" + order.OrderState + "_" + account.Name
@@ -250,8 +260,14 @@ namespace Glitch.Services
                 if (currentNet != expectedNet
                     || !HasExactBaselineProtection(master, instrument, entryPlan))
                     return GlitchAiExecutionResult.Failed("reconcile_entry_superseded_manual_or_concurrent_intent");
-                if (HasExactCorrelationOwnedProtection(master, instrument, correlation, entry.Filled, entryDirection))
+                if (HasExactCorrelationOwnedProtection(master, instrument, correlation, entry.Filled, entryDirection, requireConfirmed: true))
                     return GlitchAiExecutionResult.Succeeded("reconciled_entry_native_protected");
+                // Exact-coverage protection that is still in a submit or
+                // cancel transient is not yet a native outcome: report the
+                // intent pending instead of recovering (flattening) exposure
+                // whose protection may confirm on the next state change.
+                if (HasExactCorrelationOwnedProtection(master, instrument, correlation, entry.Filled, entryDirection, requireConfirmed: false))
+                    return GlitchAiExecutionResult.Pending("reconcile_entry_protection_confirmation_pending");
                 return TryRecoverReconciledEntryProtection(rawJson, master, instrument, entry, correlation);
             }
 
@@ -2182,6 +2198,122 @@ namespace Glitch.Services
             }
         }
 
+        private static bool TryRepairRejectedProtectionLeg(
+            ExecutionGroupContext group,
+            Account account,
+            Order rejected)
+        {
+            if (group == null || account == null || rejected == null)
+                return false;
+
+            int slot;
+            int stride = GetOrderStride(group);
+            lock (GroupSync)
+            {
+                if (group.RecoveryStarted)
+                    return false;
+                slot = -1;
+                for (int i = 0; i < group.Orders.Count; i++)
+                {
+                    Order candidate = group.Orders[i];
+                    if (candidate != null
+                        && (ReferenceEquals(candidate, rejected)
+                            || string.Equals(candidate.Name, rejected.Name, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        slot = i;
+                        break;
+                    }
+                }
+                // Only protection slots on a filled entry are repairable. The
+                // entry slot and unknown orders keep the full recovery response.
+                if (slot < 0 || slot % stride == 0 || !HasFilledEntry(group, slot / stride))
+                    return false;
+                if (group.RepairedProtectionSlots == null)
+                    group.RepairedProtectionSlots = new HashSet<int>();
+                // One bounded attempt per leg slot; a second rejection of the
+                // same leg is a real native refusal, not a transient race.
+                if (!group.RepairedProtectionSlots.Add(slot))
+                    return false;
+            }
+
+            int quantity = Math.Max(0, rejected.Quantity - rejected.Filled);
+            string oco = rejected.Oco ?? string.Empty;
+            string signal = rejected.Name;
+            bool isStopSlot = ((slot % stride) - 1) % 2 == 0;
+            double stopPrice = isStopSlot ? rejected.StopPrice : 0;
+            double limitPrice = isStopSlot ? 0 : rejected.LimitPrice;
+            if (quantity <= 0
+                || string.IsNullOrWhiteSpace(signal)
+                || (isStopSlot ? stopPrice <= 0 : limitPrice <= 0))
+                return false;
+
+            // A thrown create must return false so this same callback still
+            // reaches RecoverGroup; the outer dispatcher catch would otherwise
+            // swallow the whole rejection response.
+            OrderAction exitAction = group.IsLong ? OrderAction.Sell : OrderAction.BuyToCover;
+            Order replacement;
+            try
+            {
+                replacement = CreateExitOrder(
+                    account,
+                    group.Instrument,
+                    exitAction,
+                    isStopSlot ? OrderType.StopMarket : OrderType.Limit,
+                    quantity,
+                    limitPrice,
+                    stopPrice,
+                    oco,
+                    signal);
+            }
+            catch
+            {
+                replacement = null;
+            }
+            if (replacement == null)
+                return false;
+
+            lock (GroupSync)
+            {
+                if (group.RecoveryStarted)
+                    return false;
+                group.Orders[slot] = replacement;
+                GroupsBySignal[signal.Trim()] = group;
+            }
+
+            try
+            {
+                account.Submit(new[] { replacement });
+            }
+            catch
+            {
+                // A never-submitted replacement would hold the slot in
+                // Initialized forever and keep recovery from reaching a
+                // terminal state. Restore the terminal rejected order so the
+                // recovery that follows can complete.
+                lock (GroupSync)
+                {
+                    if (ReferenceEquals(group.Orders[slot], replacement))
+                        group.Orders[slot] = rejected;
+                }
+                return false;
+            }
+            if (IsRejected(replacement))
+                return false;
+
+            GlitchAiExecutionJournalWriter.TryAppend(
+                group.IntentId,
+                GlitchAiExecutionResult.Pending(
+                    "group_protection_leg_resubmitted",
+                    BuildGroupEvidenceMessage(group)
+                        + "|account=" + CleanToken(account.Name)
+                        + "|leg=" + (isStopSlot ? "stop" : "target")
+                        + "|signal=" + CleanToken(signal)
+                        + "|rejected_state=" + rejected.OrderState
+                        + "|scope=same_price_same_oco_single_attempt"),
+                DateTime.UtcNow);
+            return true;
+        }
+
         private static void RecoverGroup(ExecutionGroupContext group, string trigger)
         {
             if (group == null)
@@ -2397,9 +2529,12 @@ namespace Glitch.Services
                 {
                     Order stop = group.Orders[offset + 1 + (legIndex * 2)];
                     Order target = group.Orders[offset + 2 + (legIndex * 2)];
+                    // Both legs must be independently confirmed native-working
+                    // before this account counts as protected. Submit-time and
+                    // cancel-side transients must never latch open-protected.
                     everyBracketWorking &= stop != null && target != null
-                        && GlitchReplicationEngine.IsWorkingOrderState(stop.OrderState)
-                        && GlitchReplicationEngine.IsWorkingOrderState(target.OrderState);
+                        && IsConfirmedProtectiveOrderState(stop.OrderState)
+                        && IsConfirmedProtectiveOrderState(target.OrderState);
                 }
                 allProtected &= entryFilled
                     && HasExactOwnedExposure(group, accountIndex)
@@ -2518,7 +2653,8 @@ namespace Glitch.Services
                     group.Instrument,
                     group.Correlation,
                     entry.Filled,
-                    entryDirection);
+                    entryDirection,
+                    requireConfirmed: true);
         }
 
         private static bool TryPrepareEntryBaselinePlan(
@@ -2616,7 +2752,8 @@ namespace Glitch.Services
             Instrument instrument,
             string correlation,
             int expectedQuantity,
-            int expectedDirection)
+            int expectedDirection,
+            bool requireConfirmed)
         {
             if (expectedQuantity <= 0 || expectedDirection == 0
                 || !TrySnapshotOrders(account, out Order[] orders))
@@ -2625,8 +2762,16 @@ namespace Glitch.Services
             int targetCoverage = 0;
             foreach (Order order in orders)
             {
-                if (order == null || !SameInstrument(order.Instrument, instrument)
-                    || !GlitchReplicationEngine.IsWorkingOrderState(order.OrderState))
+                if (order == null || !SameInstrument(order.Instrument, instrument))
+                    continue;
+                // requireConfirmed gates positive protection claims on states
+                // the native layer has confirmed; the loose form additionally
+                // counts submit/cancel transients and may only be used to
+                // keep an outcome pending, never to report protection.
+                bool stateEligible = requireConfirmed
+                    ? IsConfirmedProtectiveOrderState(order.OrderState)
+                    : GlitchReplicationEngine.IsWorkingOrderState(order.OrderState);
+                if (!stateEligible)
                     continue;
                 bool isStop = TryGetProtectionCorrelation(order.Name, SignalStop, out string orderCorrelation);
                 bool isTarget = !isStop && TryGetProtectionCorrelation(order.Name, SignalTarget, out orderCorrelation);
@@ -2873,6 +3018,27 @@ namespace Glitch.Services
                 || order.OrderState == OrderState.Rejected;
         }
 
+        private static bool IsConfirmedProtectiveOrderState(OrderState state)
+        {
+            // Protection may be reported working only after the native layer
+            // confirms it is holding the order. Submit-time transients
+            // (Initialized/Submitted) are not yet confirmed, and cancel-side
+            // transients (CancelPending/CancelSubmitted) are protection on the
+            // way out. Recording open-protected from either journals a claim
+            // the broker never made: on 2026-07-30 a target leg was rejected
+            // out of CancelPending milliseconds after batch submit while its
+            // group was already recorded open-protected, so the later
+            // rejection flattened a stop-protected position across the group.
+            // ChangePending/ChangeSubmitted imply a previously confirmed order
+            // whose amendment is in flight; the resting protection remains.
+            return state == OrderState.Accepted
+                || state == OrderState.TriggerPending
+                || state == OrderState.Working
+                || state == OrderState.ChangePending
+                || state == OrderState.ChangeSubmitted
+                || state == OrderState.PartFilled;
+        }
+
         private static bool SameInstrument(Instrument left, Instrument right)
         {
             return left != null && right != null
@@ -3032,6 +3198,7 @@ namespace Glitch.Services
             public bool EntryFilledRecorded { get; set; }
             public bool OpenProtectedRecorded { get; set; }
             public bool TradeClosedRecorded { get; set; }
+            public HashSet<int> RepairedProtectionSlots { get; set; }
             public double PointValue { get; set; }
             public double TickSize { get; set; }
             public double DecisionReferencePrice { get; set; }

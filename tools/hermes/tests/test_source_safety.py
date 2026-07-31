@@ -780,6 +780,114 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn('StartsWith(SignalTarget + "-"', executor)
         self.assertNotIn("GLT-COPY", body)
 
+    def test_open_protected_requires_confirmed_native_protection_states(self):
+        # 2026-07-30 Sim101 incident: a bracket target was rejected out of
+        # CancelPending milliseconds after batch submit while the group was
+        # already journaled open-protected, so the rejection flattened a
+        # stop-protected position across the whole replication group. The
+        # positive protection claims must only accept states the native layer
+        # has confirmed, never submit-time or cancel-side transients.
+        executor = source(EXECUTOR)
+        predicate = method_body(
+            executor,
+            "private static bool IsConfirmedProtectiveOrderState",
+            "private static bool SameInstrument",
+        )
+        for confirmed in (
+            "OrderState.Accepted",
+            "OrderState.TriggerPending",
+            "OrderState.Working",
+            "OrderState.ChangePending",
+            "OrderState.ChangeSubmitted",
+            "OrderState.PartFilled",
+        ):
+            self.assertIn(confirmed, predicate)
+        for transient in (
+            "OrderState.Initialized",
+            "OrderState.Submitted",
+            "OrderState.CancelPending",
+            "OrderState.CancelSubmitted",
+        ):
+            self.assertNotIn(transient, predicate)
+
+        recorder = method_body(
+            executor,
+            "private static void TryRecordFilledAndProtected",
+            "private static string BuildGroupEvidenceMessage",
+        )
+        self.assertIn("IsConfirmedProtectiveOrderState(stop.OrderState)", recorder)
+        self.assertIn("IsConfirmedProtectiveOrderState(target.OrderState)", recorder)
+        self.assertNotIn("IsWorkingOrderState", recorder)
+
+        coverage = method_body(
+            executor,
+            "private static bool HasExactCorrelationOwnedProtection",
+            "private static bool HasFilledEntry",
+        )
+        self.assertIn("bool requireConfirmed", coverage)
+        self.assertIn("IsConfirmedProtectiveOrderState(order.OrderState)", coverage)
+
+        # Every positive protection claim requires confirmation; the loose
+        # form may only keep a started-intent outcome pending.
+        self.assertIn(
+            'return GlitchAiExecutionResult.Succeeded("reconciled_entry_native_protected");',
+            executor,
+        )
+        reconcile = method_body(
+            executor,
+            'if (HasExactCorrelationOwnedProtection(master, instrument, correlation, entry.Filled, entryDirection, requireConfirmed: true))',
+            "private static GlitchAiExecutionResult TryRecoverReconciledEntryProtection",
+        )
+        self.assertIn("requireConfirmed: false", reconcile)
+        self.assertIn(
+            'GlitchAiExecutionResult.Pending("reconcile_entry_protection_confirmation_pending")',
+            reconcile,
+        )
+        self.assertIn("requireConfirmed: true", method_body(
+            executor,
+            "private static bool HasExactEntryExposure",
+            "private static bool TryPrepareEntryBaselinePlan",
+        ))
+
+    def test_rejected_protection_leg_is_repaired_before_group_recovery(self):
+        # A transient native rejection of one protection leg on a filled entry
+        # must not convert into an exit Hermes never requested. The response is
+        # one bounded resubmission of the exact same leg (same price, quantity,
+        # OCO, and signal); entry rejections and failed repairs keep the full
+        # recovery response.
+        executor = source(EXECUTOR)
+        dispatch = method_body(
+            executor,
+            "public static void ProcessOrderUpdate",
+            "public static GlitchAiExecutionResult TryReconcileStartedIntent",
+        )
+        self.assertIn("TryRepairRejectedProtectionLeg(group, account, order)", dispatch)
+        # Repair is attempted before RecoverGroup in the rejection branch.
+        self.assertLess(
+            dispatch.index("TryRepairRejectedProtectionLeg"),
+            dispatch.index("RecoverGroup"),
+        )
+
+        repair = method_body(
+            executor,
+            "private static bool TryRepairRejectedProtectionLeg",
+            "private static void RecoverGroup",
+        )
+        # Entry slots are never repaired; only protection slots on a filled entry.
+        self.assertIn("slot % stride == 0", repair)
+        self.assertIn("HasFilledEntry(group, slot / stride)", repair)
+        # One bounded attempt per leg slot.
+        self.assertIn("RepairedProtectionSlots.Add(slot)", repair)
+        # The replacement expresses the original intent: same identity, no new prices.
+        self.assertIn("rejected.Oco", repair)
+        self.assertIn("rejected.Name", repair)
+        self.assertIn("rejected.StopPrice", repair)
+        self.assertIn("rejected.LimitPrice", repair)
+        self.assertIn("group_protection_leg_resubmitted", repair)
+        # No recovery, flatten, or close is initiated from the repair path.
+        self.assertNotIn("RecoverGroup(", repair)
+        self.assertNotIn("TryCloseAttributableEntryDelta", repair)
+
 
 if __name__ == "__main__":
     unittest.main()

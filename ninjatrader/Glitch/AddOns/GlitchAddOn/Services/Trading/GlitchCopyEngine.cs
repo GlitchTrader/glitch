@@ -422,7 +422,24 @@ namespace Glitch.Services
                     && string.Equals(item.Instrument.FullName, order.Instrument.FullName, StringComparison.OrdinalIgnoreCase)
                     && !string.IsNullOrWhiteSpace(item.EntryToken)
                     && signal.IndexOf("-" + item.EntryToken + "-", StringComparison.OrdinalIgnoreCase) >= 0);
-                if (lifecycle != null)
+                if (lifecycle != null && lifecycle.ProtectionFailed)
+                    return;
+            }
+
+            // A rejected Glitch-owned protective leg is first repaired in place:
+            // one bounded resubmission of the same leg with the same price,
+            // quantity, OCO, and signal. The follower keeps replicating the
+            // master's intent through a transient native fault instead of being
+            // closed out of a position the master still holds. A second
+            // rejection of the same leg is a real native refusal and falls
+            // through to attributed recovery.
+            if (lifecycle != null
+                && TryRepairRejectedFollowerProtectionLeg(followerAccount, lifecycle, order, signal))
+                return;
+
+            if (lifecycle != null)
+            {
+                lock (_gate)
                 {
                     if (lifecycle.ProtectionFailed)
                         return;
@@ -1420,6 +1437,70 @@ namespace Glitch.Services
                 "FollowerCloseTerminalUnresolved|"
                     + CleanToken(order.Instrument?.FullName)
                     + "|" + CleanToken(signal));
+        }
+
+        private bool TryRepairRejectedFollowerProtectionLeg(
+            Account followerAccount,
+            FollowerEntryLifecycle lifecycle,
+            Order rejected,
+            string signal)
+        {
+            if (followerAccount == null || lifecycle == null || rejected?.Instrument == null)
+                return false;
+
+            bool isStop = GlitchReplicationEngine.IsStopLikeOrder(rejected);
+            double stopPrice = isStop ? rejected.StopPrice : 0;
+            double limitPrice = isStop ? 0 : rejected.LimitPrice;
+            int quantity = Math.Max(0, rejected.Quantity - rejected.Filled);
+            if (quantity <= 0
+                || string.IsNullOrWhiteSpace(rejected.Oco)
+                || (isStop ? stopPrice <= 0 : limitPrice <= 0))
+                return false;
+
+            lock (_gate)
+            {
+                if (lifecycle.RepairedProtectionSignals == null)
+                    lifecycle.RepairedProtectionSignals = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (!lifecycle.RepairedProtectionSignals.Add(signal))
+                    return false;
+            }
+
+            Order replacement;
+            try
+            {
+                replacement = followerAccount.CreateOrder(
+                    rejected.Instrument,
+                    lifecycle.IsLong ? OrderAction.Sell : OrderAction.BuyToCover,
+                    isStop ? OrderType.StopMarket : OrderType.Limit,
+                    OrderEntry.Automated,
+                    TimeInForce.Gtc,
+                    quantity,
+                    limitPrice,
+                    stopPrice,
+                    rejected.Oco,
+                    signal,
+                    DateTime.MaxValue,
+                    null);
+                if (replacement == null)
+                    return false;
+                followerAccount.Submit(new[] { replacement });
+            }
+            catch
+            {
+                return false;
+            }
+            if (replacement.OrderState == OrderState.Rejected
+                || replacement.OrderState == OrderState.Cancelled)
+                return false;
+
+            Journal?.Invoke(
+                followerAccount.Name,
+                "follower_protection_repair|signal=" + CleanToken(signal)
+                + "|leg=" + (isStop ? "stop" : "target")
+                + "|qty=" + quantity.ToString(CultureInfo.InvariantCulture)
+                + "|scope=same_price_same_oco_single_attempt"
+                + "|result=resubmitted");
+            return true;
         }
 
         private void TrySubmitAttributedRecoveryClose(
@@ -3071,6 +3152,7 @@ namespace Glitch.Services
             public bool RecoveryCloseSubmitted { get; set; }
             public List<GlitchScaledProtectionLeg> ScaledLegs { get; set; }
             public bool LatePlanWaitLogged { get; set; }
+            public HashSet<string> RepairedProtectionSignals { get; set; }
         }
     }
 }
