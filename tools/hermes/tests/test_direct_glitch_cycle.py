@@ -490,12 +490,14 @@ class DirectCycleTests(unittest.TestCase):
         value = MODULE.build_prompt(packet(), MODULE.build_scenario(packet()), {})
         self.assertIn("multi-timeframe regime", value)
         self.assertIn("Mag7, and news", value)
-        self.assertIn("review intervals, not trade horizons", value)
-        self.assertIn("Do not reduce a directional or rotational thesis to the next candle", value)
+        self.assertIn("decision horizons, not confirmation windows", value)
+        self.assertIn("forecast the most likely next five-minute path", value)
         self.assertIn("account for snapshot-to-fill drift", value)
         self.assertNotIn("Predict and trade the most likely next five minutes", value)
         self.assertNotIn("predict the most likely next one-minute candle", value)
-        self.assertIn('"prompt_version":"direct-v7-regime"', value)
+        self.assertIn('"prompt_version":"direct-v9-clean-experiment"', value)
+        self.assertIn("An anticipatory entry still needs all three", value)
+        self.assertIn("materially new evidence such as a reclaim", value)
 
     def test_feed_observation_uses_fresh_native_rail(self):
         with tempfile.TemporaryDirectory() as root:
@@ -1100,7 +1102,7 @@ class DirectCycleTests(unittest.TestCase):
         self.assertEqual(model_packet["observation_contract"]["missing_order_flow"], "neutral_not_bearish_or_bullish")
         self.assertEqual(
             model_packet["observation_contract"]["decision_horizon"],
-            "regime_and_thesis_adaptive; 5m_flat_review; 1m_positioned_review",
+            "next_5m_when_flat; next_1m_when_positioned",
         )
         self.assertEqual(model_packet["policy"]["profile_account_bindings"], ["glitch=Sim101"])
         self.assertEqual(model_packet["policy"]["account_allowlist"], ["Sim101", "Sim102"])

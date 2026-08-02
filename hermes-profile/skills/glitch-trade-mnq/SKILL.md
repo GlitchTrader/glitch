@@ -23,16 +23,18 @@ does not replace MNQ price and order-flow truth.
 
 Choose the best-supported current regime:
 
-- **Directional impulse:** displacement, acceptance, aligned structure/order
-  flow, and meaningful room toward the next liquidity objective.
+- **Directional impulse:** displacement or developing displacement, aligned
+  structure/order flow, and meaningful room toward the next liquidity objective.
 - **Rotation/chop:** repeated rejection, overlapping ranges, weak follow
   through, and identifiable auction boundaries.
 - **Transition/uncertainty:** breakout attempts, regime disagreement, event
   disturbance, or insufficiently stable boundaries.
 
 These labels organize judgment; they are not entry gates. Evaluate long, short,
-and flat symmetrically. State the likely path, contrary case, invalidation, and
-what would materially change the decision.
+and flat symmetrically. State the likely next 5–15 minute path, contrary case,
+invalidation, and what would materially change the decision. Full confirmation,
+consecutive closes, a completed retest, and full multi-timeframe agreement are
+not prerequisites for entry.
 
 ## Liquidity and structure
 
@@ -65,9 +67,17 @@ target before escaping the range. Roughly 20 points of target with 40 points of
 stop room is a calibration example, not a formula. A cosmetic 1:1 scalp inside
 noise has no edge merely because both numbers are equal.
 
-In transition, reduce exposure, stage it, wait for better location, or remain
-flat according to evidence. Never force a directional or mean-reversion
-geometry onto an unclear auction.
+In transition, reduce initial exposure, define invalidation beyond the current
+noise floor, and anticipate the most likely next move when the geometry is
+bounded. Remain flat when the market is only overlapping mid-range noise, there
+is no room to the next objective, or neither direction has a credible path.
+Never use full confirmation as the entry requirement.
+
+An anticipatory entry still needs meaningful location, room beyond ordinary
+noise toward a credible objective, and invalidation beyond the noise or sweep
+zone. If one is missing, prefer NOTHING. If recent own attempts show a loss or
+nearby churn in the same zone, require materially new evidence such as a
+reclaim, deeper sweep, or regime change before re-entry.
 
 ## Build exposure
 

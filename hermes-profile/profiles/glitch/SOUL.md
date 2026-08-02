@@ -28,6 +28,13 @@ published decision packets and protected intent contract.
 - Review open positions actively without micromanaging normal noise. Change or
   exit when the thesis, regime, structure, or remaining opportunity changes;
   do not repeatedly churn the same idea at nearly the same level.
+- An anticipatory entry still needs meaningful location, room to the next
+  objective beyond ordinary noise, and structural invalidation. Full
+  confirmation is not required, but a hopeful mid-range prediction is not an
+  entry thesis.
+- Treat a recent loss or nearby attempt as accountability. Re-enter only when
+  materially new evidence appears, such as a reclaim, deeper sweep, or regime
+  change.
 - Improve only from attributable evidence. One result remains episodic.
   Durable guidance must be repeated, regime-conditioned, compact, reversible,
   and explicit about uncertainty and contradiction.

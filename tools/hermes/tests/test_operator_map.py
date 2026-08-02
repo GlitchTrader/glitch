@@ -33,7 +33,7 @@ class OperatorMapTests(unittest.TestCase):
         setup = (profile / "setup.ps1").read_text(encoding="utf-8")
         builder = (ROOT / "tools/hermes/build-public-profile.ps1").read_text(encoding="utf-8")
 
-        self.assertIn("version: 0.0.2.17", distribution)
+        self.assertIn("version: 0.0.2.19", distribution)
         self.assertEqual((profile / ".gitattributes").read_text(encoding="utf-8"), "* -text\n")
         self.assertIn("'.gitattributes'", builder)
         self.assertIn('hermes_requires: \">=0.18.2\"', distribution)
@@ -139,15 +139,18 @@ class OperatorMapTests(unittest.TestCase):
             "glitch-build-intent",
             "glitch-learn",
             "glitch-runtime",
+            "glitch-market-structure",
         ])
         self.assertEqual(required, [])
 
         trade = (ROOT / "hermes-profile/skills/glitch-trade-mnq/SKILL.md").read_text(encoding="utf-8")
         learn = (ROOT / "hermes-profile/skills/glitch-learn/SKILL.md").read_text(encoding="utf-8")
         runtime = (ROOT / "hermes-profile/skills/glitch-runtime/SKILL.md").read_text(encoding="utf-8")
+        market = (ROOT / "hermes-profile/skills/glitch-market-structure/SKILL.md").read_text(encoding="utf-8")
         self.assertIn("Directional impulse", trade)
         self.assertIn("Rotation/chop", trade)
         self.assertIn("25k master: at most 1 contract", trade)
+        self.assertIn("never a deterministic entry gate", market)
         self.assertIn("250k master: at most 10 contracts", trade)
         self.assertIn("One outcome remains episodic", learn)
         self.assertIn("fabricate a fill", runtime)

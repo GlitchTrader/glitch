@@ -52,8 +52,15 @@ foreach ($name in $workerNames) {
     Copy-Item -LiteralPath (Join-Path $repoRoot "tools\hermes\$name") -Destination (Join-Path $target "scripts\$name") -Force
 }
 
+foreach ($bytecodeDirectory in @(Get-ChildItem -LiteralPath $target -Recurse -Directory -Filter '__pycache__' -Force)) {
+    Remove-Item -LiteralPath $bytecodeDirectory.FullName -Recurse -Force
+}
+foreach ($bytecodeFile in @(Get-ChildItem -LiteralPath $target -Recurse -File -Filter '*.pyc' -Force)) {
+    Remove-Item -LiteralPath $bytecodeFile.FullName -Force
+}
+
 $skillCount = @(Get-ChildItem -LiteralPath (Join-Path $target 'skills') -Directory).Count
-if ($skillCount -ne 4) { throw "Expected four Glitch skills; found $skillCount." }
+if ($skillCount -ne 5) { throw "Expected five Glitch skills; found $skillCount." }
 $scriptCount = @(Get-ChildItem -LiteralPath (Join-Path $target 'scripts') -File).Count
 if ($scriptCount -ne 8) { throw "Expected eight runtime scripts; found $scriptCount." }
 
@@ -103,7 +110,7 @@ if ($unexpectedAfter.Count -gt 0) { throw "Public profile gained unexpected path
 [ordered]@{
     schema_version = 'glitch.hermes.public_profile_build.v1'
     target = $target
-    version = '0.0.2.17'
+    version = '0.0.2.19'
     skills = $skillCount
     scripts = $scriptCount
     files = $textFiles.Count + 1
