@@ -477,7 +477,8 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
             "private static void ReleaseProtectionSubmission",
             "private static double RoundToTick",
         )
-        self.assertIn("group.ProtectionSubmitted[accountIndex] = false", release)
+        self.assertIn("latch also", release)
+        self.assertNotIn("group.ProtectionSubmitted[accountIndex] = false", release)
         self.assertIn("GlitchAiOrderExecutor.ProcessAccountStateUpdate(activeAccount)", refresh)
         self.assertNotIn("GlitchAiOrderExecutor.GetReplicationEntryDenialReason", telemetry)
 
@@ -849,44 +850,32 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
             "private static bool TryPrepareEntryBaselinePlan",
         ))
 
-    def test_rejected_protection_leg_is_repaired_before_group_recovery(self):
-        # A transient native rejection of one protection leg on a filled entry
-        # must not convert into an exit Hermes never requested. The response is
-        # one bounded resubmission of the exact same leg (same price, quantity,
-        # OCO, and signal); entry rejections and failed repairs keep the full
-        # recovery response.
+    def test_rejected_protection_leg_recovers_without_oco_reuse(self):
+        # NinjaTrader rejects a replacement order that reuses a consumed OCO.
+        # Until a native-state pair replacement exists, any protection rejection
+        # must fail closed through attributable group recovery without creating a
+        # duplicate bracket or losing callback ownership.
         executor = source(EXECUTOR)
         dispatch = method_body(
             executor,
             "public static void ProcessOrderUpdate",
             "public static GlitchAiExecutionResult TryReconcileStartedIntent",
         )
-        self.assertIn("TryRepairRejectedProtectionLeg(group, account, order)", dispatch)
-        # Repair is attempted before RecoverGroup in the rejection branch.
-        self.assertLess(
-            dispatch.index("TryRepairRejectedProtectionLeg"),
-            dispatch.index("RecoverGroup"),
-        )
+        self.assertNotIn("TryRepairRejectedProtectionLeg", dispatch)
+        self.assertIn("RecoverGroup(", dispatch)
+        self.assertIn("consumed OCO as unavailable for reuse", dispatch)
+        self.assertNotIn("rejected.Oco", executor)
+        self.assertNotIn("RepairedProtectionSlots", executor)
 
-        repair = method_body(
+        release = method_body(
             executor,
-            "private static bool TryRepairRejectedProtectionLeg",
-            "private static void RecoverGroup",
+            "private static void ReleaseProtectionSubmission",
+            "private static double RoundToTick",
         )
-        # Entry slots are never repaired; only protection slots on a filled entry.
-        self.assertIn("slot % stride == 0", repair)
-        self.assertIn("HasFilledEntry(group, slot / stride)", repair)
-        # One bounded attempt per leg slot.
-        self.assertIn("RepairedProtectionSlots.Add(slot)", repair)
-        # The replacement expresses the original intent: same identity, no new prices.
-        self.assertIn("rejected.Oco", repair)
-        self.assertIn("rejected.Name", repair)
-        self.assertIn("rejected.StopPrice", repair)
-        self.assertIn("rejected.LimitPrice", repair)
-        self.assertIn("group_protection_leg_resubmitted", repair)
-        # No recovery, flatten, or close is initiated from the repair path.
-        self.assertNotIn("RecoverGroup(", repair)
-        self.assertNotIn("TryCloseAttributableEntryDelta", repair)
+        self.assertIn("Keep native order ownership mapped until TryCompleteGroup observes", release)
+        self.assertIn("latch also", release)
+        self.assertNotIn("GroupsBySignal.Remove", release)
+        self.assertNotIn("ProtectionSubmitted[accountIndex] = false", release)
 
 
 if __name__ == "__main__":

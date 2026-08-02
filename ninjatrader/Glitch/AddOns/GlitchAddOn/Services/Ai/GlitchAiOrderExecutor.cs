@@ -85,16 +85,12 @@ namespace Glitch.Services
 
             if (order.OrderState == OrderState.Rejected)
             {
-                // A rejected protection leg on a filled entry is first repaired
-                // in place: one bounded resubmission of the same leg with the
-                // same price, quantity, OCO, and signal. This executes the
-                // original intent against a transient native fault instead of
-                // converting it into an exit Hermes never requested (2026-07-30:
-                // a target rejected out of a native CancelPending race while the
-                // stop was working, and the whole group was flattened). Entry
-                // rejections and failed repairs still use full group recovery.
-                if (TryRepairRejectedProtectionLeg(group, account, order))
-                    return;
+                // Never resubmit one protection leg with the original OCO. Native
+                // NinjaTrader treats a consumed OCO as unavailable for reuse, and
+                // callback re-entry can otherwise create a duplicate bracket before
+                // the first native objects are terminal. Recover this group through
+                // the attributable flat-and-terminal path instead. Other groups
+                // remain isolated by their own signal/correlation ownership.
                 RecoverGroup(
                     group,
                     "order_update_" + order.OrderState + "_" + account.Name
@@ -1335,18 +1331,12 @@ namespace Glitch.Services
             int accountIndex,
             IEnumerable<Order> createdOrders)
         {
-            lock (GroupSync)
-            {
-                foreach (Order protectionOrder in createdOrders ?? Enumerable.Empty<Order>())
-                {
-                    if (protectionOrder != null && !string.IsNullOrWhiteSpace(protectionOrder.Name))
-                        GroupsBySignal.Remove(protectionOrder.Name.Trim());
-                }
-                if (group?.ProtectionSubmitted != null
-                    && accountIndex >= 0
-                    && accountIndex < group.ProtectionSubmitted.Length)
-                    group.ProtectionSubmitted[accountIndex] = false;
-            }
+            // Keep native order ownership mapped until TryCompleteGroup observes
+            // terminal orders. A rejected protection callback can arrive while
+            // Submit is unwinding; removing the mapping here strands late callbacks
+            // and prevents durable recovery completion. The submission latch also
+            // remains closed so a later account-state callback cannot build a second
+            // bracket for the same group/account.
         }
 
         private static double RoundToTick(double price, double tickSize)
@@ -2196,122 +2186,6 @@ namespace Glitch.Services
                         GroupsBySignal[order.Name.Trim()] = group;
                 }
             }
-        }
-
-        private static bool TryRepairRejectedProtectionLeg(
-            ExecutionGroupContext group,
-            Account account,
-            Order rejected)
-        {
-            if (group == null || account == null || rejected == null)
-                return false;
-
-            int slot;
-            int stride = GetOrderStride(group);
-            lock (GroupSync)
-            {
-                if (group.RecoveryStarted)
-                    return false;
-                slot = -1;
-                for (int i = 0; i < group.Orders.Count; i++)
-                {
-                    Order candidate = group.Orders[i];
-                    if (candidate != null
-                        && (ReferenceEquals(candidate, rejected)
-                            || string.Equals(candidate.Name, rejected.Name, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        slot = i;
-                        break;
-                    }
-                }
-                // Only protection slots on a filled entry are repairable. The
-                // entry slot and unknown orders keep the full recovery response.
-                if (slot < 0 || slot % stride == 0 || !HasFilledEntry(group, slot / stride))
-                    return false;
-                if (group.RepairedProtectionSlots == null)
-                    group.RepairedProtectionSlots = new HashSet<int>();
-                // One bounded attempt per leg slot; a second rejection of the
-                // same leg is a real native refusal, not a transient race.
-                if (!group.RepairedProtectionSlots.Add(slot))
-                    return false;
-            }
-
-            int quantity = Math.Max(0, rejected.Quantity - rejected.Filled);
-            string oco = rejected.Oco ?? string.Empty;
-            string signal = rejected.Name;
-            bool isStopSlot = ((slot % stride) - 1) % 2 == 0;
-            double stopPrice = isStopSlot ? rejected.StopPrice : 0;
-            double limitPrice = isStopSlot ? 0 : rejected.LimitPrice;
-            if (quantity <= 0
-                || string.IsNullOrWhiteSpace(signal)
-                || (isStopSlot ? stopPrice <= 0 : limitPrice <= 0))
-                return false;
-
-            // A thrown create must return false so this same callback still
-            // reaches RecoverGroup; the outer dispatcher catch would otherwise
-            // swallow the whole rejection response.
-            OrderAction exitAction = group.IsLong ? OrderAction.Sell : OrderAction.BuyToCover;
-            Order replacement;
-            try
-            {
-                replacement = CreateExitOrder(
-                    account,
-                    group.Instrument,
-                    exitAction,
-                    isStopSlot ? OrderType.StopMarket : OrderType.Limit,
-                    quantity,
-                    limitPrice,
-                    stopPrice,
-                    oco,
-                    signal);
-            }
-            catch
-            {
-                replacement = null;
-            }
-            if (replacement == null)
-                return false;
-
-            lock (GroupSync)
-            {
-                if (group.RecoveryStarted)
-                    return false;
-                group.Orders[slot] = replacement;
-                GroupsBySignal[signal.Trim()] = group;
-            }
-
-            try
-            {
-                account.Submit(new[] { replacement });
-            }
-            catch
-            {
-                // A never-submitted replacement would hold the slot in
-                // Initialized forever and keep recovery from reaching a
-                // terminal state. Restore the terminal rejected order so the
-                // recovery that follows can complete.
-                lock (GroupSync)
-                {
-                    if (ReferenceEquals(group.Orders[slot], replacement))
-                        group.Orders[slot] = rejected;
-                }
-                return false;
-            }
-            if (IsRejected(replacement))
-                return false;
-
-            GlitchAiExecutionJournalWriter.TryAppend(
-                group.IntentId,
-                GlitchAiExecutionResult.Pending(
-                    "group_protection_leg_resubmitted",
-                    BuildGroupEvidenceMessage(group)
-                        + "|account=" + CleanToken(account.Name)
-                        + "|leg=" + (isStopSlot ? "stop" : "target")
-                        + "|signal=" + CleanToken(signal)
-                        + "|rejected_state=" + rejected.OrderState
-                        + "|scope=same_price_same_oco_single_attempt"),
-                DateTime.UtcNow);
-            return true;
         }
 
         private static void RecoverGroup(ExecutionGroupContext group, string trigger)
@@ -3198,7 +3072,6 @@ namespace Glitch.Services
             public bool EntryFilledRecorded { get; set; }
             public bool OpenProtectedRecorded { get; set; }
             public bool TradeClosedRecorded { get; set; }
-            public HashSet<int> RepairedProtectionSlots { get; set; }
             public double PointValue { get; set; }
             public double TickSize { get; set; }
             public double DecisionReferencePrice { get; set; }
