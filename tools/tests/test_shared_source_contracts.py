@@ -410,6 +410,52 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("FollowerSignalKind.Close", flat)
         self.assertNotIn("ParseFollowerSignalKind(order.Name) != FollowerSignalKind.None", flat)
 
+    def test_rejected_follower_protection_leg_is_repaired_before_recovery_close(self):
+        # A transient native rejection of one follower protection leg must not
+        # close a follower out of a position the master still holds. The
+        # response is one bounded resubmission of the exact same leg; a second
+        # rejection falls through to attributed recovery.
+        text = source(COPY_ENGINE)
+        dispatch = method_body(
+            text,
+            "private void ProcessFollowerProtectionOrderUpdate",
+            "public void ProcessAccountStateUpdate",
+        )
+        self.assertIn("TryRepairRejectedFollowerProtectionLeg", dispatch)
+        self.assertLess(
+            dispatch.index("TryRepairRejectedFollowerProtectionLeg"),
+            dispatch.index("TrySubmitAttributedRecoveryClose"),
+        )
+        repair = method_body(
+            text,
+            "private bool TryRepairRejectedFollowerProtectionLeg",
+            "private void TrySubmitAttributedRecoveryClose",
+        )
+        self.assertIn("RepairedProtectionSignals.Add(signal)", repair)
+        self.assertIn("rejected.Oco", repair)
+        self.assertIn("rejected.StopPrice", repair)
+        self.assertIn("rejected.LimitPrice", repair)
+        self.assertIn("follower_protection_repair", repair)
+        self.assertNotIn("TrySubmitAttributedRecoveryClose", repair)
+        self.assertNotIn("Flatten", repair)
+
+    def test_unavailable_risk_state_is_never_displayed_as_realized_loss(self):
+        # GL-STAB-01: a disconnected or unread account must render risk as
+        # unavailable (dash), never as a computed 100% loss, and the risk
+        # mitigation loop must skip rows without ready native data.
+        text = source(MAIN_WINDOW)
+        self.assertIn("bool isRiskDataReady = nativeNetLiquidation > 0 || cashValue > 0", text)
+        self.assertIn(
+            "double headroomRatioRaw = isRiskDataReady && maxDrawdown > 0 && bufferMargin.HasValue",
+            text,
+        )
+        mitigation = method_body(
+            text,
+            "private void ApplyEnabledRiskActions",
+            "private void ClearComplianceEnforcementRuntimeState",
+        )
+        self.assertIn("if (!row.IsRiskDataReady)", mitigation)
+
     def test_copy_engine_never_uses_account_flatten_or_human_orders_for_cleanup(self):
         copy = source(COPY_ENGINE)
         cleanup = method_body(copy, "private void CleanupFlatFollowerOrders", "private bool TryGetRouteSnapshot")

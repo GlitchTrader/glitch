@@ -7124,8 +7124,13 @@ namespace Glitch.UI
                     minMargin = normalizedNative.Value;
             }
             // Derived metric: distance from live equity to liquidation threshold.
+            // Unavailable native reads must never be displayed as a realized
+            // risk percentage: a disconnected account read as zero equity is
+            // `state unavailable`, not 100% loss. NaN renders as a dash.
             double? bufferMargin = minMargin.HasValue ? effectiveBalance - minMargin.Value : (double?)null;
-            double headroomRatioRaw = maxDrawdown > 0 && bufferMargin.HasValue ? bufferMargin.Value / maxDrawdown : double.NaN;
+            double headroomRatioRaw = isRiskDataReady && maxDrawdown > 0 && bufferMargin.HasValue
+                ? bufferMargin.Value / maxDrawdown
+                : double.NaN;
             double headroomSafeWidth = 0;
             double headroomUsedWidth = 0;
             double riskRatioRaw = double.NaN;
