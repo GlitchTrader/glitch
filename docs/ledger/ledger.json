@@ -170,7 +170,10 @@
         "rollback and preserved GlitchData migration proof",
         "public docs/download/profile/ABKB version reconciliation"
       ],
-      "stop_line": "No stable Advanced release declaration until one exact AddOn/profile pair passes compatibility and bounded native acceptance."
+      "stop_line": "No stable Advanced release declaration until one exact AddOn/profile pair passes compatibility and bounded native acceptance.",
+      "evidence": [
+        "Glitch AI 0.0.2.7 is paired with intelligence-first Hermes profile 0.0.2.20 (profile merge 0ae40d977931a0ee34191da175510a86a92cb10f)."
+      ]
     },
     {
       "id": "GL-BETA-STANDARD",
