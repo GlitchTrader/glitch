@@ -235,6 +235,7 @@ class LearningCycleTests(unittest.TestCase):
                 "stop_loss": 19970.0, "take_profit_1": 20030.0,
                 "quantity_tp1": 1, "stop_loss_2": 19980.0, "take_profit_2": 20040.0,
                 "quantity_tp2": 1, "stop_loss_3": 19990.0, "take_profit_3": 20050.0,
+                "reason": "Long setup",
             }
             (glitch_data / "intents" / "decisions.jsonl").write_text(json.dumps({
                 "recorded_utc": "2099-01-01T14:05:01Z", "intent": intent,
@@ -270,6 +271,10 @@ class LearningCycleTests(unittest.TestCase):
             self.assertEqual(context["pre_entry"]["valid_entry_quantities"], list(range(1, 28)))
             self.assertEqual(context["selected_plan"]["entry_role"], "initial_position")
             self.assertEqual(context["decision_reference_price"], 20000.0)
+            self.assertEqual(context["intent_id"], "entry-1")
+            self.assertEqual(context["master_account"], "Sim101")
+            self.assertEqual(context["snapshot_hash"], "12345")
+            self.assertEqual(context["rationale"]["reason"], "Long setup")
             self.assertEqual(context["actual_entry_vwap"], 20005.0)
             self.assertEqual(context["selected_plan"]["decision_reference_risk_usd"], 120.0)
             self.assertEqual([leg["quantity"] for leg in context["selected_plan"]["legs"]], [1, 1, 1])

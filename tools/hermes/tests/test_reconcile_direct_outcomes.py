@@ -32,6 +32,29 @@ def ledger_row(account, entry_utc, exit_utc, entry_price, exit_price, correlatio
 
 
 class DirectOutcomeReconcileTests(unittest.TestCase):
+    def test_outbox_cycle_id_is_not_erased_by_decision_log_without_cycle(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            outbox = root / "outbox"
+            outbox.mkdir()
+            intent = {
+                "intent_id": "same-intent",
+                "action": "ENTER_LONG",
+                "snapshot_hash": "snapshot-1",
+            }
+            (outbox / "cycle-42.json").write_text(
+                json.dumps({"cycle_id": "cycle-42", "decisions": [intent]}),
+                encoding="utf-8",
+            )
+            decision_log = root / "decisions.jsonl"
+            decision_log.write_text(
+                json.dumps({"intent": intent}) + "\n", encoding="utf-8"
+            )
+
+            intents = MODULE.find_intents(decision_root=outbox, decision_log=decision_log)
+
+            self.assertEqual(intents["same-intent"]["_cycle_id"], "cycle-42")
+
     def test_durable_decision_log_survives_outbox_consumption(self):
         with tempfile.TemporaryDirectory() as temporary:
             decision_log = Path(temporary) / "decisions.jsonl"
