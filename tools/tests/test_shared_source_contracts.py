@@ -759,9 +759,12 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             "public void ProcessMasterOrderUpdate",
         )
         classifier = method_body(copy, "private static bool IsOpeningAction", "private static bool SignalContainsToken")
-        self.assertIn("IsOpeningAction(context)", execution)
+        self.assertIn("IsOpeningAction(masterAccount, context)", execution)
         self.assertIn("IsExitSignal(signal)", classifier)
         self.assertIn("IsEntrySignal(signal)", classifier)
+        self.assertIn("TryGetMasterNet(masterAccount, context, out int masterNet)", classifier)
+        self.assertIn("ResolveEntryAction(masterAccount, context)", source(COPY_ENGINE))
+        self.assertIn("ResolveCloseAction(masterAccount, context)", source(COPY_ENGINE))
         self.assertIn('SignalContainsToken(signal, "entry")', classifier)
         self.assertIn('SignalContainsToken(signal, "close")', classifier)
         self.assertIn('SignalContainsToken(signal, "x")', classifier)

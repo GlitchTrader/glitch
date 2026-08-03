@@ -279,7 +279,7 @@ namespace Glitch.Services
                 return;
             }
 
-            if (!IsOpeningAction(context))
+            if (!IsOpeningAction(masterAccount, context))
             {
                 string closeKey = BuildExecutionDedupKey(masterAccount.Name, context);
                 if (TryRememberExecutionId(closeKey))
@@ -1285,7 +1285,7 @@ namespace Glitch.Services
                 SubmitFollowerEntry(
                     route,
                     context.Instrument,
-                    context.Action,
+                    ResolveEntryAction(masterAccount, context),
                     allocation.Quantity,
                     allocation.FollowerOrderOffset,
                     allocation.FollowerOrderPlanQuantity,
@@ -1306,6 +1306,7 @@ namespace Glitch.Services
             string executionKey)
         {
             string root = GlitchReplicationEngine.GetInstrumentRoot(context.Instrument);
+            OrderAction closeAction = ResolveCloseAction(masterAccount, context);
             foreach (GlitchCopyFollowerRoute route in routes)
             {
                 ExecutionAllocation allocation = AllocateExecutionDelta(route, context, false);
@@ -1318,9 +1319,9 @@ namespace Glitch.Services
                         "FollowerCloseStateUnavailable|" + CleanToken(context.Instrument?.FullName ?? root));
                     continue;
                 }
-                int closable = context.Action == OrderAction.Sell
+                int closable = closeAction == OrderAction.Sell
                     ? Math.Max(0, followerNet)
-                    : context.Action == OrderAction.BuyToCover
+                    : closeAction == OrderAction.BuyToCover
                         ? Math.Max(0, -followerNet)
                         : 0;
                 int requested = allocation.Quantity;
@@ -1341,7 +1342,7 @@ namespace Glitch.Services
                 FollowerOrderSubmission submission = SubmitFollowerClose(
                     route.FollowerAccount,
                     context.Instrument,
-                    context.Action,
+                    closeAction,
                     quantity,
                     executionKey,
                     CopySignalName);
@@ -2929,7 +2930,7 @@ namespace Glitch.Services
                 && !double.IsInfinity(route.Ratio);
         }
 
-        private static bool IsOpeningAction(GlitchCopyExecutionContext context)
+        private static bool IsOpeningAction(Account masterAccount, GlitchCopyExecutionContext context)
         {
             if (context == null)
                 return false;
@@ -2951,10 +2952,62 @@ namespace Glitch.Services
             if (IsEntrySignal(signal))
                 return true;
 
-            // Keep the historical default for unnamed Buy fills. Unnamed
-            // Sell fills remain closes unless the order is explicitly named
-            // as an entry, which is the safe choice for ambiguous exits.
+            if (TryGetMasterNet(masterAccount, context, out int masterNet))
+            {
+                if (context.Action == OrderAction.Sell)
+                    return masterNet < 0;
+                if (context.Action == OrderAction.Buy)
+                    return masterNet > 0;
+            }
+
+            // If native position truth is unavailable, retain the historical
+            // conservative fallback: unnamed Buy opens and unnamed Sell
+            // closes. The engine must never infer a short entry from absence.
             return context.Action == OrderAction.Buy;
+        }
+
+        private static OrderAction ResolveEntryAction(
+            Account masterAccount,
+            GlitchCopyExecutionContext context)
+        {
+            if (context == null)
+                return OrderAction.Buy;
+            if (context.Action == OrderAction.Sell
+                && TryGetMasterNet(masterAccount, context, out int shortNet)
+                && shortNet < 0)
+                return OrderAction.SellShort;
+            return context.Action;
+        }
+
+        private static OrderAction ResolveCloseAction(
+            Account masterAccount,
+            GlitchCopyExecutionContext context)
+        {
+            if (context == null)
+                return OrderAction.BuyToCover;
+            if (context.Action == OrderAction.Buy
+                && TryGetMasterNet(masterAccount, context, out int shortNet)
+                && shortNet < 0)
+                return OrderAction.BuyToCover;
+            if (context.Action == OrderAction.Sell
+                && TryGetMasterNet(masterAccount, context, out int longNet)
+                && longNet > 0)
+                return OrderAction.Sell;
+            return context.Action;
+        }
+
+        private static bool TryGetMasterNet(
+            Account masterAccount,
+            GlitchCopyExecutionContext context,
+            out int masterNet)
+        {
+            masterNet = 0;
+            return masterAccount != null
+                && context?.Instrument != null
+                && GlitchReplicationEngine.TryGetNetQuantityForInstrument(
+                    masterAccount,
+                    context.Instrument,
+                    out masterNet);
         }
 
         private static bool IsEntrySignal(string signal)
