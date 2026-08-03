@@ -225,7 +225,8 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         refresh = source(ADDON / "UI/MainWindow/GlitchMainWindow.RefreshPipeline.partial.cs")
         self.assertIn('EnsureAccountStatusEventSubscribed();', window)
         self.assertIn('string[] eventNames = { "ExecutionUpdate", "PositionUpdate", "OrderUpdate", "AccountItemUpdate" };', window)
-        self.assertIn('"AccountStatusUpdate",\n                    BindingFlags.Public | BindingFlags.Static', window)
+        self.assertIn('"AccountStatusUpdate"', window)
+        self.assertIn("BindingFlags.Public | BindingFlags.Static", window)
         self.assertIn('_accountStatusEventSubscription', window)
         callback = method_body(window, "private void OnAccountRuntimeEventBridgeCore", "private static bool IsReplicationInternalSignal")
         self.assertNotIn("RefreshAccountData(", callback)
@@ -234,6 +235,35 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("QueueBackgroundAccountRefresh(GetActiveAccountsSnapshot(), heavyTabWork: true);", callback)
         self.assertIn("private void QueueAccountRefreshFromRuntimeEvent(Account account, object eventArgs)", refresh)
         self.assertIn("sequence < Interlocked.Read(ref _accountRefreshSequence)", refresh)
+
+    def test_account_event_binding_failures_are_visible_and_narrowly_scoped(self):
+        window = source(ADDON / "UI/MainWindow/GlitchMainWindow.cs")
+        binding = method_body(
+            window,
+            "private void EnsureAccountRuntimeEventsSubscribed",
+            "private void RecordAccountEventBindingFailure",
+        )
+        failure = method_body(
+            window,
+            "private void RecordAccountEventBindingFailure",
+            "private void EnsureAccountStatusEventSubscribed",
+        )
+        status = method_body(
+            window,
+            "private void EnsureAccountStatusEventSubscribed",
+            "private void OnAccountRuntimeEventBridge",
+        )
+
+        self.assertIn('RecordAccountEventBindingFailure(accountName, eventName, "event_registration", ex);', binding)
+        self.assertIn('"reflection_lookup"', binding)
+        self.assertIn('"delegate_construction"', binding)
+        self.assertIn('"event_registration"', status)
+        self.assertIn('AppendJournal(normalizedAccount, "System", message);', failure)
+        self.assertIn("RaiseCriticalWarning(", failure)
+        self.assertIn("unlocksTrading: false", failure)
+        self.assertIn("subscriptions.Add(new EventBridgeSubscription", binding)
+        self.assertNotIn("catch\n                {\n                }", binding)
+        self.assertNotIn("_accountEventSubscriptions.Clear()", binding + status)
 
     def test_inferred_account_identity_is_observational_only(self):
         window = source(MAIN_WINDOW)

@@ -5779,17 +5779,70 @@ namespace Glitch.UI
                 try
                 {
                     string eventNameLocal = eventName;
-                    EventInfo eventInfo = account.GetType().GetEvent(eventName, BindingFlags.Public | BindingFlags.Instance);
-                    if (eventInfo == null || eventInfo.EventHandlerType == null)
+                    EventInfo eventInfo;
+                    try
+                    {
+                        eventInfo = account.GetType().GetEvent(eventName, BindingFlags.Public | BindingFlags.Instance);
+                    }
+                    catch (Exception ex)
+                    {
+                        RecordAccountEventBindingFailure(accountName, eventName, "reflection_lookup", ex);
                         continue;
+                    }
+
+                    if (eventInfo == null)
+                    {
+                        RecordAccountEventBindingFailure(
+                            accountName,
+                            eventName,
+                            "reflection_lookup",
+                            new MissingMemberException($"NinjaTrader account event {eventName} is unavailable."));
+                        continue;
+                    }
+
+                    if (eventInfo.EventHandlerType == null)
+                    {
+                        RecordAccountEventBindingFailure(
+                            accountName,
+                            eventName,
+                            "reflection_lookup",
+                            new InvalidOperationException($"NinjaTrader account event {eventName} has no handler type."));
+                        continue;
+                    }
 
                     Action<object, object> callback = (runtimeSender, runtimeArgs) =>
                         OnAccountRuntimeEventBridge(eventNameLocal, runtimeSender, runtimeArgs);
-                    Delegate handler = CreateEventBridgeDelegate(eventInfo.EventHandlerType, callback);
-                    if (handler == null)
+                    Delegate handler;
+                    try
+                    {
+                        handler = CreateEventBridgeDelegate(eventInfo.EventHandlerType, callback);
+                    }
+                    catch (Exception ex)
+                    {
+                        RecordAccountEventBindingFailure(accountName, eventName, "delegate_construction", ex);
                         continue;
+                    }
 
-                    eventInfo.AddEventHandler(account, handler);
+                    if (handler == null)
+                    {
+                        RecordAccountEventBindingFailure(
+                            accountName,
+                            eventName,
+                            "delegate_construction",
+                            new InvalidOperationException($"NinjaTrader account event {eventName} handler could not be created."));
+                        continue;
+                    }
+
+                    try
+                    {
+                        eventInfo.AddEventHandler(account, handler);
+                    }
+                    catch (Exception ex)
+                    {
+                        RecordAccountEventBindingFailure(accountName, eventName, "event_registration", ex);
+                        continue;
+                    }
+
                     subscriptions.Add(new EventBridgeSubscription
                     {
                         Account = account,
@@ -5797,13 +5850,35 @@ namespace Glitch.UI
                         Handler = handler
                     });
                 }
-                catch
+                catch (Exception ex)
                 {
+                    RecordAccountEventBindingFailure(accountName, eventName, "event_binding", ex);
                 }
             }
 
             if (subscriptions.Count > 0)
                 _accountEventSubscriptions[accountName] = subscriptions;
+        }
+
+        private void RecordAccountEventBindingFailure(
+            string accountName,
+            string eventName,
+            string stage,
+            Exception error)
+        {
+            string normalizedAccount = string.IsNullOrWhiteSpace(accountName) ? "System" : accountName.Trim();
+            string normalizedEvent = string.IsNullOrWhiteSpace(eventName) ? "unknown" : eventName.Trim();
+            string normalizedStage = string.IsNullOrWhiteSpace(stage) ? "unknown" : stage.Trim();
+            string detail = CleanJournalToken(error?.Message ?? "internal_error");
+            string message =
+                $"ACCOUNT_EVENT_BINDING_FAILED|event={CleanJournalToken(normalizedEvent)}|stage={CleanJournalToken(normalizedStage)}|message={detail}";
+
+            AppendJournal(normalizedAccount, "System", message);
+            RaiseCriticalWarning(
+                normalizedAccount,
+                $"Account event {normalizedEvent} is unavailable; dependent account-event capability is disabled ({normalizedStage}).",
+                "AccountEventBinding|" + normalizedEvent + "|" + normalizedAccount,
+                unlocksTrading: false);
         }
 
         private void EnsureAccountStatusEventSubscribed()
@@ -5813,29 +5888,62 @@ namespace Glitch.UI
 
             try
             {
-                EventInfo eventInfo = typeof(Account).GetEvent(
-                    "AccountStatusUpdate",
-                    BindingFlags.Public | BindingFlags.Static);
+                EventInfo eventInfo;
+                try
+                {
+                    eventInfo = typeof(Account).GetEvent(
+                        "AccountStatusUpdate",
+                        BindingFlags.Public | BindingFlags.Static);
+                }
+                catch (Exception ex)
+                {
+                    RecordAccountEventBindingFailure("System", "AccountStatusUpdate", "reflection_lookup", ex);
+                    return;
+                }
+
                 if (eventInfo == null || eventInfo.EventHandlerType == null)
                 {
-                    RecordSubsystemFault(
-                        "account_status_event_subscription",
+                    RecordAccountEventBindingFailure(
+                        "System",
+                        "AccountStatusUpdate",
+                        "reflection_lookup",
                         new InvalidOperationException("NinjaTrader AccountStatusUpdate static event is unavailable."));
                     return;
                 }
 
                 Action<object, object> callback = (runtimeSender, runtimeArgs) =>
                     OnAccountRuntimeEventBridge("AccountStatusUpdate", runtimeSender, runtimeArgs);
-                Delegate handler = CreateEventBridgeDelegate(eventInfo.EventHandlerType, callback);
+                Delegate handler;
+                try
+                {
+                    handler = CreateEventBridgeDelegate(eventInfo.EventHandlerType, callback);
+                }
+                catch (Exception ex)
+                {
+                    RecordAccountEventBindingFailure("System", "AccountStatusUpdate", "delegate_construction", ex);
+                    return;
+                }
+
                 if (handler == null)
                 {
-                    RecordSubsystemFault(
-                        "account_status_event_subscription",
+                    RecordAccountEventBindingFailure(
+                        "System",
+                        "AccountStatusUpdate",
+                        "delegate_construction",
                         new InvalidOperationException("NinjaTrader AccountStatusUpdate handler could not be created."));
                     return;
                 }
 
-                eventInfo.AddEventHandler(null, handler);
+                try
+                {
+                    eventInfo.AddEventHandler(null, handler);
+                }
+                catch (Exception ex)
+                {
+                    RecordAccountEventBindingFailure("System", "AccountStatusUpdate", "event_registration", ex);
+                    return;
+                }
+
                 _accountStatusEventSubscription = new EventBridgeSubscription
                 {
                     EventInfo = eventInfo,
@@ -5844,7 +5952,7 @@ namespace Glitch.UI
             }
             catch (Exception ex)
             {
-                RecordSubsystemFault("account_status_event_subscription", ex);
+                RecordAccountEventBindingFailure("System", "AccountStatusUpdate", "event_registration", ex);
             }
         }
 
