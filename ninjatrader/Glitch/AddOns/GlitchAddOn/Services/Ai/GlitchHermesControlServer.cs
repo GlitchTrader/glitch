@@ -144,7 +144,7 @@ namespace Glitch.Services
                 receipt.Status = status;
                 receipt.Message = message;
                 receipt.Evidence = evidence;
-                receipt.AppliedUtc = status == "applying" ? (DateTime?)null : DateTime.UtcNow;
+                receipt.AppliedUtc = status == "applied" ? DateTime.UtcNow : (DateTime?)null;
                 GlitchStateStore.WriteAllTextAtomic(GetPath(receipt.CommandId), BuildJson(receipt), Utf8NoBom);
                 return receipt;
             }
@@ -279,6 +279,7 @@ namespace Glitch.Services
         private static void HandleRequest(HttpListenerContext context)
         {
             string commandId = null;
+            GlitchHermesControlReceipt activeReceipt = null;
             try
             {
                 string path = context.Request.Url == null ? "/" : context.Request.Url.AbsolutePath;
@@ -308,6 +309,7 @@ namespace Glitch.Services
                     Write(context, receipt.Status == "applied" ? 200 : 409, StatusJson(true, receipt));
                     return;
                 }
+                activeReceipt = receipt;
 
                 string message;
                 string evidence;
@@ -318,8 +320,22 @@ namespace Glitch.Services
             }
             catch (Exception ex)
             {
+                if (activeReceipt != null)
+                {
+                    try
+                    {
+                        activeReceipt = GlitchHermesControlReceiptStore.Complete(
+                            activeReceipt,
+                            "pending",
+                            "control_outcome_ambiguous",
+                            "exception=" + ex.GetType().Name);
+                    }
+                    catch
+                    {
+                    }
+                }
                 NotifyFailure(commandId, "control_failed");
-                Write(context, 500, Error("control_failed", ex.Message));
+                Write(context, 500, Error("control_failed"));
             }
         }
 
@@ -378,10 +394,10 @@ namespace Glitch.Services
             if (action.StartsWith("REPLICATE_", StringComparison.Ordinal))
             {
                 bool enabled = desiredState == "true";
-                state.ReplicationDesired = enabled;
-                GlitchHermesControlStateStore.Save(state);
                 Func<bool, bool> setter = SetReplication;
                 if (setter == null || !setter(enabled)) { message = "replication_request_denied"; return "failed"; }
+                state.ReplicationDesired = enabled;
+                GlitchHermesControlStateStore.Save(state);
                 bool effective;
                 if (GetReplicationEffective == null) { message = "replication_effective_state_unavailable"; return "pending"; }
                 effective = GetReplicationEffective();
@@ -402,7 +418,16 @@ namespace Glitch.Services
             message = "flatten_evidence_pending"; evidence = null;
             Func<string> provider = GetFlattenEvidence;
             if (provider == null) return false;
-            evidence = provider();
+            try
+            {
+                evidence = provider();
+            }
+            catch (Exception ex)
+            {
+                message = "flatten_evidence_provider_failed";
+                evidence = "exception=" + ex.GetType().Name;
+                return false;
+            }
             IDictionary snapshot;
             if (string.IsNullOrWhiteSpace(evidence) || !GlitchAiJsonFields.TryParseObject(evidence, out snapshot)) return false;
             bool resolved; bool flat; bool ordersClear;

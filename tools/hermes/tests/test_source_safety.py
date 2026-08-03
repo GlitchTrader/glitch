@@ -128,6 +128,10 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn('"pending"', control)
         self.assertIn("TryReconcile", control)
         self.assertIn("TryFlattenEvidence", control)
+        self.assertIn('receipt.AppliedUtc = status == "applied"', control)
+        self.assertIn('"control_outcome_ambiguous"', control)
+        self.assertIn('"exception=" + ex.GetType().Name', control)
+        self.assertIn('Error("control_failed")', control)
         self.assertIn("GlitchSnapshotJson.String", control)
         self.assertIn("Guid.TryParse", control)
         self.assertIn('Status = "applying"', control)
@@ -161,6 +165,7 @@ class AiSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("all_accounts_resolved", control)
         self.assertIn("all_positions_flat", control)
         self.assertIn("all_orders_clear", control)
+        self.assertIn('state.ReplicationDesired = enabled;', control)
 
     def test_restart_reconciles_without_time_created_replay_authority(self):
         server = source(INTENT_SERVER)
