@@ -37,6 +37,7 @@ RELEASES_LIB = DOWNLOAD_APP / "src/lib/releases.ts"
 RELEASE_VALIDATOR = DOWNLOAD_APP / "scripts/validate-releases.mjs"
 RELEASE_PUBLISHER = ROOT / "scripts/publish-release.ps1"
 ADDON_UPDATE = ROOT / "apps/api/src/lib/addon-update.ts"
+HERMES_PORTFOLIO_EVENTS = ADDON / "Services/Persistence/GlitchHermesPortfolioEventWriter.cs"
 
 
 def source(path: Path) -> str:
@@ -918,6 +919,14 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         )
         self.assertIn("return false;", ownership)
         self.assertNotIn("IsConfiguredFollower", text)
+
+    def test_hermes_portfolio_event_queue_preserves_events_and_surfaces_overflow(self):
+        writer = source(HERMES_PORTFOLIO_EVENTS)
+        self.assertIn("GlitchAiJsonFields.TryParseObject", writer)
+        self.assertIn('parsed["portfolio_events"] is IEnumerable', writer)
+        self.assertIn('directive["dropped_event_count"]', writer)
+        self.assertIn('Append(sb, "dropped_event_count"', writer)
+        self.assertIn("MaxQueuedEvents", writer)
 
     def test_flatten_all_requires_resolved_accounts_and_one_native_submission(self):
         window = source(MAIN_WINDOW)

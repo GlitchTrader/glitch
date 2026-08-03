@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -85,8 +86,13 @@ namespace Glitch.Services
                         ["execution_id"] = executionId ?? string.Empty,
                         ["recorded_utc"] = recordedUtc.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture)
                     });
+                    int droppedEvents = Value(directive, "dropped_event_count").TryParseIntInvariant();
                     while (events.Count > MaxQueuedEvents)
+                    {
                         events.RemoveAt(0);
+                        droppedEvents++;
+                    }
+                    directive["dropped_event_count"] = droppedEvents.ToString(CultureInfo.InvariantCulture);
                     directive["portfolio_events"] = events;
                     WriteAtomic(path, Serialize(directive));
                 }
@@ -103,21 +109,35 @@ namespace Glitch.Services
                 return null;
             try
             {
-                // Keep this writer dependency-free: only recognize the fields we
-                // need from a pending directive and preserve user directives.
                 string json = File.ReadAllText(path);
-                if (json.IndexOf("\"schema_version\":\"" + SchemaVersion + "\"", StringComparison.Ordinal) < 0)
+                if (!GlitchAiJsonFields.TryParseObject(json, out IDictionary parsed)
+                    || !string.Equals(Value(parsed, "schema_version"), SchemaVersion, StringComparison.Ordinal))
                     return null;
                 var result = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["schema_version"] = SchemaVersion,
-                    ["directive_id"] = Extract(json, "directive_id"),
-                    ["directive_type"] = Extract(json, "directive_type"),
-                    ["status"] = Extract(json, "status"),
-                    ["created_utc"] = Extract(json, "created_utc"),
-                    ["expires_utc"] = Extract(json, "expires_utc"),
+                    ["directive_id"] = Value(parsed, "directive_id"),
+                    ["directive_type"] = Value(parsed, "directive_type"),
+                    ["status"] = Value(parsed, "status"),
+                    ["created_utc"] = Value(parsed, "created_utc"),
+                    ["expires_utc"] = Value(parsed, "expires_utc"),
+                    ["dropped_event_count"] = Value(parsed, "dropped_event_count"),
                     ["portfolio_events"] = new List<Dictionary<string, object>>()
                 };
+                if (parsed["portfolio_events"] is IEnumerable rawEvents)
+                {
+                    var events = (List<Dictionary<string, object>>)result["portfolio_events"];
+                    foreach (object rawEvent in rawEvents)
+                    {
+                        if (!(rawEvent is IDictionary eventObject))
+                            continue;
+                        var item = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                        string[] keys = { "event_type", "account", "instrument", "signal_name", "quantity", "fill_price", "execution_id", "recorded_utc" };
+                        foreach (string key in keys)
+                            item[key] = Value(eventObject, key);
+                        events.Add(item);
+                    }
+                }
                 return result;
             }
             catch
@@ -138,15 +158,9 @@ namespace Glitch.Services
             return values != null && values.TryGetValue(key, out object value) ? value as string ?? string.Empty : string.Empty;
         }
 
-        private static string Extract(string json, string key)
+        private static string Value(IDictionary values, string key)
         {
-            string token = "\"" + key + "\":\"";
-            int start = json.IndexOf(token, StringComparison.Ordinal);
-            if (start < 0)
-                return string.Empty;
-            start += token.Length;
-            int end = json.IndexOf('"', start);
-            return end < 0 ? string.Empty : json.Substring(start, end - start).Replace("\\\"", "\"");
+            return values != null && values[key] != null ? Convert.ToString(values[key], CultureInfo.InvariantCulture) : string.Empty;
         }
 
         private static string Serialize(Dictionary<string, object> directive)
@@ -158,6 +172,7 @@ namespace Glitch.Services
             Append(sb, "status", Value(directive, "status"));
             Append(sb, "created_utc", Value(directive, "created_utc"));
             Append(sb, "expires_utc", Value(directive, "expires_utc"));
+            Append(sb, "dropped_event_count", Value(directive, "dropped_event_count"));
             sb.Append(",\"portfolio_events\":[");
             List<Dictionary<string, object>> events = ExtractEvents(directive);
             for (int i = 0; i < events.Count; i++)
@@ -186,6 +201,13 @@ namespace Glitch.Services
         {
             if (value == null) value = string.Empty;
             return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n") + "\"";
+        }
+
+        private static int TryParseIntInvariant(this string value)
+        {
+            return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed)
+                ? Math.Max(0, parsed)
+                : 0;
         }
 
         private static void WriteAtomic(string path, string content)
