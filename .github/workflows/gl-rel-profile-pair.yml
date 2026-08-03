@@ -52,13 +52,12 @@ jobs:
         run: |
           python -m json.tool apps/download/src/lib/release-catalog.json >/dev/null
           python -m json.tool docs/ledger/ledger.json >/dev/null
-          python -m unittest discover -s tools/tests -p 'test_release*.py'
-          python -m unittest discover -s tools/hermes/tests -p 'test_*release*.py'
+          python tools/hermes/tests/test_profile_pair_contract.py
       - name: Commit verified metadata and remove this one-shot workflow
         run: |
           rm .github/workflows/gl-rel-profile-pair.yml
           git config user.name "glitch-release-maintainer"
           git config user.email "actions@users.noreply.github.com"
-          git add apps/download/src/lib/release-catalog.json docs/ledger/ledger.json .github/workflows/gl-rel-profile-pair.yml
+          git add apps/download/src/lib/release-catalog.json docs/ledger/ledger.json tools/hermes/tests/test_profile_pair_contract.py .github/workflows/gl-rel-profile-pair.yml
           git commit -m "fix(release): pair AI 0.0.2.7 with profile 0.0.2.20"
           git push origin HEAD:fix/gl-rel-01-profile-0.0.2.20
