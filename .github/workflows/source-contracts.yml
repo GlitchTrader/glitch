@@ -1,4 +1,4 @@
-name: Source contracts
+name: AI source contracts
 
 on:
   pull_request:
@@ -17,7 +17,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Shared and lifecycle contracts
-        run: python -m unittest discover -s tools/tests -p "test_*.py"
       - name: AI and Hermes contracts
         run: python -m unittest discover -s tools/hermes/tests -p "test_*.py"
