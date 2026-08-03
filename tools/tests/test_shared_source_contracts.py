@@ -911,6 +911,13 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("isCatchUp", text)
         self.assertNotRegex(text, r"StartsWith\(\s*\"GLT-\"")
         self.assertNotRegex(text, r"Cancel.*Unknown|Flatten.*Unknown")
+        ownership = method_body(
+            text,
+            "private bool AccountOwnsGlitchReplicationState",
+            "private void CancelOwnedOrdersAtFlat",
+        )
+        self.assertIn("return false;", ownership)
+        self.assertNotIn("IsConfiguredFollower", text)
 
     def test_flatten_all_requires_resolved_accounts_and_one_native_submission(self):
         window = source(MAIN_WINDOW)

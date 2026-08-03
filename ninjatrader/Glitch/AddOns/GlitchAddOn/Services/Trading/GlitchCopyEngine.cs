@@ -2410,7 +2410,7 @@ namespace Glitch.Services
                     return true;
             }
 
-            return IsConfiguredFollower(account);
+            return false;
         }
 
         private void CancelOwnedOrdersAtFlat(Account account, Instrument instrument, Order[] orders)
@@ -2891,17 +2891,6 @@ namespace Glitch.Services
                 routes = configured.ToList();
                 return true;
             }
-        }
-
-        private bool IsConfiguredFollower(Account account)
-        {
-            if (account == null)
-                return false;
-            lock (_gate)
-                return _routesByMaster.Values.SelectMany(items => items).Any(route => string.Equals(
-                    route.FollowerAccount?.Name,
-                    account.Name,
-                    StringComparison.OrdinalIgnoreCase));
         }
 
         private static bool IsValidRoute(GlitchCopyFollowerRoute route)
