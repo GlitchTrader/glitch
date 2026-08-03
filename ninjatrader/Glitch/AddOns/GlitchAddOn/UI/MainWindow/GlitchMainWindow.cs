@@ -1639,6 +1639,7 @@ namespace Glitch.UI
                 bool complete = flattened && unresolvedAccounts.Count == 0;
                 if (complete)
                 {
+                    _copyEngine?.ResetAfterFlattenAll();
                     string flattenSummary = flattenSubmitCount > 0
                         ? "Flatten All executed successfully."
                         : "Flatten All: fleet already flat.";

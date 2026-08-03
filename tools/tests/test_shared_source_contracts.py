@@ -441,6 +441,24 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("FollowerSignalKind.Close", flat)
         self.assertNotIn("ParseFollowerSignalKind(order.Name) != FollowerSignalKind.None", flat)
 
+    def test_protection_resize_failure_does_not_promote_local_quantity_to_native_truth(self):
+        copy = source(COPY_ENGINE)
+        trim = method_body(
+            copy,
+            "private void ResizeProtection",
+            "private static bool TryBuildFollowerProtectionUnit",
+        )
+        self.assertIn("bool nativeMutationFailed = false;", trim)
+        self.assertIn("var originalQuantityChanged = new Dictionary<Order, int>();", trim)
+        self.assertIn("originalQuantityChanged[order] = order.QuantityChanged;", trim)
+        self.assertIn("original.Key.QuantityChanged = original.Value;", trim)
+        self.assertIn("nativeMutationFailed = true;", trim)
+        self.assertIn("if (!nativeMutationFailed)\n                ClearProtectionAmbiguity(account, instrument);", trim)
+        self.assertLess(
+            trim.index("account.Change(changes.ToArray())"),
+            trim.index("original.Key.QuantityChanged = original.Value;"),
+        )
+
     def test_rejected_follower_protection_leg_is_repaired_before_recovery_close(self):
         # A transient native rejection of one follower protection leg must not
         # close a follower out of a position the master still holds. The
@@ -733,6 +751,22 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("IsMasterProtectionExecution", body)
         self.assertIn("return;", body)
 
+    def test_ambiguous_manual_and_ai_exit_actions_use_signal_intent(self):
+        copy = source(COPY_ENGINE)
+        execution = method_body(
+            copy,
+            "public void ProcessMasterExecution",
+            "public void ProcessMasterOrderUpdate",
+        )
+        classifier = method_body(copy, "private static bool IsOpeningAction", "private static bool SignalContainsToken")
+        self.assertIn("IsOpeningAction(context)", execution)
+        self.assertIn("IsExitSignal(signal)", classifier)
+        self.assertIn("IsEntrySignal(signal)", classifier)
+        self.assertIn('SignalContainsToken(signal, "entry")', classifier)
+        self.assertIn('SignalContainsToken(signal, "close")', classifier)
+        self.assertIn('SignalContainsToken(signal, "x")', classifier)
+        self.assertIn("context.Action == OrderAction.Buy", classifier)
+
     def test_reload_recovery_is_recent_and_non_mutating_when_old(self):
         body = method_body(
             source(COPY_ENGINE),
@@ -948,6 +982,33 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             "private bool AreAccountsFlatAndClear",
         )
         self.assertEqual(issue.count("TryFlattenAccount("), 1)
+
+    def test_flatten_all_success_ends_copy_lifecycle_before_routes_restore(self):
+        copy = source(COPY_ENGINE)
+        window = source(MAIN_WINDOW)
+        self.assertIn("public void ResetAfterFlattenAll()", copy)
+        reset = method_body(copy, "public void ResetAfterFlattenAll", "public void ProcessMasterExecution")
+        for lifecycle_map in (
+            "_entriesBySignal.Clear()",
+            "_closesBySignal.Clear()",
+            "_syncByFollowerInstrument.Clear()",
+        ):
+            self.assertIn(lifecycle_map, reset)
+        complete = method_body(window, "private async Task<bool> ExecuteFlattenAllCoreAsync", "private void OnCreateGroupClick")
+        self.assertIn("if (complete)", complete)
+        self.assertIn("_copyEngine?.ResetAfterFlattenAll();", complete)
+        self.assertLess(
+            complete.index("_copyEngine?.ResetAfterFlattenAll();"),
+            complete.index("RefreshAccountData(preferSynchronous: true);"),
+        )
+
+    def test_allocation_route_signature_is_explicit_and_not_object_hash_based(self):
+        copy = source(COPY_ENGINE)
+        signature = method_body(copy, "private static string BuildAllocationRouteSignature", "private static string ResolveMasterOrderIdentity")
+        self.assertIn("BuildAllocationRouteKey(route)", signature)
+        self.assertIn("BitConverter.DoubleToInt64Bits(route?.Ratio ?? 0)", signature)
+        self.assertIn("route?.FollowerAccount?.Name?.Trim()", signature)
+        self.assertNotIn("GetHashCode()", signature)
 
     def test_journal_replay_ignores_orphan_exits_and_splits_reversal_commission(self):
         text = source(TRADE_INSIGHTS)

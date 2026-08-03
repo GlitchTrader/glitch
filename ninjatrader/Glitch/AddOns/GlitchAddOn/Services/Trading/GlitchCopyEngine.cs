@@ -246,6 +246,21 @@ namespace Glitch.Services
             }
         }
 
+        // Flatten All is a terminal lifecycle boundary. Do not carry native
+        // entry/close/sync ownership into the next flat session.
+        public void ResetAfterFlattenAll()
+        {
+            lock (_gate)
+            {
+                _entriesBySignal.Clear();
+                _closesBySignal.Clear();
+                _syncByFollowerInstrument.Clear();
+                _reportedProtectionAmbiguities.Clear();
+                _seenExecutionIds.Clear();
+                _seenExecutionIdSet.Clear();
+            }
+        }
+
         public void ProcessMasterExecution(Account masterAccount, GlitchCopyExecutionContext context)
         {
             if (masterAccount == null || context?.Instrument == null || context.Quantity <= 0)
@@ -261,7 +276,7 @@ namespace Glitch.Services
                 return;
             }
 
-            if (!IsOpeningAction(context.Action))
+            if (!IsOpeningAction(context))
             {
                 string closeKey = BuildExecutionDedupKey(masterAccount.Name, context);
                 if (TryRememberExecutionId(closeKey))
@@ -1196,11 +1211,9 @@ namespace Glitch.Services
                 + BitConverter.DoubleToInt64Bits(route?.Ratio ?? 0)
                     .ToString("x16", CultureInfo.InvariantCulture)
                 + "|M"
-                + (route?.MasterAccountInstance?.GetHashCode() ?? 0)
-                    .ToString(CultureInfo.InvariantCulture)
+                + (route?.MasterAccount?.Trim() ?? string.Empty)
                 + "|F"
-                + (route?.FollowerAccount?.GetHashCode() ?? 0)
-                    .ToString(CultureInfo.InvariantCulture);
+                + (route?.FollowerAccount?.Name?.Trim() ?? string.Empty);
         }
 
         private static string ResolveMasterOrderIdentity(GlitchCopyExecutionContext context)
@@ -2603,9 +2616,12 @@ namespace Glitch.Services
                 ClearProtectionAmbiguity(account, instrument);
                 return;
             }
-            ClearProtectionAmbiguity(account, instrument);
+            bool nativeMutationFailed = false;
+            var originalQuantityChanged = new Dictionary<Order, int>();
             if (changes.Count > 0)
             {
+                foreach (Order order in changes)
+                    originalQuantityChanged[order] = order.QuantityChanged;
                 try
                 {
                     account.Change(changes.ToArray());
@@ -2616,6 +2632,9 @@ namespace Glitch.Services
                 }
                 catch (Exception ex)
                 {
+                    nativeMutationFailed = true;
+                    foreach (KeyValuePair<Order, int> original in originalQuantityChanged)
+                        original.Key.QuantityChanged = original.Value;
                     RaiseCritical?.Invoke(
                         account.Name,
                         "Excess follower protection could not be resized: " + ex.GetType().Name,
@@ -2634,12 +2653,15 @@ namespace Glitch.Services
                 }
                 catch (Exception ex)
                 {
+                    nativeMutationFailed = true;
                     RaiseCritical?.Invoke(
                         account.Name,
                         "Excess follower protection could not be cancelled: " + ex.GetType().Name,
                         "FollowerProtectionTrimFailed|" + CleanToken(instrument.FullName));
                 }
             }
+            if (!nativeMutationFailed)
+                ClearProtectionAmbiguity(account, instrument);
         }
 
         private static bool TryBuildFollowerProtectionUnit(
@@ -2904,9 +2926,54 @@ namespace Glitch.Services
                 && !double.IsInfinity(route.Ratio);
         }
 
-        private static bool IsOpeningAction(OrderAction action)
+        private static bool IsOpeningAction(GlitchCopyExecutionContext context)
         {
-            return action == OrderAction.Buy || action == OrderAction.SellShort;
+            if (context == null)
+                return false;
+
+            if (context.Action == OrderAction.SellShort)
+                return true;
+            if (context.Action == OrderAction.BuyToCover)
+                return false;
+
+            // NinjaTrader uses Sell for both a long exit and a manual short
+            // entry, and Buy for both a long entry and a short exit. The
+            // action alone is therefore not enough to classify the fill.
+            // Prefer the explicit signal when one exists. This preserves
+            // manual/AI intent while leaving native OCO protection to the
+            // IsMasterProtectionExecution gate above.
+            string signal = context.OrderSignalName?.Trim() ?? string.Empty;
+            if (IsExitSignal(signal))
+                return false;
+            if (IsEntrySignal(signal))
+                return true;
+
+            // Keep the historical default for unnamed Buy fills. Unnamed
+            // Sell fills remain closes unless the order is explicitly named
+            // as an entry, which is the safe choice for ambiguous exits.
+            return context.Action == OrderAction.Buy;
+        }
+
+        private static bool IsEntrySignal(string signal)
+        {
+            return SignalContainsToken(signal, "entry")
+                || SignalContainsToken(signal, "e");
+        }
+
+        private static bool IsExitSignal(string signal)
+        {
+            return SignalContainsToken(signal, "exit")
+                || SignalContainsToken(signal, "close")
+                || SignalContainsToken(signal, "flatten")
+                || SignalContainsToken(signal, "x");
+        }
+
+        private static bool SignalContainsToken(string signal, string token)
+        {
+            if (string.IsNullOrWhiteSpace(signal) || string.IsNullOrWhiteSpace(token))
+                return false;
+            return signal.Split(new[] { '-', '_', ' ', ':' }, StringSplitOptions.RemoveEmptyEntries)
+                .Any(part => string.Equals(part, token, StringComparison.OrdinalIgnoreCase));
         }
 
         private static FollowerSignalKind ParseFollowerSignalKind(string signal)
