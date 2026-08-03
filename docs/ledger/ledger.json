@@ -13,7 +13,7 @@
       "version": "0.0.2.7",
       "maturity": "experimental",
       "source_commit": "08aec7a43d3ab1510227aa36fc72a37178c8f8dc",
-      "hermes_profile_version": "0.0.2.19",
+      "hermes_profile_version": "0.0.2.20",
       "authority": "Hermes owns probabilistic judgment and intent; Glitch owns factual executability, native mutation, protection, reconciliation, and receipts"
     },
     "topstep": {
@@ -206,7 +206,7 @@
         "GL-AI-07",
         "GL-CTRL-02",
         "GL-REL-01",
-        "glitch-hermes-profile:profile-beta"
+        "glitch-hermes-profile:PROFILE-BETA-01"
       ],
       "acceptance": [
         "one immutable AddOn/profile combination",
