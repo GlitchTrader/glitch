@@ -992,6 +992,9 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             "_entriesBySignal.Clear()",
             "_closesBySignal.Clear()",
             "_syncByFollowerInstrument.Clear()",
+            "_allocationByRouteDirection.Clear()",
+            "_entryOrderAllocations.Clear()",
+            "_allocationRouteSignatures.Clear()",
         ):
             self.assertIn(lifecycle_map, reset)
         complete = method_body(window, "private async Task<bool> ExecuteFlattenAllCoreAsync", "private void OnCreateGroupClick")
