@@ -49,6 +49,7 @@ class OperatorMapTests(unittest.TestCase):
             "launch-direct-glitch-cycle.py",
             "reconcile-hermes-outcomes.py",
             "run-hermes-learning-cycle.py",
+            "market_structure.py",
             "launch-hermes-learning-cycle.py",
             "ensure-named-sessions.py",
             "reset-hermes-trading-epoch.ps1",
@@ -147,11 +148,9 @@ class OperatorMapTests(unittest.TestCase):
         learn = (ROOT / "hermes-profile/skills/glitch-learn/SKILL.md").read_text(encoding="utf-8")
         runtime = (ROOT / "hermes-profile/skills/glitch-runtime/SKILL.md").read_text(encoding="utf-8")
         market = (ROOT / "hermes-profile/skills/glitch-market-structure/SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("Directional impulse", trade)
-        self.assertIn("Rotation/chop", trade)
-        self.assertIn("25k master: at most 1 contract", trade)
-        self.assertIn("never a deterministic entry gate", market)
-        self.assertIn("250k master: at most 10 contracts", trade)
+        self.assertIn("competing explanations", trade)
+        self.assertIn("no fixed point distance", trade)
+        self.assertIn("never as a rule set", market)
         self.assertIn("One outcome remains episodic", learn)
         self.assertIn("fabricate a fill", runtime)
 

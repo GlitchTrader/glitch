@@ -16,7 +16,7 @@ class ThreeLayerHandoffTests(unittest.TestCase):
     def test_soul_keeps_codex_out_of_trading_runtime(self):
         soul = (ROOT / "hermes-profile/profiles/glitch/SOUL.md").read_text()
         self.assertIn("Codex is a separate bounded builder", soul)
-        self.assertIn("never part of your market-data or execution loop", soul)
+        self.assertIn("never part of the market-data or execution loop", soul)
 
     def test_handoff_doc_preserves_glitch_truth_authority(self):
         doc = (ROOT / "glitch_hermes_docs/docs/13_three_layer_handoff.md").read_text()

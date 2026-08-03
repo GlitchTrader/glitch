@@ -43,6 +43,7 @@ $workerNames = @(
     'launch-direct-glitch-cycle.py',
     'reconcile-hermes-outcomes.py',
     'run-hermes-learning-cycle.py',
+    'market_structure.py',
     'launch-hermes-learning-cycle.py',
     'win_subprocess.py',
     'ensure-named-sessions.py',
@@ -62,7 +63,7 @@ foreach ($bytecodeFile in @(Get-ChildItem -LiteralPath $target -Recurse -File -F
 $skillCount = @(Get-ChildItem -LiteralPath (Join-Path $target 'skills') -Directory).Count
 if ($skillCount -ne 5) { throw "Expected five Glitch skills; found $skillCount." }
 $scriptCount = @(Get-ChildItem -LiteralPath (Join-Path $target 'scripts') -File).Count
-if ($scriptCount -ne 8) { throw "Expected eight runtime scripts; found $scriptCount." }
+if ($scriptCount -ne 9) { throw "Expected nine runtime scripts; found $scriptCount." }
 
 $textFiles = @(Get-ChildItem -LiteralPath $target -Recurse -File -Force | Where-Object {
     $_.Name -ne 'SHA256SUMS' -and $_.FullName -notlike (Join-Path $target '.git\*')

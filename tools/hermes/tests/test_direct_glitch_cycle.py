@@ -741,8 +741,8 @@ class DirectCycleTests(unittest.TestCase):
         self.assertIn("take_profit_3", value)
         self.assertIn("quantity_tp2", value)
         self.assertIn("independent native OCO pair", value)
-        self.assertIn("TP1/TP2/TP3 scale-out", trade_skill)
-        self.assertIn("Never grid, martingale", trade_skill)
+        self.assertIn("target count", trade_skill)
+        self.assertIn("no fixed point distance", trade_skill)
 
     def test_strict_batch_rejects_unknown_fields_and_incomplete_audit(self):
         value = packet()
