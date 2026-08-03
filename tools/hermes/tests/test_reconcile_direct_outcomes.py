@@ -32,6 +32,50 @@ def ledger_row(account, entry_utc, exit_utc, entry_price, exit_price, correlatio
 
 
 class DirectOutcomeReconcileTests(unittest.TestCase):
+    def test_manual_master_trade_gets_provenance_snapshot_and_ai_comparison(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            gd = root / "GlitchData"
+            snapshot_root = gd / "snapshots" / "historical" / "portfolio"
+            frame_root = gd / "hermes" / "exchange" / "glitch" / "minute-frames"
+            snapshot_root.mkdir(parents=True)
+            frame_root.mkdir(parents=True)
+            (snapshot_root / "1.json").write_text(json.dumps({
+                "schema_version": "glitch.portfolio.snapshot.v1",
+                "snapshot_id": "portfolio-1",
+                "created_utc": "2099-01-01T14:00:00Z",
+                "accounts": [{"account": "Sim101", "positions": [], "working_orders": 0}],
+            }), encoding="utf-8")
+            (frame_root / "20990101T1400Z.json").write_text(json.dumps({
+                "minute_id": "20990101T1400Z",
+                "market_snapshot": {"snapshot_hash": "market-1"},
+            }), encoding="utf-8")
+            trade = {
+                "trade_id": "manual-trade-1", "account": "Sim101", "instrument": "MNQ",
+                "side": "Long", "contracts": 1, "entry_price": 20000, "exit_price": 20010,
+                "pnl_points": 10, "commission_total": 1, "entry_utc": MODULE.parse_utc("2099-01-01T14:00:30Z"),
+                "exit_utc": MODULE.parse_utc("2099-01-01T14:05:00Z"), "trade_source": "Manual",
+                "entry_type": "Manual", "entry_signal": "ENTRY", "exit_signal": "CLOSE",
+                "open_reason": "Manual Entry", "close_reason": "Manual / Other",
+            }
+            intents = {
+                "ai-1": {
+                    "intent_id": "ai-1", "account": "Sim101", "instrument": "MNQ",
+                    "created_utc": "2099-01-01T14:00:20Z", "_cycle_id": "ai-cycle-1",
+                    "action": "ENTER_SHORT", "confidence": 0.4, "snapshot_hash": "market-1",
+                    "reason": "AI alternative",
+                }
+            }
+            result = MODULE.manual_trade_outcome(gd, [(MODULE.parse_utc("2099-01-01T14:00:00Z"), {
+                "snapshot_id": "portfolio-1", "created_utc": "2099-01-01T14:00:00Z",
+                "accounts": [{"account": "Sim101", "positions": [], "working_orders": 0}],
+            })], intents, trade)
+            self.assertEqual(result["origin"], "manual")
+            self.assertTrue(result["intent_id"].startswith("manual-"))
+            self.assertEqual(result["snapshot_reference"]["market"]["snapshot_hash"], "market-1")
+            self.assertEqual(result["ai_comparison"]["intent_id"], "ai-1")
+            self.assertTrue(result["master_learning_eligible"])
+
     def test_outbox_cycle_id_is_not_erased_by_decision_log_without_cycle(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

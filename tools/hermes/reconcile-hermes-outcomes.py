@@ -8,6 +8,7 @@ Follower misses remain replication diagnostics and never erase master learning.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import tempfile
@@ -252,6 +253,170 @@ def account_at(snapshot, account):
 def nearest_before(snapshots, when):
     candidates = [row for stamp, row in snapshots if stamp < when]
     return candidates[-1] if candidates else None
+
+
+def snapshot_reference(snapshots, when):
+    """Return a stable reference to the latest portfolio state before entry."""
+    candidates = [(stamp, row) for stamp, row in snapshots if stamp < when]
+    if not candidates:
+        return None
+    stamp, row = candidates[-1]
+    canonical = json.dumps(row, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return {
+        "snapshot_id": row.get("snapshot_id"),
+        "snapshot_hash": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+        "created_utc": stamp.isoformat().replace("+00:00", "Z"),
+        "relation": "nearest_before_entry",
+    }
+
+
+def market_snapshot_reference(glitch_data, when):
+    """Reference the nearest market frame without treating it as native account truth."""
+    root = glitch_data / "hermes" / "exchange" / "glitch" / "minute-frames"
+    candidates = []
+    for path in root.glob("*.json"):
+        try:
+            row = json.loads(path.read_text(encoding="utf-8-sig"))
+            raw_stamp = row.get("created_utc") or row.get("minute_id")
+            try:
+                stamp = parse_utc(raw_stamp)
+            except (TypeError, ValueError):
+                stamp = datetime.strptime(str(raw_stamp), "%Y%m%dT%H%MZ").replace(tzinfo=timezone.utc)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            continue
+        if stamp < when:
+            candidates.append((stamp, row))
+    if not candidates:
+        return None
+    stamp, row = sorted(candidates, key=lambda item: item[0])[-1]
+    market = row.get("market_snapshot") if isinstance(row, dict) else None
+    if not isinstance(market, dict):
+        return None
+    return {
+        "minute_id": row.get("minute_id"),
+        "snapshot_hash": market.get("snapshot_hash"),
+        "created_utc": stamp.isoformat().replace("+00:00", "Z"),
+        "relation": "nearest_before_entry",
+    }
+
+
+def configured_master_accounts(path):
+    masters = set()
+    if not path.exists():
+        return masters
+    for raw in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
+        fields = raw.strip().split("\t")
+        if len(fields) >= 3 and fields[0] == "G" and fields[2].strip():
+            masters.add(fields[2].strip().lower())
+    return masters
+
+
+def contemporaneous_ai_comparison(intents, trade):
+    """Return nearby AI thought, when present, without inventing one for manual trades."""
+    candidates = []
+    for intent in intents.values():
+        if str(intent.get("account") or "").lower() != str(trade.get("account") or "").lower():
+            continue
+        if str(intent.get("instrument") or "").split()[0].upper() != str(trade.get("instrument") or "").split()[0].upper():
+            continue
+        try:
+            created = parse_utc(intent.get("created_utc"))
+        except (TypeError, ValueError):
+            continue
+        distance = abs((created - trade["entry_utc"]).total_seconds())
+        if distance > 90:
+            continue
+        candidates.append((distance, created, intent))
+    if not candidates:
+        return None
+    _, created, intent = sorted(candidates, key=lambda item: (item[0], item[1]))[0]
+    return {
+        "intent_id": intent.get("intent_id"),
+        "cycle_id": intent.get("_cycle_id"),
+        "created_utc": created.isoformat().replace("+00:00", "Z"),
+        "action": intent.get("action"),
+        "confidence": intent.get("confidence"),
+        "snapshot_hash": intent.get("snapshot_hash"),
+        "reason": intent.get("reason"),
+        "decision_audit": intent.get("decision_audit"),
+        "comparison_status": "nearby_ai_decision",
+    }
+
+
+def manual_trade_outcome(glitch_data, snapshots, intents, trade):
+    """Build a learning-only manual episode from completed native round-trip truth."""
+    source = str(trade.get("trade_source") or "").strip().lower()
+    entry_type = str(trade.get("entry_type") or "").strip().lower()
+    signal = str(trade.get("entry_signal") or "").strip().upper()
+    if source != "manual" and entry_type != "manual":
+        return None
+    if source == "replication" or signal.startswith("GLT-"):
+        return None
+    account = str(trade.get("account") or "")
+    instrument = str(trade.get("instrument") or "MNQ").split()[0].upper()
+    origin_key = str(trade.get("trade_id") or "").strip()
+    if not account or not origin_key:
+        return None
+    digest = hashlib.sha256((account.lower() + "|" + origin_key).encode("utf-8")).hexdigest()
+    intent_id = "manual-" + digest[:32]
+    cycle_id = "manual-cycle-" + digest[:24]
+    side = "ENTER_LONG" if str(trade.get("side") or "").lower() == "long" else "ENTER_SHORT"
+    portfolio = snapshot_reference(snapshots, trade["entry_utc"])
+    market = market_snapshot_reference(glitch_data, trade["entry_utc"])
+    terminal = terminal_group_snapshot(snapshots, trade["exit_utc"], [account])
+    master_result = {
+        "account": account,
+        "quantity": int(abs(trade.get("contracts") or 1)),
+        "entry_price": trade.get("entry_price"),
+        "exit_price": trade.get("exit_price"),
+        "realized_pnl_usd": None,
+        "pnl_points": trade.get("pnl_points"),
+        "commission_total": trade.get("commission_total"),
+        "trade_id": trade.get("trade_id"),
+        "close_kind": infer_close_kind(trade),
+        **excursion(
+            snapshots, account, trade["entry_utc"], trade["exit_utc"], instrument, 0.0
+        ),
+    }
+    return {
+        "schema_version": "glitch.hermes.trade_outcome.v1",
+        "recorded_utc": trade["exit_utc"].isoformat().replace("+00:00", "Z"),
+        "intent_id": intent_id,
+        "cycle_id": cycle_id,
+        "origin": "manual",
+        "route_id": "manual",
+        "master_account": account,
+        "instrument": instrument,
+        "action": side,
+        "entry_utc": trade["entry_utc"].isoformat().replace("+00:00", "Z"),
+        "exit_utc": trade["exit_utc"].isoformat().replace("+00:00", "Z"),
+        "terminal_verified_utc": terminal.isoformat().replace("+00:00", "Z") if terminal else None,
+        "reason": trade.get("open_reason"),
+        "account_outcomes": [master_result],
+        "replication_diagnostics": [],
+        "master_realized_pnl_usd": None,
+        "group_realized_pnl_usd": None,
+        "master_realized_pnl_points": trade.get("pnl_points"),
+        "master_attribution_status": "complete",
+        "master_learning_eligible": True,
+        "attribution_status": "complete",
+        "learning_eligible": True,
+        "evidence": "TradeLedger.tsv",
+        "snapshot_reference": {
+            "portfolio": portfolio,
+            "market": market,
+            "status": "complete" if portfolio or market else "unavailable",
+        },
+        "ai_comparison": contemporaneous_ai_comparison(intents, trade),
+        "manual_trade": {
+            "trade_source": trade.get("trade_source"),
+            "entry_type": trade.get("entry_type"),
+            "entry_signal": trade.get("entry_signal"),
+            "exit_signal": trade.get("exit_signal"),
+            "open_reason": trade.get("open_reason"),
+            "close_reason": trade.get("close_reason"),
+        },
+    }
 
 
 def nearest_after(snapshots, when):
@@ -557,6 +722,7 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None, decis
             "recorded_utc": exit_utc.isoformat().replace("+00:00", "Z"),
             "intent_id": intent_id,
             "cycle_id": intent.get("_cycle_id"),
+            "origin": "ai",
             "route_id": intent.get("operator_profile"),
             "master_account": master,
             "instrument": instrument_root,
@@ -588,6 +754,17 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None, decis
             "learning_eligible": not process_error,
             "evidence": intent.get("_evidence_path"),
         }
+
+    # Manual master round trips are learning evidence, but never AI execution
+    # evidence.  Keep them in the same outcome stream with explicit provenance
+    # and stable IDs so the learning worker can compare origins safely.
+    master_accounts = configured_master_accounts(glitch_data / "AccountGroups.tsv")
+    for trade in trade_ledger:
+        if master_accounts and str(trade.get("account") or "").lower() not in master_accounts:
+            continue
+        manual = manual_trade_outcome(glitch_data, snapshots, intents, trade)
+        if manual is not None:
+            existing[manual["intent_id"]] = manual
 
     ordered = sorted(existing.values(), key=lambda row: (row.get("exit_utc", ""), row.get("intent_id", "")))
     write_jsonl_atomic(output_path, ordered)
