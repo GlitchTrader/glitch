@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Glitch.Services;
 
 namespace Glitch.UI
@@ -29,6 +30,8 @@ namespace Glitch.UI
             GlitchHermesControlServer.FlattenAllAsync = () =>
                 (System.Threading.Tasks.Task<bool>)Dispatcher.Invoke(
                     new Func<System.Threading.Tasks.Task<bool>>(() => TryExecuteFlattenAllAsync()));
+            GlitchHermesControlServer.GetFlattenEvidence = () =>
+                (string)Dispatcher.Invoke(new Func<string>(BuildFlattenEvidenceFromNativeState));
             GlitchHermesControlServer.TradingModeChanged = paused =>
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
@@ -109,6 +112,7 @@ namespace Glitch.UI
             GlitchHermesControlServer.GetReplication = null;
             GlitchHermesControlServer.GetReplicationEffective = null;
             GlitchHermesControlServer.FlattenAllAsync = null;
+            GlitchHermesControlServer.GetFlattenEvidence = null;
             GlitchHermesControlServer.TradingModeChanged = null;
             GlitchHermesControlServer.CommandFailed = null;
             GlitchAiOrderExecutor.UiInvoke = null;
@@ -117,6 +121,37 @@ namespace Glitch.UI
             _intentStartLogged = false;
             _controlStartLogged = false;
             GlitchRailSelfCheckWriter.TryWrite(System.DateTime.UtcNow);
+        }
+
+        private string BuildFlattenEvidenceFromNativeState()
+        {
+            List<string> unresolvedAccounts;
+            var accounts = ResolveFlattenAllAccounts(out unresolvedAccounts);
+            var accountParts = new List<string>();
+            bool allPositionsFlat = accounts.Count > 0;
+            bool allOrdersClear = accounts.Count > 0;
+
+            foreach (var account in accounts)
+            {
+                bool positionsFlat = GlitchReplicationEngine.IsAccountFlat(account);
+                bool ordersClear = !GlitchReplicationEngine.HasAnyWorkingOrders(account);
+                allPositionsFlat = allPositionsFlat && positionsFlat;
+                allOrdersClear = allOrdersClear && ordersClear;
+                accountParts.Add("{\"account\":" + GlitchSnapshotJson.String(account?.Name)
+                    + ",\"resolved\":true"
+                    + ",\"positions_flat\":" + GlitchSnapshotJson.Bool(positionsFlat)
+                    + ",\"orders_clear\":" + GlitchSnapshotJson.Bool(ordersClear) + "}");
+            }
+
+            foreach (string unresolved in unresolvedAccounts ?? new List<string>())
+                accountParts.Add("{\"account\":" + GlitchSnapshotJson.String(unresolved)
+                    + ",\"resolved\":false,\"positions_flat\":false,\"orders_clear\":false}");
+
+            bool allResolved = unresolvedAccounts != null && unresolvedAccounts.Count == 0 && accounts.Count > 0;
+            return "{\"all_accounts_resolved\":" + GlitchSnapshotJson.Bool(allResolved)
+                + ",\"all_positions_flat\":" + GlitchSnapshotJson.Bool(allPositionsFlat)
+                + ",\"all_orders_clear\":" + GlitchSnapshotJson.Bool(allOrdersClear)
+                + ",\"accounts\":[" + string.Join(",", accountParts) + "]}";
         }
 
         private void WireIntentHandlers()
