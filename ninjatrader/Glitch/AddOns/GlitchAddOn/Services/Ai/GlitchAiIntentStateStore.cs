@@ -226,19 +226,34 @@ namespace Glitch.Services
             if (string.IsNullOrWhiteSpace(executionLine))
                 return true;
 
-            string executionStatus = GlitchAiJsonFields.ExtractString(executionLine, "status") ?? "failed";
+            string executionStatus = GlitchAiJsonFields.ExtractString(executionLine, "status");
             string executionCode = GlitchAiJsonFields.ExtractString(executionLine, "code") ?? "legacy_execution_unknown";
-            state.Phase = string.Equals(executionStatus, "failed", StringComparison.Ordinal) ? "failed" : "executed";
+            GlitchAiExecutionResult legacyResult = BuildLegacyExecutionResult(executionStatus, executionCode);
+            state.Phase = GlitchAiIntentResultContract.GetPhase(legacyResult);
             state.HttpStatus = 202;
-            state.ResponseJson = "{"
-                + "\"schema_version\":" + GlitchSnapshotJson.String("glitch.intent.response.v1") + ","
-                + "\"status\":" + GlitchSnapshotJson.String("accepted") + ","
-                + "\"intent_id\":" + GlitchSnapshotJson.String(intentId) + ","
-                + "\"executor\":" + GlitchSnapshotJson.String(executionStatus) + ","
-                + "\"executor_code\":" + GlitchSnapshotJson.String(executionCode) + ","
-                + "\"created_utc\":" + GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(DateTime.UtcNow))
-                + "}";
+            state.ResponseJson = GlitchAiIntentResultContract.BuildAcceptedJson(intentId, legacyResult);
             return true;
+        }
+
+        internal static GlitchAiExecutionResult BuildLegacyExecutionResult(
+            string executionStatus,
+            string executionCode)
+        {
+            string status = (executionStatus ?? string.Empty).Trim().ToLowerInvariant();
+            string code = string.IsNullOrWhiteSpace(executionCode)
+                ? "legacy_execution_unknown"
+                : executionCode.Trim();
+            if (status == "pending")
+                return GlitchAiExecutionResult.Pending(code);
+            if (status == "executed")
+                return GlitchAiExecutionResult.Succeeded(code);
+            if (status == "failed")
+                return GlitchAiExecutionResult.Failed(code);
+            if (status == "skipped")
+                return GlitchAiExecutionResult.Skipped(code);
+            return GlitchAiExecutionResult.Failed(
+                "legacy_execution_status_unknown",
+                string.IsNullOrWhiteSpace(status) ? code : status + "|" + code);
         }
 
         private static string FindLastLine(string path, string token)
