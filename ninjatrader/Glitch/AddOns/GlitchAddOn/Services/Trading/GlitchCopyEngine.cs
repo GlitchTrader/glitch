@@ -255,6 +255,9 @@ namespace Glitch.Services
                 _entriesBySignal.Clear();
                 _closesBySignal.Clear();
                 _syncByFollowerInstrument.Clear();
+                _allocationByRouteDirection.Clear();
+                _entryOrderAllocations.Clear();
+                _allocationRouteSignatures.Clear();
                 _reportedProtectionAmbiguities.Clear();
                 _seenExecutionIds.Clear();
                 _seenExecutionIdSet.Clear();
