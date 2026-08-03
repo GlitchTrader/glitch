@@ -254,12 +254,19 @@ namespace Glitch.UI
 
         private void FlushPendingJournalEntries()
         {
+            FlushPendingJournalEntries(force: false);
+        }
+
+        private void FlushPendingJournalEntries(bool force)
+        {
             _journalFlushScheduled = false;
             if (_pendingJournalEntries.Count == 0)
                 return;
 
             DateTime nowUtc = DateTime.UtcNow;
-            if ((nowUtc - _lastJournalFlushUtc) < JournalBatchFlushInterval && _pendingJournalEntries.Count < 8)
+            if (!force
+                && (nowUtc - _lastJournalFlushUtc) < JournalBatchFlushInterval
+                && _pendingJournalEntries.Count < 8)
             {
                 _journalFlushScheduled = true;
                 Dispatcher.BeginInvoke(new Action(FlushPendingJournalEntries), System.Windows.Threading.DispatcherPriority.Background);
@@ -269,28 +276,30 @@ namespace Glitch.UI
             _lastJournalFlushUtc = nowUtc;
             var batch = _pendingJournalEntries.ToList();
             _pendingJournalEntries.Clear();
-            for (int i = batch.Count - 1; i >= 0; i--)
-                _journalEntries.Insert(0, batch[i]);
 
             bool containsExecution = batch.Any(entry =>
                 entry != null &&
                 string.Equals(entry.Category, "Execution", StringComparison.OrdinalIgnoreCase));
-
-            const int maxJournalEntries = 800;
-            while (_journalEntries.Count > maxJournalEntries)
-                _journalEntries.RemoveAt(_journalEntries.Count - 1);
-
             if (containsExecution)
             {
                 try
                 {
-                    RefreshTradeLedgerFromJournal(nowUtc);
+                    // Feed every native execution fragment to the stateful ledger
+                    // before the bounded UI journal can evict an earlier fill.
+                    MergeTradeLedgerJournalBatch(batch, nowUtc);
                 }
                 catch (Exception error)
                 {
                     RecordSubsystemFault("trade_ledger", error);
                 }
             }
+
+            for (int i = batch.Count - 1; i >= 0; i--)
+                _journalEntries.Insert(0, batch[i]);
+
+            const int maxJournalEntries = 800;
+            while (_journalEntries.Count > maxJournalEntries)
+                _journalEntries.RemoveAt(_journalEntries.Count - 1);
         }
 
         internal void RequestAnalyticsRefresh()

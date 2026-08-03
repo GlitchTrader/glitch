@@ -18,21 +18,102 @@ def scale_follower_quantity(master_quantity: int, ratio: float) -> int:
     return int(math.floor(master_quantity * ratio + 0.5))
 
 
+def remaining_attributed_close_quantity(
+    initial_follower_net: int,
+    actual_follower_net: int,
+    requested_close_quantity: int,
+    owned_close_filled_quantity: int = 0,
+) -> int:
+    if (
+        initial_follower_net == 0
+        or actual_follower_net == 0
+        or (initial_follower_net > 0) != (actual_follower_net > 0)
+    ):
+        return 0
+    bounded = min(abs(initial_follower_net), max(0, requested_close_quantity))
+    owned_filled = min(bounded, max(0, owned_close_filled_quantity))
+    native_reduction = max(
+        0,
+        abs(initial_follower_net) - (abs(actual_follower_net) + owned_filled),
+    )
+    return min(
+        abs(actual_follower_net),
+        max(0, bounded - owned_filled - native_reduction),
+    )
+
+
+def scale_native_execution_delta(filled_after: int, delta: int, ratio: float) -> int:
+    """Historical per-native-order scaler retained only for regression comparison."""
+    if filled_after <= 0 or delta <= 0 or ratio <= 0:
+        return 0
+    filled_after = max(filled_after, delta)
+    filled_before = max(0, filled_after - delta)
+    return max(
+        0,
+        scale_follower_quantity(filled_after, ratio)
+        - scale_follower_quantity(filled_before, ratio),
+    )
+
+
 @dataclass
-class CumulativeExecutionAllocator:
-    """Selected UCL-01 basis: cumulative exact-contract quantity for one direction."""
+class CumulativeAllocation:
+    quantity: int = 0
+    master_cumulative: int = 0
+    follower_cumulative: int = 0
 
-    master_quantity: int = 0
-    follower_quantity: int = 0
 
-    def apply(self, delta: int, ratio: float) -> int:
-        if delta <= 0 or ratio <= 0:
-            return 0
-        self.master_quantity += delta
-        target = scale_follower_quantity(self.master_quantity, ratio)
-        follower_delta = max(0, target - self.follower_quantity)
-        self.follower_quantity = target
-        return follower_delta
+class CumulativeAllocationBook:
+    """Executable model of the production future-only route allocation epochs."""
+
+    def __init__(self) -> None:
+        self._enabled = False
+        self._route_signatures: dict[str, str] = {}
+        self._states: dict[tuple[str, str, str], tuple[int, int]] = {}
+
+    def configure(self, enabled: bool, route_signatures: dict[str, str]) -> None:
+        next_signatures = dict(route_signatures or {})
+        if not enabled or not self._enabled:
+            self._states.clear()
+        else:
+            changed = {
+                route
+                for route in self._route_signatures.keys() | next_signatures.keys()
+                if self._route_signatures.get(route) != next_signatures.get(route)
+            }
+            self._states = {
+                key: state for key, state in self._states.items() if key[0] not in changed
+            }
+        self._route_signatures = next_signatures
+        self._enabled = enabled
+
+    def allocate(
+        self,
+        route_key: str,
+        instrument_key: str,
+        direction_key: str,
+        master_execution_quantity: int,
+        ratio: float,
+    ) -> CumulativeAllocation:
+        result = CumulativeAllocation()
+        if (
+            not self._enabled
+            or not route_key.strip()
+            or not instrument_key.strip()
+            or not direction_key.strip()
+            or master_execution_quantity <= 0
+            or ratio <= 0
+            or not math.isfinite(ratio)
+        ):
+            return result
+        key = (route_key.strip(), instrument_key.strip(), direction_key.strip())
+        master_before, follower_before = self._states.get(key, (0, 0))
+        master_after = master_before + master_execution_quantity
+        follower_after = scale_follower_quantity(master_after, ratio)
+        result.quantity = max(0, follower_after - follower_before)
+        result.master_cumulative = master_after
+        result.follower_cumulative = follower_after
+        self._states[key] = (master_after, follower_after)
+        return result
 
 
 class OrderState(str, Enum):
@@ -106,7 +187,11 @@ class AccountSim:
         self.net_by_exact[self.exact_key(instrument)] = net
 
     def cancel(self, orders: Iterable[Order]) -> None:
-        for order in orders:
+        requested = list(orders)
+        oco_groups = {order.oco for order in requested if order.oco}
+        for order in self.orders:
+            if order not in requested and order.oco not in oco_groups:
+                continue
             if order in self.orders and order.working:
                 order.state = OrderState.Cancelled
                 self.cancelled.append(order)
@@ -192,7 +277,7 @@ def trim_follower_protection_current(account: AccountSim) -> None:
             reduction = min(excess, qty)
             desired = qty - reduction
             if desired == 0:
-                cancellations.extend(group)
+                cancellations.append(group[0])
             else:
                 for order in group:
                     order.quantity = min(order.quantity, desired)
@@ -221,7 +306,7 @@ def trim_follower_protection_by_geometry(
     for order in working:
         groups.setdefault(order.oco, []).append(order)
 
-    units: list[tuple[str, list[Order], str, float, float]] = []
+    units: list[tuple[str, list[Order], str, float, float, int]] = []
     for oco, group in groups.items():
         stops = [order for order in group if order.order_type == "stop"]
         targets = [order for order in group if order.order_type == "target"]
@@ -229,8 +314,8 @@ def trim_follower_protection_by_geometry(
             return False
         stop, target = stops[0], targets[0]
         if (
-            stop.remaining_qty() != 1
-            or target.remaining_qty() != 1
+            stop.remaining_qty() <= 0
+            or stop.remaining_qty() != target.remaining_qty()
             or not stop.source_token
             or stop.source_token != target.source_token
         ):
@@ -242,31 +327,35 @@ def trim_follower_protection_by_geometry(
                 stop.source_token,
                 stop.stop_price,
                 target.target_price,
+                stop.remaining_qty(),
             )
         )
 
     units.sort(key=lambda item: item[0])
-    survivors: set[str] = set()
+    keep_by_oco = {unit[0]: 0 for unit in units}
     for source, stop_price, target_price in desired_geometry:
         match = next(
             (
                 unit
                 for unit in units
-                if unit[0] not in survivors
+                if keep_by_oco[unit[0]] < unit[5]
                 and unit[2] == source
             ),
             None,
         )
         if match is None:
             return False
-        survivors.add(match[0])
+        keep_by_oco[match[0]] += 1
 
-    account.cancel(
-        order
-        for oco, group, _source, _stop, _target in units
-        if oco not in survivors
-        for order in group
-    )
+    for oco, group, _source, _stop, _target, quantity in units:
+        keep = keep_by_oco[oco]
+        if keep == 0:
+            account.cancel([group[0]])
+        elif keep < quantity:
+            for order in group:
+                order.quantity = keep
+                if order.remaining is not None:
+                    order.remaining = min(order.remaining, keep)
     return True
 
 

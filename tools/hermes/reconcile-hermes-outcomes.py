@@ -75,7 +75,7 @@ def read_trade_ledger(path):
         "side", "contracts", "entry_price", "exit_price", "pnl_points",
         "open_reason", "close_reason", "entry_session", "exit_session",
         "trade_source", "entry_type", "exit_type", "entry_signal", "exit_signal",
-        "commission_total",
+        "commission_total", "entry_order_identity", "exit_order_identity",
     ]
     rows = []
     for raw in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
@@ -311,6 +311,70 @@ def configured_master_accounts(path):
     return masters
 
 
+def _normalized_entry_order_identity(record):
+    for key in ("entry_order_identity", "entry_order_id"):
+        value = str(record.get(key) or "").strip()
+        if value:
+            return value.lower()
+    return ""
+
+
+def _manual_entry_order_key(record):
+    manual = record.get("manual_trade") if isinstance(record.get("manual_trade"), dict) else {}
+    order_identity = _normalized_entry_order_identity(record) or _normalized_entry_order_identity(manual)
+    account = str(record.get("account") or record.get("master_account") or "").strip().lower()
+    instrument = str(record.get("instrument") or "").split()[0].upper()
+    if not account or not instrument or not order_identity:
+        return ""
+    return "|".join(("entry-order-v1", account, instrument, order_identity))
+
+
+def _manual_entry_fallback_key(record):
+    account = str(record.get("account") or record.get("master_account") or "").strip().lower()
+    instrument = str(record.get("instrument") or "").split()[0].upper()
+    side = str(record.get("side") or record.get("action") or "").strip().lower()
+    if side in {"long", "buy", "enter_long"}:
+        side = "long"
+    elif side in {"short", "sell", "sellshort", "enter_short"}:
+        side = "short"
+    entry_value = record.get("entry_utc")
+    try:
+        entry_utc = parse_utc(entry_value).isoformat().replace("+00:00", "Z")
+    except (TypeError, ValueError):
+        return ""
+    manual = record.get("manual_trade") if isinstance(record.get("manual_trade"), dict) else {}
+    source = str(record.get("trade_source") or manual.get("trade_source") or "").strip().lower()
+    entry_type = str(record.get("entry_type") or manual.get("entry_type") or "").strip().lower()
+    signal = str(record.get("entry_signal") or manual.get("entry_signal") or "").strip().lower()
+    if not account or not instrument or not side:
+        return ""
+    return "|".join(("entry-fallback-v1", account, instrument, side, entry_utc, source, entry_type, signal))
+
+
+def manual_episode_identity(trade):
+    """Return an immutable manual-entry identity, with a legacy-ledger fallback."""
+    return _manual_entry_order_key(trade) or _manual_entry_fallback_key(trade)
+
+
+def replace_manual_outcome(existing, manual, trade):
+    """Replace corrected and legacy-ID variants of the same manual episode."""
+    current_order_key = _manual_entry_order_key(trade)
+    current_fallback = _manual_entry_fallback_key(trade)
+    for intent_id, prior in list(existing.items()):
+        if not isinstance(prior, dict) or str(prior.get("origin") or "").lower() != "manual":
+            continue
+        prior_order_key = _manual_entry_order_key(prior)
+        if current_order_key and prior_order_key:
+            same_episode = current_order_key == prior_order_key
+        elif prior_order_key:
+            same_episode = False
+        else:
+            same_episode = bool(current_fallback and current_fallback == _manual_entry_fallback_key(prior))
+        if same_episode:
+            existing.pop(intent_id, None)
+    existing[manual["intent_id"]] = manual
+
+
 def contemporaneous_ai_comparison(intents, trade):
     """Return nearby AI thought, when present, without inventing one for manual trades."""
     candidates = []
@@ -323,8 +387,8 @@ def contemporaneous_ai_comparison(intents, trade):
             created = parse_utc(intent.get("created_utc"))
         except (TypeError, ValueError):
             continue
-        distance = abs((created - trade["entry_utc"]).total_seconds())
-        if distance > 90:
+        distance = (trade["entry_utc"] - created).total_seconds()
+        if distance < 0 or distance > 90:
             continue
         candidates.append((distance, created, intent))
     if not candidates:
@@ -354,10 +418,10 @@ def manual_trade_outcome(glitch_data, snapshots, intents, trade):
         return None
     account = str(trade.get("account") or "")
     instrument = str(trade.get("instrument") or "MNQ").split()[0].upper()
-    origin_key = str(trade.get("trade_id") or "").strip()
+    origin_key = manual_episode_identity(trade)
     if not account or not origin_key:
         return None
-    digest = hashlib.sha256((account.lower() + "|" + origin_key).encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(origin_key.encode("utf-8")).hexdigest()
     intent_id = "manual-" + digest[:32]
     cycle_id = "manual-cycle-" + digest[:24]
     side = "ENTER_LONG" if str(trade.get("side") or "").lower() == "long" else "ENTER_SHORT"
@@ -409,6 +473,7 @@ def manual_trade_outcome(glitch_data, snapshots, intents, trade):
         },
         "ai_comparison": contemporaneous_ai_comparison(intents, trade),
         "manual_trade": {
+            "entry_order_identity": str(trade.get("entry_order_identity") or trade.get("entry_order_id") or "").strip() or None,
             "trade_source": trade.get("trade_source"),
             "entry_type": trade.get("entry_type"),
             "entry_signal": trade.get("entry_signal"),
@@ -764,7 +829,7 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None, decis
             continue
         manual = manual_trade_outcome(glitch_data, snapshots, intents, trade)
         if manual is not None:
-            existing[manual["intent_id"]] = manual
+            replace_manual_outcome(existing, manual, trade)
 
     ordered = sorted(existing.values(), key=lambda row: (row.get("exit_utc", ""), row.get("intent_id", "")))
     write_jsonl_atomic(output_path, ordered)

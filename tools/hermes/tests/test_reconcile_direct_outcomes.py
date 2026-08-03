@@ -3,7 +3,7 @@ import json
 import os
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -29,6 +29,28 @@ def ledger_row(account, entry_utc, exit_utc, entry_price, exit_price, correlatio
         entry_price, exit_price, points, signal, "Manual / Other", "Asia", "Asia",
         "Strategy" if correlation else "Replication", "SYNC", "SYNC", signal, "GLT-EXIT", 0,
     ])) + "\n"
+
+
+def manual_identity_trade(entry_utc):
+    return {
+        "trade_id": "mutable-trade-id",
+        "account": "Sim101",
+        "instrument": "MNQ 09-26",
+        "side": "Long",
+        "contracts": 1,
+        "entry_price": 20000,
+        "exit_price": 20004,
+        "pnl_points": 4,
+        "commission_total": 1,
+        "entry_utc": entry_utc,
+        "exit_utc": entry_utc + timedelta(minutes=2),
+        "trade_source": "Manual",
+        "entry_type": "Manual",
+        "entry_signal": "ChartTrader",
+        "exit_signal": "Close",
+        "open_reason": "Manual Entry",
+        "close_reason": "Manual / Other",
+    }
 
 
 class DirectOutcomeReconcileTests(unittest.TestCase):
@@ -75,6 +97,116 @@ class DirectOutcomeReconcileTests(unittest.TestCase):
             self.assertEqual(result["snapshot_reference"]["market"]["snapshot_hash"], "market-1")
             self.assertEqual(result["ai_comparison"]["intent_id"], "ai-1")
             self.assertTrue(result["master_learning_eligible"])
+
+    def test_ai_comparison_uses_only_pre_entry_decisions_within_90_seconds(self):
+        entry_utc = MODULE.parse_utc("2026-08-03T12:50:30Z")
+        trade = manual_identity_trade(entry_utc)
+        intents = {
+            "before": {
+                "intent_id": "before", "account": "Sim101", "instrument": "MNQ",
+                "created_utc": (entry_utc - timedelta(seconds=90)).isoformat(),
+            },
+            "after": {
+                "intent_id": "after", "account": "Sim101", "instrument": "MNQ",
+                "created_utc": (entry_utc + timedelta(seconds=1)).isoformat(),
+            },
+            "too-old": {
+                "intent_id": "too-old", "account": "Sim101", "instrument": "MNQ",
+                "created_utc": (entry_utc - timedelta(seconds=91)).isoformat(),
+            },
+        }
+
+        comparison = MODULE.contemporaneous_ai_comparison(intents, trade)
+
+        self.assertEqual(comparison["intent_id"], "before")
+        self.assertIsNone(MODULE.contemporaneous_ai_comparison({"after": intents["after"]}, trade))
+        self.assertIsNone(MODULE.contemporaneous_ai_comparison({"too-old": intents["too-old"]}, trade))
+
+    def test_manual_identity_survives_correction_and_prefers_entry_order(self):
+        entry_utc = MODULE.parse_utc("2026-08-03T12:50:30Z")
+        original = manual_identity_trade(entry_utc)
+        corrected = {
+            **original,
+            "trade_id": "corrected-mutable-trade-id",
+            "contracts": 3,
+            "entry_price": 20001.25,
+            "exit_price": 20007.75,
+            "pnl_points": 19.5,
+            "exit_utc": original["exit_utc"] + timedelta(seconds=20),
+            "exit_signal": "CorrectedClose",
+        }
+
+        self.assertEqual(MODULE.manual_episode_identity(original), MODULE.manual_episode_identity(corrected))
+        first = MODULE.manual_trade_outcome(Path("unused"), [], {}, original)
+        second = MODULE.manual_trade_outcome(Path("unused"), [], {}, corrected)
+        self.assertEqual(first["intent_id"], second["intent_id"])
+        self.assertEqual(first["cycle_id"], second["cycle_id"])
+
+        order_original = {**original, "entry_order_identity": "native-order-1"}
+        order_corrected = {**corrected, "entry_order_identity": "native-order-1"}
+        other_order = {**corrected, "entry_order_identity": "native-order-2"}
+        self.assertEqual(
+            MODULE.manual_episode_identity(order_original),
+            MODULE.manual_episode_identity(order_corrected),
+        )
+        self.assertNotEqual(
+            MODULE.manual_episode_identity(order_original),
+            MODULE.manual_episode_identity(other_order),
+        )
+
+    def test_corrected_manual_episode_replaces_legacy_mutable_id(self):
+        entry_utc = MODULE.parse_utc("2026-08-03T12:50:30Z")
+        trade = manual_identity_trade(entry_utc)
+        corrected = {
+            **trade,
+            "trade_id": "changed",
+            "contracts": 4,
+            "entry_price": 20002,
+            "entry_order_identity": "native-order-1",
+        }
+        current = MODULE.manual_trade_outcome(Path("unused"), [], {}, corrected)
+        legacy = MODULE.manual_trade_outcome(Path("unused"), [], {}, trade)
+        legacy["intent_id"] = "manual-legacy-mutable-trade-id"
+        fields = [
+            "changed", str(dotnet_ticks(entry_utc.isoformat())),
+            str(dotnet_ticks(corrected["exit_utc"].isoformat())), "Sim101", "MNQ",
+            "Long", "4", "20002", "20004", "8", "Manual Entry", "Manual / Other",
+            "Asia", "Asia", "Manual", "Manual", "Manual", "ChartTrader", "Close", "1",
+            "native-order-1", "native-exit-1",
+        ]
+        with tempfile.TemporaryDirectory() as temporary:
+            glitch_data = Path(temporary) / "GlitchData"
+            (glitch_data / "intents").mkdir(parents=True)
+            (glitch_data / "TradeLedger.tsv").write_text(
+                "\t".join(fields) + "\n", encoding="utf-8"
+            )
+            output = glitch_data / "intents" / "hermes-trade-outcomes.jsonl"
+            output.write_text(json.dumps(legacy) + "\n", encoding="utf-8")
+
+            rows = MODULE.reconcile(glitch_data, None, output)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["intent_id"], current["intent_id"])
+        self.assertEqual(rows[0]["account_outcomes"][0]["quantity"], 4)
+
+    def test_trade_ledger_reader_accepts_optional_entry_order_identity(self):
+        entry_utc = MODULE.parse_utc("2026-08-03T12:50:30Z")
+        exit_utc = entry_utc + timedelta(minutes=2)
+        fields = [
+            "mutable-id", str(dotnet_ticks(entry_utc.isoformat())),
+            str(dotnet_ticks(exit_utc.isoformat())), "Sim101", "MNQ", "Long", "1",
+            "20000", "20004", "4", "Manual Entry", "Manual / Other", "Asia", "Asia",
+            "Manual", "Manual", "Manual", "ChartTrader", "Close", "1",
+            "native-order-1", "native-exit-1",
+        ]
+        with tempfile.TemporaryDirectory() as temporary:
+            ledger = Path(temporary) / "TradeLedger.tsv"
+            ledger.write_text("\t".join(fields) + "\n", encoding="utf-8")
+
+            rows = MODULE.read_trade_ledger(ledger)
+
+        self.assertEqual(rows[0]["entry_order_identity"], "native-order-1")
+        self.assertTrue(MODULE.manual_episode_identity(rows[0]).endswith("|native-order-1"))
 
     def test_outbox_cycle_id_is_not_erased_by_decision_log_without_cycle(self):
         with tempfile.TemporaryDirectory() as temporary:

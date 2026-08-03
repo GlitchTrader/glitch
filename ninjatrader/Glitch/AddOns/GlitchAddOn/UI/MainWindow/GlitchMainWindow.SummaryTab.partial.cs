@@ -59,6 +59,7 @@ namespace Glitch.UI
         private int _summaryLastExecutionCount = -1;
         private long _summaryLastExecutionTicks = -1;
         private int _summaryLastWarningCount = -1;
+        private bool _tradeExecutionAggregationInitialized;
         private Grid _summaryRootGrid;
         private UniformGrid _summaryCardsPanel;
         private Grid _summaryMidGrid;
@@ -375,6 +376,9 @@ namespace Glitch.UI
 
         private void RefreshTradeLedgerFromJournal(DateTime nowUtc)
         {
+            if (_tradeExecutionAggregationInitialized)
+                return;
+
             var journalEvents = (_journalEntries ?? new ObservableCollection<JournalEntry>())
                 .Where(entry => entry != null && !string.IsNullOrWhiteSpace(entry.Message))
                 .Select(entry => new GlitchTradeInsightsService.TradeJournalEvent
@@ -386,12 +390,44 @@ namespace Glitch.UI
                 })
                 .ToList();
 
-            GlitchTradeInsightsService.TradeInsightsSnapshot snapshot =
-                _tradeInsightsService.BuildSnapshot(
-                    journalEvents,
-                    new List<GlitchTradeInsightsService.TradeWarningEvent>(),
-                    nowUtc);
-            _tradeLedgerService.MergeAndGetAll(snapshot.ClosedTrades, nowUtc);
+            _tradeLedgerService.RebuildExecutionAggregationAndGetAll(journalEvents, journalEvents, nowUtc);
+            _tradeExecutionAggregationInitialized = true;
+        }
+
+        private void MergeTradeLedgerJournalBatch(IReadOnlyList<JournalEntry> batch, DateTime nowUtc)
+        {
+            if (batch == null || batch.Count == 0)
+                return;
+
+            RefreshTradeLedgerFromJournal(nowUtc);
+
+            List<GlitchTradeInsightsService.TradeJournalEvent> newEvents = batch
+                .Where(entry => entry != null && !string.IsNullOrWhiteSpace(entry.Message))
+                .Select(ToTradeJournalEvent)
+                .ToList();
+            if (newEvents.Count == 0)
+                return;
+
+            List<GlitchTradeInsightsService.TradeJournalEvent> contextEvents =
+                (_journalEntries ?? new ObservableCollection<JournalEntry>())
+                    .Where(entry => entry != null && !string.IsNullOrWhiteSpace(entry.Message))
+                    .Select(ToTradeJournalEvent)
+                    .Concat(newEvents)
+                    .OrderBy(entry => entry.UtcTime)
+                    .ToList();
+
+            _tradeLedgerService.MergeExecutionEventsAndGetAll(newEvents, contextEvents, nowUtc);
+        }
+
+        private static GlitchTradeInsightsService.TradeJournalEvent ToTradeJournalEvent(JournalEntry entry)
+        {
+            return new GlitchTradeInsightsService.TradeJournalEvent
+            {
+                UtcTime = entry.TimestampUtc.ToUniversalTime(),
+                AccountName = entry.AccountName,
+                Category = entry.Category,
+                Message = entry.Message
+            };
         }
 
         private void RefreshSummaryInsightsIfNeeded(DateTime nowUtc, bool force = false)
@@ -459,9 +495,8 @@ namespace Glitch.UI
                 })
                 .ToList();
 
-            GlitchTradeInsightsService.TradeInsightsSnapshot currentSnapshot = _tradeInsightsService.BuildSnapshot(journalEvents, warningEvents, nowUtc);
             IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> ledgerTrades =
-                _tradeLedgerService.MergeAndGetAll(currentSnapshot.ClosedTrades, nowUtc);
+                _tradeLedgerService.MergeAndGetAll(null, nowUtc);
             _riskLockLedgerService.MergeAndGetSnapshot(warningEvents, nowUtc);
             IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> usdLedgerTrades = NormalizeTradesToUsd(ledgerTrades);
             TryEmitJournalReconcileNotices(usdLedgerTrades);
@@ -847,6 +882,7 @@ namespace Glitch.UI
             UpdateWarningCountUi();
 
             _tradeLedgerService.Reset(nowUtc);
+            _tradeExecutionAggregationInitialized = false;
             _riskLockLedgerService.Reset(nowUtc);
 
             _summaryMetricRows.Clear();

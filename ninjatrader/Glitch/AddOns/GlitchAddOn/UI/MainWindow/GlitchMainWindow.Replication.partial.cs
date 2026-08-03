@@ -389,7 +389,9 @@ namespace Glitch.UI
                 return false;
 
             Order order = TryGetNestedPropertyValue(executionObject, "Order") as Order;
-            string signalName = order?.Name;
+            string signalName = TryGetNestedPropertyValueAsString(executionObject, "Name");
+            if (string.IsNullOrWhiteSpace(signalName))
+                signalName = order?.Name;
             if (!string.IsNullOrWhiteSpace(signalName)
                 && (signalName.Trim().StartsWith(GlitchCopyEngine.CopySignalName + "-", StringComparison.OrdinalIgnoreCase)
                     || signalName.Trim().StartsWith(GlitchCopyEngine.CatchUpSignalName + "-", StringComparison.OrdinalIgnoreCase)))

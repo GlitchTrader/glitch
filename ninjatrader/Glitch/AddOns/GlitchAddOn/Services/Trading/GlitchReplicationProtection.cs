@@ -18,6 +18,7 @@ namespace Glitch.Services
         public double StopPrice { get; set; }
         public double TargetPrice { get; set; }
         public string SourceToken { get; set; }
+        public DateTime NativeTime { get; set; }
     }
 
     internal sealed class GlitchReplicationProtectionPlan
@@ -45,6 +46,25 @@ namespace Glitch.Services
             string entrySignal,
             int requiredMasterQuantity,
             bool isLong,
+            out GlitchReplicationProtectionPlan plan)
+        {
+            return TryResolveMasterPlan(
+                masterAccount,
+                instrument,
+                entrySignal,
+                requiredMasterQuantity,
+                isLong,
+                null,
+                out plan);
+        }
+
+        public static bool TryResolveMasterPlan(
+            Account masterAccount,
+            Instrument instrument,
+            string entrySignal,
+            int requiredMasterQuantity,
+            bool isLong,
+            ISet<string> excludedSourceTokens,
             out GlitchReplicationProtectionPlan plan)
         {
             plan = null;
@@ -110,29 +130,46 @@ namespace Glitch.Services
                 if (!isLong && (stop.StopPrice <= target.LimitPrice))
                     continue;
 
+                string sourceToken = BuildSourceToken(stop.Name, stop.Oco);
+                if (excludedSourceTokens != null
+                    && excludedSourceTokens.Contains(sourceToken))
+                    continue;
+
                 legs.Add(new GlitchReplicationProtectionLeg
                 {
                     MasterQuantity = quantity,
                     StopPrice = stop.StopPrice,
                     TargetPrice = target.LimitPrice,
-                    SourceToken = BuildSourceToken(stop.Name, stop.Oco)
+                    SourceToken = sourceToken,
+                    NativeTime = stop.Time <= target.Time ? stop.Time : target.Time
                 });
             }
 
-            int totalQuantity = legs.Sum(leg => leg.MasterQuantity);
-            if (totalQuantity != requiredMasterQuantity)
+            // Same-signal ATM entries can expose several complete OCO groups at
+            // once. Claim the earliest exact native tranche instead of summing
+            // every same-signal group and deadlocking on over-coverage. Claimed
+            // source tokens exclude that tranche for the next entry identity.
+            List<GlitchReplicationProtectionLeg> selected =
+                GlitchReplicationMath.SelectExactPrefix(
+                legs
+                .OrderBy(item => item.NativeTime)
+                .ThenBy(item => item.SourceToken, StringComparer.OrdinalIgnoreCase),
+                requiredMasterQuantity,
+                item => item.MasterQuantity);
+            if (selected.Count == 0)
                 return false;
+            int selectedQuantity = selected.Sum(item => item.MasterQuantity);
 
-            legs = isLong
-                ? legs.OrderBy(leg => leg.TargetPrice).ToList()
-                : legs.OrderByDescending(leg => leg.TargetPrice).ToList();
+            selected = isLong
+                ? selected.OrderBy(leg => leg.TargetPrice).ToList()
+                : selected.OrderByDescending(leg => leg.TargetPrice).ToList();
 
             plan = new GlitchReplicationProtectionPlan
             {
                 IsLong = isLong,
-                MasterQuantity = totalQuantity,
+                MasterQuantity = selectedQuantity,
                 TickSize = instrument.MasterInstrument?.TickSize ?? 0,
-                Legs = legs
+                Legs = selected
             };
             return true;
         }
@@ -254,9 +291,7 @@ namespace Glitch.Services
 
         public static int ScaleFollowerQuantity(int masterQuantity, double ratio)
         {
-            if (masterQuantity <= 0 || ratio <= 0 || double.IsNaN(ratio) || double.IsInfinity(ratio))
-                return 0;
-            return (int)Math.Round(masterQuantity * ratio, MidpointRounding.AwayFromZero);
+            return GlitchReplicationMath.ScaleQuantity(masterQuantity, ratio);
         }
 
         public static bool TryScalePlanSlice(
