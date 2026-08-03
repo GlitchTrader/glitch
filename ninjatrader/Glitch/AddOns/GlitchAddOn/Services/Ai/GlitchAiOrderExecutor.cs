@@ -778,13 +778,22 @@ namespace Glitch.Services
                     && string.Equals(group.MasterAccount, masterAccount, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            if (matching.Count != 1)
+            if (matching.Count == 0)
             {
-                failure = matching.Count == 0 ? "executor_group_missing" : "executor_group_ambiguous";
+                failure = "executor_group_missing";
                 return false;
             }
 
-            GlitchStateStore.AccountGroupRecord selected = matching[0];
+            // Hermes owns the master once.  Several configured AccountGroups
+            // may intentionally fan that same master out to different follower
+            // fleets; GlitchCopyEngine owns those follower routes.  Refusing
+            // the master solely because matching groups > 1 manufactured the
+            // same ambiguity that previously produced phantom Hermes routes.
+            // Keep a deterministic group identity for receipts while resolving
+            // the actual master account exactly once.
+            GlitchStateStore.AccountGroupRecord selected = matching
+                .OrderBy(group => group.GroupId, StringComparer.OrdinalIgnoreCase)
+                .First();
             string name = selected.MasterAccount.Trim();
             if (!policy.AccountAllowlist.Contains(name))
             {
@@ -803,7 +812,9 @@ namespace Glitch.Services
             // engine independently owns follower discovery, ratios and protection.
             members.Add(new ExecutionGroupMember { Account = account });
 
-            groupId = selected.GroupId;
+            groupId = string.Join(",", matching
+                .OrderBy(group => group.GroupId, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.GroupId));
             return true;
         }
 

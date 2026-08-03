@@ -839,6 +839,26 @@ class DirectCycleTests(unittest.TestCase):
         self.assertTrue(context["native_protection"]["coverage_complete"])
         self.assertTrue(context["apex_legacy_survival_applicable"])
 
+    def test_multiple_follower_groups_share_one_master_book_and_route(self):
+        value = packet()
+        value["account_groups_tsv"] = """# type\tgroupId\taccount\tfollowerSize\tratio\tmasterSize\tenabled
+G\tg1\tSim101\t100000
+M\tg1\tSim102\t100000\t2\t100000\t1
+G\tg2\tSim101\t100000
+M\tg2\tSim301\t100000\t3\t100000\t1
+"""
+        value["policy"]["profile_account_bindings"] = ["glitch=Sim101"]
+        scenario = MODULE.build_scenario(value)
+        self.assertEqual(len(scenario["books"]), 1)
+        self.assertEqual(scenario["books"][0]["route_id"], "glitch")
+        self.assertEqual(scenario["books"][0]["group_ids"], ["g1", "g2"])
+        self.assertEqual(
+            [follower["account"] for follower in scenario["books"][0]["followers"]],
+            ["Sim102", "Sim301"],
+        )
+        model_packet = MODULE.packet_for_model(value, scenario)
+        self.assertEqual(model_packet["policy"]["profile_account_bindings"], ["glitch=Sim101"])
+
     def test_apex_survival_accepts_one_contract_and_a_larger_multi_leg_choice(self):
         scenario = MODULE.build_scenario(packet())
         for quantity in (1, 10):
