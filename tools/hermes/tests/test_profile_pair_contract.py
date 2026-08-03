@@ -22,6 +22,10 @@ class ProfilePairContractTests(unittest.TestCase):
 
     def test_release_ledger_records_the_exact_profile_pair(self) -> None:
         ledger = json.loads(LEDGER.read_text(encoding="utf-8"))
+        advanced = ledger["products"]["advanced"]
+        self.assertEqual(advanced.get("version"), "0.0.2.7")
+        self.assertEqual(advanced.get("hermes_profile_version"), "0.0.2.20")
+
         release = next(item for item in ledger["items"] if item["id"] == "GL-REL-01")
         evidence = "\n".join(release.get("evidence") or [])
         self.assertIn("Glitch AI 0.0.2.7", evidence)
