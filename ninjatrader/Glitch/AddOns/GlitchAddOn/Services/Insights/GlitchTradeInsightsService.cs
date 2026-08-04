@@ -45,58 +45,8 @@ namespace Glitch.Services
             IReadOnlyList<TradeWarningEvent> warningEvents,
             DateTime nowUtc)
         {
-            var snapshot = CreateEmptySnapshot(nowUtc);
-
-            if (journalEvents == null || journalEvents.Count == 0)
-                return snapshot;
-
-            List<ExecutionEvent> parsedExecutions = journalEvents
-                .Where(evt => evt != null && string.Equals(evt.Category, "Execution", StringComparison.OrdinalIgnoreCase))
-                .Select(TryParseExecutionEvent)
-                .Where(evt => evt != null)
-                .OrderBy(evt => evt.UtcTime)
-                .ToList();
-
-            var executions = new List<ExecutionEvent>(parsedExecutions.Count);
-            var seenExecutionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var lastSeenNoIdExecutionUtcBySignature = new Dictionary<string, DateTime>(StringComparer.Ordinal);
-            foreach (ExecutionEvent evt in parsedExecutions)
-            {
-                if (!string.IsNullOrWhiteSpace(evt.ExecutionId))
-                {
-                    string identity = BuildExecutionIdentityKey(evt);
-                    if (!seenExecutionIds.Add(identity))
-                        continue;
-                }
-                else
-                {
-                    string signature = BuildNoIdExecutionSignature(evt);
-                    if (lastSeenNoIdExecutionUtcBySignature.TryGetValue(signature, out DateTime previousUtc) &&
-                        Math.Abs((evt.UtcTime - previousUtc).TotalMilliseconds) <= 500)
-                    {
-                        continue;
-                    }
-
-                    lastSeenNoIdExecutionUtcBySignature[signature] = evt.UtcTime;
-                }
-
-                executions.Add(evt);
-            }
-
-            if (executions.Count == 0)
-                return snapshot;
-
-            List<TradeJournalEvent> contextEvents = journalEvents
-                .Where(evt => evt != null)
-                .OrderBy(evt => evt.UtcTime)
-                .ToList();
-
-            var states = new Dictionary<string, OpenPositionState>(StringComparer.OrdinalIgnoreCase);
-            var closedTrades = new List<TradeRoundTrip>();
-
-            foreach (ExecutionEvent evt in executions)
-                ApplyExecution(evt, states, closedTrades, contextEvents);
-
+            var accumulator = new ExecutionAccumulator();
+            IReadOnlyList<TradeRoundTrip> closedTrades = accumulator.Process(journalEvents, journalEvents);
             return BuildSnapshotFromClosedTrades(closedTrades, warningEvents, nowUtc);
         }
 
@@ -192,6 +142,8 @@ namespace Glitch.Services
                 }
 
                 AccumulateExecutionCommission(state, evt);
+                state.EntryContracts += Math.Abs(signedQty);
+                state.EntryNotional += Math.Abs(signedQty) * evt.Price;
                 state.AveragePrice =
                     ((Math.Abs(previousQty) * state.AveragePrice) + (Math.Abs(signedQty) * evt.Price)) /
                     Math.Abs(newQty);
@@ -200,6 +152,8 @@ namespace Glitch.Services
                 state.FillCount += 1;
                 if (string.IsNullOrWhiteSpace(state.EntrySource) && !string.IsNullOrWhiteSpace(evt.Source))
                     state.EntrySource = evt.Source;
+                if (string.IsNullOrWhiteSpace(state.EntrySignalName) && !string.IsNullOrWhiteSpace(evt.SignalName))
+                    state.EntrySignalName = evt.SignalName;
                 if (string.IsNullOrWhiteSpace(state.EntrySignalTag) && !string.IsNullOrWhiteSpace(evt.SignalTag))
                     state.EntrySignalTag = evt.SignalTag;
                 return;
@@ -266,6 +220,12 @@ namespace Glitch.Services
                 return null;
 
             DateTime exitUtc = state.LastExitUtc <= DateTime.MinValue ? exitEvent.UtcTime : state.LastExitUtc;
+            double entryContracts = state.EntryContracts > Epsilon
+                ? state.EntryContracts
+                : state.MaxAbsQty;
+            double entryPrice = state.EntryNotional > Epsilon && entryContracts > Epsilon
+                ? state.EntryNotional / entryContracts
+                : state.AveragePrice;
             double exitPrice = state.ClosedNotional > Epsilon
                 ? state.ClosedNotional / state.ClosedContracts
                 : exitEvent.Price;
@@ -281,9 +241,9 @@ namespace Glitch.Services
                 ExitUtc = exitUtc,
                 Duration = exitUtc > state.EntryUtc ? (exitUtc - state.EntryUtc) : TimeSpan.Zero,
                 IsLong = isLong,
-                EntryPrice = state.AveragePrice,
+                EntryPrice = entryPrice,
                 ExitPrice = exitPrice,
-                Contracts = state.MaxAbsQty,
+                Contracts = entryContracts,
                 PnlPoints = state.RealizedPoints,
                 CommissionTotal = state.TotalCommission,
                 OpenReason = openReason,
@@ -482,22 +442,6 @@ namespace Glitch.Services
             string account = CleanToken(evt?.AccountName).ToUpperInvariant();
             string executionId = CleanToken(evt?.ExecutionId).ToUpperInvariant();
             return account + "|" + executionId;
-        }
-
-        private static string BuildNoIdExecutionSignature(ExecutionEvent evt)
-        {
-            if (evt == null)
-                return string.Empty;
-
-            string account = CleanToken(evt.AccountName).ToUpperInvariant();
-            string instrument = CleanToken(evt.Instrument).ToUpperInvariant();
-            string action = NormalizeActionToken(evt.Action);
-            string quantity = Math.Round(Math.Abs(evt.Quantity), 6).ToString("0.######", CultureInfo.InvariantCulture);
-            string price = Math.Round(evt.Price, 8).ToString("0.########", CultureInfo.InvariantCulture);
-            string signal = CleanToken(evt.SignalName).ToUpperInvariant();
-            string source = CleanToken(evt.Source).ToUpperInvariant();
-            string signalTag = CleanToken(evt.SignalTag).ToUpperInvariant();
-            return string.Join("|", account, instrument, action, quantity, price, signal, source, signalTag);
         }
 
         private static bool TryParseFlexibleDouble(string value, out double parsed)
@@ -1082,6 +1026,57 @@ namespace Glitch.Services
             public int AccountsWithCriticalLock { get; set; }
         }
 
+        internal sealed class ExecutionAccumulator
+        {
+            private readonly Dictionary<string, OpenPositionState> _states =
+                new Dictionary<string, OpenPositionState>(StringComparer.OrdinalIgnoreCase);
+            private readonly HashSet<string> _seenExecutionIds =
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            internal IReadOnlyList<TradeRoundTrip> Process(
+                IReadOnlyList<TradeJournalEvent> journalEvents,
+                IReadOnlyList<TradeJournalEvent> contextEvents)
+            {
+                var closedTrades = new List<TradeRoundTrip>();
+                if (journalEvents == null || journalEvents.Count == 0)
+                    return closedTrades;
+
+                List<TradeJournalEvent> orderedContext = (contextEvents ?? journalEvents)
+                    .Where(evt => evt != null)
+                    .OrderBy(evt => evt.UtcTime)
+                    .ToList();
+                List<ExecutionEvent> executions = journalEvents
+                    .Where(evt => evt != null && string.Equals(evt.Category, "Execution", StringComparison.OrdinalIgnoreCase))
+                    .Select(TryParseExecutionEvent)
+                    .Where(evt => evt != null)
+                    .OrderBy(evt => evt.UtcTime)
+                    .ToList();
+
+                foreach (ExecutionEvent evt in executions)
+                {
+                    if (!string.IsNullOrWhiteSpace(evt.ExecutionId) &&
+                        !_seenExecutionIds.Add(BuildExecutionIdentityKey(evt)))
+                    {
+                        continue;
+                    }
+
+                    // Events without a native execution id are already deduplicated
+                    // by the runtime journal bridge. Do not collapse identical fills:
+                    // separate partial fills may legitimately have the same account,
+                    // action, quantity, price, and signal.
+                    ApplyExecution(evt, _states, closedTrades, orderedContext);
+                }
+
+                return closedTrades;
+            }
+
+            internal void Reset()
+            {
+                _states.Clear();
+                _seenExecutionIds.Clear();
+            }
+        }
+
         private sealed class ExecutionEvent
         {
             public DateTime UtcTime { get; set; }
@@ -1109,6 +1104,8 @@ namespace Glitch.Services
             public double NetQty { get; set; }
             public double AveragePrice { get; set; }
             public double MaxAbsQty { get; set; }
+            public double EntryContracts { get; set; }
+            public double EntryNotional { get; set; }
             public int FillCount { get; set; }
             public double RealizedPoints { get; set; }
             public double TotalCommission { get; set; }
@@ -1133,6 +1130,8 @@ namespace Glitch.Services
                     NetQty = signedQty,
                     AveragePrice = evt.Price,
                     MaxAbsQty = Math.Abs(signedQty),
+                    EntryContracts = Math.Abs(signedQty),
+                    EntryNotional = Math.Abs(signedQty) * evt.Price,
                     FillCount = 1,
                     RealizedPoints = 0,
                     TotalCommission = 0,

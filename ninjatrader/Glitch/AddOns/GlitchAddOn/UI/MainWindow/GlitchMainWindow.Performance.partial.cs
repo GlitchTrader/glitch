@@ -269,28 +269,30 @@ namespace Glitch.UI
             _lastJournalFlushUtc = nowUtc;
             var batch = _pendingJournalEntries.ToList();
             _pendingJournalEntries.Clear();
-            for (int i = batch.Count - 1; i >= 0; i--)
-                _journalEntries.Insert(0, batch[i]);
 
             bool containsExecution = batch.Any(entry =>
                 entry != null &&
                 string.Equals(entry.Category, "Execution", StringComparison.OrdinalIgnoreCase));
-
-            const int maxJournalEntries = 800;
-            while (_journalEntries.Count > maxJournalEntries)
-                _journalEntries.RemoveAt(_journalEntries.Count - 1);
-
             if (containsExecution)
             {
                 try
                 {
-                    RefreshTradeLedgerFromJournal(nowUtc);
+                    // Feed every native execution fragment to the stateful ledger
+                    // before the bounded UI journal can evict an earlier fill.
+                    MergeTradeLedgerJournalBatch(batch, nowUtc);
                 }
                 catch (Exception error)
                 {
                     RecordSubsystemFault("trade_ledger", error);
                 }
             }
+
+            for (int i = batch.Count - 1; i >= 0; i--)
+                _journalEntries.Insert(0, batch[i]);
+
+            const int maxJournalEntries = 800;
+            while (_journalEntries.Count > maxJournalEntries)
+                _journalEntries.RemoveAt(_journalEntries.Count - 1);
         }
 
         internal void RequestAnalyticsRefresh()

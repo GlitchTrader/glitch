@@ -141,7 +141,8 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         scale = method_body(copy, "private ExecutionAllocation AllocateExecutionDelta", "private static string BuildAllocationRouteKey")
         self.assertIn("AllocateExecutionDelta(route, context, true)", opening)
         self.assertIn("state.MasterQuantity += context.Quantity", scale)
-        self.assertIn("ScaleFollowerQuantity(state.MasterQuantity, route.Ratio)", scale)
+        self.assertIn("ScaleFollowerQuantity(state.MasterQuantity, state.Ratio)", scale)
+        self.assertIn("ResolveMasterOrderIdentity(context)", scale)
         self.assertIn("targetFollowerQuantity - state.FollowerQuantity", scale)
         self.assertNotIn("ResolveContextMasterQuantity(context)", opening)
         self.assertNotIn("expected", opening)
@@ -155,7 +156,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         configure = method_body(copy, "public void Configure", "public void ProcessMasterExecution")
         epochs = method_body(
             copy,
-            "private void ReconcileAllocationEpochs",
+            "private bool ReconcileAllocationEpochs",
             "private ExecutionAllocation AllocateExecutionDelta",
         )
         tooltip = method_body(
@@ -164,9 +165,10 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             "private static Style CreateEditableRatioTextBoxStyle",
         )
         self.assertIn("ReconcileAllocationEpochs(nextEnabled, nextRouteSignatures)", configure)
-        self.assertIn("if (!nextEnabled || !_enabled)", epochs)
-        self.assertIn("_allocationByRouteDirection.Clear()", epochs)
-        self.assertIn("changedRoutes.Contains(item.Value.RouteKey)", epochs)
+        self.assertIn("if (!nextEnabled)", epochs)
+        self.assertIn("_entryOrderAllocations.Clear()", epochs)
+        self.assertIn("_routeRevision++", epochs)
+        self.assertNotIn("changedRoutes.Contains(item.Value.RouteKey)", epochs)
         self.assertNotIn("Submit", epochs)
         self.assertIn("dashboard.group.ratio_allocation_policy", tooltip)
 
@@ -459,34 +461,21 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             trim.index("original.Key.QuantityChanged = original.Value;"),
         )
 
-    def test_rejected_follower_protection_leg_is_repaired_before_recovery_close(self):
-        # A transient native rejection of one follower protection leg must not
-        # close a follower out of a position the master still holds. The
-        # response is one bounded resubmission of the exact same leg; a second
-        # rejection falls through to attributed recovery.
+    def test_rejected_follower_protection_fails_closed_without_oco_reuse(self):
+        # A rejected native protection leg has no safe retry identity. The
+        # follower must fail closed through attributable recovery without
+        # resubmitting the consumed OCO or creating duplicate exposure.
         text = source(COPY_ENGINE)
         dispatch = method_body(
             text,
             "private void ProcessFollowerProtectionOrderUpdate",
             "public void ProcessAccountStateUpdate",
         )
-        self.assertIn("TryRepairRejectedFollowerProtectionLeg", dispatch)
-        self.assertLess(
-            dispatch.index("TryRepairRejectedFollowerProtectionLeg"),
-            dispatch.index("TrySubmitAttributedRecoveryClose"),
-        )
-        repair = method_body(
-            text,
-            "private bool TryRepairRejectedFollowerProtectionLeg",
-            "private void TrySubmitAttributedRecoveryClose",
-        )
-        self.assertIn("RepairedProtectionSignals.Add(signal)", repair)
-        self.assertIn("rejected.Oco", repair)
-        self.assertIn("rejected.StopPrice", repair)
-        self.assertIn("rejected.LimitPrice", repair)
-        self.assertIn("follower_protection_repair", repair)
-        self.assertNotIn("TrySubmitAttributedRecoveryClose", repair)
-        self.assertNotIn("Flatten", repair)
+        self.assertNotIn("TryRepairRejectedFollowerProtectionLeg", dispatch)
+        self.assertIn("lifecycle.ProtectionFailed = true;", dispatch)
+        self.assertIn("TrySubmitAttributedRecoveryClose", dispatch)
+        self.assertNotIn("private bool TryRepairRejectedFollowerProtectionLeg", text)
+        self.assertNotIn("rejected.Oco", text)
 
     def test_unavailable_risk_state_is_never_displayed_as_realized_loss(self):
         # GL-STAB-01: a disconnected or unread account must render risk as
@@ -516,7 +505,9 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         text = source(COPY_ENGINE)
         opening = method_body(text, "public void ProcessMasterExecution", "public void ProcessMasterOrderUpdate")
         submit = method_body(text, "private FollowerOrderSubmission SubmitFollowerEntry", "private bool SubmitProtectionUnits")
-        self.assertIn("FanOutOpening(masterAccount, context, routes, plan, masterEntryQuantity)", opening)
+        self.assertIn("FanOutOpening(", opening)
+        self.assertIn("openContext", opening)
+        self.assertIn("transition.CloseQuantity > 0", opening)
         self.assertIn("TryResolveMasterPlan", opening)
         self.assertNotIn("TryGetNetQuantityForInstrumentRoot", opening)
         self.assertNotIn("PendingMasterCopy", text)
@@ -548,7 +539,8 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("TryAttachLateFollowerProtection(masterAccount, order)", master_update)
         self.assertIn("lifecycle.MasterEntrySignal", attach)
         self.assertIn("lifecycle.MasterEntryQuantity", attach)
-        self.assertIn("lifecycle.MasterEntryOrder?.Filled", attach)
+        self.assertIn("lifecycle.MasterOrderIdentity", attach)
+        self.assertIn("GetClaimedMasterSourceTokens(", attach)
         self.assertIn("!lifecycle.ProtectionAvailable", attach)
         self.assertIn("lifecycle.ProtectionAvailable = true", attach)
         self.assertIn("ProcessFollowerOrderUpdate(lifecycle.Account, entryOrder)", attach)
@@ -599,10 +591,17 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         )
         self.assertIn("GlitchReplicationEngine.IsStopLikeOrder(masterOrder)", mirror)
         self.assertIn("masterOrder.OrderType == OrderType.Limit", mirror)
-        self.assertIn('CopySignalName + (isStop ? "-S-" : "-T-")', mirror)
-        self.assertIn("followerOrder.StopPriceChanged = masterPrice", mirror)
-        self.assertIn("followerOrder.LimitPriceChanged = masterPrice", mirror)
-        self.assertIn("route.FollowerAccount.Change(changes.ToArray())", mirror)
+        self.assertIn("_pendingProtectionMirrors[key]", mirror)
+        self.assertIn("TryApplyPendingProtectionMirror(key, protectionKind)", mirror)
+        apply = method_body(
+            source(COPY_ENGINE),
+            "private void TryApplyPendingProtectionMirror(string key, string protectionKind)",
+            "private static bool CanChangeOrder",
+        )
+        self.assertIn("followerOrder.StopPriceChanged = desiredPrice", apply)
+        self.assertIn("followerOrder.LimitPriceChanged = desiredPrice", apply)
+        self.assertIn("pending.Account.Change(changes.ToArray())", apply)
+        self.assertIn("!CanChangeOrder(order)", apply)
 
     def test_late_protection_never_uses_an_unlinked_master_plan(self):
         protection = source(PROTECTION)
@@ -650,9 +649,9 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("EntryOrderFilledQuantity", copy)
         self.assertIn("EntryOrderQuantity", copy)
         self.assertIn("OrderIdentity", copy)
-        self.assertIn("context.EntryOrder?.Filled", copy)
+        self.assertIn("ResolveMasterOrderIdentity(context)", copy)
         self.assertIn("AllocateExecutionDelta(route, context, true)", copy)
-        self.assertIn("orderState.AllocatedFollowerQuantity", copy)
+        self.assertIn("state.FollowerQuantity", copy)
         self.assertNotIn("Math.Abs(currentMasterNet) < copyMasterQuantity", copy)
         self.assertNotIn("Math.Abs(masterNet) < copyMasterQuantity", copy)
         self.assertIn('TryGetNestedPropertyValueAsString(executionObject, "ExecutionId")', replication)
@@ -721,17 +720,23 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("(followerNet > 0) != lifecycle.IsLong", recovery)
         self.assertIn("Math.Min(attributableQuantity, Math.Abs(followerNet))", recovery)
         self.assertIn("manual_override", recovery)
-        self.assertIn("SubmitFollowerClose(", recovery)
+        self.assertIn("QueueFollowerCloseAfterProtectionCancel(", recovery)
 
-    def test_each_follower_unit_has_an_independent_native_oco_pair(self):
+    def test_identical_follower_protection_units_share_quantity_sized_native_oco_pairs(self):
         body = method_body(
             source(COPY_ENGINE),
             "private bool SubmitProtectionUnits",
             "private bool TryRecoverRecentFollowerLifecycle",
         )
         self.assertIn("for (int unitIndex = fromQuantity; unitIndex < toQuantity; unitIndex++)", body)
+        self.assertIn("ProtectionBatch", body)
+        self.assertIn("MaxNativeProtectionBatchQuantity", source(COPY_ENGINE))
+        self.assertIn("batch.Quantity++", body)
+        self.assertIn("batch.Quantity, 0, batch.StopPrice", body)
+        self.assertIn("batch.Quantity, batch.TargetPrice", body)
         self.assertIn("string oco =", body)
-        self.assertGreaterEqual(body.count("\n                    1,"), 2)
+        self.assertNotIn("\n                    1, 0, leg.StopPrice", body)
+        self.assertNotIn("\n                    1, leg.TargetPrice", body)
 
     def test_multi_leg_stop_identity_is_native_oco_not_trade_correlation(self):
         body = method_body(
@@ -742,14 +747,16 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("oco.Trim()", body)
         self.assertNotIn("TryGetSignalCorrelation", body)
 
-    def test_master_bracket_fills_are_not_double_copied(self):
+    def test_master_bracket_fills_are_replicated_once_from_native_execution_truth(self):
         body = method_body(
             source(COPY_ENGINE),
             "public void ProcessMasterExecution",
             "public void ProcessMasterOrderUpdate",
         )
-        self.assertIn("IsMasterProtectionExecution", body)
-        self.assertIn("return;", body)
+        self.assertNotIn("IsMasterProtectionExecution", body)
+        self.assertIn("TryResolveExecutionTransition", body)
+        self.assertIn("TryRememberExecutionId(closeKey)", body)
+        self.assertIn("FanOutCompleteClose", body)
 
     def test_ambiguous_manual_and_ai_exit_actions_use_signal_intent(self):
         copy = source(COPY_ENGINE)
@@ -871,7 +878,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             recovery.index("TryGetNetQuantityForInstrument"),
             recovery.index("lifecycle.RecoveryCloseSubmitted = true"),
         )
-        self.assertIn('submission.Result, "submitted"', recovery)
+        self.assertIn("IsPendingCloseAccepted(queueResult)", recovery)
         close_tracking = method_body(
             copy_engine,
             "private void TrackCloseOrder",
@@ -995,9 +1002,13 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             "_entriesBySignal.Clear()",
             "_closesBySignal.Clear()",
             "_syncByFollowerInstrument.Clear()",
-            "_allocationByRouteDirection.Clear()",
             "_entryOrderAllocations.Clear()",
             "_allocationRouteSignatures.Clear()",
+            "_pendingMasterCloses.Clear()",
+            "_pendingProtectionMirrors.Clear()",
+            "_deferredFollowerOpens.Clear()",
+            "_followerProtectionExitBlocks.Clear()",
+            "_protectionRepairAttempts.Clear()",
         ):
             self.assertIn(lifecycle_map, reset)
         complete = method_body(window, "private async Task<bool> ExecuteFlattenAllCoreAsync", "private void OnCreateGroupClick")

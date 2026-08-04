@@ -35,6 +35,7 @@ namespace Glitch.Services
     {
         private readonly string _filePath;
         private readonly Dictionary<string, GlitchTradeInsightsService.TradeRoundTrip> _ledgerById;
+        private readonly GlitchTradeInsightsService.ExecutionAccumulator _executionAccumulator;
         private readonly object _sync = new object();
         private bool _loaded;
         private bool _dirty;
@@ -50,6 +51,7 @@ namespace Glitch.Services
         {
             _filePath = filePath;
             _ledgerById = new Dictionary<string, GlitchTradeInsightsService.TradeRoundTrip>(StringComparer.OrdinalIgnoreCase);
+            _executionAccumulator = new GlitchTradeInsightsService.ExecutionAccumulator();
             _lastWriteUtc = DateTime.MinValue;
         }
 
@@ -60,45 +62,97 @@ namespace Glitch.Services
             lock (_sync)
             {
                 EnsureLoadedUnsafe();
+                MergeTradesUnsafe(incomingTrades);
+                return CompleteMergeUnsafe(nowUtc);
+            }
+        }
 
-                if (incomingTrades != null)
+        internal IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> RebuildExecutionAggregationAndGetAll(
+            IReadOnlyList<GlitchTradeInsightsService.TradeJournalEvent> journalEvents,
+            IReadOnlyList<GlitchTradeInsightsService.TradeJournalEvent> contextEvents,
+            DateTime nowUtc)
+        {
+            lock (_sync)
+            {
+                EnsureLoadedUnsafe();
+                _executionAccumulator.Reset();
+                MergeTradesUnsafe(_executionAccumulator.Process(journalEvents, contextEvents));
+                return CompleteMergeUnsafe(nowUtc);
+            }
+        }
+
+        internal IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> MergeExecutionEventsAndGetAll(
+            IReadOnlyList<GlitchTradeInsightsService.TradeJournalEvent> executionEvents,
+            IReadOnlyList<GlitchTradeInsightsService.TradeJournalEvent> contextEvents,
+            DateTime nowUtc)
+        {
+            lock (_sync)
+            {
+                EnsureLoadedUnsafe();
+                MergeTradesUnsafe(_executionAccumulator.Process(executionEvents, contextEvents));
+                return CompleteMergeUnsafe(nowUtc);
+            }
+        }
+
+        private void MergeTradesUnsafe(IEnumerable<GlitchTradeInsightsService.TradeRoundTrip> incomingTrades)
+        {
+            if (incomingTrades == null)
+                return;
+
+            foreach (GlitchTradeInsightsService.TradeRoundTrip trade in incomingTrades)
+            {
+                if (trade == null)
+                    continue;
+
+                string tradeId = string.IsNullOrWhiteSpace(trade.TradeId)
+                    ? GlitchTradeInsightsService.BuildTradeId(trade)
+                    : trade.TradeId;
+                if (string.IsNullOrWhiteSpace(tradeId))
+                    continue;
+
+                if (_ledgerById.TryGetValue(tradeId, out GlitchTradeInsightsService.TradeRoundTrip exact))
                 {
-                    foreach (GlitchTradeInsightsService.TradeRoundTrip trade in incomingTrades)
-                    {
-                        if (trade == null)
-                            continue;
-
-                        string tradeId = string.IsNullOrWhiteSpace(trade.TradeId)
-                            ? GlitchTradeInsightsService.BuildTradeId(trade)
-                            : trade.TradeId;
-                        if (string.IsNullOrWhiteSpace(tradeId))
-                            continue;
-
-                        if (_ledgerById.TryGetValue(tradeId, out GlitchTradeInsightsService.TradeRoundTrip existing))
-                        {
-                            if (TryBackfillTradeMetadata(existing, trade))
-                                _dirty = true;
-                            continue;
-                        }
-
-                        trade.TradeId = tradeId;
-                        _ledgerById[tradeId] = CloneTrade(trade);
+                    if (TryBackfillTradeMetadata(exact, trade))
                         _dirty = true;
+                    continue;
+                }
+
+                KeyValuePair<string, GlitchTradeInsightsService.TradeRoundTrip>? lifecycleMatch =
+                    _ledgerById.FirstOrDefault(pair => AreSameTradeLifecycle(pair.Value, trade));
+                if (lifecycleMatch.HasValue && lifecycleMatch.Value.Value != null)
+                {
+                    GlitchTradeInsightsService.TradeRoundTrip existing = lifecycleMatch.Value.Value;
+                    if (IsPreferredAggregate(existing, trade))
+                    {
+                        _ledgerById.Remove(lifecycleMatch.Value.Key);
+                    }
+                    else
+                    {
+                        if (TryBackfillTradeMetadata(existing, trade))
+                            _dirty = true;
+                        continue;
                     }
                 }
 
-                NormalizeDuplicateTradesUnsafe();
-                bool queueFlush = _dirty;
-
-                var snapshot = _ledgerById.Values
-                    .OrderByDescending(trade => trade.ExitUtc)
-                    .ToList();
-
-                if (queueFlush)
-                    QueueBackgroundFlush(nowUtc, force: false);
-
-                return snapshot;
+                GlitchTradeInsightsService.TradeRoundTrip clone = CloneTrade(trade);
+                clone.TradeId = tradeId;
+                _ledgerById[tradeId] = clone;
+                _dirty = true;
             }
+        }
+
+        private IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> CompleteMergeUnsafe(DateTime nowUtc)
+        {
+            NormalizeDuplicateTradesUnsafe();
+            bool queueFlush = _dirty;
+            var snapshot = _ledgerById.Values
+                .OrderByDescending(trade => trade.ExitUtc)
+                .ToList();
+
+            if (queueFlush)
+                QueueBackgroundFlush(nowUtc, force: false);
+
+            return snapshot;
         }
 
         internal void Flush(DateTime nowUtc, bool force)
@@ -165,6 +219,7 @@ namespace Glitch.Services
             {
                 _loaded = true;
                 _ledgerById.Clear();
+                _executionAccumulator.Reset();
                 _dirty = false;
                 _lastWriteUtc = DateTime.MinValue;
 
@@ -408,11 +463,12 @@ namespace Glitch.Services
                 return;
 
             var seenSignatures = new HashSet<string>(StringComparer.Ordinal);
-            var seenGlitchEntries = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var duplicateTradeIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var retainedLifecycles = new List<KeyValuePair<string, GlitchTradeInsightsService.TradeRoundTrip>>();
 
             foreach (KeyValuePair<string, GlitchTradeInsightsService.TradeRoundTrip> kvp in _ledgerById
-                .OrderBy(pair => pair.Value?.ExitUtc ?? DateTime.MinValue)
+                .OrderByDescending(pair => Math.Abs(pair.Value?.Contracts ?? 0))
+                .ThenByDescending(pair => pair.Value?.ExitUtc ?? DateTime.MinValue)
                 .ThenBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase))
             {
                 GlitchTradeInsightsService.TradeRoundTrip trade = kvp.Value;
@@ -429,13 +485,15 @@ namespace Glitch.Services
                     continue;
                 }
 
-                string entrySignal = CleanToken(trade.EntrySignal);
-                if (entrySignal.StartsWith("GLT-", StringComparison.OrdinalIgnoreCase)
-                    && !seenGlitchEntries.Add(string.Join("|",
-                        CleanToken(trade.AccountName),
-                        CleanToken(trade.Instrument),
-                        entrySignal)))
+                KeyValuePair<string, GlitchTradeInsightsService.TradeRoundTrip>? lifecycleMatch =
+                    retainedLifecycles.FirstOrDefault(pair => AreSameTradeLifecycle(pair.Value, trade));
+                if (lifecycleMatch.HasValue && lifecycleMatch.Value.Value != null)
+                {
                     duplicateTradeIds.Add(kvp.Key);
+                    continue;
+                }
+
+                retainedLifecycles.Add(kvp);
             }
 
             if (duplicateTradeIds.Count == 0)
@@ -445,6 +503,62 @@ namespace Glitch.Services
                 _ledgerById.Remove(tradeId);
 
             _dirty = true;
+        }
+
+        internal static bool AreSameTradeLifecycle(
+            GlitchTradeInsightsService.TradeRoundTrip left,
+            GlitchTradeInsightsService.TradeRoundTrip right)
+        {
+            if (left == null || right == null)
+                return false;
+            if (!string.Equals(CleanToken(left.AccountName), CleanToken(right.AccountName), StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(CleanToken(left.Instrument), CleanToken(right.Instrument), StringComparison.OrdinalIgnoreCase) ||
+                left.IsLong != right.IsLong)
+            {
+                return false;
+            }
+
+            string leftSignal = CleanToken(left.EntrySignal);
+            string rightSignal = CleanToken(right.EntrySignal);
+            if (!string.Equals(leftSignal, rightSignal, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            string leftSource = CleanToken(left.TradeSource);
+            string rightSource = CleanToken(right.TradeSource);
+            if (!string.IsNullOrWhiteSpace(leftSource) &&
+                !string.IsNullOrWhiteSpace(rightSource) &&
+                !leftSource.Equals("Unknown", StringComparison.OrdinalIgnoreCase) &&
+                !rightSource.Equals("Unknown", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(leftSource, rightSource, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (Math.Abs((left.EntryUtc - right.EntryUtc).TotalSeconds) > 5)
+                return false;
+
+            DateTime laterEntry = left.EntryUtc >= right.EntryUtc ? left.EntryUtc : right.EntryUtc;
+            DateTime earlierExit = left.ExitUtc <= right.ExitUtc ? left.ExitUtc : right.ExitUtc;
+            return laterEntry <= earlierExit;
+        }
+
+        internal static bool IsPreferredAggregate(
+            GlitchTradeInsightsService.TradeRoundTrip existing,
+            GlitchTradeInsightsService.TradeRoundTrip incoming)
+        {
+            if (existing == null)
+                return incoming != null;
+            if (incoming == null)
+                return false;
+
+            double existingContracts = Math.Abs(existing.Contracts);
+            double incomingContracts = Math.Abs(incoming.Contracts);
+            if (incomingContracts > existingContracts + 0.0001)
+                return true;
+            if (existingContracts > incomingContracts + 0.0001)
+                return false;
+
+            return incoming.ExitUtc > existing.ExitUtc;
         }
 
         private static string BuildExactDuplicateSignature(GlitchTradeInsightsService.TradeRoundTrip trade)

@@ -47,6 +47,27 @@ namespace Glitch.Services
             bool isLong,
             out GlitchReplicationProtectionPlan plan)
         {
+            return TryResolveMasterPlan(
+                masterAccount,
+                instrument,
+                entrySignal,
+                requiredMasterQuantity,
+                isLong,
+                null,
+                DateTime.MinValue,
+                out plan);
+        }
+
+        public static bool TryResolveMasterPlan(
+            Account masterAccount,
+            Instrument instrument,
+            string entrySignal,
+            int requiredMasterQuantity,
+            bool isLong,
+            IReadOnlyCollection<string> excludedSourceTokens,
+            DateTime preferredNotBeforeUtc,
+            out GlitchReplicationProtectionPlan plan)
+        {
             plan = null;
             if (masterAccount == null || instrument == null || requiredMasterQuantity <= 0)
                 return false;
@@ -90,7 +111,10 @@ namespace Glitch.Services
                     return false;
             }
 
-            var legs = new List<GlitchReplicationProtectionLeg>();
+            var excluded = new HashSet<string>(
+                excludedSourceTokens ?? Array.Empty<string>(),
+                StringComparer.OrdinalIgnoreCase);
+            var candidatesByOco = new List<PlanCandidate>();
             foreach (IGrouping<string, Order> ocoGroup in candidates.GroupBy(
                 order => order.Oco.Trim(),
                 StringComparer.OrdinalIgnoreCase))
@@ -110,18 +134,37 @@ namespace Glitch.Services
                 if (!isLong && (stop.StopPrice <= target.LimitPrice))
                     continue;
 
-                legs.Add(new GlitchReplicationProtectionLeg
+                string sourceToken = BuildSourceToken(stop.Name, stop.Oco);
+                if (excluded.Contains(sourceToken))
+                    continue;
+                candidatesByOco.Add(new PlanCandidate
                 {
-                    MasterQuantity = quantity,
-                    StopPrice = stop.StopPrice,
-                    TargetPrice = target.LimitPrice,
-                    SourceToken = BuildSourceToken(stop.Name, stop.Oco)
+                    ObservedUtc = LatestOrderTimeUtc(stop, target),
+                    Leg = new GlitchReplicationProtectionLeg
+                    {
+                        MasterQuantity = quantity,
+                        StopPrice = stop.StopPrice,
+                        TargetPrice = target.LimitPrice,
+                        SourceToken = sourceToken
+                    }
                 });
             }
 
-            int totalQuantity = legs.Sum(leg => leg.MasterQuantity);
-            if (totalQuantity != requiredMasterQuantity)
+            List<PlanCandidate> selected;
+            int totalAvailable = candidatesByOco.Sum(item => item.Leg.MasterQuantity);
+            if (totalAvailable == requiredMasterQuantity)
+                selected = candidatesByOco;
+            else if (!TrySelectExactPlan(
+                candidatesByOco,
+                requiredMasterQuantity,
+                preferredNotBeforeUtc,
+                out selected))
                 return false;
+
+            List<GlitchReplicationProtectionLeg> legs = selected
+                .Select(item => item.Leg)
+                .ToList();
+            int totalQuantity = legs.Sum(leg => leg.MasterQuantity);
 
             legs = isLong
                 ? legs.OrderBy(leg => leg.TargetPrice).ToList()
@@ -135,6 +178,80 @@ namespace Glitch.Services
                 Legs = legs
             };
             return true;
+        }
+
+        private static bool TrySelectExactPlan(
+            IReadOnlyList<PlanCandidate> candidates,
+            int requiredMasterQuantity,
+            DateTime preferredNotBeforeUtc,
+            out List<PlanCandidate> selected)
+        {
+            selected = null;
+            if (requiredMasterQuantity <= 0 || candidates == null || candidates.Count == 0)
+                return false;
+            DateTime preferred = preferredNotBeforeUtc.Kind == DateTimeKind.Utc
+                ? preferredNotBeforeUtc
+                : preferredNotBeforeUtc == DateTime.MinValue
+                    ? DateTime.MinValue
+                    : preferredNotBeforeUtc.ToUniversalTime();
+            List<PlanCandidate> ordered = candidates
+                .OrderBy(item => preferred == DateTime.MinValue
+                    ? 0
+                    : item.ObservedUtc < preferred.AddMilliseconds(-250) ? 1 : 0)
+                .ThenBy(item => preferred == DateTime.MinValue
+                    ? 0
+                    : Math.Abs((item.ObservedUtc - preferred).Ticks))
+                .ThenBy(item => item.ObservedUtc)
+                .ThenBy(item => item.Leg.SourceToken, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var paths = new Dictionary<int, List<PlanCandidate>>
+            {
+                [0] = new List<PlanCandidate>()
+            };
+            var pathCounts = new Dictionary<int, int> { [0] = 1 };
+            foreach (PlanCandidate candidate in ordered)
+            {
+                foreach (KeyValuePair<int, List<PlanCandidate>> existing in paths
+                    .OrderByDescending(item => item.Key)
+                    .ToList())
+                {
+                    int nextQuantity = existing.Key + candidate.Leg.MasterQuantity;
+                    if (nextQuantity > requiredMasterQuantity)
+                        continue;
+                    int addedPaths = pathCounts.TryGetValue(existing.Key, out int existingCount)
+                        ? existingCount
+                        : 1;
+                    if (!paths.ContainsKey(nextQuantity))
+                    {
+                        paths[nextQuantity] = new List<PlanCandidate>(existing.Value) { candidate };
+                        pathCounts[nextQuantity] = Math.Min(2, addedPaths);
+                    }
+                    else
+                    {
+                        pathCounts[nextQuantity] = Math.Min(
+                            2,
+                            pathCounts[nextQuantity] + addedPaths);
+                    }
+                }
+            }
+            return paths.TryGetValue(requiredMasterQuantity, out selected)
+                && pathCounts.TryGetValue(requiredMasterQuantity, out int solutionCount)
+                && solutionCount == 1;
+        }
+
+        private static DateTime LatestOrderTimeUtc(Order first, Order second)
+        {
+            DateTime firstUtc = NormalizeUtc(first?.Time ?? DateTime.MinValue);
+            DateTime secondUtc = NormalizeUtc(second?.Time ?? DateTime.MinValue);
+            return firstUtc >= secondUtc ? firstUtc : secondUtc;
+        }
+
+        private static DateTime NormalizeUtc(DateTime value)
+        {
+            if (value == DateTime.MinValue || value.Kind == DateTimeKind.Utc)
+                return value;
+            return value.ToUniversalTime();
         }
 
         public static bool TryScalePlan(
@@ -342,19 +459,19 @@ namespace Glitch.Services
             string source = !string.IsNullOrWhiteSpace(oco)
                 ? oco.Trim()
                 : orderName;
-            return StableToken(source, 8);
+            return StableToken(source, 12);
         }
 
         public static string StableToken(string value, int length)
         {
-            uint hash = 2166136261;
+            ulong hash = 14695981039346656037UL;
             byte[] bytes = Encoding.UTF8.GetBytes(value ?? string.Empty);
             foreach (byte item in bytes)
             {
                 hash ^= item;
-                hash *= 16777619;
+                hash *= 1099511628211UL;
             }
-            string token = hash.ToString("x8", CultureInfo.InvariantCulture);
+            string token = hash.ToString("x16", CultureInfo.InvariantCulture);
             return token.Substring(0, Math.Max(1, Math.Min(token.Length, length)));
         }
 
@@ -434,6 +551,12 @@ namespace Glitch.Services
             public int Index { get; set; }
             public int Quantity { get; set; }
             public double Remainder { get; set; }
+        }
+
+        private sealed class PlanCandidate
+        {
+            public DateTime ObservedUtc { get; set; }
+            public GlitchReplicationProtectionLeg Leg { get; set; }
         }
     }
 }

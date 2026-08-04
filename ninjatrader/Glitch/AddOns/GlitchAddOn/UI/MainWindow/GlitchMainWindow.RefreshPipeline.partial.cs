@@ -230,7 +230,11 @@ namespace Glitch.UI
             // coalesces or replaces an OrderUpdate object. A filled AI master
             // must become natively protected or enter fail-closed recovery.
             foreach (Account activeAccount in activeAccounts)
+            {
                 GlitchAiOrderExecutor.ProcessAccountStateUpdate(activeAccount);
+                if (_copyEngine != null && _isReplicatingUi)
+                    _copyEngine.ProcessAccountStateUpdate(activeAccount);
+            }
 
             ApplyAccountRows(rows);
             ApplyRiskMitigations(rows, activeAccounts);

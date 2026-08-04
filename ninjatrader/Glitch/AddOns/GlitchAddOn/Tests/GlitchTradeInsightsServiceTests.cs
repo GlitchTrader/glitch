@@ -300,6 +300,86 @@ namespace Glitch.Services.Tests
             Assert.That(snapshot.ClosedTrades[1].CommissionTotal, Is.EqualTo(2.00).Within(0.000001));
         }
 
+        [Test]
+        public void IncrementalPartialFillsAggregateExactlyOnceWithVwapAndPnl()
+        {
+            DateTime start = new DateTime(2026, 8, 3, 11, 0, 0, DateTimeKind.Utc);
+            var accumulator = new GlitchTradeInsightsService.ExecutionAccumulator();
+            var entries = new List<GlitchTradeInsightsService.TradeJournalEvent>
+            {
+                Execution(start, "Buy", 3, 100.00, "GLT-COPY-E-trade-1", "SYNC", "entry-1", 3.00, "Replication"),
+                Execution(start.AddMilliseconds(20), "Buy", 2, 102.00, "GLT-COPY-E-trade-1", "SYNC", "entry-2", 2.00, "Replication")
+            };
+
+            Assert.That(accumulator.Process(entries, entries), Is.Empty);
+
+            var allExits = new List<GlitchTradeInsightsService.TradeJournalEvent>();
+            GlitchTradeInsightsService.TradeRoundTrip completed = null;
+            for (int index = 0; index < 5; index++)
+            {
+                GlitchTradeInsightsService.TradeJournalEvent exit = Execution(
+                    start.AddMinutes(1).AddMilliseconds(index * 20),
+                    "Sell",
+                    1,
+                    108.00 + index,
+                    "GLT-COPY-S-trade-1-" + (index + 1),
+                    "SL",
+                    "exit-" + (index + 1),
+                    1.00,
+                    "Replication");
+                allExits.Add(exit);
+                IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> closed =
+                    accumulator.Process(new[] { exit }, entries.Concat(allExits).ToList());
+                if (index < 4)
+                    Assert.That(closed, Is.Empty);
+                else
+                {
+                    Assert.That(closed, Has.Count.EqualTo(1));
+                    completed = closed[0];
+                }
+            }
+
+            Assert.That(completed, Is.Not.Null);
+            Assert.That(completed.Contracts, Is.EqualTo(5).Within(0.000001));
+            Assert.That(completed.EntryPrice, Is.EqualTo(100.8).Within(0.000001));
+            Assert.That(completed.ExitPrice, Is.EqualTo(110.0).Within(0.000001));
+            Assert.That(completed.PnlPoints, Is.EqualTo(46.0).Within(0.000001));
+            Assert.That(completed.CommissionTotal, Is.EqualTo(10.0).Within(0.000001));
+            Assert.That(completed.TradeSource, Is.EqualTo("Replication"));
+            Assert.That(completed.EntrySignal, Is.EqualTo("GLT-COPY-E-trade-1"));
+
+            Assert.That(
+                accumulator.Process(new[] { allExits[4] }, entries.Concat(allExits).ToList()),
+                Is.Empty,
+                "A repeated native execution id must not emit a duplicate completion row.");
+        }
+
+        [Test]
+        public void ScaleOutThenScaleInIncludesEveryEntryAndExitFragment()
+        {
+            DateTime start = new DateTime(2026, 8, 3, 12, 0, 0, DateTimeKind.Utc);
+            var events = new List<GlitchTradeInsightsService.TradeJournalEvent>
+            {
+                Execution(start, "Buy", 2, 100.00, "Entry", null, "entry-1", 0, "Manual"),
+                Execution(start.AddMinutes(1), "Sell", 1, 110.00, "Close", "EXIT", "exit-1", 0, "Manual"),
+                Execution(start.AddMinutes(2), "Buy", 1, 120.00, "Entry", null, "entry-2", 0, "Manual"),
+                Execution(start.AddMinutes(3), "Sell", 2, 130.00, "Close", "EXIT", "exit-2", 0, "Manual")
+            };
+
+            GlitchTradeInsightsService.TradeInsightsSnapshot snapshot =
+                new GlitchTradeInsightsService().BuildSnapshot(
+                    events,
+                    new List<GlitchTradeInsightsService.TradeWarningEvent>(),
+                    start.AddMinutes(4));
+
+            Assert.That(snapshot.ClosedTrades, Has.Count.EqualTo(1));
+            Assert.That(snapshot.ClosedTrades[0].Contracts, Is.EqualTo(3).Within(0.000001));
+            Assert.That(snapshot.ClosedTrades[0].EntryPrice, Is.EqualTo(106.6666666667).Within(0.000001));
+            Assert.That(snapshot.ClosedTrades[0].ExitPrice, Is.EqualTo(123.3333333333).Within(0.000001));
+            Assert.That(snapshot.ClosedTrades[0].PnlPoints, Is.EqualTo(50).Within(0.000001));
+            Assert.That(snapshot.ClosedTrades[0].TradeSource, Is.EqualTo("Manual"));
+        }
+
         private static GlitchTradeInsightsService.TradeJournalEvent Execution(
             DateTime utc,
             string action,
@@ -308,7 +388,8 @@ namespace Glitch.Services.Tests
             string signal,
             string tag,
             string executionId,
-            double commission = 0)
+            double commission = 0,
+            string source = "Strategy")
         {
             string tagToken = string.IsNullOrWhiteSpace(tag) ? string.Empty : " [TAG:" + tag + "]";
             string commissionToken = commission == 0
@@ -321,7 +402,7 @@ namespace Glitch.Services.Tests
                 Category = "Execution",
                 Message = "Exec " + action + " " + quantity + " MNQ @ " +
                           price.ToString("0.########", System.Globalization.CultureInfo.InvariantCulture) +
-                          " (" + signal + ") [SRC:Strategy]" + tagToken + commissionToken + " [EID:" + executionId + "]"
+                          " (" + signal + ") [SRC:" + source + "]" + tagToken + commissionToken + " [EID:" + executionId + "]"
             };
         }
     }

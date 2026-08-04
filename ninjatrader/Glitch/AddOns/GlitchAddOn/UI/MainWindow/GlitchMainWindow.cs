@@ -4696,22 +4696,35 @@ namespace Glitch.UI
             }
         }
 
-        private static bool HasWorkingProtectiveStop(Account account, string instrumentRoot)
+        private static bool TryGetWorkingProtectiveStopQuantity(
+            Account account,
+            string instrumentRoot,
+            MarketPosition marketPosition,
+            out int protectedQuantity)
         {
+            protectedQuantity = 0;
             if (account == null || string.IsNullOrWhiteSpace(instrumentRoot))
                 return false;
 
             try
             {
-                return account.Orders.Any(order =>
-                    order != null &&
-                    order.Instrument != null &&
-                    IsWorkingOrderState(order.OrderState) &&
-                    string.Equals(GetInstrumentRoot(order.Instrument), instrumentRoot, StringComparison.OrdinalIgnoreCase) &&
-                    IsStopLikeOrder(order));
+                OrderAction expectedAction = marketPosition == MarketPosition.Long
+                    ? OrderAction.Sell
+                    : OrderAction.BuyToCover;
+                protectedQuantity = account.Orders
+                    .Where(order =>
+                        order != null
+                        && order.Instrument != null
+                        && IsWorkingOrderState(order.OrderState)
+                        && string.Equals(GetInstrumentRoot(order.Instrument), instrumentRoot, StringComparison.OrdinalIgnoreCase)
+                        && order.OrderAction == expectedAction
+                        && IsStopLikeOrder(order))
+                    .Sum(order => Math.Max(0, Math.Abs(order.Quantity) - Math.Max(0, order.Filled)));
+                return true;
             }
             catch
             {
+                protectedQuantity = 0;
                 return false;
             }
         }
@@ -4742,7 +4755,13 @@ namespace Glitch.UI
 
                     openRoots.Add(instrumentRoot);
                     string key = accountName + "|" + instrumentRoot;
-                    if (HasWorkingProtectiveStop(account, instrumentRoot))
+                    int exposureQuantity = Math.Abs(position.Quantity);
+                    if (TryGetWorkingProtectiveStopQuantity(
+                            account,
+                            instrumentRoot,
+                            position.MarketPosition,
+                            out int protectedQuantity)
+                        && protectedQuantity >= exposureQuantity)
                     {
                         _noProtectionDetectedSinceByKey.Remove(key);
                         continue;
@@ -4757,7 +4776,9 @@ namespace Glitch.UI
                     if ((nowUtc - sinceUtc).TotalMilliseconds >= timeoutMs)
                     {
                         breachedInstrumentRoot = instrumentRoot;
-                        detail = $"no protective stop for {timeoutMs}ms";
+                        detail = protectedQuantity <= 0
+                            ? $"no protective stop for {timeoutMs}ms"
+                            : $"protective stops cover {protectedQuantity} of {exposureQuantity} contracts for {timeoutMs}ms";
                         return true;
                     }
                 }
