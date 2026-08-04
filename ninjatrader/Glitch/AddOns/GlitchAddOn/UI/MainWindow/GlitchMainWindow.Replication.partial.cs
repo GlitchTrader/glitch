@@ -7,7 +7,6 @@ using System.Collections.ObjectModel;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Glitch.Services;
 using NinjaTrader.Cbi;
@@ -432,37 +431,6 @@ namespace Glitch.UI
                     entryOrderQuantity = Math.Max(quantity, Math.Max(0, nestedQuantity));
             }
 
-            int? postExecutionNetQuantity = null;
-            if (int.TryParse(
-                    TryGetNestedPropertyValueAsString(executionObject, "Position"),
-                    NumberStyles.Integer,
-                    CultureInfo.InvariantCulture,
-                    out int executionPosition))
-            {
-                string marketPosition = TryGetNestedPropertyValueAsString(
-                    executionObject,
-                    "MarketPosition");
-                if (marketPosition.Equals("Short", StringComparison.OrdinalIgnoreCase))
-                    postExecutionNetQuantity = -Math.Abs(executionPosition);
-                else if (marketPosition.Equals("Long", StringComparison.OrdinalIgnoreCase))
-                    postExecutionNetQuantity = Math.Abs(executionPosition);
-                else if (marketPosition.Equals("Flat", StringComparison.OrdinalIgnoreCase))
-                    postExecutionNetQuantity = 0;
-                else
-                    postExecutionNetQuantity = executionPosition;
-            }
-            string executionOperation = TryGetNestedPropertyValueAsString(eventArgs, "Operation");
-            bool isSodExecution = bool.TryParse(
-                TryGetNestedPropertyValueAsString(executionObject, "IsSod"),
-                out bool parsedIsSod) && parsedIsSod;
-            string nativeOrderIdentity = order == null
-                ? TryGetNestedPropertyValueAsString(executionObject, "OrderId")
-                : "local:"
-                    + RuntimeHelpers.GetHashCode(order).ToString(CultureInfo.InvariantCulture)
-                    + "|" + order.Time.Ticks.ToString(CultureInfo.InvariantCulture)
-                    + "|" + (signalName?.Trim() ?? string.Empty)
-                    + "|" + Math.Max(0, order.Quantity).ToString(CultureInfo.InvariantCulture);
-
             context = new GlitchCopyExecutionContext
             {
                 ExecutionId = executionId,
@@ -472,12 +440,12 @@ namespace Glitch.UI
                 Quantity = quantity,
                 EntryOrderFilledQuantity = entryOrderFilledQuantity,
                 EntryOrderQuantity = entryOrderQuantity,
-                PostExecutionNetQuantity = postExecutionNetQuantity,
-                IsRuntimeEventSnapshot = true,
-                ExecutionOperation = executionOperation,
-                IsSodExecution = isSodExecution,
                 EntryOrder = order,
-                OrderIdentity = nativeOrderIdentity,
+                OrderIdentity = TryGetNestedPropertyValueAsString(
+                    executionObject,
+                    "Order.OrderId",
+                    "Order.Id",
+                    "OrderId"),
                 OrderSignalName = signalName,
                 Oco = order?.Oco,
                 ExecutionTimeUtc = TryReadExecutionTimeUtc(executionObject)

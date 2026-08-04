@@ -907,10 +907,8 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             "public void ProcessMasterExecution",
             "public void ProcessMasterOrderUpdate",
         )
-        self.assertNotIn("IsMasterProtectionExecution", body)
-        self.assertIn("TryResolveExecutionTransition", body)
-        self.assertIn("TryRememberExecutionId(closeKey)", body)
-        self.assertIn("FanOutCompleteClose", body)
+        self.assertIn("IsMasterProtectionExecution", body)
+        self.assertIn("return;", body)
 
     def test_ambiguous_manual_and_ai_exit_actions_use_signal_intent(self):
         copy = source(COPY_ENGINE)

@@ -119,23 +119,6 @@ namespace Glitch.Services
                         TryBackfillTradeMetadata(replacement, exact);
                         _ledgerById[tradeId] = replacement;
                         _dirty = true;
-                    continue;
-                }
-
-                KeyValuePair<string, GlitchTradeInsightsService.TradeRoundTrip>? lifecycleMatch =
-                    _ledgerById.FirstOrDefault(pair => AreSameTradeLifecycle(pair.Value, trade));
-                if (lifecycleMatch.HasValue && lifecycleMatch.Value.Value != null)
-                {
-                    GlitchTradeInsightsService.TradeRoundTrip existing = lifecycleMatch.Value.Value;
-                    if (IsPreferredAggregate(existing, trade))
-                    {
-                        _ledgerById.Remove(lifecycleMatch.Value.Key);
-                    }
-                    else
-                    {
-                        if (TryBackfillTradeMetadata(existing, trade))
-                            _dirty = true;
-                        continue;
                     }
                     else if (TryBackfillTradeMetadata(exact, trade))
                     {
