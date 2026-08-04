@@ -45,7 +45,7 @@ namespace Glitch.Services
         private const int MaxLedgerRows = 200000;
         private const int MinWriteIntervalMs = 1200;
         private const string LedgerHeaderLine =
-            "# trade_id\tentry_utc_ticks\texit_utc_ticks\taccount\tinstrument\tside\tcontracts\tentry_price\texit_price\tpnl_points\topen_reason\tclose_reason\tentry_session\texit_session\ttrade_source\tentry_type\texit_type\tentry_signal\texit_signal\tcommission_total";
+            "# trade_id\tentry_utc_ticks\texit_utc_ticks\taccount\tinstrument\tside\tcontracts\tentry_price\texit_price\tpnl_points\topen_reason\tclose_reason\tentry_session\texit_session\ttrade_source\tentry_type\texit_type\tentry_signal\texit_signal\tcommission_total\tentry_order_identity";
 
         internal GlitchTradeLedgerService(string filePath)
         {
@@ -112,7 +112,12 @@ namespace Glitch.Services
 
                 if (_ledgerById.TryGetValue(tradeId, out GlitchTradeInsightsService.TradeRoundTrip exact))
                 {
-                    if (TryBackfillTradeMetadata(exact, trade))
+                    if (IsPreferredAggregate(exact, trade))
+                    {
+                        GlitchTradeInsightsService.TradeRoundTrip replacement = CloneTrade(trade);
+                        replacement.TradeId = tradeId;
+                        TryBackfillTradeMetadata(replacement, exact);
+                        _ledgerById[tradeId] = replacement;
                         _dirty = true;
                     continue;
                 }
@@ -132,11 +137,35 @@ namespace Glitch.Services
                             _dirty = true;
                         continue;
                     }
+                    else if (TryBackfillTradeMetadata(exact, trade))
+                    {
+                        _dirty = true;
+                    }
+                    continue;
+                }
+
+                string retainedTradeId = tradeId;
+                KeyValuePair<string, GlitchTradeInsightsService.TradeRoundTrip>? lifecycleMatch =
+                    _ledgerById.FirstOrDefault(pair => AreSameTradeLifecycle(pair.Value, trade));
+                if (lifecycleMatch.HasValue && lifecycleMatch.Value.Value != null)
+                {
+                    GlitchTradeInsightsService.TradeRoundTrip existing = lifecycleMatch.Value.Value;
+                    if (IsPreferredAggregate(existing, trade))
+                    {
+                        retainedTradeId = lifecycleMatch.Value.Key;
+                        _ledgerById.Remove(lifecycleMatch.Value.Key);
+                    }
+                    else
+                    {
+                        if (TryBackfillTradeMetadata(existing, trade))
+                            _dirty = true;
+                        continue;
+                    }
                 }
 
                 GlitchTradeInsightsService.TradeRoundTrip clone = CloneTrade(trade);
-                clone.TradeId = tradeId;
-                _ledgerById[tradeId] = clone;
+                clone.TradeId = retainedTradeId;
+                _ledgerById[retainedTradeId] = clone;
                 _dirty = true;
             }
         }
@@ -360,7 +389,8 @@ namespace Glitch.Services
                 ExitType = parts.Length >= 17 ? parts[16] : string.Empty,
                 EntrySignal = parts.Length >= 18 ? parts[17] : string.Empty,
                 ExitSignal = parts.Length >= 19 ? parts[18] : string.Empty,
-                CommissionTotal = parts.Length >= 20 && TryParseDouble(parts[19], out double commissionTotal) ? commissionTotal : 0
+                CommissionTotal = parts.Length >= 20 && TryParseDouble(parts[19], out double commissionTotal) ? commissionTotal : 0,
+                EntryOrderIdentity = parts.Length >= 21 ? parts[20] : string.Empty
             };
         }
 
@@ -396,7 +426,8 @@ namespace Glitch.Services
                 CleanToken(trade.ExitType),
                 CleanToken(trade.EntrySignal),
                 CleanToken(trade.ExitSignal),
-                trade.CommissionTotal.ToString("0.########", CultureInfo.InvariantCulture));
+                trade.CommissionTotal.ToString("0.########", CultureInfo.InvariantCulture),
+                CleanToken(trade.EntryOrderIdentity));
         }
 
         private static GlitchTradeInsightsService.TradeRoundTrip CloneTrade(GlitchTradeInsightsService.TradeRoundTrip trade)
@@ -424,6 +455,7 @@ namespace Glitch.Services
                 ExitType = trade.ExitType,
                 EntrySignal = trade.EntrySignal,
                 ExitSignal = trade.ExitSignal,
+                EntryOrderIdentity = trade.EntryOrderIdentity,
                 EntrySession = trade.EntrySession,
                 ExitSession = trade.ExitSession,
                 CommissionTotal = trade.CommissionTotal
@@ -443,6 +475,7 @@ namespace Glitch.Services
             changed |= TryFillString(existing.ExitType, incoming.ExitType, value => existing.ExitType = value);
             changed |= TryFillString(existing.EntrySignal, incoming.EntrySignal, value => existing.EntrySignal = value);
             changed |= TryFillString(existing.ExitSignal, incoming.ExitSignal, value => existing.ExitSignal = value);
+            changed |= TryFillString(existing.EntryOrderIdentity, incoming.EntryOrderIdentity, value => existing.EntryOrderIdentity = value);
             return changed;
         }
 
@@ -518,13 +551,23 @@ namespace Glitch.Services
                 return false;
             }
 
-            string leftSignal = CleanToken(left.EntrySignal);
-            string rightSignal = CleanToken(right.EntrySignal);
-            if (!string.Equals(leftSignal, rightSignal, StringComparison.OrdinalIgnoreCase))
+            string leftOrderIdentity = left.EntryOrderIdentity?.Trim() ?? string.Empty;
+            string rightOrderIdentity = right.EntryOrderIdentity?.Trim() ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(leftOrderIdentity) &&
+                !string.IsNullOrWhiteSpace(rightOrderIdentity))
+            {
+                return string.Equals(leftOrderIdentity, rightOrderIdentity, StringComparison.OrdinalIgnoreCase);
+            }
+
+            string leftSignal = left.EntrySignal?.Trim() ?? string.Empty;
+            string rightSignal = right.EntrySignal?.Trim() ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(leftSignal)
+                && !string.IsNullOrWhiteSpace(rightSignal)
+                && !string.Equals(leftSignal, rightSignal, StringComparison.OrdinalIgnoreCase))
                 return false;
 
-            string leftSource = CleanToken(left.TradeSource);
-            string rightSource = CleanToken(right.TradeSource);
+            string leftSource = left.TradeSource?.Trim() ?? string.Empty;
+            string rightSource = right.TradeSource?.Trim() ?? string.Empty;
             if (!string.IsNullOrWhiteSpace(leftSource) &&
                 !string.IsNullOrWhiteSpace(rightSource) &&
                 !leftSource.Equals("Unknown", StringComparison.OrdinalIgnoreCase) &&

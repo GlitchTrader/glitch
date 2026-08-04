@@ -45,10 +45,14 @@ def test_accumulator_counts_every_fragment_and_deduplicates_only_native_ids():
     close = method_body(insights, "private static TradeRoundTrip BuildClosedTrade", "private static void AccumulateExecutionCommission")
     assert "_seenExecutionIds.Add(BuildExecutionIdentityKey(evt))" in accumulator
     assert "BuildNoIdExecutionSignature" not in insights
-    assert "state.EntryContracts += Math.Abs(signedQty)" in insights
-    assert "state.EntryNotional += Math.Abs(signedQty) * evt.Price" in insights
+    assert "BuildEntryOwnershipKey(evt)" in insights
+    assert "state.Lots[0]" in insights
+    assert "state.Lots.RemoveAt(0)" in insights
+    assert "lot.EntryContracts += fillQuantity" in insights
+    assert "lot.EntryNotional += fillQuantity * evt.Price" in insights
     assert "Contracts = entryContracts" in close
     assert "EntryPrice = entryPrice" in close
+    assert "EntryOrderIdentity = state.EntryOrderIdentity" in close
 
 
 def test_corrected_aggregate_replaces_partial_without_merging_reused_signal():
@@ -61,3 +65,14 @@ def test_corrected_aggregate_replaces_partial_without_merging_reused_signal():
     assert "TotalSeconds) > 5" in lifecycle
     assert "return laterEntry <= earlierExit" in lifecycle
     assert "incomingContracts > existingContracts" in preferred
+
+
+def test_stable_identity_is_appended_without_breaking_legacy_rows():
+    insights = source(INSIGHTS)
+    ledger = source(LEDGER)
+    assert 'if (key == "OID")' in insights
+    assert '"OID",\n                    CleanToken(rawEntryOrderIdentity)' in insights
+    assert "if (!string.IsNullOrWhiteSpace(rawOrderIdentity))" in insights
+    assert "entry_order_identity" in ledger
+    assert "parts.Length >= 21 ? parts[20] : string.Empty" in ledger
+    assert "CleanToken(trade.EntryOrderIdentity)" in ledger

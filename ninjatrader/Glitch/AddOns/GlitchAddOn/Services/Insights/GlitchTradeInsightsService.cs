@@ -85,18 +85,25 @@ namespace Glitch.Services
             string account = CleanToken(trade.AccountName).ToUpperInvariant();
             string instrument = CleanToken(trade.Instrument).ToUpperInvariant();
             string side = trade.IsLong ? "L" : "S";
-            string entryTicks = trade.EntryUtc.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture);
-            string exitTicks = trade.ExitUtc.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture);
-            string contracts = Math.Round(Math.Abs(trade.Contracts), 4).ToString("0.####", CultureInfo.InvariantCulture);
-            string entryPrice = Math.Round(trade.EntryPrice, 8).ToString("0.########", CultureInfo.InvariantCulture);
-            string exitPrice = Math.Round(trade.ExitPrice, 8).ToString("0.########", CultureInfo.InvariantCulture);
+            string rawEntryOrderIdentity = trade.EntryOrderIdentity?.Trim() ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(rawEntryOrderIdentity))
+                return string.Join(
+                    "|",
+                    account,
+                    instrument,
+                    side,
+                    "OID",
+                    CleanToken(rawEntryOrderIdentity).ToUpperInvariant());
 
-            return string.Join("|", account, instrument, side, entryTicks, exitTicks, contracts, entryPrice, exitPrice);
+            string entryTicks = trade.EntryUtc.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture);
+            string source = CleanToken(trade.TradeSource).ToUpperInvariant();
+            string entrySignal = CleanToken(trade.EntrySignal).ToUpperInvariant();
+            return string.Join("|", account, instrument, side, entryTicks, source, entrySignal);
         }
 
         private static void ApplyExecution(
             ExecutionEvent evt,
-            IDictionary<string, OpenPositionState> states,
+            IDictionary<string, PositionState> states,
             ICollection<TradeRoundTrip> closedTrades,
             IReadOnlyList<TradeJournalEvent> contextEvents)
         {
@@ -108,7 +115,7 @@ namespace Glitch.Services
                 return;
 
             string key = BuildStateKey(evt.AccountName, evt.Instrument);
-            if (!states.TryGetValue(key, out OpenPositionState state) || state == null || Math.Abs(state.NetQty) <= Epsilon)
+            if (!states.TryGetValue(key, out PositionState state) || state == null || state.OpenQuantity <= Epsilon)
             {
                 // Journal replay can begin after a position was opened (for example
                 // after a reset or when the retained window starts mid-trade). In
@@ -121,91 +128,120 @@ namespace Glitch.Services
                     return;
                 }
 
-                states[key] = OpenPositionState.FromExecution(evt, signedQty);
-                AccumulateExecutionCommission(states[key], evt);
+                state = new PositionState(Math.Sign(signedQty));
+                states[key] = state;
+                AddEntryFill(state, evt, signedQty, 1d);
                 return;
             }
 
-            double previousQty = state.NetQty;
-            int previousSign = Math.Sign(previousQty);
+            int previousSign = state.Direction;
             int executionSign = Math.Sign(signedQty);
             if (previousSign == 0 || executionSign == 0)
                 return;
 
             if (previousSign == executionSign)
             {
-                double newQty = previousQty + signedQty;
-                if (Math.Abs(newQty) <= Epsilon)
-                {
-                    states.Remove(key);
-                    return;
-                }
-
-                AccumulateExecutionCommission(state, evt);
-                state.EntryContracts += Math.Abs(signedQty);
-                state.EntryNotional += Math.Abs(signedQty) * evt.Price;
-                state.AveragePrice =
-                    ((Math.Abs(previousQty) * state.AveragePrice) + (Math.Abs(signedQty) * evt.Price)) /
-                    Math.Abs(newQty);
-                state.NetQty = newQty;
-                state.MaxAbsQty = Math.Max(state.MaxAbsQty, Math.Abs(newQty));
-                state.FillCount += 1;
-                if (string.IsNullOrWhiteSpace(state.EntrySource) && !string.IsNullOrWhiteSpace(evt.Source))
-                    state.EntrySource = evt.Source;
-                if (string.IsNullOrWhiteSpace(state.EntrySignalName) && !string.IsNullOrWhiteSpace(evt.SignalName))
-                    state.EntrySignalName = evt.SignalName;
-                if (string.IsNullOrWhiteSpace(state.EntrySignalTag) && !string.IsNullOrWhiteSpace(evt.SignalTag))
-                    state.EntrySignalTag = evt.SignalTag;
+                AddEntryFill(state, evt, signedQty, 1d);
                 return;
             }
 
-            double closeQty = Math.Min(Math.Abs(previousQty), Math.Abs(signedQty));
             double executionQuantity = Math.Abs(signedQty);
-            AccumulateExecutionCommission(state, evt, closeQty / executionQuantity);
-            double pointsPerContract = (evt.Price - state.AveragePrice) * previousSign;
-            state.RealizedPoints += pointsPerContract * closeQty;
-            state.ClosedContracts += closeQty;
-            state.ClosedNotional += evt.Price * closeQty;
-            state.LastExitUtc = evt.UtcTime;
-            state.LastExitSignal = string.IsNullOrWhiteSpace(evt.SignalName) ? state.LastExitSignal : evt.SignalName;
-            state.LastExitSource = string.IsNullOrWhiteSpace(evt.Source) ? state.LastExitSource : evt.Source;
-            state.LastExitSignalTag = string.IsNullOrWhiteSpace(evt.SignalTag) ? state.LastExitSignalTag : evt.SignalTag;
-
-            bool fullyClosed = (Math.Abs(previousQty) - closeQty) <= Epsilon;
-            if (fullyClosed)
+            double remaining = executionQuantity;
+            while (remaining > Epsilon && state.Lots.Count > 0)
             {
-                TradeRoundTrip trade = BuildClosedTrade(state, evt, contextEvents);
+                OpenPositionState lot = state.Lots[0];
+                double closeQty = Math.Min(Math.Abs(lot.NetQty), remaining);
+                AccumulateExecutionCommission(lot, evt, closeQty / executionQuantity);
+                double pointsPerContract = (evt.Price - lot.AveragePrice) * lot.EntryDirection;
+                lot.RealizedPoints += pointsPerContract * closeQty;
+                lot.ClosedContracts += closeQty;
+                lot.ClosedNotional += evt.Price * closeQty;
+                lot.LastExitUtc = evt.UtcTime;
+                lot.LastExitSignal = string.IsNullOrWhiteSpace(evt.SignalName) ? lot.LastExitSignal : evt.SignalName;
+                lot.LastExitSource = string.IsNullOrWhiteSpace(evt.Source) ? lot.LastExitSource : evt.Source;
+                lot.LastExitSignalTag = string.IsNullOrWhiteSpace(evt.SignalTag) ? lot.LastExitSignalTag : evt.SignalTag;
+                lot.NetQty = lot.EntryDirection * Math.Max(0, Math.Abs(lot.NetQty) - closeQty);
+                remaining -= closeQty;
+
+                if (Math.Abs(lot.NetQty) > Epsilon)
+                    break;
+
+                TradeRoundTrip trade = BuildClosedTrade(lot, evt, contextEvents);
                 if (trade != null)
                     closedTrades.Add(trade);
+                state.Lots.RemoveAt(0);
             }
 
-            double remainder = Math.Abs(signedQty) - closeQty;
-            if (remainder <= Epsilon)
+            if (state.Lots.Count == 0)
+                states.Remove(key);
+
+            if (remaining > Epsilon)
             {
-                if (fullyClosed)
-                    states.Remove(key);
-                else
-                    state.NetQty = previousSign * (Math.Abs(previousQty) - closeQty);
+                var reversalState = new PositionState(executionSign);
+                states[key] = reversalState;
+                AddEntryFill(
+                    reversalState,
+                    evt,
+                    executionSign * remaining,
+                    remaining / executionQuantity);
+            }
+        }
+
+        private static void AddEntryFill(
+            PositionState state,
+            ExecutionEvent evt,
+            double signedQty,
+            double commissionFraction)
+        {
+            if (state == null || evt == null || Math.Abs(signedQty) <= Epsilon)
+                return;
+
+            string ownershipKey = BuildEntryOwnershipKey(evt);
+            OpenPositionState lot = state.Lots.FirstOrDefault(candidate =>
+                candidate != null &&
+                candidate.EntryDirection == Math.Sign(signedQty) &&
+                string.Equals(candidate.EntryOwnershipKey, ownershipKey, StringComparison.OrdinalIgnoreCase));
+
+            if (lot == null)
+            {
+                lot = OpenPositionState.FromExecution(evt, signedQty, ownershipKey);
+                state.Lots.Add(lot);
+                AccumulateExecutionCommission(lot, evt, commissionFraction);
                 return;
             }
 
-            int remainderSign = executionSign;
-            if (fullyClosed)
-            {
-                states[key] = OpenPositionState.FromRemainder(evt, remainderSign * remainder);
-                AccumulateExecutionCommission(states[key], evt, remainder / executionQuantity);
-                return;
-            }
+            double fillQuantity = Math.Abs(signedQty);
+            double openQuantityBeforeFill = Math.Abs(lot.NetQty);
+            lot.AveragePrice =
+                ((openQuantityBeforeFill * lot.AveragePrice) + (fillQuantity * evt.Price)) /
+                (openQuantityBeforeFill + fillQuantity);
+            lot.NetQty += signedQty;
+            lot.EntryContracts += fillQuantity;
+            lot.EntryNotional += fillQuantity * evt.Price;
+            lot.MaxAbsQty = Math.Max(lot.MaxAbsQty, Math.Abs(lot.NetQty));
+            lot.FillCount += 1;
+            AccumulateExecutionCommission(lot, evt, commissionFraction);
+            if (string.IsNullOrWhiteSpace(lot.EntrySource) && !string.IsNullOrWhiteSpace(evt.Source))
+                lot.EntrySource = evt.Source;
+            if (string.IsNullOrWhiteSpace(lot.EntrySignalName) && !string.IsNullOrWhiteSpace(evt.SignalName))
+                lot.EntrySignalName = evt.SignalName;
+            if (string.IsNullOrWhiteSpace(lot.EntrySignalTag) && !string.IsNullOrWhiteSpace(evt.SignalTag))
+                lot.EntrySignalTag = evt.SignalTag;
+            if (string.IsNullOrWhiteSpace(lot.EntryOrderIdentity) && !string.IsNullOrWhiteSpace(evt.OrderIdentity))
+                lot.EntryOrderIdentity = evt.OrderIdentity;
+        }
 
-            double carryQty = previousSign * (Math.Abs(previousQty) - closeQty);
-            if (Math.Sign(carryQty) != previousSign)
-            {
-                states[key] = OpenPositionState.FromRemainder(evt, remainderSign * remainder);
-                AccumulateExecutionCommission(states[key], evt, remainder / executionQuantity);
-                return;
-            }
+        private static string BuildEntryOwnershipKey(ExecutionEvent evt)
+        {
+            string rawOrderIdentity = evt?.OrderIdentity?.Trim() ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(rawOrderIdentity))
+                return "OID|" + CleanToken(rawOrderIdentity).ToUpperInvariant();
 
-            state.NetQty = carryQty;
+            return string.Join("|",
+                "ATTR",
+                NormalizeTradeSource(evt?.Source).ToUpperInvariant(),
+                CleanToken(evt?.SignalName).ToUpperInvariant(),
+                NormalizeSignalTag(evt?.SignalTag).ToUpperInvariant());
         }
 
         private static TradeRoundTrip BuildClosedTrade(
@@ -253,6 +289,7 @@ namespace Glitch.Services
                 ExitType = ResolveExitType(closeReason, state.LastExitSignal, state.LastExitSignalTag, state.LastExitSource),
                 EntrySignal = state.EntrySignalName,
                 ExitSignal = state.LastExitSignal,
+                EntryOrderIdentity = state.EntryOrderIdentity,
                 EntrySession = ResolveSessionName(state.EntryUtc),
                 ExitSession = ResolveSessionName(exitUtc)
             };
@@ -343,6 +380,7 @@ namespace Glitch.Services
                 match.Groups["extras"].Value,
                 out string signalName,
                 out string executionId,
+                out string orderIdentity,
                 out string executionSource,
                 out string signalTag,
                 out double commission);
@@ -359,6 +397,7 @@ namespace Glitch.Services
                 Price = price,
                 SignalName = signalName,
                 ExecutionId = executionId,
+                OrderIdentity = orderIdentity,
                 Source = executionSource,
                 SignalTag = signalTag,
                 Commission = commission
@@ -369,12 +408,14 @@ namespace Glitch.Services
             string extras,
             out string signalName,
             out string executionId,
+            out string orderIdentity,
             out string executionSource,
             out string signalTag,
             out double commission)
         {
             signalName = string.Empty;
             executionId = string.Empty;
+            orderIdentity = string.Empty;
             executionSource = string.Empty;
             signalTag = string.Empty;
             commission = 0;
@@ -406,6 +447,12 @@ namespace Glitch.Services
                 if (key == "EID")
                 {
                     executionId = value;
+                    continue;
+                }
+
+                if (key == "OID")
+                {
+                    orderIdentity = value;
                     continue;
                 }
 
@@ -956,6 +1003,7 @@ namespace Glitch.Services
             public string ExitType { get; set; }
             public string EntrySignal { get; set; }
             public string ExitSignal { get; set; }
+            public string EntryOrderIdentity { get; set; }
             public string EntrySession { get; set; }
             public string ExitSession { get; set; }
         }
@@ -1028,8 +1076,8 @@ namespace Glitch.Services
 
         internal sealed class ExecutionAccumulator
         {
-            private readonly Dictionary<string, OpenPositionState> _states =
-                new Dictionary<string, OpenPositionState>(StringComparer.OrdinalIgnoreCase);
+            private readonly Dictionary<string, PositionState> _states =
+                new Dictionary<string, PositionState>(StringComparer.OrdinalIgnoreCase);
             private readonly HashSet<string> _seenExecutionIds =
                 new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -1087,6 +1135,7 @@ namespace Glitch.Services
             public double Price { get; set; }
             public string SignalName { get; set; }
             public string ExecutionId { get; set; }
+            public string OrderIdentity { get; set; }
             public string Source { get; set; }
             public string SignalTag { get; set; }
             public double Commission { get; set; }
@@ -1100,6 +1149,8 @@ namespace Glitch.Services
             public string EntrySignalName { get; set; }
             public string EntrySignalTag { get; set; }
             public string EntrySource { get; set; }
+            public string EntryOrderIdentity { get; set; }
+            public string EntryOwnershipKey { get; set; }
             public int EntryDirection { get; set; }
             public double NetQty { get; set; }
             public double AveragePrice { get; set; }
@@ -1116,7 +1167,10 @@ namespace Glitch.Services
             public string LastExitSignalTag { get; set; }
             public string LastExitSource { get; set; }
 
-            public static OpenPositionState FromExecution(ExecutionEvent evt, double signedQty)
+            public static OpenPositionState FromExecution(
+                ExecutionEvent evt,
+                double signedQty,
+                string ownershipKey)
             {
                 return new OpenPositionState
                 {
@@ -1126,6 +1180,8 @@ namespace Glitch.Services
                     EntrySignalName = evt.SignalName,
                     EntrySignalTag = evt.SignalTag,
                     EntrySource = evt.Source,
+                    EntryOrderIdentity = evt.OrderIdentity,
+                    EntryOwnershipKey = ownershipKey,
                     EntryDirection = Math.Sign(signedQty),
                     NetQty = signedQty,
                     AveragePrice = evt.Price,
@@ -1144,9 +1200,21 @@ namespace Glitch.Services
                 };
             }
 
-            public static OpenPositionState FromRemainder(ExecutionEvent evt, double signedQty)
+        }
+
+        private sealed class PositionState
+        {
+            public PositionState(int direction)
             {
-                return FromExecution(evt, signedQty);
+                Direction = direction;
+                Lots = new List<OpenPositionState>();
+            }
+
+            public int Direction { get; private set; }
+            public List<OpenPositionState> Lots { get; private set; }
+            public double OpenQuantity
+            {
+                get { return Lots.Sum(lot => Math.Abs(lot?.NetQty ?? 0)); }
             }
         }
     }

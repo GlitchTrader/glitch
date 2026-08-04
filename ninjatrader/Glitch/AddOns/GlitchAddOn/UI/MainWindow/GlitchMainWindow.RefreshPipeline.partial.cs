@@ -232,8 +232,7 @@ namespace Glitch.UI
             foreach (Account activeAccount in activeAccounts)
             {
                 GlitchAiOrderExecutor.ProcessAccountStateUpdate(activeAccount);
-                if (_copyEngine != null && _isReplicatingUi)
-                    _copyEngine.ProcessAccountStateUpdate(activeAccount);
+                _copyEngine?.ProcessAccountStateUpdate(activeAccount);
             }
 
             ApplyAccountRows(rows);

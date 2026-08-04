@@ -390,9 +390,6 @@ namespace Glitch.UI
                 return false;
 
             Order order = TryGetNestedPropertyValue(executionObject, "Order") as Order;
-            // Execution is the passed-by-value lifecycle fact. NinjaTrader's
-            // own guidance warns that the associated Order object can already
-            // reflect a later partial fill by the time queued work observes it.
             string signalName = TryGetNestedPropertyValueAsString(executionObject, "Name");
             if (string.IsNullOrWhiteSpace(signalName))
                 signalName = order?.Name;

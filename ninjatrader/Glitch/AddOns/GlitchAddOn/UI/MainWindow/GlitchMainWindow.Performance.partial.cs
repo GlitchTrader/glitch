@@ -254,12 +254,19 @@ namespace Glitch.UI
 
         private void FlushPendingJournalEntries()
         {
+            FlushPendingJournalEntries(force: false);
+        }
+
+        private void FlushPendingJournalEntries(bool force)
+        {
             _journalFlushScheduled = false;
             if (_pendingJournalEntries.Count == 0)
                 return;
 
             DateTime nowUtc = DateTime.UtcNow;
-            if ((nowUtc - _lastJournalFlushUtc) < JournalBatchFlushInterval && _pendingJournalEntries.Count < 8)
+            if (!force
+                && (nowUtc - _lastJournalFlushUtc) < JournalBatchFlushInterval
+                && _pendingJournalEntries.Count < 8)
             {
                 _journalFlushScheduled = true;
                 Dispatcher.BeginInvoke(new Action(FlushPendingJournalEntries), System.Windows.Threading.DispatcherPriority.Background);

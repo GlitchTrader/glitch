@@ -4,8 +4,8 @@ import unittest
 
 from replication_lifecycle_sim import (
     AccountSim,
+    CumulativeAllocationBook,
     can_attach_unlinked_full_position_plan,
-    CumulativeExecutionAllocator,
     Instrument,
     Order,
     OrderState,
@@ -14,6 +14,7 @@ from replication_lifecycle_sim import (
     rail_flat_requires_protection_cancel,
     rail_sync_should_reduce_by_delta,
     reconcile_follower_protection_current,
+    remaining_attributed_close_quantity,
     should_cancel_owned_close_remainder,
     simulate_stale_execution_then_flat,
     sync_decide_initial,
@@ -123,20 +124,56 @@ class ReplicationLifecycleRailGapTests(unittest.TestCase):
         self.assertEqual(account.net_exact(jun), 0)
         self.assertFalse(account.orders[1].working)
 
-    def test_fractional_separate_orders_share_one_directional_cumulative_basis(self):
-        ratio = 0.5
-        allocator = CumulativeExecutionAllocator()
-        first = allocator.apply(delta=1, ratio=ratio)
-        second = allocator.apply(delta=1, ratio=ratio)
-        self.assertEqual(first, 1)
-        self.assertEqual(second, 0)
-        self.assertEqual(first + second, 1)
+    def test_fractional_carry_crosses_native_orders_within_one_route_direction_epoch(self):
+        book = CumulativeAllocationBook()
+        book.configure(True, {"route-a": "ratio-0.4"})
+        quantities = [
+            book.allocate("route-a", "MNQ|202609", "open_long", 1, 0.4).quantity
+            for _ in range(4)
+        ]
+        self.assertEqual(quantities, [0, 1, 0, 1])
+        self.assertEqual(sum(quantities), 2)
 
-    def test_fractional_carry_can_cross_threshold_on_a_later_master_order(self):
-        allocator = CumulativeExecutionAllocator()
+    def test_unchanged_route_configuration_preserves_cumulative_epoch(self):
+        book = CumulativeAllocationBook()
+        book.configure(True, {"route-a": "ratio-0.5"})
         self.assertEqual(
-            [allocator.apply(delta=1, ratio=0.4) for _ in range(3)],
-            [0, 1, 0],
+            book.allocate("route-a", "MNQ|202609", "open_long", 1, 0.5).quantity,
+            1,
+        )
+        book.configure(True, {"route-a": "ratio-0.5"})
+        self.assertEqual(
+            book.allocate("route-a", "MNQ|202609", "open_long", 1, 0.5).quantity,
+            0,
+        )
+
+    def test_route_or_ratio_change_starts_future_only_epoch(self):
+        book = CumulativeAllocationBook()
+        book.configure(True, {"route-a": "ratio-1.0"})
+        self.assertEqual(
+            book.allocate("route-a", "MNQ|202609", "open_long", 10, 1.0).quantity,
+            10,
+        )
+        book.configure(True, {"route-a": "ratio-0.5"})
+        self.assertEqual(
+            book.allocate("route-a", "MNQ|202609", "open_long", 1, 0.5).quantity,
+            1,
+        )
+        self.assertEqual(
+            book.allocate("route-a", "MNQ|202609", "open_long", 1, 0.5).quantity,
+            0,
+        )
+
+    def test_directions_have_independent_cumulative_bases(self):
+        book = CumulativeAllocationBook()
+        book.configure(True, {"route-a": "ratio-0.5"})
+        self.assertEqual(
+            book.allocate("route-a", "MNQ|202609", "open_long", 1, 0.5).quantity,
+            1,
+        )
+        self.assertEqual(
+            book.allocate("route-a", "MNQ|202609", "close_long", 1, 0.5).quantity,
+            1,
         )
 
     def test_partial_close_keeps_the_oco_matching_current_master_geometry(self):
@@ -192,6 +229,41 @@ class ReplicationLifecycleRailGapTests(unittest.TestCase):
         self.assertFalse(any(order.working and order.oco == "oco-a" for order in account.orders))
         self.assertTrue(all(order.working for order in account.orders if order.oco == "oco-b"))
 
+    def test_partial_close_keeps_exact_one_contract_oco_units(self):
+        inst = Instrument("MNQ", "202609")
+        account = AccountSim("Sim102")
+        account.orders = []
+        for index in range(60):
+            source = f"entry-{index:02d}"
+            oco = f"oco-{index:02d}"
+            account.orders.extend(
+                [
+                    Order(
+                        f"GLT-COPY-S-{source}",
+                        inst,
+                        1,
+                        oco=oco,
+                        order_type="stop",
+                        source_token=source,
+                        stop_price=28000,
+                    ),
+                    Order(
+                        f"GLT-COPY-T-{source}",
+                        inst,
+                        1,
+                        oco=oco,
+                        order_type="target",
+                        source_token=source,
+                        target_price=28100,
+                    ),
+                ]
+            )
+        desired = [(f"entry-{index:02d}", 28000, 28100) for index in range(40)]
+        self.assertTrue(trim_follower_protection_by_geometry(account, inst, desired))
+        self.assertEqual({order.quantity for order in account.orders if order.working}, {1})
+        self.assertEqual(len([order for order in account.orders if order.working]), 80)
+        self.assertEqual(len({order.oco for order in account.orders if order.working}), 40)
+
     def test_ambiguous_partial_close_geometry_leaves_all_oco_orders_unchanged(self):
         inst = Instrument("MNQ", "202609")
         account = AccountSim("Sim102")
@@ -239,6 +311,14 @@ class ReplicationLifecycleRailGapTests(unittest.TestCase):
         self.assertTrue(should_cancel_owned_close_remainder(3, 1, 2, -1, 0))
         self.assertFalse(should_cancel_owned_close_remainder(3, 1, 2, -1, 1))
         self.assertTrue(should_cancel_owned_close_remainder(3, 2, 2, -1, 0))
+
+    def test_delayed_copied_close_preserves_later_manual_follower_entries(self):
+        self.assertEqual(remaining_attributed_close_quantity(10, 15, 1), 1)
+        self.assertEqual(remaining_attributed_close_quantity(-10, -15, 1), 1)
+        self.assertEqual(remaining_attributed_close_quantity(10, 9, 1), 0)
+        self.assertEqual(remaining_attributed_close_quantity(-10, -9, 1), 0)
+        self.assertEqual(remaining_attributed_close_quantity(10, 11, 1, 1), 0)
+        self.assertEqual(remaining_attributed_close_quantity(10, 11, 2, 1), 1)
 
 
 if __name__ == "__main__":

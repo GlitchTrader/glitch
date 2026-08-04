@@ -18,6 +18,7 @@ namespace Glitch.Services
         public double StopPrice { get; set; }
         public double TargetPrice { get; set; }
         public string SourceToken { get; set; }
+        public DateTime NativeTime { get; set; }
     }
 
     internal sealed class GlitchReplicationProtectionPlan
@@ -54,7 +55,6 @@ namespace Glitch.Services
                 requiredMasterQuantity,
                 isLong,
                 null,
-                DateTime.MinValue,
                 out plan);
         }
 
@@ -64,8 +64,7 @@ namespace Glitch.Services
             string entrySignal,
             int requiredMasterQuantity,
             bool isLong,
-            IReadOnlyCollection<string> excludedSourceTokens,
-            DateTime preferredNotBeforeUtc,
+            ISet<string> excludedSourceTokens,
             out GlitchReplicationProtectionPlan plan)
         {
             plan = null;
@@ -135,47 +134,45 @@ namespace Glitch.Services
                     continue;
 
                 string sourceToken = BuildSourceToken(stop.Name, stop.Oco);
-                if (excluded.Contains(sourceToken))
+                if (excludedSourceTokens != null
+                    && excludedSourceTokens.Contains(sourceToken))
                     continue;
-                candidatesByOco.Add(new PlanCandidate
+
+                legs.Add(new GlitchReplicationProtectionLeg
                 {
-                    ObservedUtc = LatestOrderTimeUtc(stop, target),
-                    Leg = new GlitchReplicationProtectionLeg
-                    {
-                        MasterQuantity = quantity,
-                        StopPrice = stop.StopPrice,
-                        TargetPrice = target.LimitPrice,
-                        SourceToken = sourceToken
-                    }
+                    MasterQuantity = quantity,
+                    StopPrice = stop.StopPrice,
+                    TargetPrice = target.LimitPrice,
+                    SourceToken = sourceToken,
+                    NativeTime = stop.Time <= target.Time ? stop.Time : target.Time
                 });
             }
 
-            List<PlanCandidate> selected;
-            int totalAvailable = candidatesByOco.Sum(item => item.Leg.MasterQuantity);
-            if (totalAvailable == requiredMasterQuantity)
-                selected = candidatesByOco;
-            else if (!TrySelectExactPlan(
-                candidatesByOco,
+            // Same-signal ATM entries can expose several complete OCO groups at
+            // once. Claim the earliest exact native tranche instead of summing
+            // every same-signal group and deadlocking on over-coverage. Claimed
+            // source tokens exclude that tranche for the next entry identity.
+            List<GlitchReplicationProtectionLeg> selected =
+                GlitchReplicationMath.SelectExactPrefix(
+                legs
+                .OrderBy(item => item.NativeTime)
+                .ThenBy(item => item.SourceToken, StringComparer.OrdinalIgnoreCase),
                 requiredMasterQuantity,
-                preferredNotBeforeUtc,
-                out selected))
+                item => item.MasterQuantity);
+            if (selected.Count == 0)
                 return false;
+            int selectedQuantity = selected.Sum(item => item.MasterQuantity);
 
-            List<GlitchReplicationProtectionLeg> legs = selected
-                .Select(item => item.Leg)
-                .ToList();
-            int totalQuantity = legs.Sum(leg => leg.MasterQuantity);
-
-            legs = isLong
-                ? legs.OrderBy(leg => leg.TargetPrice).ToList()
-                : legs.OrderByDescending(leg => leg.TargetPrice).ToList();
+            selected = isLong
+                ? selected.OrderBy(leg => leg.TargetPrice).ToList()
+                : selected.OrderByDescending(leg => leg.TargetPrice).ToList();
 
             plan = new GlitchReplicationProtectionPlan
             {
                 IsLong = isLong,
-                MasterQuantity = totalQuantity,
+                MasterQuantity = selectedQuantity,
                 TickSize = instrument.MasterInstrument?.TickSize ?? 0,
-                Legs = legs
+                Legs = selected
             };
             return true;
         }
@@ -371,9 +368,7 @@ namespace Glitch.Services
 
         public static int ScaleFollowerQuantity(int masterQuantity, double ratio)
         {
-            if (masterQuantity <= 0 || ratio <= 0 || double.IsNaN(ratio) || double.IsInfinity(ratio))
-                return 0;
-            return (int)Math.Round(masterQuantity * ratio, MidpointRounding.AwayFromZero);
+            return GlitchReplicationMath.ScaleQuantity(masterQuantity, ratio);
         }
 
         public static bool TryScalePlanSlice(

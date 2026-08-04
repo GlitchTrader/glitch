@@ -380,6 +380,118 @@ namespace Glitch.Services.Tests
             Assert.That(snapshot.ClosedTrades[0].TradeSource, Is.EqualTo("Manual"));
         }
 
+        [Test]
+        public void ManualThenAiAdditionClosesAsDistinctFifoLots()
+        {
+            DateTime start = new DateTime(2026, 8, 3, 14, 0, 0, DateTimeKind.Utc);
+            GlitchTradeInsightsService.TradeInsightsSnapshot snapshot = Snapshot(start,
+                Execution(start, "Buy", 1, 100, "Entry", null, "m-1", 1, "Manual", "manual-order"),
+                Execution(start.AddSeconds(1), "Buy", 2, 110, "GLT-AI-E-intent-1", "ENTRY", "a-1", 2, "Strategy", "ai-order"),
+                Execution(start.AddMinutes(1), "Sell", 3, 120, "Close", "EXIT", "x-1", 3, "Manual"));
+
+            Assert.That(snapshot.ClosedTrades, Has.Count.EqualTo(2));
+            GlitchTradeInsightsService.TradeRoundTrip manual = snapshot.ClosedTrades.Single(trade => trade.EntryOrderIdentity == "manual-order");
+            GlitchTradeInsightsService.TradeRoundTrip ai = snapshot.ClosedTrades.Single(trade => trade.EntryOrderIdentity == "ai-order");
+            Assert.That(manual.TradeSource, Is.EqualTo("Manual"));
+            Assert.That(manual.PnlPoints, Is.EqualTo(20).Within(0.000001));
+            Assert.That(manual.CommissionTotal, Is.EqualTo(2).Within(0.000001));
+            Assert.That(ai.TradeSource, Is.EqualTo("Strategy"));
+            Assert.That(ai.PnlPoints, Is.EqualTo(20).Within(0.000001));
+            Assert.That(ai.CommissionTotal, Is.EqualTo(4).Within(0.000001));
+        }
+
+        [Test]
+        public void AiThenManualAdditionClosesAsDistinctFifoLots()
+        {
+            DateTime start = new DateTime(2026, 8, 3, 14, 30, 0, DateTimeKind.Utc);
+            GlitchTradeInsightsService.TradeInsightsSnapshot snapshot = Snapshot(start,
+                Execution(start, "Buy", 1, 100, "GLT-AI-E-intent-2", "ENTRY", "a-2", 0, "Strategy", "ai-order-2"),
+                Execution(start.AddSeconds(1), "Buy", 1, 110, "Entry", null, "m-2", 0, "Manual", "manual-order-2"),
+                Execution(start.AddMinutes(1), "Sell", 2, 120, "Close", "EXIT", "x-2", 0, "Manual"));
+
+            Assert.That(snapshot.ClosedTrades, Has.Count.EqualTo(2));
+            Assert.That(snapshot.ClosedTrades.Single(trade => trade.EntryOrderIdentity == "ai-order-2").PnlPoints, Is.EqualTo(20).Within(0.000001));
+            Assert.That(snapshot.ClosedTrades.Single(trade => trade.EntryOrderIdentity == "manual-order-2").PnlPoints, Is.EqualTo(10).Within(0.000001));
+        }
+
+        [Test]
+        public void DistinctAiIntentsWithoutOrderIdentityRemainDistinct()
+        {
+            DateTime start = new DateTime(2026, 8, 3, 15, 0, 0, DateTimeKind.Utc);
+            GlitchTradeInsightsService.TradeInsightsSnapshot snapshot = Snapshot(start,
+                Execution(start, "Buy", 1, 100, "GLT-AI-E-intent-A", "ENTRY", "a-3", 0, "Strategy"),
+                Execution(start.AddSeconds(1), "Buy", 1, 105, "GLT-AI-E-intent-B", "ENTRY", "a-4", 0, "Strategy"),
+                Execution(start.AddMinutes(1), "Sell", 2, 110, "GLT-AI-X", "EXIT", "x-3", 0, "Strategy"));
+
+            Assert.That(snapshot.ClosedTrades, Has.Count.EqualTo(2));
+            Assert.That(snapshot.ClosedTrades.Select(trade => trade.EntrySignal), Is.EquivalentTo(new[]
+            {
+                "GLT-AI-E-intent-A",
+                "GLT-AI-E-intent-B"
+            }));
+        }
+
+        [Test]
+        public void SameNativeOrderPartialFillsAggregateIntoOneEpisode()
+        {
+            DateTime start = new DateTime(2026, 8, 3, 15, 30, 0, DateTimeKind.Utc);
+            GlitchTradeInsightsService.TradeInsightsSnapshot snapshot = Snapshot(start,
+                Execution(start, "Buy", 1, 100, "Entry", null, "p-1", 1, "Manual", "partial-order"),
+                Execution(start.AddMilliseconds(20), "Buy", 1, 102, "Entry", null, "p-2", 1, "Manual", "partial-order"),
+                Execution(start.AddMinutes(1), "Sell", 2, 110, "Close", "EXIT", "p-x", 2, "Manual"));
+
+            Assert.That(snapshot.ClosedTrades, Has.Count.EqualTo(1));
+            Assert.That(snapshot.ClosedTrades[0].Contracts, Is.EqualTo(2).Within(0.000001));
+            Assert.That(snapshot.ClosedTrades[0].EntryPrice, Is.EqualTo(101).Within(0.000001));
+            Assert.That(snapshot.ClosedTrades[0].EntryOrderIdentity, Is.EqualTo("partial-order"));
+        }
+
+        [Test]
+        public void TradeIdIsStableAcrossAggregateCorrections()
+        {
+            DateTime entry = new DateTime(2026, 8, 3, 16, 0, 0, DateTimeKind.Utc);
+            var partial = new GlitchTradeInsightsService.TradeRoundTrip
+            {
+                AccountName = "Sim101",
+                Instrument = "MNQ",
+                EntryUtc = entry,
+                ExitUtc = entry.AddMinutes(1),
+                IsLong = true,
+                Contracts = 1,
+                EntryPrice = 100,
+                ExitPrice = 110,
+                TradeSource = "Manual",
+                EntrySignal = "Entry",
+                EntryOrderIdentity = "stable-order"
+            };
+            var corrected = new GlitchTradeInsightsService.TradeRoundTrip
+            {
+                AccountName = "Sim101",
+                Instrument = "MNQ",
+                EntryUtc = entry.AddMilliseconds(20),
+                ExitUtc = entry.AddMinutes(2),
+                IsLong = true,
+                Contracts = 3,
+                EntryPrice = 102,
+                ExitPrice = 108,
+                TradeSource = "Manual",
+                EntrySignal = "Entry",
+                EntryOrderIdentity = "stable-order"
+            };
+
+            Assert.That(GlitchTradeInsightsService.BuildTradeId(corrected), Is.EqualTo(GlitchTradeInsightsService.BuildTradeId(partial)));
+        }
+
+        private static GlitchTradeInsightsService.TradeInsightsSnapshot Snapshot(
+            DateTime start,
+            params GlitchTradeInsightsService.TradeJournalEvent[] events)
+        {
+            return new GlitchTradeInsightsService().BuildSnapshot(
+                events,
+                new List<GlitchTradeInsightsService.TradeWarningEvent>(),
+                start.AddHours(1));
+        }
+
         private static GlitchTradeInsightsService.TradeJournalEvent Execution(
             DateTime utc,
             string action,
@@ -389,12 +501,14 @@ namespace Glitch.Services.Tests
             string tag,
             string executionId,
             double commission = 0,
-            string source = "Strategy")
+            string source = "Strategy",
+            string orderIdentity = "")
         {
             string tagToken = string.IsNullOrWhiteSpace(tag) ? string.Empty : " [TAG:" + tag + "]";
             string commissionToken = commission == 0
                 ? string.Empty
                 : " [COMM:" + commission.ToString("0.########", System.Globalization.CultureInfo.InvariantCulture) + "]";
+            string orderToken = string.IsNullOrWhiteSpace(orderIdentity) ? string.Empty : " [OID:" + orderIdentity + "]";
             return new GlitchTradeInsightsService.TradeJournalEvent
             {
                 UtcTime = utc,
@@ -402,7 +516,7 @@ namespace Glitch.Services.Tests
                 Category = "Execution",
                 Message = "Exec " + action + " " + quantity + " MNQ @ " +
                           price.ToString("0.########", System.Globalization.CultureInfo.InvariantCulture) +
-                          " (" + signal + ") [SRC:" + source + "]" + tagToken + commissionToken + " [EID:" + executionId + "]"
+                          " (" + signal + ") [SRC:" + source + "]" + tagToken + commissionToken + " [EID:" + executionId + "]" + orderToken
             };
         }
     }

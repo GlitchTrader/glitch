@@ -36,6 +36,7 @@ using System.IO;
 using System.Linq;
 using LinqExpression = System.Linq.Expressions.Expression;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -1600,6 +1601,7 @@ namespace Glitch.UI
             var flattenStopwatch = Stopwatch.StartNew();
             int flattenSubmitCount = 0;
             bool restoreCopyEngine = _isReplicatingUi;
+            bool verifiedFlatAndOrderFree = false;
             try
             {
                 if (restoreCopyEngine)
@@ -1637,6 +1639,7 @@ namespace Glitch.UI
                 bool flattened = await WaitForAllAccountsFlatAsync(accounts, TimeSpan.FromSeconds(8));
 
                 bool complete = flattened && unresolvedAccounts.Count == 0;
+                verifiedFlatAndOrderFree = complete;
                 if (complete)
                 {
                     _copyEngine?.ResetAfterFlattenAll();
@@ -1673,10 +1676,24 @@ namespace Glitch.UI
             }
             finally
             {
-                if (restoreCopyEngine)
-                    RefreshCopyEngineConfiguration(GetActiveAccountsSnapshot());
-
                 _isFlattenAllInProgress = false;
+                if (restoreCopyEngine && verifiedFlatAndOrderFree)
+                    RefreshCopyEngineConfiguration(GetActiveAccountsSnapshot());
+                else if (restoreCopyEngine)
+                {
+                    // Never reopen the copy gate around late native flatten
+                    // fills. An incomplete Flatten All requires a fresh,
+                    // explicit Replication enable from the operator.
+                    _isReplicatingUi = false;
+                    _copyEngine?.Configure(false, null);
+                    AppendJournal(
+                        "System",
+                        "Replication",
+                        "replication_disabled|reason=flatten_all_not_verified");
+                    UpdateReplicateButtonState();
+                    PersistReplicationUiState();
+                    PublishGlitchShellState();
+                }
             }
         }
 
@@ -3823,6 +3840,9 @@ namespace Glitch.UI
             _isWindowClosed = true;
             _refreshTimer.Stop();
             _refreshTimer.Tick -= OnRefreshTimerTick;
+            // Persist and aggregate the final native execution batch before
+            // the bounded journal and TradeLedger are flushed for F5/close.
+            FlushPendingJournalEntries(force: true);
             CaptureSelectionOverridesFromRows();
             SaveSelectionOverridesToDisk();
             SaveAccountGroupsToDisk();
@@ -4756,6 +4776,14 @@ namespace Glitch.UI
                     openRoots.Add(instrumentRoot);
                     string key = accountName + "|" + instrumentRoot;
                     int exposureQuantity = Math.Abs(position.Quantity);
+                    if (_copyEngine?.HasPendingOwnedMutation(account, instrumentRoot) == true)
+                    {
+                        // A copied close deliberately reserves exposure by
+                        // shrinking its own OCO before the market close order.
+                        // That bounded transition is not an unprotected breach.
+                        _noProtectionDetectedSinceByKey.Remove(key);
+                        continue;
+                    }
                     if (TryGetWorkingProtectiveStopQuantity(
                             account,
                             instrumentRoot,
@@ -6344,6 +6372,18 @@ namespace Glitch.UI
             string price = TryGetNestedPropertyValueAsString(executionObject, "Price", "ExecutionPrice", "FillPrice");
             string orderName = TryGetNestedPropertyValueAsString(executionObject, "Order.Name", "Name");
             string orderEntry = TryGetNestedPropertyValueAsString(executionObject, "Order.OrderEntry", "OrderEntry", "Order.Entry");
+            object orderObject = TryGetNestedPropertyValue(executionObject, "Order");
+            string orderIdentity = TryGetNestedPropertyValueAsString(
+                executionObject,
+                "Order.OrderId",
+                "Order.Id",
+                "OrderId");
+            if (string.IsNullOrWhiteSpace(orderIdentity) && orderObject != null)
+            {
+                orderIdentity = "orderref:"
+                    + RuntimeHelpers.GetHashCode(orderObject)
+                        .ToString("x8", CultureInfo.InvariantCulture);
+            }
             string executionId = TryGetNestedPropertyValueAsString(executionObject, "ExecutionId", "Id");
 
             if (string.IsNullOrWhiteSpace(instrument) && string.IsNullOrWhiteSpace(quantity) && string.IsNullOrWhiteSpace(price))
@@ -6358,6 +6398,8 @@ namespace Glitch.UI
             string tagToken = ResolveExecutionTagToken(orderName);
             if (!string.IsNullOrWhiteSpace(tagToken))
                 message += $" [TAG:{tagToken}]";
+            if (!string.IsNullOrWhiteSpace(orderIdentity))
+                message += $" [OID:{CleanJournalToken(orderIdentity)}]";
             if (!string.IsNullOrWhiteSpace(executionId))
                 message += $" [EID:{CleanJournalToken(executionId)}]";
             double commission = TryGetNestedPropertyValueAsDouble(executionObject, "Commission");
