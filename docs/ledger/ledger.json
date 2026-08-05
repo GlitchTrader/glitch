@@ -75,11 +75,12 @@
         "native fill-anchored protection, cancellation finality, reversal geometry, and protective-fill races have executable harness coverage",
         "Hermes cognitive firewall removed; structural validation and deterministic configured-master binding feed the same runtime",
         "manual account metadata commits before refresh; compliance mutations are granular and off by default",
-        "all six compiled harnesses pass: 83-file AddOn source compile, native gateway boundary, reducer state machine, operation journal/recovery, runtime lifecycle, and canonical configuration",
-        "focused Glitch contract suite passes 70 tests and 4 subtests; repository-wide sweep passes 266 tests with only pre-existing public guide/metadata failures outside this rebuild",
+        "all six compiled harnesses pass: 84-file AddOn source compile, native gateway boundary, reducer state machine, operation journal/recovery, runtime lifecycle, and canonical configuration",
+        "focused Glitch and Hermes contract suite passes 257 tests and 4 subtests; repository-wide sweep previously passed 266 tests with only pre-existing public guide/metadata failures outside this rebuild",
         "structural audit proves NinjaTraderGateway.cs is the sole native order mutator and no retired replication, protection, intent-state, AI-risk, or Apex-guard engine remains in production",
-        "one complete 93-file AddOn folder deployed to NinjaTrader with exact relative-manifest and SHA-256 parity; prior live folder preserved at D:/ab/deploy-backups/glitch-nt-rebuild-predeploy-20260805-075515",
-        "authoritative public Hermes profile 0.0.2.20 is independently unchanged and installed with 22/22 distribution hashes plus exactly two expected jobs"
+        "AppDomain-wide runtime ownership now stops the prior NinjaScript assembly before rail binding; failed handoff blocks replacement and stale termination cannot clear the new owner",
+        "one complete 94-file AddOn folder deployed to NinjaTrader with exact relative-manifest and SHA-256 parity; prior live folder preserved at D:/ab/deploy-backups/glitch-nt-rebuild-predeploy-20260805-075515",
+        "authoritative public Hermes profile 0.0.2.20 is independently unchanged and installed with 22/22 distribution hashes; fresh epoch e7a43a93-ec25-4cdd-8552-1ae27fe3e3e3 has zero retained memory/request dumps and exactly two expected paused jobs"
       ],
       "next_gate": "compile in NinjaTrader, then execute the named bounded Sim fixtures before legacy cutover",
       "acceptance": [
