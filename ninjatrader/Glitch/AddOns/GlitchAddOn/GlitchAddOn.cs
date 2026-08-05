@@ -70,17 +70,19 @@ namespace NinjaTrader.NinjaScript.AddOns
                     _runtimeOwnership = new GlitchRuntimeOwnershipLease(StopRuntimeHost);
                     _runtimeOwnership.Acquire();
 
-                    // A recompile creates a new assembly. Retire its visible shell
-                    // and any pre-lease runtime synchronously before binding rails.
-                    RunOnUiThreadSync(() =>
+                    // Retire any generation compiled before the AppDomain lease
+                    // existed without crossing the UI dispatcher. NinjaTrader's
+                    // UI waits for compilation, so synchronous UI dispatch here
+                    // would deadlock the compile/reload boundary.
+                    StopPriorAssemblyRuntimes();
+                    StartRuntimeHost();
+                    RunOnUiThread(() =>
                     {
                         if (previousInstance != null && !ReferenceEquals(previousInstance, this))
                             previousInstance.RetireShellForReplacement();
                         RetirePriorAssemblyShells();
+                        ActivateShell();
                     });
-
-                    StartRuntimeHost();
-                    RunOnUiThread(ActivateShell);
                 }
                 catch
                 {
@@ -173,43 +175,43 @@ namespace NinjaTrader.NinjaScript.AddOns
         private static void RetirePriorAssemblyShells()
         {
             foreach (Window window in FindOpenGlitchWindows())
-            {
-                StopPriorAssemblyRuntime(window);
                 SafeClose(window);
-            }
         }
 
-        private static void StopPriorAssemblyRuntime(Window window)
+        private static void StopPriorAssemblyRuntimes()
         {
-            if (window == null || window.GetType().Assembly == typeof(GlitchAddOn).Assembly)
-                return;
-
             // Transitional handoff for a loaded generation compiled before the
             // AppDomain lease existed. Future generations retire through Acquire.
-            Type hostType = window.GetType().Assembly.GetType(
-                "Glitch.Infrastructure.GlitchRuntimeHost",
-                throwOnError: false);
-            if (hostType == null)
-                return;
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                if (assembly == typeof(GlitchAddOn).Assembly)
+                    continue;
 
-            var activeProperty = hostType.GetProperty(
-                "Active",
-                System.Reflection.BindingFlags.Public
-                | System.Reflection.BindingFlags.Static);
-            object priorHost = activeProperty?.GetValue(null, null);
-            if (priorHost == null)
-                return;
+                Type hostType = assembly.GetType(
+                    "Glitch.Infrastructure.GlitchRuntimeHost",
+                    throwOnError: false);
+                if (hostType == null)
+                    continue;
 
-            var dispose = hostType.GetMethod(
-                "Dispose",
-                System.Reflection.BindingFlags.Public
-                | System.Reflection.BindingFlags.Instance,
-                null,
-                Type.EmptyTypes,
-                null);
-            if (dispose == null)
-                throw new InvalidOperationException("Prior Glitch runtime cannot be retired.");
-            dispose.Invoke(priorHost, null);
+                var activeProperty = hostType.GetProperty(
+                    "Active",
+                    System.Reflection.BindingFlags.Public
+                    | System.Reflection.BindingFlags.Static);
+                object priorHost = activeProperty?.GetValue(null, null);
+                if (priorHost == null)
+                    continue;
+
+                var dispose = hostType.GetMethod(
+                    "Dispose",
+                    System.Reflection.BindingFlags.Public
+                    | System.Reflection.BindingFlags.Instance,
+                    null,
+                    Type.EmptyTypes,
+                    null);
+                if (dispose == null)
+                    throw new InvalidOperationException("Prior Glitch runtime cannot be retired.");
+                dispose.Invoke(priorHost, null);
+            }
         }
 
         private void StartRuntimeHost()
