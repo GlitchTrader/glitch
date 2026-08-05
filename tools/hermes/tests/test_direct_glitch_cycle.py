@@ -1604,7 +1604,7 @@ M\tg2\tSim301\t100000\t3\t100000\t1
             self.assertFalse(receipt["complete"])
             self.assertEqual(receipt["results"][0]["intent_id"], batch["decisions"][0]["intent_id"])
 
-    def test_pending_executor_keeps_receipt_and_attempt_incomplete_for_same_id_retry(self):
+    def test_pending_executor_is_accepted_delivery_while_native_queue_processes(self):
         with tempfile.TemporaryDirectory() as root:
             glitch_data = Path(root)
             exchange = glitch_data / "hermes" / "exchange"
@@ -1625,11 +1625,11 @@ M\tg2\tSim301\t100000\t3\t100000\t1
             }):
                 receipt = MODULE.submit_batch(batch, glitch_data, exchange)
 
-            self.assertFalse(receipt["complete"])
-            self.assertEqual(MODULE.receipt_classification(receipt), "transport_uncertain")
+            self.assertTrue(receipt["complete"])
+            self.assertEqual(MODULE.receipt_classification(receipt), "successful")
             MODULE.mark_attempt_from_receipt(exchange, batch["cycle_id"], receipt)
             attempt = MODULE.read_json(MODULE.model_attempt_path(exchange, batch["cycle_id"]))
-            self.assertEqual(attempt["status"], "delivery_incomplete")
+            self.assertEqual(attempt["status"], "completed")
 
     def test_duplicate_http_response_is_terminal_delivery_evidence(self):
         with tempfile.TemporaryDirectory() as root:
