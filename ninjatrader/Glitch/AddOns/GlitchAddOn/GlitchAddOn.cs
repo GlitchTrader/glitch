@@ -48,6 +48,7 @@ namespace NinjaTrader.NinjaScript.AddOns
         private NTMenuItem _newMenu;
         private GlitchMainWindow _mainWindow;
         private GlitchRuntimeHost _runtimeHost;
+        private GlitchRuntimeOwnershipLease _runtimeOwnership;
         private static GlitchAddOn _activeInstance;
 
         protected override void OnStateChange()
@@ -61,16 +62,35 @@ namespace NinjaTrader.NinjaScript.AddOns
             {
                 GlitchAddOn previousInstance = _activeInstance;
                 _activeInstance = this;
-                if (previousInstance != null && !ReferenceEquals(previousInstance, this))
-                    previousInstance.StopRuntimeHost();
-                StartRuntimeHost();
-                RunOnUiThread(() =>
+                try
                 {
                     if (previousInstance != null && !ReferenceEquals(previousInstance, this))
-                        previousInstance.RetireShellForReplacement();
+                        previousInstance.StopRuntimeHost();
 
-                    ActivateShell();
-                });
+                    _runtimeOwnership = new GlitchRuntimeOwnershipLease(StopRuntimeHost);
+                    _runtimeOwnership.Acquire();
+
+                    // A recompile creates a new assembly. Retire its visible shell
+                    // and any pre-lease runtime synchronously before binding rails.
+                    RunOnUiThreadSync(() =>
+                    {
+                        if (previousInstance != null && !ReferenceEquals(previousInstance, this))
+                            previousInstance.RetireShellForReplacement();
+                        RetirePriorAssemblyShells();
+                    });
+
+                    StartRuntimeHost();
+                    RunOnUiThread(ActivateShell);
+                }
+                catch
+                {
+                    StopRuntimeHost();
+                    _runtimeOwnership?.Dispose();
+                    _runtimeOwnership = null;
+                    if (ReferenceEquals(_activeInstance, this))
+                        _activeInstance = null;
+                    throw;
+                }
             }
             else if (State == State.Terminated)
             {
@@ -78,6 +98,8 @@ namespace NinjaTrader.NinjaScript.AddOns
                     _activeInstance = null;
 
                 StopRuntimeHost();
+                _runtimeOwnership?.Dispose();
+                _runtimeOwnership = null;
                 RunOnUiThread(RetireShellForTermination);
             }
         }
@@ -146,6 +168,48 @@ namespace NinjaTrader.NinjaScript.AddOns
             RemoveMenusFromOpenControlCenters();
             DetachAllChartTraderHosts();
             CloseWindow();
+        }
+
+        private static void RetirePriorAssemblyShells()
+        {
+            foreach (Window window in FindOpenGlitchWindows())
+            {
+                StopPriorAssemblyRuntime(window);
+                SafeClose(window);
+            }
+        }
+
+        private static void StopPriorAssemblyRuntime(Window window)
+        {
+            if (window == null || window.GetType().Assembly == typeof(GlitchAddOn).Assembly)
+                return;
+
+            // Transitional handoff for a loaded generation compiled before the
+            // AppDomain lease existed. Future generations retire through Acquire.
+            Type hostType = window.GetType().Assembly.GetType(
+                "Glitch.Infrastructure.GlitchRuntimeHost",
+                throwOnError: false);
+            if (hostType == null)
+                return;
+
+            var activeProperty = hostType.GetProperty(
+                "Active",
+                System.Reflection.BindingFlags.Public
+                | System.Reflection.BindingFlags.Static);
+            object priorHost = activeProperty?.GetValue(null, null);
+            if (priorHost == null)
+                return;
+
+            var dispose = hostType.GetMethod(
+                "Dispose",
+                System.Reflection.BindingFlags.Public
+                | System.Reflection.BindingFlags.Instance,
+                null,
+                Type.EmptyTypes,
+                null);
+            if (dispose == null)
+                throw new InvalidOperationException("Prior Glitch runtime cannot be retired.");
+            dispose.Invoke(priorHost, null);
         }
 
         private void StartRuntimeHost()

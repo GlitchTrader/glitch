@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using Glitch.Core;
+using Glitch.Infrastructure;
 
 internal static class GlitchRuntimeLifecycleHarness
 {
@@ -13,6 +14,40 @@ internal static class GlitchRuntimeLifecycleHarness
 
     public static int Main()
     {
+        GlitchRuntimeOwnershipLease.ResetForTests();
+        int firstShutdowns = 0;
+        int secondShutdowns = 0;
+        var firstOwner = new GlitchRuntimeOwnershipLease(() => firstShutdowns++);
+        var secondOwner = new GlitchRuntimeOwnershipLease(() => secondShutdowns++);
+        firstOwner.Acquire();
+        Assert(firstOwner.IsOwner, "the first AppDomain runtime owner was not published");
+        secondOwner.Acquire();
+        Assert(firstShutdowns == 1, "replacement did not synchronously stop the prior owner exactly once");
+        Assert(secondOwner.IsOwner, "the replacement AppDomain runtime owner was not published");
+        firstOwner.Dispose();
+        Assert(secondOwner.IsOwner, "stale termination cleared the replacement runtime owner");
+        secondOwner.Dispose();
+        Assert(!secondOwner.IsOwner, "runtime ownership remained published after termination");
+
+        var failingOwner = new GlitchRuntimeOwnershipLease(
+            () => { throw new InvalidOperationException("expected handoff failure"); });
+        var blockedReplacement = new GlitchRuntimeOwnershipLease(() => { });
+        failingOwner.Acquire();
+        bool handoffFailed = false;
+        try
+        {
+            blockedReplacement.Acquire();
+        }
+        catch (InvalidOperationException error)
+        {
+            handoffFailed = error.Message == "expected handoff failure";
+        }
+        Assert(handoffFailed, "a failed prior shutdown did not block replacement ownership");
+        Assert(failingOwner.IsOwner, "a failed shutdown discarded the prior runtime owner");
+        failingOwner.Dispose();
+        blockedReplacement.Dispose();
+        GlitchRuntimeOwnershipLease.ResetForTests();
+
         var observed = new List<long>();
         var observedSignal = new ManualResetEventSlim(false);
         var runtime = new GlitchRuntime(

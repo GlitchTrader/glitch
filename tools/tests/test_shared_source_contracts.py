@@ -40,6 +40,9 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
 
     def test_addon_lifetime_owns_the_runtime_not_the_window(self):
         addon = read("ninjatrader/Glitch/AddOns/GlitchAddOn/GlitchAddOn.cs")
+        ownership = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/GlitchRuntimeOwnershipLease.cs"
+        )
         host = read(
             "ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/GlitchRuntimeHost.cs"
         )
@@ -49,6 +52,9 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("State.Active", addon)
         self.assertIn("new GlitchRuntimeHost()", addon)
         self.assertIn("State.Terminated", addon)
+        self.assertLess(addon.index("_runtimeOwnership.Acquire();"), addon.index("StartRuntimeHost();"))
+        self.assertIn("AppDomain.CurrentDomain.SetData(OwnerSlot, _shutdown)", ownership)
+        self.assertIn("priorOwner();", ownership)
         self.assertIn("public static GlitchRuntimeHost Active", host)
         self.assertNotIn("new GlitchRuntimeHost()", window)
 
