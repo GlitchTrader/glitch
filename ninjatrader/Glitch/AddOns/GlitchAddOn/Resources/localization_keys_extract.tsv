@@ -203,10 +203,13 @@ header.metric.pa_risk	PA Risk
 header.metric.warnings	Warnings
 settings.title	Settings
 settings.risk.title	Risk Management Rules
-settings.risk.enforce_15_flatten_freeze	Flatten and freeze account when buffer falls below 15% of maximum drawdown.
-settings.risk.enforce_20_one_contract	Force one-contract replication when buffer falls below 20% of maximum drawdown (release at 25%).
+settings.risk.enforce_15_flatten_freeze	Flatten account once when buffer falls below 15% of maximum drawdown.
+settings.risk.enforce_20_one_contract	Limit each future follower replication order to one contract below 20% of maximum drawdown (release at 25%).
 settings.risk.enforce_80_flatten	Flatten account when unrealized loss exceeds 80% of maximum intratrade loss (max loss limit).
-settings.risk.enforce_eval_lock_flatten	Flatten and lock evaluation account when equity reaches the evaluation target lock balance.
+settings.risk.enforce_eval_lock_flatten	Flatten evaluation account once when equity reaches the configured target balance.
+settings.risk.enforce_max_contracts_flatten	Flatten account once when open contracts exceed the configured max-contracts limit.
+settings.risk.enforce_no_protection_flatten	Flatten account once when an open position has no working protective stop within the configured timeout.
+settings.risk.no_protection_timeout_ms	No-protection timeout (milliseconds)
 settings.license.title	License
 settings.license.key	License Key
 settings.license.key_placeholder	Enter license key

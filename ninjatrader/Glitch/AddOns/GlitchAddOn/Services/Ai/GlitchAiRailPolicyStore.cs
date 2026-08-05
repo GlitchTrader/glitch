@@ -11,6 +11,7 @@ namespace Glitch.Services
     internal sealed class GlitchAiRailPolicy
     {
         public bool IsValid { get; set; }
+        public bool ExecutionBindingsValid { get; set; }
         public string ValidationError { get; set; }
         public bool RequireValidLicense { get; set; } = false;
         public int SnapshotMaxAgeSeconds { get; set; } = 300;
@@ -78,7 +79,7 @@ namespace Glitch.Services
             try
             {
                 GlitchAiRailPolicy policy = Load();
-                if (!policy.IsValid)
+                if (!policy.ExecutionBindingsValid)
                 {
                     error = policy.ValidationError ?? "policy_invalid";
                     return false;
@@ -321,6 +322,21 @@ namespace Glitch.Services
             if (CountJsonKey(json, "schema_version") != 1)
                 return Invalid("policy_schema_duplicated");
 
+            if (CountJsonKey(json, "profile_account_bindings") != 1
+                || !Regex.IsMatch(
+                    json,
+                    "\"profile_account_bindings\"\\s*:\\s*\\[",
+                    RegexOptions.CultureInvariant | RegexOptions.IgnoreCase))
+                return Invalid("policy_execution_bindings_invalid");
+
+            string executorAccount = GlitchAiJsonFields.ExtractString(json, "executor_account");
+            if (!string.IsNullOrWhiteSpace(executorAccount))
+                policy.ExecutorAccount = executorAccount.Trim();
+            policy.ProfileAccountBindings = ParseProfileAccountBindings(json, policy.ProfileAccountBindings);
+            policy.AccountAllowlist = ParseStringArray(json, "account_allowlist", policy.AccountAllowlist);
+            policy.AccountAllowlist.UnionWith(policy.ProfileAccountBindings.Values);
+            policy.ExecutionBindingsValid = true;
+
             string[] requiredKeys =
             {
                 "snapshot_max_age_seconds",
@@ -334,9 +350,9 @@ namespace Glitch.Services
             {
                 int count = CountJsonKey(json, key);
                 if (count == 0)
-                    return Invalid("policy_key_missing_" + key);
+                    return Invalidate(policy, "policy_key_missing_" + key);
                 if (count != 1)
-                    return Invalid("policy_key_duplicated_" + key);
+                    return Invalidate(policy, "policy_key_duplicated_" + key);
             }
             foreach (string key in new[]
             {
@@ -350,30 +366,23 @@ namespace Glitch.Services
                     json,
                     "\"" + Regex.Escape(key) + "\"\\s*:\\s*\\[",
                     RegexOptions.CultureInvariant | RegexOptions.IgnoreCase))
-                    return Invalid("policy_array_invalid_" + key);
+                    return Invalidate(policy, "policy_array_invalid_" + key);
             }
 
             if (GlitchAiJsonFields.TryExtractBool(json, "require_valid_license", out bool requireLicense))
                 policy.RequireValidLicense = requireLicense;
-            string executorAccount = GlitchAiJsonFields.ExtractString(json, "executor_account");
-            if (!string.IsNullOrWhiteSpace(executorAccount))
-                policy.ExecutorAccount = executorAccount.Trim();
-
             if (CountJsonKey(json, "mode") != 0)
-                return Invalid("policy_key_retired_mode");
+                return Invalidate(policy, "policy_key_retired_mode");
 
             if (!GlitchAiJsonFields.TryExtractNumber(json, "snapshot_max_age_seconds", out double snapshotAge)
                 || snapshotAge < 1 || snapshotAge > 900
                 || Math.Abs(snapshotAge - Math.Round(snapshotAge)) > 0.0000001d)
-                return Invalid("policy_snapshot_age_invalid");
+                return Invalidate(policy, "policy_snapshot_age_invalid");
             policy.SnapshotMaxAgeSeconds = (int)snapshotAge;
             policy.InstrumentAllowlist = ParseStringArray(json, "instrument_allowlist", policy.InstrumentAllowlist);
-            policy.AccountAllowlist = ParseStringArray(json, "account_allowlist", policy.AccountAllowlist);
-            policy.ProfileAccountBindings = ParseProfileAccountBindings(json, policy.ProfileAccountBindings);
-            policy.AccountAllowlist.UnionWith(policy.ProfileAccountBindings.Values);
             policy.BlockedSessions = ParseStringArray(json, "blocked_sessions", policy.BlockedSessions);
             if (policy.InstrumentAllowlist.Count == 0)
-                return Invalid("policy_instrument_allowlist_empty");
+                return Invalidate(policy, "policy_instrument_allowlist_empty");
             policy.IsValid = true;
             policy.ValidationError = null;
             return policy;
@@ -394,6 +403,13 @@ namespace Glitch.Services
                 IsValid = false,
                 ValidationError = string.IsNullOrWhiteSpace(error) ? "policy_invalid" : error
             };
+        }
+
+        private static GlitchAiRailPolicy Invalidate(GlitchAiRailPolicy policy, string error)
+        {
+            policy.IsValid = false;
+            policy.ValidationError = string.IsNullOrWhiteSpace(error) ? "policy_invalid" : error;
+            return policy;
         }
 
         private static Dictionary<string, string> ParseProfileAccountBindings(

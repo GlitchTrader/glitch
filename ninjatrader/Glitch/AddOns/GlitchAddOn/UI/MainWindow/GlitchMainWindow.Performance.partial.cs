@@ -32,7 +32,6 @@ namespace Glitch.UI
         private static readonly TimeSpan ActiveAccountCacheTtl = TimeSpan.FromSeconds(10);
         private static readonly TimeSpan AccountItemUpdateMinInterval = TimeSpan.FromMilliseconds(500);
         private static readonly TimeSpan ShellPublishMinInterval = TimeSpan.FromMilliseconds(400);
-        private static readonly TimeSpan AccountSubscriptionResyncInterval = TimeSpan.FromSeconds(20);
         private static readonly TimeSpan AnalyticsMinRefreshInterval = TimeSpan.FromSeconds(8);
         private static readonly TimeSpan JournalBatchFlushInterval = TimeSpan.FromMilliseconds(350);
 
@@ -47,8 +46,6 @@ namespace Glitch.UI
         private bool _lastShellPublishReplicating;
         private string _lastShellPublishFingerprint = string.Empty;
 
-        private string _lastSubscribedAccountsKey = string.Empty;
-        private DateTime _lastAccountSubscriptionSyncUtc = DateTime.MinValue;
 
         private string _lastAnalyticsRefreshInstrument = string.Empty;
         private DateTime _lastAnalyticsRefreshUtc = DateTime.MinValue;
@@ -208,33 +205,6 @@ namespace Glitch.UI
 
             for (int i = 0; i < stale.Count; i++)
                 _accountItemUpdateThrottleUtc.Remove(stale[i]);
-        }
-
-        private void SyncAccountRuntimeEventSubscriptionsThrottled(List<Account> activeAccounts)
-        {
-            string snapshot = BuildActiveAccountNamesSnapshot(activeAccounts);
-            DateTime nowUtc = DateTime.UtcNow;
-            if (string.Equals(snapshot, _lastSubscribedAccountsKey, StringComparison.Ordinal) &&
-                (nowUtc - _lastAccountSubscriptionSyncUtc) < AccountSubscriptionResyncInterval)
-            {
-                return;
-            }
-
-            _lastSubscribedAccountsKey = snapshot;
-            _lastAccountSubscriptionSyncUtc = nowUtc;
-            SyncAccountRuntimeEventSubscriptions(activeAccounts);
-        }
-
-        private static string BuildActiveAccountNamesSnapshot(IList<Account> activeAccounts)
-        {
-            if (activeAccounts == null || activeAccounts.Count == 0)
-                return string.Empty;
-
-            return string.Join("|", activeAccounts
-                .Where(account => account != null && !string.IsNullOrWhiteSpace(account.Name))
-                .Select(account => account.Name.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase));
         }
 
         private void QueueJournalEntry(JournalEntry entry)

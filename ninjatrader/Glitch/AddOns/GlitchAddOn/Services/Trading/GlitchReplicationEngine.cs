@@ -65,22 +65,6 @@ namespace Glitch.Services
             return true;
         }
 
-        public static bool TryFlattenAccount(Account account, out int instrumentCount)
-        {
-            instrumentCount = 0;
-            if (account == null)
-                return false;
-
-            if (!TryGetOpenPositionInstruments(account, out List<Instrument> instruments))
-                return false;
-            if (instruments.Count == 0)
-                return false;
-
-            account.Flatten(instruments.ToArray());
-            instrumentCount = instruments.Count;
-            return true;
-        }
-
         public static bool IsAccountFlat(Account account)
         {
             if (account == null || !TrySnapshotPositions(account, out Position[] positions))
@@ -116,20 +100,9 @@ namespace Glitch.Services
 
         public static bool IsWorkingOrderState(OrderState state)
         {
-            if (state == OrderState.Working ||
-                state == OrderState.Accepted ||
-                state == OrderState.PartFilled)
-                return true;
-
-            string stateText = state.ToString();
-            if (stateText.IndexOf("Pending", StringComparison.OrdinalIgnoreCase) >= 0)
-                return true;
-            if (stateText.IndexOf("Submitted", StringComparison.OrdinalIgnoreCase) >= 0)
-                return true;
-            if (stateText.IndexOf("Trigger", StringComparison.OrdinalIgnoreCase) >= 0)
-                return true;
-
-            return false;
+            return state != OrderState.Cancelled
+                && state != OrderState.Filled
+                && state != OrderState.Rejected;
         }
 
         public static bool CanCancelOrder(Order order)

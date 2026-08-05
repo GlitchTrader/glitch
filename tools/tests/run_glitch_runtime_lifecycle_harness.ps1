@@ -27,11 +27,9 @@ foreach ($dependency in @(
 }
 
 $sourcePaths = @(
-    (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Services\Trading\GlitchInstrumentMetadataService.cs'),
-    (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Services\Trading\GlitchReplicationMath.cs'),
-    (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Services\Trading\GlitchReplicationEngine.cs'),
-    (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Services\Trading\GlitchReplicationProtection.cs'),
-    (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Services\Trading\GlitchCopyEngine.cs')
+    (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Core\GlitchContracts.cs'),
+    (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Core\GlitchRuntime.cs'),
+    (Join-Path $repoRoot 'tools\tests\GlitchRuntimeLifecycleHarness.cs')
 )
 $syntaxTrees = [System.Collections.Generic.List[Microsoft.CodeAnalysis.SyntaxTree]]::new()
 foreach ($sourcePath in $sourcePaths) {
@@ -43,30 +41,12 @@ foreach ($sourcePath in $sourcePaths) {
     ))
 }
 
-$syntaxOnlyPaths = @(
-    (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\UI\MainWindow\GlitchMainWindow.Replication.partial.cs')
-)
-foreach ($sourcePath in $syntaxOnlyPaths) {
-    $syntaxTree = [Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree]::ParseText(
-        [System.IO.File]::ReadAllText($sourcePath),
-        $null,
-        $sourcePath,
-        [System.Text.Encoding]::UTF8
-    )
-    $syntaxErrors = $syntaxTree.GetDiagnostics() |
-        Where-Object { $_.Severity -eq [Microsoft.CodeAnalysis.DiagnosticSeverity]::Error } |
-        ForEach-Object { $_.ToString() }
-    if ($syntaxErrors) {
-        throw ($syntaxErrors -join [Environment]::NewLine)
-    }
-}
-
 $referencePaths = @(
     [object].Assembly.Location,
+    [System.Console].Assembly.Location,
     [System.Linq.Enumerable].Assembly.Location,
-    [System.Uri].Assembly.Location,
-    [System.Threading.Tasks.Task].Assembly.Location,
-    (Join-Path $ninjaRoot 'NinjaTrader.Core.dll')
+    [System.Collections.Concurrent.BlockingCollection[object]].Assembly.Location,
+    [System.Threading.Thread].Assembly.Location
 ) | Select-Object -Unique
 $references = [System.Collections.Generic.List[Microsoft.CodeAnalysis.MetadataReference]]::new()
 foreach ($referencePath in $referencePaths) {
@@ -74,15 +54,15 @@ foreach ($referencePath in $referencePaths) {
 }
 
 $options = [Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions]::new(
-    [Microsoft.CodeAnalysis.OutputKind]::DynamicallyLinkedLibrary
+    [Microsoft.CodeAnalysis.OutputKind]::ConsoleApplication
 )
 $compilation = [Microsoft.CodeAnalysis.CSharp.CSharpCompilation]::Create(
-    'GlitchReplicationSourceCompile',
+    'GlitchRuntimeLifecycleHarness',
     $syntaxTrees,
     $references,
     $options
 )
-$outputPath = Join-Path ([System.IO.Path]::GetTempPath()) 'GlitchReplicationSourceCompile.dll'
+$outputPath = Join-Path ([System.IO.Path]::GetTempPath()) 'GlitchRuntimeLifecycleHarness.exe'
 $stream = [System.IO.File]::Open($outputPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
 try {
     $emitResult = $compilation.Emit($stream)
@@ -97,4 +77,7 @@ if (-not $emitResult.Success) {
     throw ($diagnostics -join [Environment]::NewLine)
 }
 
-Write-Output 'replication source compile: PASS'
+& $outputPath
+if ($LASTEXITCODE -ne 0) {
+    throw "runtime lifecycle harness exited with code $LASTEXITCODE"
+}

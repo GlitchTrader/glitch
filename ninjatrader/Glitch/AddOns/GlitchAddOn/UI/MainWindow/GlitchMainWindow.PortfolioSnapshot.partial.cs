@@ -6,6 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using Glitch.Core;
+using Glitch.Infrastructure;
 using Glitch.Services;
 using NinjaTrader.Cbi;
 
@@ -126,8 +128,8 @@ namespace Glitch.UI
                 NativeStateAvailable = positionsAvailable && ordersAvailable,
                 WorkingOrderCount = workingOrderCount,
                 MaxContracts = ruleMaxContracts > 0 ? ruleMaxContracts : row.MaxContractsRaw,
-                IsRiskLocked = _riskLockedAccounts.Contains(row.DisplayName),
-                IsEvalTargetLocked = _evalTargetLockedAccounts.Contains(row.DisplayName),
+                IsRiskLocked = false,
+                IsEvalTargetLocked = false,
                 TradingStartTime = ruleFirm?.TradingStartTime,
                 TradingEndTime = ruleFirm?.TradingEndTime,
                 Positions = positions,
@@ -227,6 +229,7 @@ namespace Glitch.UI
                         string instrumentRoot = order.Instrument?.MasterInstrument?.Name;
                         if (string.IsNullOrWhiteSpace(instrumentRoot))
                             instrumentRoot = instrumentFullName;
+                        GlitchNativeIdentity.TryGetProtectionLegId(order.Name, out string legId);
                         records.Add(new GlitchPortfolioSnapshotOrderRecord
                         {
                             InstrumentFullName = instrumentFullName,
@@ -235,6 +238,7 @@ namespace Glitch.UI
                             OrderType = order.OrderType.ToString(),
                             OrderState = order.OrderState.ToString(),
                             Oco = order.Oco,
+                            LegId = legId,
                             Quantity = order.Quantity,
                             Filled = order.Filled,
                             LimitPrice = order.LimitPrice,

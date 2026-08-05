@@ -292,13 +292,6 @@ namespace Glitch.UI
             Informational = 3
         }
 
-        private sealed class EventBridgeSubscription
-        {
-            public Account Account { get; set; }
-            public EventInfo EventInfo { get; set; }
-            public Delegate Handler { get; set; }
-        }
-
         private sealed class FirmRuleMetadata
         {
             public string FirmId { get; set; }

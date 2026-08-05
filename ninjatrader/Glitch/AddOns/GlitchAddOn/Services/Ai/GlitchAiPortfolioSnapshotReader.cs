@@ -209,12 +209,15 @@ namespace Glitch.Services
             foreach (string orderJson in orders)
             {
                 string orderInstrument = GlitchAiJsonFields.ExtractString(orderJson, "instrument_root");
-                string name = GlitchAiJsonFields.ExtractString(orderJson, "name") ?? string.Empty;
                 if (!string.Equals(orderInstrument, root, StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                bool isStop = name.StartsWith(GlitchAiOrderExecutor.SignalStop + "-", StringComparison.OrdinalIgnoreCase);
-                bool isTarget = name.StartsWith(GlitchAiOrderExecutor.SignalTarget + "-", StringComparison.OrdinalIgnoreCase);
+                string legId = GlitchAiJsonFields.ExtractString(orderJson, "leg_id");
+                if (string.IsNullOrWhiteSpace(legId))
+                    continue;
+                string orderType = GlitchAiJsonFields.ExtractString(orderJson, "order_type") ?? string.Empty;
+                bool isStop = orderType.IndexOf("Stop", StringComparison.OrdinalIgnoreCase) >= 0;
+                bool isTarget = string.Equals(orderType, "Limit", StringComparison.OrdinalIgnoreCase);
                 if (!isStop && !isTarget)
                     continue;
 

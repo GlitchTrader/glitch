@@ -27,10 +27,7 @@ namespace Glitch.UI
             if (_isWindowClosed)
                 return;
 
-            ApplyPlanLimitsToAccountGroups("refresh");
-
             List<Account> activeAccounts = GetActiveAccountsSnapshot();
-            SyncAccountRuntimeEventSubscriptionsThrottled(activeAccounts);
 
             if (!heavyTabWork)
             {
@@ -90,7 +87,7 @@ namespace Glitch.UI
             AccountRefreshBuildResult result = BuildAccountRowsOnWorker(
                 activeAccounts,
                 SnapshotSelectionOverridesForRefresh(activeAccounts));
-            ApplyFullAccountRefreshResult(result.Rows, result.DeferredAutoOverrides, heavyTabWork: false);
+            ApplyFullAccountRefreshResult(result.Rows, heavyTabWork: false);
             _lastHiddenRuntimeRefreshUtc = nowUtc;
         }
 
@@ -155,7 +152,7 @@ namespace Glitch.UI
                     return;
 
                 AccountRefreshBuildResult result = BuildAccountRowsOnWorker(accountsCopy, overridesSnapshot);
-                ApplyFullAccountRefreshResult(result.Rows, result.DeferredAutoOverrides, heavyTabWork);
+                ApplyFullAccountRefreshResult(result.Rows, heavyTabWork);
                 _accountRefreshAppliedSequence = sequence;
             }
             catch (Exception ex)
@@ -179,7 +176,6 @@ namespace Glitch.UI
             List<Account> accountsCopy,
             Dictionary<string, AccountSelectionOverride> overridesSnapshot)
         {
-            var deferredAutoOverrides = new Dictionary<string, AccountSelectionOverride>(StringComparer.OrdinalIgnoreCase);
             var rows = new List<AccountGridRow>(accountsCopy.Count);
 
             foreach (Account account in accountsCopy)
@@ -188,13 +184,12 @@ namespace Glitch.UI
                     continue;
 
                 overridesSnapshot.TryGetValue(account.Name, out AccountSelectionOverride selectionOverride);
-                rows.Add(BuildAccountRow(account, selectionOverride, deferredAutoOverrides));
+                rows.Add(BuildAccountRow(account, selectionOverride));
             }
 
             return new AccountRefreshBuildResult
             {
-                Rows = rows,
-                DeferredAutoOverrides = deferredAutoOverrides
+                Rows = rows
             };
         }
 
@@ -203,43 +198,23 @@ namespace Glitch.UI
             AccountRefreshBuildResult result = BuildAccountRowsOnWorker(
                 activeAccounts,
                 SnapshotSelectionOverridesForRefresh(activeAccounts));
-            ApplyFullAccountRefreshResult(result.Rows, result.DeferredAutoOverrides, heavyTabWork);
+            ApplyFullAccountRefreshResult(result.Rows, heavyTabWork);
             _accountRefreshAppliedSequence = Interlocked.Increment(ref _accountRefreshSequence);
         }
 
         private void ApplyFullAccountRefreshResult(
             IReadOnlyList<AccountGridRow> rows,
-            IReadOnlyDictionary<string, AccountSelectionOverride> deferredAutoOverrides,
             bool heavyTabWork)
         {
-            if (deferredAutoOverrides != null)
-            {
-                foreach (KeyValuePair<string, AccountSelectionOverride> entry in deferredAutoOverrides)
-                {
-                    if (string.IsNullOrWhiteSpace(entry.Key) || entry.Value == null)
-                        continue;
-                    _selectionOverrides[entry.Key] = entry.Value;
-                }
-            }
-
             List<Account> activeAccounts = GetActiveAccountsSnapshot();
 
             MaybeEnforceAiDailyClose(activeAccounts);
 
-            // Existing refresh cadence is the deterministic fallback when NT
-            // coalesces or replaces an OrderUpdate object. A filled AI master
-            // must become natively protected or enter fail-closed recovery.
-            foreach (Account activeAccount in activeAccounts)
-            {
-                GlitchAiOrderExecutor.ProcessAccountStateUpdate(activeAccount);
-                _copyEngine?.ProcessAccountStateUpdate(activeAccount);
-            }
-
             ApplyAccountRows(rows);
             ApplyRiskMitigations(rows, activeAccounts);
             RefreshGroupMasterDropdownOptionsIfNeeded(rows);
-            if (_isReplicatingUi)
-                RefreshCopyEngineConfiguration(activeAccounts);
+            if (_isReplicatingUi && !_isFlattenAllInProgress)
+                RefreshCopyEngineConfiguration();
             UpdateHeaderMetricsFromRows(rows);
             UpdateHermesModeUi(GlitchHermesControlStateStore.Load().TradingPaused);
             PublishGlitchShellState(rows);
@@ -297,7 +272,6 @@ namespace Glitch.UI
         private sealed class AccountRefreshBuildResult
         {
             public List<AccountGridRow> Rows { get; set; }
-            public Dictionary<string, AccountSelectionOverride> DeferredAutoOverrides { get; set; }
         }
     }
 }

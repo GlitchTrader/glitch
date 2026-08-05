@@ -26,6 +26,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Glitch.Core;
 
 namespace Glitch.Services
 {
@@ -519,14 +520,22 @@ namespace Glitch.Services
             string signal = CleanToken(entrySignal).ToUpperInvariant();
             if (string.IsNullOrWhiteSpace(signal))
                 return "Manual / Unknown";
+            if (GlitchNativeIdentity.TryGetRole(signal, out string role))
+            {
+                if (string.Equals(role, "Y", StringComparison.OrdinalIgnoreCase))
+                    return "Replication Sync";
+                if (string.Equals(role, "R", StringComparison.OrdinalIgnoreCase))
+                    return "Replication";
+                if (string.Equals(role, "HME", StringComparison.OrdinalIgnoreCase))
+                    return "Hermes Entry";
+                if (string.Equals(role, "HMX", StringComparison.OrdinalIgnoreCase))
+                    return "Hermes Exit";
+                if (GlitchNativeIdentity.IsProtectionRole(role))
+                    return "Protective Follow-up";
+                return "Glitch / Unknown";
+            }
             if (signal.StartsWith("ENTRY", StringComparison.OrdinalIgnoreCase))
                 return "Manual Entry";
-            if (signal.StartsWith("GLT-SYNC", StringComparison.OrdinalIgnoreCase))
-                return "Replication Sync";
-            if (signal.StartsWith("GLT-CATCHUP", StringComparison.OrdinalIgnoreCase))
-                return "Replication Catch-up";
-            if (signal.StartsWith("GLT-PROT-", StringComparison.OrdinalIgnoreCase))
-                return "Protective Follow-up";
             return signal;
         }
 
@@ -606,16 +615,29 @@ namespace Glitch.Services
             if (string.IsNullOrWhiteSpace(signal))
                 return string.Empty;
 
+            if (GlitchNativeIdentity.TryGetRole(signal, out string role))
+            {
+                if (GlitchNativeIdentity.IsStopRole(role))
+                    return "SL";
+                if (GlitchNativeIdentity.IsTargetRole(role))
+                    return "TP";
+                if (string.Equals(role, "Y", StringComparison.OrdinalIgnoreCase))
+                    return "SYNC";
+                if (string.Equals(role, "HME", StringComparison.OrdinalIgnoreCase))
+                    return "ENTRY";
+                if (string.Equals(role, "HMX", StringComparison.OrdinalIgnoreCase))
+                    return "EXIT";
+                if (string.Equals(role, "R", StringComparison.OrdinalIgnoreCase))
+                    return "REPL";
+                return string.Empty;
+            }
+
             if (signal.Contains("TRAIL") || signal.Contains("TSL"))
                 return "TSL";
-            if (signal.StartsWith("GLT-PROT-TGT", StringComparison.OrdinalIgnoreCase) || IsTargetSignal(signal))
+            if (IsTargetSignal(signal))
                 return "TP";
-            if (signal.StartsWith("GLT-PROT-STP", StringComparison.OrdinalIgnoreCase) || IsStopSignal(signal))
+            if (IsStopSignal(signal))
                 return "SL";
-            if (signal.StartsWith("GLT-SYNC", StringComparison.OrdinalIgnoreCase))
-                return "SYNC";
-            if (signal.StartsWith("GLT-CATCHUP", StringComparison.OrdinalIgnoreCase))
-                return "CATCHUP";
             if (signal.StartsWith("ENTRY", StringComparison.OrdinalIgnoreCase))
                 return "ENTRY";
             if (signal.StartsWith("EXIT", StringComparison.OrdinalIgnoreCase) ||
@@ -683,10 +705,24 @@ namespace Glitch.Services
             IReadOnlyList<TradeJournalEvent> contextEvents)
         {
             string signal = CleanToken(exitSignal).ToUpperInvariant();
-            if (signal.StartsWith("GLT-PROT-STP", StringComparison.OrdinalIgnoreCase) || IsStopSignal(signal))
-                return "Stop Loss";
-            if (signal.StartsWith("GLT-PROT-TGT", StringComparison.OrdinalIgnoreCase) || IsTargetSignal(signal))
-                return "Take Profit";
+            if (GlitchNativeIdentity.TryGetRole(signal, out string role))
+            {
+                if (GlitchNativeIdentity.IsStopRole(role))
+                    return "Stop Loss";
+                if (GlitchNativeIdentity.IsTargetRole(role))
+                    return "Take Profit";
+                if (string.Equals(role, "Y", StringComparison.OrdinalIgnoreCase))
+                    return "Replication Sync";
+                if (string.Equals(role, "R", StringComparison.OrdinalIgnoreCase))
+                    return "Replication";
+            }
+            else
+            {
+                if (IsStopSignal(signal))
+                    return "Stop Loss";
+                if (IsTargetSignal(signal))
+                    return "Take Profit";
+            }
 
             if (contextEvents != null && contextEvents.Count > 0)
             {
@@ -719,15 +755,6 @@ namespace Glitch.Services
             if ((local.Hour == 15 && local.Minute >= 55) || (local.Hour == 16 && local.Minute <= 10))
                 return "Session End";
 
-            if (signal.StartsWith("GLT-SYNC", StringComparison.OrdinalIgnoreCase))
-            {
-                if (HasNearbyManualCloseContext(exitUtc, instrument, contextEvents))
-                    return "Manual / Other";
-
-                return "Replication Sync";
-            }
-            if (signal.StartsWith("GLT-CATCHUP", StringComparison.OrdinalIgnoreCase))
-                return "Replication Catch-up";
             if (signal.StartsWith("EXIT", StringComparison.OrdinalIgnoreCase) ||
                 signal.StartsWith("CLOSE", StringComparison.OrdinalIgnoreCase))
             {

@@ -1,7 +1,7 @@
 import threading
 import unittest
 
-from control_server_sim import (
+from .control_server_sim import (
     AccountSnapshot,
     ControlServer,
     CrashInjected,

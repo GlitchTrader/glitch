@@ -34,7 +34,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using LinqExpression = System.Linq.Expressions.Expression;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
@@ -50,7 +49,9 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using Glitch.Core;
 using Glitch.Services;
+using Glitch.Infrastructure;
 using NinjaTrader.Cbi;
 using NinjaTrader.Gui.Tools;
 
@@ -70,9 +71,6 @@ namespace Glitch.UI
         private static readonly FontWeight UiHeadingFontWeight = FontWeights.Medium;
         private static readonly FontWeight UiActionFontWeight = FontWeights.Medium;
         private static readonly FontWeight UiTabFontWeight = FontWeights.Medium;
-        private const string ReplicationSignalName = "GLT-SYNC";
-        private const string ProtectiveStopSignalName = "GLT-PROT-STP";
-        private const string ProtectiveTargetSignalName = "GLT-PROT-TGT";
         private const string CurrentClientVersion = "addon-ai-0.0.2.2";
         private const string DefaultLatestDownloadUrl = "https://download.glitchtrader.com/latest";
         private const double UnrealizedLossFlattenThresholdRatio = 0.80;
@@ -110,15 +108,13 @@ namespace Glitch.UI
         private string _lastPlanLimitWarningSignature;
         private readonly DispatcherTimer _refreshTimer;
         private readonly ConcurrentDictionary<string, PeakState> _peakStatesByAccount;
-        private readonly Dictionary<string, List<EventBridgeSubscription>> _accountEventSubscriptions;
-        private EventBridgeSubscription _accountStatusEventSubscription;
         private readonly HashSet<string> _riskLockedAccounts;
         private readonly HashSet<string> _evalTargetLockedAccounts;
         private readonly HashSet<string> _riskLockAcknowledgedAccounts;
         private readonly HashSet<string> _riskOneContractAccounts;
         private readonly HashSet<string> _unrealizedLossFlattenTriggeredAccounts;
+        private readonly HashSet<string> _complianceFlattenLatchKeys;
         private readonly HashSet<AccountGroupMemberRow> _wiredReplicationMembers;
-        private readonly GlitchCopyEngine _copyEngine;
         private readonly Dictionary<string, DateTime> _noProtectionDetectedSinceByKey;
         private readonly Dictionary<string, DateTime> _riskMitigationCooldownByKey;
         private readonly Dictionary<string, string> _lastOrderJournalSnapshotByKey;
@@ -280,19 +276,13 @@ namespace Glitch.UI
             _runtimePolicySettings = GlitchRuntimePolicyStore.LoadSettings(_runtimePolicyFilePath);
             _licenseCacheState = GlitchRuntimePolicyStore.LoadLicenseCache(_licenseCacheFilePath);
             _peakStatesByAccount = new ConcurrentDictionary<string, PeakState>(StringComparer.OrdinalIgnoreCase);
-            _accountEventSubscriptions = new Dictionary<string, List<EventBridgeSubscription>>(StringComparer.OrdinalIgnoreCase);
             _riskLockedAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _evalTargetLockedAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _riskLockAcknowledgedAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _riskOneContractAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _unrealizedLossFlattenTriggeredAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _complianceFlattenLatchKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _wiredReplicationMembers = new HashSet<AccountGroupMemberRow>();
-            _copyEngine = new GlitchCopyEngine
-            {
-                Journal = (accountName, message) => AppendJournal(accountName, "Replication", message),
-                RaiseCritical = (accountName, message, key) =>
-                    RaiseCriticalWarning(accountName, message, key, unlocksTrading: false)
-            };
             _noProtectionDetectedSinceByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
             _riskMitigationCooldownByKey = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
             _lastOrderJournalSnapshotByKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -804,42 +794,36 @@ namespace Glitch.UI
 
         internal bool SetReplicationFromExternalSurface(bool enabled, string origin)
         {
-            bool runtimeEnabled = _isReplicatingUi && _copyEngine?.IsEnabled == true;
-            if ((enabled && runtimeEnabled) || (!enabled && !_isReplicatingUi))
+            GlitchRuntimeHost host = GlitchRuntimeHost.Active;
+            if (_isReplicatingUi == enabled
+                && host != null
+                && host.ReplicationEnabled == enabled)
                 return true;
 
-            if (enabled)
+            if (!RefreshCopyEngineConfiguration(
+                    replicationEnabledOverride: enabled,
+                    synchronizeChanges: enabled))
             {
-                if (!CanEnableReplication(out string denialReason))
-                {
-                    AppendJournal("System", "Replication", $"Replication start blocked. {denialReason}");
-                    RaiseCriticalWarning(
-                        "System",
-                        "Replication start blocked: " + denialReason,
-                        "PolicyReplicationBlocked",
-                        unlocksTrading: false);
-                    return false;
-                }
-
-                ApplyPlanLimitsToAccountGroups("replication_start");
+                AppendJournal(
+                    "System", "Replication",
+                    "replication_change_rejected|origin=" + (origin ?? "external")
+                    + "|requested=" + (enabled ? "enabled" : "disabled"));
+                UpdateReplicateButtonState();
+                PublishGlitchShellState();
+                return false;
             }
 
             _isReplicatingUi = enabled;
             _lastUiRefreshUtc = DateTime.MinValue;
-            List<Account> activeAccounts = GetActiveAccountsSnapshot();
             if (_isReplicatingUi)
-            {
                 AppendJournal("System", "Replication", "replication_enabled|origin=" + (origin ?? "external"));
-            }
-
-            RefreshCopyEngineConfiguration(activeAccounts);
 
             AppendJournal(
                 "System",
                 "Replication",
                 _isReplicatingUi
-                    ? "Replication gate opened."
-                    : "Replication gate closed.");
+                    ? "Replication enabled."
+                    : "Replication disabled.");
             UpdateReplicateButtonState();
             UpdateRefreshTimerCadence();
             PersistReplicationUiState();
@@ -861,7 +845,7 @@ namespace Glitch.UI
             _isReplicatingUi;
 
         internal bool IsReplicationEffectivelyActiveFromExternalSurface() =>
-            _isReplicatingUi && _copyEngine?.IsEnabled == true;
+            _isReplicatingUi && GlitchRuntimeHost.Active != null;
 
         private void UpdateHermesModeUi(bool paused)
         {
@@ -888,8 +872,8 @@ namespace Glitch.UI
             bool tradingJobEnabled = GlitchAiAutoRuntimeController.IsTradingJobEnabled();
             bool targetEnabled = state.TradingPaused || !tradingJobEnabled;
 
-            // OFF closes Glitch's execution gate synchronously before waiting
-            // for the background scheduler to pause.
+            // OFF records the User's entry pause synchronously before waiting
+            // for the background scheduler to stop.
             if (!targetEnabled)
             {
                 state.TradingPaused = true;
@@ -1007,7 +991,7 @@ namespace Glitch.UI
                 return;
 
             _replicateButton.Tag = _isReplicatingUi
-                ? (_copyEngine?.IsEnabled == true ? "Running" : "Armed")
+                ? (GlitchRuntimeHost.Active != null ? "Running" : "Armed")
                 : "Stopped";
         }
 
@@ -1031,10 +1015,7 @@ namespace Glitch.UI
                 $"oneContract20to25={settings.EnforceBufferOneContract30Percent}, " +
                 $"unrlzdFlatten80={settings.EnforceUnrealizedFlatten70Percent}, " +
                 $"evalLock={settings.EnforceEvalProfitTargetLock}, " +
-                $"replMaxDelta={settings.ReplicationMaxDeltaPerCycle}, " +
-                $"replBurstMs={settings.ReplicationBurstWindowMs}, " +
                 $"noProtMs={settings.NoProtectionTimeoutMs}, " +
-                $"rearmMs={settings.RearmTimeoutMs}, " +
                 $"limits={{groups:{cache.MaxGroups}, followersPerGroup:{cache.MaxFollowersPerGroup}}}.";
         }
 
@@ -1287,38 +1268,9 @@ namespace Glitch.UI
             }
         }
 
-        private bool CanEnableReplication(out string denialReason)
-        {
-            denialReason = null;
-            DateTime nowUtc = DateTime.UtcNow;
-            if (!IsLicenseActiveOrGrace(nowUtc))
-                ApplyFreeLitePolicyToCache("expired", _licenseCacheState?.LastReason ?? "grace_window_elapsed");
-
-            if (IsFreeLitePlan())
-            {
-                ApplyPlanLimitsToAccountGroups("replication_gate");
-                if (CountConfiguredGroups() > (_licenseCacheState?.MaxGroups ?? 1))
-                {
-                    denialReason = "Free Lite allows only one configured group.";
-                    return false;
-                }
-
-                if (AnyGroupHasEnabledFollowersOverLimit(_licenseCacheState?.MaxFollowersPerGroup ?? 2))
-                {
-                    denialReason = "Free Lite allows a maximum of two enabled followers per group.";
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
         private void RestoreReplicationUiFromPersistence()
         {
             bool wantOn = _runtimePolicySettings?.ReplicationUiEnabled ?? false;
-            if (wantOn && !CanEnableReplication(out _))
-                wantOn = false;
-
             _isReplicatingUi = wantOn;
             UpdateReplicateButtonState();
             UpdateRefreshTimerCadence();
@@ -1329,8 +1281,15 @@ namespace Glitch.UI
             if (_runtimePolicySettings == null || string.IsNullOrWhiteSpace(_runtimePolicyFilePath))
                 return;
 
-            _runtimePolicySettings.ReplicationUiEnabled = _isReplicatingUi;
-            GlitchRuntimePolicyStore.SaveSettings(_runtimePolicyFilePath, _runtimePolicySettings);
+            try
+            {
+                _runtimePolicySettings.ReplicationUiEnabled = _isReplicatingUi;
+                GlitchRuntimePolicyStore.SaveSettings(_runtimePolicyFilePath, _runtimePolicySettings);
+            }
+            catch (Exception error)
+            {
+                RecordSubsystemFault("replication_ui_persistence", error);
+            }
         }
 
         private int CountConfiguredGroups()
@@ -1357,31 +1316,7 @@ namespace Glitch.UI
 
         private void ApplyPlanLimitsToAccountGroups(string source)
         {
-            if (!IsFreeLitePlan() || _accountGroups == null)
-            {
-                _lastPlanLimitWarningSignature = null;
-                return;
-            }
-
-            int maxGroups = Math.Max(1, _licenseCacheState?.MaxGroups ?? 1);
-            int maxFollowers = Math.Max(1, _licenseCacheState?.MaxFollowersPerGroup ?? 2);
-            bool groupsOverLimit = CountConfiguredGroups() > maxGroups;
-            bool followersOverLimit = AnyGroupHasEnabledFollowersOverLimit(maxFollowers);
-            if (!groupsOverLimit && !followersOverLimit)
-            {
-                _lastPlanLimitWarningSignature = null;
-                return;
-            }
-
-            string signature = $"{maxGroups}|{maxFollowers}|{groupsOverLimit}|{followersOverLimit}";
-            if (string.Equals(signature, _lastPlanLimitWarningSignature, StringComparison.Ordinal))
-                return;
-
-            _lastPlanLimitWarningSignature = signature;
-            AppendJournal(
-                "System",
-                "Policy",
-                $"Plan limits require operator selection ({source}). Free Lite caps: maxGroups={maxGroups}, maxFollowersPerGroup={maxFollowers}. Saved group and follower settings were preserved; replication remains unavailable until the configured selection is within the active plan.");
+            _lastPlanLimitWarningSignature = null;
         }
 
         private void MaybeRunLicenseHeartbeat(DateTime nowUtc)
@@ -1605,7 +1540,9 @@ namespace Glitch.UI
             try
             {
                 if (restoreCopyEngine)
-                    _copyEngine?.Configure(false, null);
+                    RefreshCopyEngineConfiguration(
+                        replicationEnabledOverride: false,
+                        persistDesiredState: false);
 
                 var accounts = ResolveFlattenAllAccounts(out List<string> unresolvedAccounts);
                 foreach (string unresolvedAccount in unresolvedAccounts)
@@ -1642,7 +1579,6 @@ namespace Glitch.UI
                 verifiedFlatAndOrderFree = complete;
                 if (complete)
                 {
-                    _copyEngine?.ResetAfterFlattenAll();
                     string flattenSummary = flattenSubmitCount > 0
                         ? "Flatten All executed successfully."
                         : "Flatten All: fleet already flat.";
@@ -1677,40 +1613,13 @@ namespace Glitch.UI
             finally
             {
                 _isFlattenAllInProgress = false;
-                if (restoreCopyEngine && verifiedFlatAndOrderFree)
-                    RefreshCopyEngineConfiguration(GetActiveAccountsSnapshot());
-                else if (restoreCopyEngine)
-                {
-                    // Never reopen the copy gate around late native flatten
-                    // fills. An incomplete Flatten All requires a fresh,
-                    // explicit Replication enable from the operator.
-                    _isReplicatingUi = false;
-                    _copyEngine?.Configure(false, null);
-                    AppendJournal(
-                        "System",
-                        "Replication",
-                        "replication_disabled|reason=flatten_all_not_verified");
-                    UpdateReplicateButtonState();
-                    PersistReplicationUiState();
-                    PublishGlitchShellState();
-                }
+                if (restoreCopyEngine)
+                    RefreshCopyEngineConfiguration();
             }
         }
 
         private void OnCreateGroupClick(object sender, RoutedEventArgs e)
         {
-            if (IsFreeLitePlan())
-            {
-                int maxGroups = Math.Max(1, _licenseCacheState?.MaxGroups ?? 1);
-                if (CountConfiguredGroups() >= maxGroups)
-                {
-                    string message = $"Free Lite limit reached: maximum {maxGroups} group(s).";
-                    AppendJournal("System", "Policy", message);
-                    RaiseCriticalWarning("System", message, "PolicyGroupLimit", unlocksTrading: false);
-                    return;
-                }
-            }
-
             var availableMasters = GetConnectedAccountNames();
 
             if (availableMasters.Count == 0)
@@ -1724,8 +1633,6 @@ namespace Glitch.UI
                 return;
 
             double masterSize = ResolveAccountSizeForName(selectedMaster);
-            if (masterSize <= 0)
-                masterSize = 25000;
 
             var group = new AccountGroupDefinition
             {
@@ -1735,7 +1642,11 @@ namespace Glitch.UI
                 Members = new ObservableCollection<AccountGroupMemberRow>()
             };
             _accountGroups.Add(group);
-            SaveAccountGroupsToDisk();
+            if (!SaveAccountGroupsToDisk())
+            {
+                _accountGroups.Remove(group);
+                return;
+            }
             RebuildAccountGroupsUi();
         }
 
@@ -1875,7 +1786,8 @@ namespace Glitch.UI
                     if (group.Members == null || group.Members.Count == 0)
                     {
                         _accountGroups.Remove(group);
-                        SaveAccountGroupsToDisk();
+                        if (!PersistAndApplyReplicationConfiguration(synchronizeChanges: false))
+                            LoadAccountGroupsFromDisk();
                         RebuildAccountGroupsUi();
                         return;
                     }
@@ -1889,7 +1801,8 @@ namespace Glitch.UI
                     foreach (AccountGroupMemberRow member in selectedRows)
                         group.Members.Remove(member);
 
-                    SaveAccountGroupsToDisk();
+                    if (!PersistAndApplyReplicationConfiguration(synchronizeChanges: false))
+                        LoadAccountGroupsFromDisk();
                     RebuildAccountGroupsUi();
                 };
 
@@ -2090,27 +2003,43 @@ namespace Glitch.UI
             var enableColumn = CreateGroupEnableColumn(context, centerHeaderStyle);
             grid.Columns.Add(enableColumn);
 
+            var ratioBeforeEdit = new Dictionary<AccountGroupMemberRow, double>();
             grid.CellEditEnding += (s, e) =>
             {
+                if (e?.Column != ratioColumn)
+                    return;
                 var editedMember = e?.Row?.Item as AccountGroupMemberRow;
                 if (editedMember == null || editedMember.IsMasterRow)
                     return;
+                double priorRatio = ratioBeforeEdit.TryGetValue(editedMember, out double rememberedRatio)
+                    ? rememberedRatio
+                    : editedMember.Ratio;
+                ratioBeforeEdit.Remove(editedMember);
 
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
-                    if (double.IsNaN(editedMember.Ratio) || double.IsInfinity(editedMember.Ratio) || editedMember.Ratio <= 0)
+                    if (double.IsNaN(editedMember.Ratio) || double.IsInfinity(editedMember.Ratio) || editedMember.Ratio < 0)
                         editedMember.Ratio = ComputeDefaultRatio(editedMember.FollowerSize, editedMember.MasterSize);
                     else
                         editedMember.Ratio = Math.Round(editedMember.Ratio, 4);
-                    SaveAccountGroupsToDisk();
-                    HandleFollowerRatioUserChange(group, editedMember);
+                    if (!HandleFollowerRatioUserChange(group, editedMember))
+                    {
+                        editedMember.Ratio = priorRatio;
+                        return;
+                    }
                 }), DispatcherPriority.Background);
             };
 
             grid.BeginningEdit += (s, e) =>
             {
                 if (e?.Row?.Item is AccountGroupMemberRow row && row.IsMasterRow)
+                {
                     e.Cancel = true;
+                    return;
+                }
+                if (e?.Column == ratioColumn
+                    && e?.Row?.Item is AccountGroupMemberRow follower)
+                    ratioBeforeEdit[follower] = follower.Ratio;
             };
 
             Action queueHeaderSelectionRefresh = () =>
@@ -2423,7 +2352,7 @@ namespace Glitch.UI
                 return L("dashboard.group.ratio_math", "Follower contracts = master contracts × ratio");
 
             double ratio = member.Ratio;
-            if (double.IsNaN(ratio) || double.IsInfinity(ratio) || ratio <= 0)
+            if (double.IsNaN(ratio) || double.IsInfinity(ratio) || ratio < 0)
                 ratio = 1.0;
 
             int exampleMaster = 2;
@@ -2523,11 +2452,23 @@ namespace Glitch.UI
             string master = group.MasterAccount?.Trim() ?? string.Empty;
             group.MasterDisplayRow.FollowerAccount = master;
             group.MasterDisplayRow.MasterAccount = master;
-            double masterSize = group.MasterSize > 0 ? group.MasterSize : ResolveAccountSizeForName(master, 25000);
+            double masterSize = ResolveAccountSizeForName(master);
+            group.MasterSize = masterSize;
             group.MasterDisplayRow.FollowerSize = masterSize;
             group.MasterDisplayRow.FollowerSizeDisplay = FormatAccountSize(masterSize);
             group.MasterDisplayRow.MasterSize = masterSize;
             group.MasterDisplayRow.MasterSizeDisplay = FormatAccountSize(masterSize);
+            foreach (AccountGroupMemberRow member in
+                group.Members ?? new ObservableCollection<AccountGroupMemberRow>())
+            {
+                if (member == null)
+                    continue;
+                double followerSize = ResolveAccountSizeForName(member.FollowerAccount);
+                member.MasterSize = masterSize;
+                member.MasterSizeDisplay = FormatAccountSize(masterSize);
+                member.FollowerSize = followerSize;
+                member.FollowerSizeDisplay = FormatAccountSize(followerSize);
+            }
             ApplyAccountSnapshotToGroupMemberRow(group.MasterDisplayRow, FindAccountRowByName(master));
             return group.MasterDisplayRow;
         }
@@ -2573,7 +2514,7 @@ namespace Glitch.UI
                 return;
 
             group.MasterAccount = selectedMaster;
-            group.MasterSize = ResolveAccountSizeForName(selectedMaster, group.MasterSize > 0 ? group.MasterSize : 25000);
+            group.MasterSize = ResolveAccountSizeForName(selectedMaster);
 
             if (group.Members != null)
             {
@@ -2590,28 +2531,18 @@ namespace Glitch.UI
                 }
             }
 
-            SaveAccountGroupsToDisk();
-            if (_replicationUserIntentLive)
-                RefreshCopyEngineConfiguration(GetActiveAccountsSnapshot());
+            if (!PersistAndApplyReplicationConfiguration(
+                    synchronizeChanges: _replicationUserIntentLive && _isReplicatingUi))
+            {
+                LoadAccountGroupsFromDisk();
+                RebuildAccountGroupsUi();
+            }
         }
 
         private void AddFollowerToGroup(AccountGroupDefinition group)
         {
             if (group == null)
                 return;
-
-            if (IsFreeLitePlan())
-            {
-                int maxFollowers = Math.Max(1, _licenseCacheState?.MaxFollowersPerGroup ?? 2);
-                int currentFollowers = group.Members?.Count(member => member != null && !string.IsNullOrWhiteSpace(member.FollowerAccount)) ?? 0;
-                if (currentFollowers >= maxFollowers)
-                {
-                    string message = $"Free Lite limit reached: maximum {maxFollowers} follower(s) per group.";
-                    AppendJournal("System", "Policy", message);
-                    RaiseCriticalWarning("System", message, "PolicyFollowerLimit", unlocksTrading: false);
-                    return;
-                }
-            }
 
             var existingFollowers = new HashSet<string>(
                 group.Members.Select(m => m.FollowerAccount),
@@ -2636,8 +2567,8 @@ namespace Glitch.UI
             if (string.IsNullOrWhiteSpace(selectedFollower))
                 return;
 
-            double masterSize = group.MasterSize > 0 ? group.MasterSize : ResolveAccountSizeForName(group.MasterAccount, 25000);
-            double followerSize = ResolveAccountSizeForName(selectedFollower, masterSize);
+            double masterSize = ResolveAccountSizeForName(group.MasterAccount);
+            double followerSize = ResolveAccountSizeForName(selectedFollower);
             double ratio = ComputeDefaultRatio(followerSize, masterSize);
             AccountGridRow followerRow = FindAccountRowByName(selectedFollower);
 
@@ -2660,7 +2591,7 @@ namespace Glitch.UI
             if (string.IsNullOrWhiteSpace(followerPosition))
                 followerPosition = "0";
 
-            group.Members.Add(new AccountGroupMemberRow
+            var addedMember = new AccountGroupMemberRow
             {
                 MasterAccount = group.MasterAccount,
                 MasterSize = masterSize,
@@ -2677,9 +2608,14 @@ namespace Glitch.UI
                 MaxL = followerMaxL,
                 MaxContracts = followerMaxContracts,
                 Position = followerPosition
-            });
+            };
+            group.Members.Add(addedMember);
 
-            SaveAccountGroupsToDisk();
+            if (!SaveAccountGroupsToDisk())
+            {
+                group.Members.Remove(addedMember);
+                return;
+            }
             RebuildAccountGroupsUi();
         }
 
@@ -3772,6 +3708,8 @@ namespace Glitch.UI
 
         private void OnWindowLoaded(object sender, RoutedEventArgs e)
         {
+            if (GlitchRuntimeHost.Active != null)
+                GlitchRuntimeHost.Active.Notice += OnRuntimeNotice;
             if (_restoreMaximizedOnLoad)
                 WindowState = WindowState.Maximized;
 
@@ -3791,7 +3729,6 @@ namespace Glitch.UI
 
             _refreshTimer.Start();
             BootstrapAnalyticsBridgeOnStartup();
-            StartRailInfrastructure();
             _ = RefreshLicenseStateAsync(useValidateEndpoint: true, force: true);
         }
 
@@ -3837,6 +3774,8 @@ namespace Glitch.UI
 
         private void OnWindowClosed(object sender, EventArgs e)
         {
+            if (GlitchRuntimeHost.Active != null)
+                GlitchRuntimeHost.Active.Notice -= OnRuntimeNotice;
             _isWindowClosed = true;
             _refreshTimer.Stop();
             _refreshTimer.Tick -= OnRefreshTimerTick;
@@ -3846,7 +3785,6 @@ namespace Glitch.UI
             CaptureSelectionOverridesFromRows();
             SaveSelectionOverridesToDisk();
             SaveAccountGroupsToDisk();
-            UnsubscribeFromAllAccountRuntimeEvents();
             SavePeakStatesToDisk(force: true);
             SaveAuditFeedsToDisk(force: true);
             SaveWindowPlacementToDisk();
@@ -3857,12 +3795,10 @@ namespace Glitch.UI
             if (portfolioCapture != null)
                 GlitchPortfolioSnapshotWriter.TryWriteLatest(closeUtc, portfolioCapture, closeSnapshotId);
             GlitchAnalyticsFeedBus.FlushPersistence();
-            StopRailInfrastructure();
             _isFlattenAllInProgress = false;
             PersistReplicationUiState();
             _replicationUserIntentLive = false;
             _isReplicatingUi = false;
-            _copyEngine?.Configure(false, null);
             PublishGlitchShellState();
             GlitchShellBridge.UnregisterMainWindow(this);
 
@@ -4000,7 +3936,6 @@ namespace Glitch.UI
             PruneAccountItemUpdateThrottle(nowUtc);
             PruneActiveAccountCache(nowUtc);
             MaybeRunLicenseHeartbeat(nowUtc);
-            EnsureRailInfrastructureIfDue(nowUtc);
 
             bool uiActive = IsGlitchShellUiActive();
             if (!uiActive && !_isEditingAccountsGrid && !_isCommittingAccountsGridEdit)
@@ -4131,6 +4066,7 @@ namespace Glitch.UI
 
                     SaveSelectionOverridesToDisk();
                     RefreshAccountData(preferSynchronous: true);
+                    RebuildAccountGroupsUi();
                 }
                 finally
                 {
@@ -4324,7 +4260,7 @@ namespace Glitch.UI
                     {
                         int declaredCap = row.MaxContractsRaw > 0
                             ? Math.Max(1, (int)Math.Round(row.MaxContractsRaw, MidpointRounding.AwayFromZero))
-                            : Math.Max(0, _runtimePolicySettings.ReplicationDeclaredCapContracts);
+                            : 0;
                         if (!TryGetTotalAbsoluteOpenContracts(liveAccount, out int currentAbsContracts))
                         {
                             RecordSubsystemFault(
@@ -4334,56 +4270,72 @@ namespace Glitch.UI
                         }
                         if (declaredCap > 0 && currentAbsContracts > declaredCap)
                         {
-                            string settingKey = GlitchRiskMitigationEngine.ResolveScopeSettingKey(
-                                "ENFORCE_MAX_CONTRACTS_FLATTEN",
-                                row.AccountStatus);
-                            _riskLockedAccounts.Add(accountName);
-                            _riskOneContractAccounts.Remove(accountName);
-                            string journalLine = GlitchRiskMitigationEngine.BuildRuleJournalEvent(
-                                "MaxContractsFlatten",
-                                "flatten_and_lock",
-                                currentAbsContracts,
-                                declaredCap,
-                                settingKey,
-                                $"Max contracts breach ({currentAbsContracts} > {declaredCap}).");
-                            AppendJournal(accountName, "Risk", journalLine);
-                            RaiseCriticalWarning(
-                                accountName,
-                                journalLine,
-                                "MaxContractsBreach",
-                                unlocksTrading: _runtimePolicySettings.LockRequiresManualAcknowledge);
-                            TryFlattenAccountForRisk(
-                                liveAccount,
-                                $"MAXQTY|{accountName}",
-                                "Max contracts breach");
+                            string latchKey = "MaxContracts|" + accountName;
+                            if (_complianceFlattenLatchKeys.Add(latchKey))
+                            {
+                                string settingKey = GlitchRiskMitigationEngine.ResolveScopeSettingKey(
+                                    "ENFORCE_MAX_CONTRACTS_FLATTEN",
+                                    row.AccountStatus);
+                                string journalLine = GlitchRiskMitigationEngine.BuildRuleJournalEvent(
+                                    "MaxContractsFlatten",
+                                    "flatten_once",
+                                    currentAbsContracts,
+                                    declaredCap,
+                                    settingKey,
+                                    $"Max contracts breach ({currentAbsContracts} > {declaredCap}).");
+                                AppendJournal(accountName, "Risk", journalLine);
+                                RaiseCriticalWarning(
+                                    accountName,
+                                    journalLine,
+                                    "MaxContractsBreach",
+                                    unlocksTrading: false);
+                                TryFlattenAccountForRisk(
+                                    liveAccount,
+                                    $"MAXQTY|{accountName}",
+                                    "Max contracts breach");
+                            }
+                        }
+                        else
+                        {
+                            _complianceFlattenLatchKeys.Remove("MaxContracts|" + accountName);
                         }
                     }
 
-                    if (_runtimePolicySettings.IsNoProtectionFlattenEnabledFor(row.AccountStatus) &&
-                        TryDetectNoProtectionBreach(liveAccount, nowUtc, out string breachedInstrumentRoot, out string breachDetail))
+                    string breachedInstrumentRoot = string.Empty;
+                    string breachDetail = string.Empty;
+                    bool noProtectionBreach = _runtimePolicySettings.IsNoProtectionFlattenEnabledFor(row.AccountStatus)
+                        && TryDetectNoProtectionBreach(
+                            liveAccount, nowUtc, out breachedInstrumentRoot, out breachDetail);
+                    if (noProtectionBreach)
                     {
-                        string settingKey = GlitchRiskMitigationEngine.ResolveScopeSettingKey(
-                            "ENFORCE_NO_PROTECTION_FLATTEN",
-                            row.AccountStatus);
-                        _riskLockedAccounts.Add(accountName);
-                        _riskOneContractAccounts.Remove(accountName);
-                        string journalLine = GlitchRiskMitigationEngine.BuildRuleJournalEvent(
-                            "NoProtectionFlatten",
-                            "flatten_and_lock",
-                            1,
-                            0,
-                            settingKey,
-                            $"instrument={CleanJournalToken(breachedInstrumentRoot)}|{CleanJournalToken(breachDetail)}");
-                        AppendJournal(accountName, "Risk", journalLine);
-                        RaiseCriticalWarning(
-                            accountName,
-                            $"No protection breach on {CleanJournalToken(breachedInstrumentRoot)}. {breachDetail}. Trading locked until manual dismiss.",
-                            "NoProtectionLock",
-                            unlocksTrading: _runtimePolicySettings.LockRequiresManualAcknowledge);
-                        TryFlattenAccountForRisk(
-                            liveAccount,
-                            $"NAKED|{accountName}",
-                            "No protection detector breach");
+                        string latchKey = "NoProtection|" + accountName;
+                        if (_complianceFlattenLatchKeys.Add(latchKey))
+                        {
+                            string settingKey = GlitchRiskMitigationEngine.ResolveScopeSettingKey(
+                                "ENFORCE_NO_PROTECTION_FLATTEN",
+                                row.AccountStatus);
+                            string journalLine = GlitchRiskMitigationEngine.BuildRuleJournalEvent(
+                                "NoProtectionFlatten",
+                                "flatten_once",
+                                1,
+                                0,
+                                settingKey,
+                                $"instrument={CleanJournalToken(breachedInstrumentRoot)}|{CleanJournalToken(breachDetail)}");
+                            AppendJournal(accountName, "Risk", journalLine);
+                            RaiseCriticalWarning(
+                                accountName,
+                                $"No protection breach on {CleanJournalToken(breachedInstrumentRoot)}. {breachDetail}. One account flatten was requested.",
+                                "NoProtectionFlatten",
+                                unlocksTrading: false);
+                            TryFlattenAccountForRisk(
+                                liveAccount,
+                                $"NAKED|{accountName}",
+                                "No protection detector breach");
+                        }
+                    }
+                    else
+                    {
+                        _complianceFlattenLatchKeys.Remove("NoProtection|" + accountName);
                     }
                 }
 
@@ -4415,7 +4367,8 @@ namespace Glitch.UI
 
                 if (!enforceOneContract)
                 {
-                    _riskOneContractAccounts.Remove(accountName);
+                    if (_riskOneContractAccounts.Remove(accountName))
+                        GlitchRuntimeHost.Active?.SetReplicationOrderLimit(accountName, null);
                 }
 
                 if (!enforceUnrealizedFlatten || !unrealizedLossBreach)
@@ -4431,15 +4384,14 @@ namespace Glitch.UI
                             "ENFORCE_BUFFER_FREEZE_15",
                             row.AccountStatus);
                         string bufferDetail =
-                            $"Buffer fell below {FormatPercentThreshold(bufferFreezeThreshold)} of max drawdown. Account flattened and locked pending manual dismiss.";
+                            $"Buffer fell below {FormatPercentThreshold(bufferFreezeThreshold)} of max drawdown. One account flatten was requested.";
                         _riskLockedAccounts.Add(accountName);
-                        _riskOneContractAccounts.Remove(accountName);
                         AppendJournal(
                             accountName,
                             "Risk",
                             BuildRuleEvent(
-                                "BufferCriticalLock",
-                                "flatten_and_lock",
+                                "BufferThresholdFlatten",
+                                "flatten_once",
                                 row.BufferMarginRaw,
                                 row.MaxDrawdownRaw * bufferFreezeThreshold,
                                 bufferSetting,
@@ -4447,8 +4399,8 @@ namespace Glitch.UI
                         RaiseCriticalWarning(
                             accountName,
                             bufferDetail,
-                            "BufferCriticalLock",
-                            unlocksTrading: true);
+                            "BufferThresholdFlatten",
+                            unlocksTrading: false);
                         isRiskLocked = true;
 
                         if (accountsByName.TryGetValue(accountName, out Account lockFlattenAccount))
@@ -4472,15 +4424,14 @@ namespace Glitch.UI
                     {
                         const string evalSetting = "ENFORCE_EVAL_PROFIT_TARGET_LOCK_EVAL";
                         string evalDetail =
-                            "Evaluation equity reached the target lock balance. Account flattened and trading locked pending manual dismiss.";
+                            "Evaluation equity reached the configured target balance. One account flatten was requested.";
                         _evalTargetLockedAccounts.Add(accountName);
-                        _riskOneContractAccounts.Remove(accountName);
                         AppendJournal(
                             accountName,
                             "Risk",
                             BuildRuleEvent(
-                                "EvalProfitTargetLock",
-                                "flatten_and_lock",
+                                "EvalTargetFlatten",
+                                "flatten_once",
                                 row.EquityRaw,
                                 row.EvalProfitTargetLockBalanceRaw,
                                 evalSetting,
@@ -4488,8 +4439,8 @@ namespace Glitch.UI
                         RaiseCriticalWarning(
                             accountName,
                             evalDetail,
-                            "EvalProfitTargetLock",
-                            unlocksTrading: true);
+                            "EvalTargetFlatten",
+                            unlocksTrading: false);
                         isEvalTargetLocked = true;
 
                         if (accountsByName.TryGetValue(accountName, out Account evalTargetLockAccount))
@@ -4512,14 +4463,11 @@ namespace Glitch.UI
                     _riskLockAcknowledgedAccounts.Remove(BuildTradingLockAckKey(accountName, "EvalProfitTargetLock"));
 
                 bool oneContractRecovery = triggers.OneContractRecovery;
-                if (IsTradingLocked(accountName))
-                {
-                    _riskOneContractAccounts.Remove(accountName);
-                }
-                else if (enforceOneContract && oneContractBreach)
+                if (enforceOneContract && oneContractBreach)
                 {
                     if (_riskOneContractAccounts.Add(accountName))
                     {
+                        GlitchRuntimeHost.Active?.SetReplicationOrderLimit(accountName, 1);
                         string oneContractSetting = GlitchRiskMitigationEngine.ResolveScopeSettingKey(
                             "ENFORCE_BUFFER_ONE_CONTRACT",
                             row.AccountStatus);
@@ -4539,6 +4487,7 @@ namespace Glitch.UI
                 {
                     if (_riskOneContractAccounts.Remove(accountName))
                     {
+                        GlitchRuntimeHost.Active?.SetReplicationOrderLimit(accountName, null);
                         string oneContractSetting = GlitchRiskMitigationEngine.ResolveScopeSettingKey(
                             "ENFORCE_BUFFER_ONE_CONTRACT",
                             row.AccountStatus);
@@ -4555,8 +4504,7 @@ namespace Glitch.UI
                     }
                 }
 
-                if (!IsTradingLocked(accountName) &&
-                    enforceUnrealizedFlatten &&
+                if (enforceUnrealizedFlatten &&
                     unrealizedLossBreach &&
                     !_unrealizedLossFlattenTriggeredAccounts.Contains(accountName) &&
                     accountsByName.TryGetValue(accountName, out Account unrealizedFlattenAccount))
@@ -4599,10 +4547,17 @@ namespace Glitch.UI
                 _evalTargetLockedAccounts.Remove(stale);
 
             foreach (string stale in _riskOneContractAccounts.Where(name => !seenAccounts.Contains(name)).ToList())
+            {
                 _riskOneContractAccounts.Remove(stale);
+                GlitchRuntimeHost.Active?.SetReplicationOrderLimit(stale, null);
+            }
 
             foreach (string stale in _unrealizedLossFlattenTriggeredAccounts.Where(name => !seenAccounts.Contains(name)).ToList())
                 _unrealizedLossFlattenTriggeredAccounts.Remove(stale);
+
+            foreach (string stale in _complianceFlattenLatchKeys
+                .Where(key => !seenAccounts.Contains(ExtractComplianceLatchAccount(key))).ToList())
+                _complianceFlattenLatchKeys.Remove(stale);
 
             foreach (string stale in _riskLockAcknowledgedAccounts
                          .Where(key => !seenAccounts.Contains(ExtractTradingLockAckAccountName(key)))
@@ -4612,10 +4567,13 @@ namespace Glitch.UI
 
         private void ClearComplianceEnforcementRuntimeState()
         {
+            foreach (string accountName in _riskOneContractAccounts.ToList())
+                GlitchRuntimeHost.Active?.SetReplicationOrderLimit(accountName, null);
             _riskLockedAccounts.Clear();
             _evalTargetLockedAccounts.Clear();
             _riskOneContractAccounts.Clear();
             _unrealizedLossFlattenTriggeredAccounts.Clear();
+            _complianceFlattenLatchKeys.Clear();
             _riskLockAcknowledgedAccounts.Clear();
             _noProtectionDetectedSinceByKey.Clear();
             _riskMitigationCooldownByKey.Clear();
@@ -4776,14 +4734,6 @@ namespace Glitch.UI
                     openRoots.Add(instrumentRoot);
                     string key = accountName + "|" + instrumentRoot;
                     int exposureQuantity = Math.Abs(position.Quantity);
-                    if (_copyEngine?.HasPendingOwnedMutation(account, instrumentRoot) == true)
-                    {
-                        // A copied close deliberately reserves exposure by
-                        // shrinking its own OCO before the market close order.
-                        // That bounded transition is not an unprotected breach.
-                        _noProtectionDetectedSinceByKey.Remove(key);
-                        continue;
-                    }
                     if (TryGetWorkingProtectiveStopQuantity(
                             account,
                             instrumentRoot,
@@ -4849,7 +4799,11 @@ namespace Glitch.UI
             string reasonToken = CleanJournalToken(reason);
             try
             {
-                if (!GlitchReplicationEngine.TryFlattenAccount(account, out int flattenedInstruments))
+                int flattenedInstruments = instruments.Count;
+                if (GlitchRuntimeHost.Active?.RequestFlatten(
+                        "risk-flatten-" + Guid.NewGuid().ToString("N"),
+                        account.Name,
+                        reasonToken) != true)
                     return false;
 
                 MarkRiskMitigation(mitigationKey, nowUtc);
@@ -4945,7 +4899,6 @@ namespace Glitch.UI
                 token.Equals("RiskFlattenFallback", StringComparison.OrdinalIgnoreCase) ||
                 token.StartsWith("PolicyGroupLimit", StringComparison.OrdinalIgnoreCase) ||
                 token.StartsWith("PolicyFollowerLimit", StringComparison.OrdinalIgnoreCase) ||
-                token.StartsWith("PolicyReplicationBlocked", StringComparison.OrdinalIgnoreCase) ||
                 token.StartsWith("PointValueUnknown|", StringComparison.OrdinalIgnoreCase))
             {
                 return WarningSeverity.Informational;
@@ -5345,7 +5298,7 @@ namespace Glitch.UI
 
         private string GetOverridesFilePath()
         {
-            return GlitchStateStore.GetDefaultPath("AccountOverrides.tsv");
+            return GlitchStateStore.GetDefaultConfigurationPath();
         }
 
         private string GetPeakStateFilePath()
@@ -5380,7 +5333,7 @@ namespace Glitch.UI
 
         private string GetAccountGroupsFilePath()
         {
-            return GlitchStateStore.GetDefaultPath("AccountGroups.tsv");
+            return GlitchStateStore.GetDefaultConfigurationPath();
         }
 
         private void LoadAuditFeedsFromDisk()
@@ -5498,9 +5451,7 @@ namespace Glitch.UI
                     if (persisted == null || string.IsNullOrWhiteSpace(persisted.GroupId) || string.IsNullOrWhiteSpace(persisted.MasterAccount))
                         continue;
 
-                    double masterSize = persisted.MasterSize > 0
-                        ? persisted.MasterSize
-                        : ResolveAccountSizeForName(persisted.MasterAccount, 25000);
+                    double masterSize = ResolveAccountSizeForName(persisted.MasterAccount);
 
                     var group = new AccountGroupDefinition
                     {
@@ -5517,13 +5468,11 @@ namespace Glitch.UI
                             if (member == null || string.IsNullOrWhiteSpace(member.FollowerAccount))
                                 continue;
 
-                            double followerSize = member.FollowerSize > 0
-                                ? member.FollowerSize
-                                : ResolveAccountSizeForName(member.FollowerAccount, masterSize);
-                            double ratio = member.Ratio > 0
+                            double followerSize = ResolveAccountSizeForName(member.FollowerAccount);
+                            double ratio = member.Ratio >= 0
                                 ? member.Ratio
                                 : ComputeDefaultRatio(followerSize, masterSize);
-                            double memberMasterSize = member.MasterSize > 0 ? member.MasterSize : masterSize;
+                            double memberMasterSize = masterSize;
 
                             group.Members.Add(new AccountGroupMemberRow
                             {
@@ -5571,7 +5520,7 @@ namespace Glitch.UI
             }
         }
 
-        private void SaveAccountGroupsToDisk()
+        private bool SaveAccountGroupsToDisk()
         {
             try
             {
@@ -5581,12 +5530,11 @@ namespace Glitch.UI
                     if (group == null || string.IsNullOrWhiteSpace(group.GroupId) || string.IsNullOrWhiteSpace(group.MasterAccount))
                         continue;
 
-                    double masterSize = group.MasterSize > 0 ? group.MasterSize : ResolveAccountSizeForName(group.MasterAccount, 25000);
                     var record = new GlitchStateStore.AccountGroupRecord
                     {
                         GroupId = group.GroupId,
                         MasterAccount = group.MasterAccount,
-                        MasterSize = masterSize,
+                        MasterSize = 0,
                         Members = new List<GlitchStateStore.AccountGroupMemberRecord>()
                     };
 
@@ -5594,14 +5542,13 @@ namespace Glitch.UI
                     {
                         foreach (AccountGroupMemberRow member in group.Members.Where(m => m != null && !string.IsNullOrWhiteSpace(m.FollowerAccount)))
                         {
-                            double followerSize = member.FollowerSize > 0 ? member.FollowerSize : ResolveAccountSizeForName(member.FollowerAccount, masterSize);
-                            double ratio = member.Ratio > 0 ? member.Ratio : ComputeDefaultRatio(followerSize, masterSize);
+                            double ratio = member.Ratio >= 0 ? member.Ratio : 1.0;
                             record.Members.Add(new GlitchStateStore.AccountGroupMemberRecord
                             {
                                 FollowerAccount = member.FollowerAccount,
-                                FollowerSize = followerSize,
+                                FollowerSize = 0,
                                 Ratio = ratio,
-                                MasterSize = masterSize,
+                                MasterSize = 0,
                                 IsEnabled = member.IsEnabled
                             });
                         }
@@ -5612,13 +5559,15 @@ namespace Glitch.UI
 
                 GlitchStateStore.SaveAccountGroups(_accountGroupsFilePath, records);
                 ReconcileAiTradingScopeWithGroups();
+                PublishGlitchShellState();
+                return true;
             }
             catch (Exception ex)
             {
                 RecordSubsystemFault("account_group_persistence", ex);
+                PublishGlitchShellState();
+                return false;
             }
-
-            PublishGlitchShellState();
         }
 
         private void RestoreWindowPlacementFromDisk()
@@ -5784,325 +5733,34 @@ namespace Glitch.UI
             }
         }
 
-        private void SyncAccountRuntimeEventSubscriptions(IReadOnlyList<Account> activeAccounts)
-        {
-            EnsureAccountStatusEventSubscribed();
-            var activeByName = new Dictionary<string, Account>(StringComparer.OrdinalIgnoreCase);
-            if (activeAccounts != null)
-            {
-                foreach (Account account in activeAccounts)
-                {
-                    if (account == null || string.IsNullOrWhiteSpace(account.Name))
-                        continue;
-                    activeByName[account.Name.Trim()] = account;
-                }
-            }
-
-            foreach (string stale in _accountEventSubscriptions.Keys.Where(k => !activeByName.ContainsKey(k)).ToList())
-                UnsubscribeFromAccountRuntimeEvents(stale);
-
-            foreach (Account account in activeByName.Values)
-                EnsureAccountRuntimeEventsSubscribed(account);
-        }
-
-        private void EnsureAccountRuntimeEventsSubscribed(Account account)
-        {
-            if (account == null || string.IsNullOrWhiteSpace(account.Name))
-                return;
-
-            string accountName = account.Name.Trim();
-
-            if (_accountEventSubscriptions.TryGetValue(accountName, out List<EventBridgeSubscription> existing) && existing.Count > 0)
-            {
-                if (ReferenceEquals(existing[0].Account, account))
-                    return;
-
-                UnsubscribeFromAccountRuntimeEvents(accountName);
-                _activeAccountCache.Remove(accountName);
-            }
-
-            var subscriptions = new List<EventBridgeSubscription>();
-            string[] eventNames = { "ExecutionUpdate", "PositionUpdate", "OrderUpdate", "AccountItemUpdate" };
-
-            foreach (string eventName in eventNames)
-            {
-                try
-                {
-                    string eventNameLocal = eventName;
-                    EventInfo eventInfo;
-                    try
-                    {
-                        eventInfo = account.GetType().GetEvent(eventName, BindingFlags.Public | BindingFlags.Instance);
-                    }
-                    catch (Exception ex)
-                    {
-                        RecordAccountEventBindingFailure(accountName, eventName, "reflection_lookup", ex);
-                        continue;
-                    }
-
-                    if (eventInfo == null)
-                    {
-                        RecordAccountEventBindingFailure(
-                            accountName,
-                            eventName,
-                            "reflection_lookup",
-                            new MissingMemberException($"NinjaTrader account event {eventName} is unavailable."));
-                        continue;
-                    }
-
-                    if (eventInfo.EventHandlerType == null)
-                    {
-                        RecordAccountEventBindingFailure(
-                            accountName,
-                            eventName,
-                            "reflection_lookup",
-                            new InvalidOperationException($"NinjaTrader account event {eventName} has no handler type."));
-                        continue;
-                    }
-
-                    Action<object, object> callback = (runtimeSender, runtimeArgs) =>
-                        OnAccountRuntimeEventBridge(eventNameLocal, runtimeSender, runtimeArgs);
-                    Delegate handler;
-                    try
-                    {
-                        handler = CreateEventBridgeDelegate(eventInfo.EventHandlerType, callback);
-                    }
-                    catch (Exception ex)
-                    {
-                        RecordAccountEventBindingFailure(accountName, eventName, "delegate_construction", ex);
-                        continue;
-                    }
-
-                    if (handler == null)
-                    {
-                        RecordAccountEventBindingFailure(
-                            accountName,
-                            eventName,
-                            "delegate_construction",
-                            new InvalidOperationException($"NinjaTrader account event {eventName} handler could not be created."));
-                        continue;
-                    }
-
-                    try
-                    {
-                        eventInfo.AddEventHandler(account, handler);
-                    }
-                    catch (Exception ex)
-                    {
-                        RecordAccountEventBindingFailure(accountName, eventName, "event_registration", ex);
-                        continue;
-                    }
-
-                    subscriptions.Add(new EventBridgeSubscription
-                    {
-                        Account = account,
-                        EventInfo = eventInfo,
-                        Handler = handler
-                    });
-                }
-                catch (Exception ex)
-                {
-                    RecordAccountEventBindingFailure(accountName, eventName, "event_binding", ex);
-                }
-            }
-
-            if (subscriptions.Count > 0)
-                _accountEventSubscriptions[accountName] = subscriptions;
-        }
-
-        private void RecordAccountEventBindingFailure(
-            string accountName,
-            string eventName,
-            string stage,
-            Exception error)
-        {
-            string normalizedAccount = string.IsNullOrWhiteSpace(accountName) ? "System" : accountName.Trim();
-            string normalizedEvent = string.IsNullOrWhiteSpace(eventName) ? "unknown" : eventName.Trim();
-            string normalizedStage = string.IsNullOrWhiteSpace(stage) ? "unknown" : stage.Trim();
-            string detail = CleanJournalToken(error?.Message ?? "internal_error");
-            string message =
-                $"ACCOUNT_EVENT_BINDING_FAILED|event={CleanJournalToken(normalizedEvent)}|stage={CleanJournalToken(normalizedStage)}|message={detail}";
-
-            AppendJournal(normalizedAccount, "System", message);
-            RaiseCriticalWarning(
-                normalizedAccount,
-                $"Account event {normalizedEvent} is unavailable; dependent account-event capability is disabled ({normalizedStage}).",
-                "AccountEventBinding|" + normalizedEvent + "|" + normalizedAccount,
-                unlocksTrading: false);
-        }
-
-        private void EnsureAccountStatusEventSubscribed()
-        {
-            if (_accountStatusEventSubscription != null)
-                return;
-
-            try
-            {
-                EventInfo eventInfo;
-                try
-                {
-                    eventInfo = typeof(Account).GetEvent(
-                        "AccountStatusUpdate",
-                        BindingFlags.Public | BindingFlags.Static);
-                }
-                catch (Exception ex)
-                {
-                    RecordAccountEventBindingFailure("System", "AccountStatusUpdate", "reflection_lookup", ex);
-                    return;
-                }
-
-                if (eventInfo == null || eventInfo.EventHandlerType == null)
-                {
-                    RecordAccountEventBindingFailure(
-                        "System",
-                        "AccountStatusUpdate",
-                        "reflection_lookup",
-                        new InvalidOperationException("NinjaTrader AccountStatusUpdate static event is unavailable."));
-                    return;
-                }
-
-                Action<object, object> callback = (runtimeSender, runtimeArgs) =>
-                    OnAccountRuntimeEventBridge("AccountStatusUpdate", runtimeSender, runtimeArgs);
-                Delegate handler;
-                try
-                {
-                    handler = CreateEventBridgeDelegate(eventInfo.EventHandlerType, callback);
-                }
-                catch (Exception ex)
-                {
-                    RecordAccountEventBindingFailure("System", "AccountStatusUpdate", "delegate_construction", ex);
-                    return;
-                }
-
-                if (handler == null)
-                {
-                    RecordAccountEventBindingFailure(
-                        "System",
-                        "AccountStatusUpdate",
-                        "delegate_construction",
-                        new InvalidOperationException("NinjaTrader AccountStatusUpdate handler could not be created."));
-                    return;
-                }
-
-                try
-                {
-                    eventInfo.AddEventHandler(null, handler);
-                }
-                catch (Exception ex)
-                {
-                    RecordAccountEventBindingFailure("System", "AccountStatusUpdate", "event_registration", ex);
-                    return;
-                }
-
-                _accountStatusEventSubscription = new EventBridgeSubscription
-                {
-                    EventInfo = eventInfo,
-                    Handler = handler
-                };
-            }
-            catch (Exception ex)
-            {
-                RecordAccountEventBindingFailure("System", "AccountStatusUpdate", "event_registration", ex);
-            }
-        }
-
-        private void OnAccountRuntimeEventBridge(string eventName, object sender, object eventArgs)
-        {
-            if (_isWindowClosed)
-                return;
-
-            Account accountSnapshot = sender as Account ?? TryExtractAccountFromEventArgs(eventArgs);
-            GlitchCopyExecutionContext executionSnapshot = null;
-            if (string.Equals(eventName, "ExecutionUpdate", StringComparison.OrdinalIgnoreCase))
-                TryBuildCopyExecutionContext(eventArgs, out executionSnapshot);
-            Order orderSnapshot = string.Equals(eventName, "OrderUpdate", StringComparison.OrdinalIgnoreCase)
-                ? TryGetNestedPropertyValue(eventArgs, "Order") as Order
-                : null;
-
-            if (!Dispatcher.CheckAccess())
-            {
-                Dispatcher.BeginInvoke(
-                    new Action(() => OnAccountRuntimeEventBridgeCore(
-                        eventName,
-                        accountSnapshot,
-                        eventArgs,
-                        executionSnapshot,
-                        orderSnapshot)),
-                    System.Windows.Threading.DispatcherPriority.Normal);
-                return;
-            }
-
-            OnAccountRuntimeEventBridgeCore(
-                eventName,
-                accountSnapshot,
-                eventArgs,
-                executionSnapshot,
-                orderSnapshot);
-        }
-
-        private void OnAccountRuntimeEventBridgeCore(
-            string eventName,
-            Account account,
-            object eventArgs,
-            GlitchCopyExecutionContext executionSnapshot,
-            Order orderSnapshot)
-        {
-            try
-            {
-                if (account == null || string.IsNullOrWhiteSpace(account.Name))
-                    return;
-
-                DateTime nowUtc = DateTime.UtcNow;
-                bool isAccountItemUpdate = string.Equals(eventName, "AccountItemUpdate", StringComparison.OrdinalIgnoreCase);
-                bool isAccountStatusUpdate = string.Equals(eventName, "AccountStatusUpdate", StringComparison.OrdinalIgnoreCase);
-                if (isAccountStatusUpdate)
-                {
-                    _activeAccountCache.Remove(account.Name.Trim());
-                    QueueBackgroundAccountRefresh(GetActiveAccountsSnapshot(), heavyTabWork: true);
-                }
-
-                if (isAccountItemUpdate)
-                {
-                    if (ShouldThrottleAccountItemUpdate(account.Name, nowUtc))
-                        return;
-
-                    QueueAccountRefreshFromRuntimeEvent(account, eventArgs);
-                }
-
-                if (!isAccountItemUpdate)
-                {
-                    double fallbackCash = TryGetAccountItem(account, "CashValue");
-                    double equity = GetCurrentEquity(account, fallbackCash);
-                    if (TryExtractEquityFromAccountItemEvent(eventArgs, account, fallbackCash, out double eventEquity) && eventEquity > 0)
-                        equity = eventEquity;
-                    double unrealizedSnapshot = TryGetAccountItem(account, "UnrealizedProfitLoss", "UnrealizedPnL");
-                    double unrealizedEquityCandidate = GetUnrealizedEquityCandidate(fallbackCash, unrealizedSnapshot);
-                    if (unrealizedEquityCandidate > equity)
-                        equity = unrealizedEquityCandidate;
-                    UpdatePeakState(BuildPeakStateKey(account.Name, "TrailingUnrealized"), equity);
-
-                    double eodReference = fallbackCash > 0 ? fallbackCash : equity;
-                    UpdatePeakState(BuildPeakStateKey(account.Name, "TrailingEod"), eodReference);
-                }
-
-                TryAppendRuntimeEventJournalEntry(eventName, account, eventArgs);
-                TryProcessCopyExecutionFromRuntimeEvent(eventName, account, eventArgs, executionSnapshot);
-                TryProcessReplicationOrderStateFromRuntimeEvent(eventName, account, eventArgs, orderSnapshot);
-            }
-            catch (Exception ex)
-            {
-                RecordSubsystemFault("account_runtime_event", ex);
-            }
-        }
-
         private static bool IsReplicationInternalSignal(string signalName)
         {
-            if (string.IsNullOrWhiteSpace(signalName))
-                return false;
+            return GlitchNativeIdentity.IsGlitchSignal(signalName);
+        }
 
-            string normalized = signalName.Trim();
-            return normalized.StartsWith(GlitchCopyEngine.CopySignalName, StringComparison.OrdinalIgnoreCase)
-                || normalized.StartsWith(GlitchCopyEngine.CatchUpSignalName, StringComparison.OrdinalIgnoreCase);
+        private void OnRuntimeNotice(GlitchRuntimeNotice notice)
+        {
+            if (notice == null || _isWindowClosed)
+                return;
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(() => OnRuntimeNotice(notice)));
+                return;
+            }
+            if ((notice.Message ?? string.Empty).StartsWith(
+                "replication_enabled_changed|origin=hermes_control|",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                _isReplicatingUi = notice.Message.IndexOf(
+                    "|enabled=true", StringComparison.OrdinalIgnoreCase) >= 0;
+                PersistReplicationUiState();
+                UpdateReplicateButtonState();
+                PublishGlitchShellState();
+            }
+            AppendJournal(
+                notice.AccountName ?? "System",
+                notice.Category ?? "Runtime",
+                notice.Message ?? string.Empty);
         }
 
         private void TryAppendRuntimeEventJournalEntry(string eventName, Account account, object eventArgs)
@@ -6150,7 +5808,8 @@ namespace Glitch.UI
                 if (!string.IsNullOrWhiteSpace(stateText) &&
                     stateText.IndexOf("Rejected", StringComparison.OrdinalIgnoreCase) >= 0 &&
                     !string.IsNullOrWhiteSpace(signalName) &&
-                    signalName.StartsWith("GLT-PROT-", StringComparison.OrdinalIgnoreCase))
+                    GlitchNativeIdentity.TryGetRole(signalName, out string rejectedRole) &&
+                    GlitchNativeIdentity.IsProtectionRole(rejectedRole))
                 {
                     string instrument = TryGetNestedPropertyValueAsString(eventArgs, "Order.Instrument.MasterInstrument.Name", "Order.Instrument.FullName", "Order.Instrument");
                     RaiseCriticalWarning(
@@ -6438,24 +6097,34 @@ namespace Glitch.UI
                 return string.Empty;
 
             string signal = signalName.Trim().ToUpperInvariant();
+            if (GlitchNativeIdentity.TryGetRole(signalName, out string role))
+            {
+                if (GlitchNativeIdentity.IsStopRole(role))
+                    return "SL";
+                if (GlitchNativeIdentity.IsTargetRole(role))
+                    return "TP";
+                if (string.Equals(role, "Y", StringComparison.OrdinalIgnoreCase))
+                    return "SYNC";
+                if (string.Equals(role, "HME", StringComparison.OrdinalIgnoreCase))
+                    return "ENTRY";
+                if (string.Equals(role, "HMX", StringComparison.OrdinalIgnoreCase))
+                    return "EXIT";
+                return "REPL";
+            }
             if (signal.Contains("TRAIL") || signal.Contains("TSL"))
                 return "TSL";
-            if (signal.StartsWith(ProtectiveTargetSignalName, StringComparison.OrdinalIgnoreCase) ||
-                signal.Contains("TARGET") ||
+            if (signal.Contains("TARGET") ||
                 signal.Contains("TGT"))
             {
                 return "TP";
             }
 
-            if (signal.StartsWith(ProtectiveStopSignalName, StringComparison.OrdinalIgnoreCase) ||
-                signal.Contains("STOP") ||
+            if (signal.Contains("STOP") ||
                 signal.Contains("STP"))
             {
                 return "SL";
             }
 
-            if (signal.StartsWith(ReplicationSignalName, StringComparison.OrdinalIgnoreCase))
-                return "SYNC";
             if (signal.StartsWith("ENTRY", StringComparison.OrdinalIgnoreCase))
                 return "ENTRY";
             if (signal.StartsWith("EXIT", StringComparison.OrdinalIgnoreCase) ||
@@ -6560,9 +6229,8 @@ namespace Glitch.UI
             }
 
             bool isProtectiveSignal =
-                !string.IsNullOrWhiteSpace(signalName) &&
-                (signalName.StartsWith(ProtectiveStopSignalName, StringComparison.OrdinalIgnoreCase) ||
-                 signalName.StartsWith(ProtectiveTargetSignalName, StringComparison.OrdinalIgnoreCase));
+                GlitchNativeIdentity.TryGetRole(signalName, out string signalRole)
+                && GlitchNativeIdentity.IsProtectionRole(signalRole);
 
             if (isProtectiveSignal &&
                 !string.IsNullOrWhiteSpace(state) &&
@@ -6634,33 +6302,6 @@ namespace Glitch.UI
             if (string.IsNullOrWhiteSpace(value))
                 return "-";
             return value.Replace("\r", " ").Replace("\n", " ").Trim();
-        }
-
-        private static Delegate CreateEventBridgeDelegate(Type handlerType, Action<object, object> callback)
-        {
-            if (handlerType == null || callback == null)
-                return null;
-
-            MethodInfo invokeMethod = handlerType.GetMethod("Invoke");
-            if (invokeMethod == null || invokeMethod.ReturnType != typeof(void))
-                return null;
-
-            ParameterInfo[] parameters = invokeMethod.GetParameters();
-            if (parameters.Length != 2)
-                return null;
-
-            var senderParameter = LinqExpression.Parameter(parameters[0].ParameterType, "sender");
-            var argsParameter = LinqExpression.Parameter(parameters[1].ParameterType, "eventArgs");
-            var callbackTarget = LinqExpression.Constant(callback);
-            MethodInfo callbackInvoke = typeof(Action<object, object>).GetMethod("Invoke");
-
-            var call = LinqExpression.Call(
-                callbackTarget,
-                callbackInvoke,
-                LinqExpression.Convert(senderParameter, typeof(object)),
-                LinqExpression.Convert(argsParameter, typeof(object)));
-
-            return LinqExpression.Lambda(handlerType, call, senderParameter, argsParameter).Compile();
         }
 
         private static Account TryExtractAccountFromEventArgs(object eventArgs)
@@ -6746,52 +6387,6 @@ namespace Glitch.UI
             }
 
             return null;
-        }
-
-        private void UnsubscribeFromAccountRuntimeEvents(string accountName)
-        {
-            if (string.IsNullOrWhiteSpace(accountName))
-                return;
-
-            if (!_accountEventSubscriptions.TryGetValue(accountName, out List<EventBridgeSubscription> subscriptions) || subscriptions == null)
-                return;
-
-            foreach (EventBridgeSubscription subscription in subscriptions)
-            {
-                if (subscription?.Account == null || subscription.EventInfo == null || subscription.Handler == null)
-                    continue;
-
-                try
-                {
-                    subscription.EventInfo.RemoveEventHandler(subscription.Account, subscription.Handler);
-                }
-                catch
-                {
-                }
-            }
-
-            _accountEventSubscriptions.Remove(accountName);
-        }
-
-        private void UnsubscribeFromAllAccountRuntimeEvents()
-        {
-            if (_accountStatusEventSubscription != null)
-            {
-                try
-                {
-                    _accountStatusEventSubscription.EventInfo?.RemoveEventHandler(
-                        null,
-                        _accountStatusEventSubscription.Handler);
-                }
-                catch
-                {
-                }
-
-                _accountStatusEventSubscription = null;
-            }
-
-            foreach (string accountName in _accountEventSubscriptions.Keys.ToList())
-                UnsubscribeFromAccountRuntimeEvents(accountName);
         }
 
         private void LoadSelectionOverridesFromDisk(bool overwriteExisting)
@@ -7119,32 +6714,13 @@ namespace Glitch.UI
             return null;
         }
 
-        private static double GetAccountSizeFromNt(Account account)
-        {
-            if (account == null)
-                return 0;
-
-            double netLiquidation = TryGetAccountItem(account,
-                "NetLiquidation", "NetLiquidationValue", "NetLiquidationAmount", "NetLiq");
-            if (netLiquidation > 0)
-                return netLiquidation;
-
-            double cashValue = TryGetAccountItem(account, "CashValue");
-            if (cashValue > 0)
-                return cashValue;
-
-            return 0;
-        }
-
         private AccountGridRow BuildAccountRow(
             Account account,
-            AccountSelectionOverride selectionOverride,
-            IDictionary<string, AccountSelectionOverride> deferredAutoOverrides = null)
+            AccountSelectionOverride selectionOverride)
         {
             double cashValue = TryGetAccountItem(account, "CashValue");
             double nativeNetLiquidation = TryGetAccountItem(account,
                 "NetLiquidation", "NetLiquidationValue", "NetLiquidationAmount", "NetLiq");
-            double accountSizeRaw = nativeNetLiquidation > 0 ? nativeNetLiquidation : cashValue;
             bool isRiskDataReady = nativeNetLiquidation > 0 || cashValue > 0;
             double realizedPnl = TryGetAccountItem(account, "RealizedProfitLoss", "RealizedPnL", "RealizedProfit", "RealizedLoss");
             double unrealizedPnl = TryGetAccountItem(account, "UnrealizedProfitLoss", "UnrealizedPnL");
@@ -7172,60 +6748,16 @@ namespace Glitch.UI
 
             string executionProvider = GetExecutionProviderHint(account);
             var accountSizeChoices = GetAccountSizeOptionsForFirm(selectedFirmId, selectedStatus, executionProvider);
-            double selectedAccountSize = hasSelectionOverride ? (selectionOverride.AccountSize ?? 0) : 0;
+            double selectedAccountSize = hasManualOverride
+                ? (selectionOverride.AccountSize ?? 0) : 0;
             string accountSizeSource = selectedAccountSize > 0
                 ? (string.IsNullOrWhiteSpace(selectionOverride?.AccountSizeSource)
-                    ? (hasManualOverride ? "LegacyManual" : "LegacyPersisted")
+                    ? "Manual"
                     : selectionOverride.AccountSizeSource.Trim())
-                : null;
-            if (selectedAccountSize <= 0)
-            {
-                double? inferredAccountSize = InferAccountSizeFromName(account?.Name);
-                if (inferredAccountSize.HasValue && inferredAccountSize.Value > 0)
-                {
-                    selectedAccountSize = inferredAccountSize.Value;
-                    accountSizeSource = "AccountName";
-                }
-            }
-            if (selectedAccountSize <= 0)
-            {
-                selectedAccountSize = accountSizeRaw;
-                accountSizeSource = nativeNetLiquidation > 0
-                    ? "LiveNetLiquidation"
-                    : (cashValue > 0 ? "LiveCashValue" : null);
-            }
+                : "Unspecified";
 
-            if (accountSizeChoices.Count > 0)
-                selectedAccountSize = FindNearestAccountSize(selectedAccountSize, accountSizeChoices);
-            else
-                selectedAccountSize = RoundToNearestStep(selectedAccountSize, 25000);
-
-            if (selectedAccountSize > 0 && string.IsNullOrWhiteSpace(accountSizeSource))
-                accountSizeSource = "DefaultTier";
-
-            if (!hasManualOverride &&
-                account != null &&
-                !string.IsNullOrWhiteSpace(account.Name) &&
-                selectedAccountSize > 0)
-            {
-                var inferredOverride = new AccountSelectionOverride
-                {
-                    AccountStatus = selectedStatus,
-                    PropFirmId = selectedFirmId,
-                    AccountSize = selectedAccountSize,
-                    AccountSizeSource = accountSizeSource,
-                    IsManual = false
-                };
-
-                if (deferredAutoOverrides != null)
-                    deferredAutoOverrides[account.Name] = inferredOverride;
-                else
-                    _selectionOverrides[account.Name] = inferredOverride;
-            }
-
-            // Sim/unknown accounts still need a deterministic contract ceiling for
-            // replication. Keep the displayed identity unchanged, but use Apex's
-            // tier table as the declared-size template when no firm rules exist.
+            // Sim/unknown accounts still need a visible comparison template for
+            // optional compliance projections. This does not limit replication.
             string ruleFirmId = selectedFirmId;
             if (string.Equals(selectedStatus, "Sim", StringComparison.OrdinalIgnoreCase) ||
                 string.IsNullOrWhiteSpace(ruleFirmId) ||
@@ -7339,6 +6871,12 @@ namespace Glitch.UI
             var accountSizeOptionDisplays = accountSizeChoices.Select(FormatAccountSize).ToList();
             if (accountSizeOptionDisplays.Count == 0)
                 accountSizeOptionDisplays = _globalAccountSizeOptions.Select(FormatAccountSize).ToList();
+            if (!accountSizeOptionDisplays.Contains("-"))
+                accountSizeOptionDisplays.Insert(0, "-");
+            string selectedAccountSizeDisplay = FormatAccountSize(selectedAccountSize);
+            if (selectedAccountSize > 0
+                && !accountSizeOptionDisplays.Contains(selectedAccountSizeDisplay))
+                accountSizeOptionDisplays.Add(selectedAccountSizeDisplay);
 
             return new AccountGridRow
             {
@@ -7348,7 +6886,7 @@ namespace Glitch.UI
                 AccountStatusOptions = _accountStatusOptions,
                 PropFirmDisplay = propFirmDisplay,
                 PropFirmOptions = propFirmOptions,
-                AccountSizeSelection = FormatAccountSize(selectedAccountSize),
+                AccountSizeSelection = selectedAccountSizeDisplay,
                 AccountSizeOptions = accountSizeOptionDisplays,
                 AccountSizeSource = accountSizeSource ?? "Unavailable",
                 IsRiskDataReady = isRiskDataReady,
@@ -7524,18 +7062,6 @@ namespace Glitch.UI
                 .ToString("N0", CultureInfo.CurrentCulture);
         }
 
-        private static double RoundToNearestStep(double value, double step)
-        {
-            if (double.IsNaN(value) || double.IsInfinity(value) || value <= 0 || step <= 0)
-                return 0;
-
-            double rounded = Math.Round(value / step, MidpointRounding.AwayFromZero) * step;
-            if (rounded < step)
-                rounded = step;
-
-            return rounded;
-        }
-
         private static double ResolveMaxContractsLimit(FirmTierRule tierRule, double microContractMultiplier)
         {
             return GlitchComplianceEngine.ResolveMaxContractsLimit(
@@ -7683,15 +7209,6 @@ namespace Glitch.UI
             return GlitchComplianceEngine.NormalizeFloorCapTrigger(trigger);
         }
 
-        private bool IsTradingLocked(string accountName)
-        {
-            if (string.IsNullOrWhiteSpace(accountName))
-                return false;
-
-            string normalized = accountName.Trim();
-            return _riskLockedAccounts.Contains(normalized) || _evalTargetLockedAccounts.Contains(normalized);
-        }
-
         private static string BuildTradingLockAckKey(string accountName, string warningType)
         {
             if (string.IsNullOrWhiteSpace(accountName))
@@ -7711,6 +7228,16 @@ namespace Glitch.UI
                 return ackKey.Trim();
 
             return ackKey.Substring(separator + 1).Trim();
+        }
+
+        private static string ExtractComplianceLatchAccount(string latchKey)
+        {
+            if (string.IsNullOrWhiteSpace(latchKey))
+                return string.Empty;
+            int separator = latchKey.IndexOf('|');
+            return separator >= 0 && separator < latchKey.Length - 1
+                ? latchKey.Substring(separator + 1).Trim()
+                : latchKey.Trim();
         }
 
         private static bool MatchesTokenFilter(string value, string filterCsv)
@@ -7985,20 +7512,6 @@ namespace Glitch.UI
                 .FirstOrDefault();
         }
 
-        private static double FindNearestAccountSize(double target, List<double> availableSizes)
-        {
-            if (availableSizes == null || availableSizes.Count == 0)
-                return RoundToNearestStep(target, 25000);
-
-            if (target <= 0)
-                return availableSizes[0];
-
-            return availableSizes
-                .OrderBy(size => Math.Abs(size - target))
-                .ThenBy(size => size)
-                .First();
-        }
-
         private static double? ParseAccountSize(string value)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -8024,30 +7537,6 @@ namespace Glitch.UI
 
             if (double.TryParse(numeric, NumberStyles.Float, CultureInfo.CurrentCulture, out result) && result > 0)
                 return result;
-
-            return null;
-        }
-
-        private static double? InferAccountSizeFromName(string accountName)
-        {
-            if (string.IsNullOrWhiteSpace(accountName))
-                return null;
-
-            Match kMatch = Regex.Match(accountName, @"(?<!\d)(\d{2,3})(?:\s*)K\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            if (kMatch.Success &&
-                double.TryParse(kMatch.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out double thousands) &&
-                thousands > 0)
-            {
-                return thousands * 1000.0;
-            }
-
-            Match fullMatch = Regex.Match(accountName, @"(?<!\d)(\d{5,6})(?!\d)", RegexOptions.CultureInvariant);
-            if (fullMatch.Success &&
-                double.TryParse(fullMatch.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out double absolute) &&
-                absolute >= 10000)
-            {
-                return absolute;
-            }
 
             return null;
         }

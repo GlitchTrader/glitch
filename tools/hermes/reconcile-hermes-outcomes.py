@@ -675,7 +675,7 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None, decis
         submit_fields = message_fields(submitted.get("message"))
         expected_accounts = [value for value in submit_fields.get("expected_accounts", "").split(",") if value]
         if not expected_accounts:
-            expected_accounts = parse_group_accounts(glitch_data / "AccountGroups.tsv", master)
+            expected_accounts = parse_group_accounts(glitch_data / "Configuration.v1.tsv", master)
         bracket_by_account = {}
         for row in brackets:
             fields = message_fields(row.get("message"))
@@ -823,7 +823,7 @@ def reconcile(glitch_data, evidence_root, output_path, decision_root=None, decis
     # Manual master round trips are learning evidence, but never AI execution
     # evidence.  Keep them in the same outcome stream with explicit provenance
     # and stable IDs so the learning worker can compare origins safely.
-    master_accounts = configured_master_accounts(glitch_data / "AccountGroups.tsv")
+    master_accounts = configured_master_accounts(glitch_data / "Configuration.v1.tsv")
     for trade in trade_ledger:
         if master_accounts and str(trade.get("account") or "").lower() not in master_accounts:
             continue

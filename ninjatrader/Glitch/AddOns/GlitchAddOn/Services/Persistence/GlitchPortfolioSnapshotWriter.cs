@@ -25,6 +25,7 @@ namespace Glitch.Services
         public string OrderType { get; set; }
         public string OrderState { get; set; }
         public string Oco { get; set; }
+        public string LegId { get; set; }
         public double Quantity { get; set; }
         public double Filled { get; set; }
         public double LimitPrice { get; set; }
@@ -321,6 +322,7 @@ namespace Glitch.Services
                 + "\"order_type\":" + GlitchSnapshotJson.String(order.OrderType) + ","
                 + "\"order_state\":" + GlitchSnapshotJson.String(order.OrderState) + ","
                 + "\"oco\":" + GlitchSnapshotJson.String(order.Oco) + ","
+                + "\"leg_id\":" + GlitchSnapshotJson.String(order.LegId) + ","
                 + "\"quantity\":" + GlitchSnapshotJson.Number(order.Quantity) + ","
                 + "\"filled\":" + GlitchSnapshotJson.Number(order.Filled) + ","
                 + "\"limit_price\":" + GlitchSnapshotJson.Number(order.LimitPrice) + ","

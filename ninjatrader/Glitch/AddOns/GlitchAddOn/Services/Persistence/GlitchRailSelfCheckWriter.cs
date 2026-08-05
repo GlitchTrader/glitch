@@ -11,7 +11,7 @@ namespace Glitch.Services
 {
     internal static class GlitchRailSelfCheckWriter
     {
-        public const string SchemaVersion = "glitch.rail.selfcheck.v1";
+        public const string SchemaVersion = "glitch.rail.selfcheck.v2";
         private static readonly TimeSpan WriteThrottle = TimeSpan.FromSeconds(30);
         private static DateTime _lastWriteUtc = DateTime.MinValue;
 
@@ -107,8 +107,9 @@ namespace Glitch.Services
             sb.Append("\"bind_address\":").Append(GlitchSnapshotJson.String(GlitchAiIntentServer.BindAddress)).Append(',');
             sb.Append("\"received_count\":").Append(GlitchAiIntentJournalWriter.CountReceived().ToString(CultureInfo.InvariantCulture));
             sb.Append("},");
-            sb.Append("\"firewall\":{");
-            sb.Append("\"enabled\":").Append(GlitchSnapshotJson.Bool(true)).Append(',');
+            sb.Append("\"translation\":{");
+            sb.Append("\"structural_validation\":").Append(GlitchSnapshotJson.Bool(true)).Append(',');
+            sb.Append("\"cognitive_firewall\":").Append(GlitchSnapshotJson.Bool(false)).Append(',');
             sb.Append("\"policy_exists\":").Append(GlitchSnapshotJson.Bool(File.Exists(GlitchAiRailPolicyStore.GetPolicyPath())));
             sb.Append("},");
             sb.Append("\"executor\":{");
@@ -128,7 +129,7 @@ namespace Glitch.Services
             sb.Append("\"r05_historical_exporter\":\"done\",");
             sb.Append("\"r07_telemetry_server\":").Append(GlitchSnapshotJson.String(GlitchExternalTelemetryServer.IsRunning ? "done" : "starting")).Append(',');
             sb.Append("\"r08_intent_server\":").Append(GlitchSnapshotJson.String(GlitchAiIntentServer.IsRunning ? "done" : "starting")).Append(',');
-            sb.Append("\"r09_risk_firewall\":").Append(GlitchSnapshotJson.String("done")).Append(',');
+            sb.Append("\"r09_intent_translation\":").Append(GlitchSnapshotJson.String("done")).Append(',');
             sb.Append("\"r12_order_executor\":").Append(GlitchSnapshotJson.String(GlitchAiOrderExecutor.IsExecutionEnabled(policy) ? "armed" : "ready")).Append(',');
             sb.Append("\"r13_replay_harness\":").Append(GlitchSnapshotJson.String(File.Exists(harnessPath) ? "done" : "starting")).Append(',');
             sb.Append("\"r11_hermes_stub\":").Append(GlitchSnapshotJson.String("ready"));

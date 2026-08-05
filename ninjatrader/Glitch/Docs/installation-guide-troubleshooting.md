@@ -264,11 +264,10 @@ This is useful when:
 
 The ratio layer is one of the main controls that makes replication safer and more practical across different account types.
 
-A ratio scales each future native master execution delta. It does not create
-extra independent follower entries, and changing a ratio does not repair,
-flatten, or re-enter an existing follower position. Use the visible `Sync`
-action only when you affirmatively want the current follower position aligned
-to the current master position and ratio.
+A ratio scales each future native master execution delta. Changing a ratio is
+also an explicit request to align that follower once to the master exposure at
+the new ratio. Independent follower trades do not trigger alignment. Use the
+visible `Sync` action when you affirmatively want another on-demand alignment.
 
 ### Best practice
 
@@ -289,9 +288,11 @@ Glitch gives you direct control over when replication is active and how to exit 
 The `Replicate` button enables replication from the selected master account to the enabled follower accounts in the group.
 
 Enabling replication, enabling a follower, changing a ratio, or choosing a new
-master changes future routing only. Glitch does not silently catch up existing
-exposure. A manual partial or full close on the master is itself a native master
-execution and is replicated at the configured ratio.
+master is an explicit request. Glitch applies the new route and performs one
+alignment to the current master exposure. Merely starting, reopening, or
+recompiling Glitch restores configuration without issuing catch-up orders. A
+manual partial or full close on the master is itself a native master execution
+and is replicated at the configured ratio.
 
 Typical use cases:
 
@@ -301,10 +302,10 @@ Typical use cases:
 
 ### Sync
 
-`Sync` is the only catch-up action. One click authorizes one alignment of the
-selected follower to the current master position and ratio. It reports each
-follower outcome. Later manual follower changes remain authoritative and do not
-block the next real master execution.
+`Sync` is the visible on-demand catch-up action. One click authorizes one
+alignment of the selected follower to the current master position and ratio. It
+reports each follower outcome. Later manual follower changes remain
+authoritative and do not block the next real master execution.
 
 ### Flatten All
 

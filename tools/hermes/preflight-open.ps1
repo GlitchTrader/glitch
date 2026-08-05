@@ -16,7 +16,7 @@ $control = if (Test-Path -LiteralPath $controlPath) {
     [pscustomobject]@{ trading_paused = $true }
 }
 $rail = Get-Content -LiteralPath (Join-Path $gd 'selfcheck\rail.json') -Raw | ConvertFrom-Json
-$groupPath = Join-Path $gd 'AccountGroups.tsv'
+$groupPath = Join-Path $gd 'Configuration.v1.tsv'
 $mnq = @($market.instruments | Where-Object instrument -eq 'MNQ') | Select-Object -First 1
 $profileBindings = @{}
 foreach ($binding in @($policy.profile_account_bindings)) {

@@ -34,6 +34,7 @@ namespace Glitch.UI
         private CheckBox _settingsNoProtectionFlattenSimCheckBox;
         private CheckBox _settingsNoProtectionFlattenEvalCheckBox;
         private CheckBox _settingsNoProtectionFlattenApCheckBox;
+        private TextBox _settingsNoProtectionTimeoutMsTextBox;
         private CheckBox _settingsAiDailyCloseCheckBox;
         private TextBox _settingsLicenseKeyTextBox;
         private Border _settingsPlanBadgeBorder;
@@ -82,7 +83,7 @@ namespace Glitch.UI
 
             compliancePanel.Children.Add(BuildComplianceFeatureExpander(
                 "settings.risk.enforce_15_flatten_freeze",
-                "Flatten and freeze account when buffer falls below threshold.",
+                "Flatten account once when buffer falls below threshold.",
                 sim: out _settingsBufferFreezeSimCheckBox,
                 eval: out _settingsBufferFreezeEvalCheckBox,
                 ap: out _settingsBufferFreezeApCheckBox,
@@ -94,7 +95,7 @@ namespace Glitch.UI
 
             compliancePanel.Children.Add(BuildComplianceFeatureExpander(
                 "settings.risk.enforce_20_one_contract",
-                "Force one-contract replication when buffer falls below on-threshold (release at off-threshold).",
+                "Limit each future follower replication order to one contract below on-threshold (release at off-threshold).",
                 sim: out _settingsOneContractSimCheckBox,
                 eval: out _settingsOneContractEvalCheckBox,
                 ap: out _settingsOneContractApCheckBox,
@@ -119,7 +120,7 @@ namespace Glitch.UI
 
             compliancePanel.Children.Add(BuildComplianceFeatureExpander(
                 "settings.risk.enforce_eval_lock_flatten",
-                "Flatten and lock evaluation account when equity reaches the evaluation target lock balance.",
+                "Flatten evaluation account once when equity reaches the configured target balance.",
                 sim: out _,
                 eval: out _settingsEvalProfitTargetLockEvalCheckBox,
                 ap: out _,
@@ -132,7 +133,7 @@ namespace Glitch.UI
 
             compliancePanel.Children.Add(BuildComplianceFeatureExpander(
                 "settings.risk.enforce_max_contracts_flatten",
-                "Flatten and lock account when open contracts exceed the configured max-contracts limit.",
+                "Flatten account once when open contracts exceed the configured max-contracts limit.",
                 sim: out _settingsMaxContractsFlattenSimCheckBox,
                 eval: out _settingsMaxContractsFlattenEvalCheckBox,
                 ap: out _settingsMaxContractsFlattenApCheckBox,
@@ -145,7 +146,7 @@ namespace Glitch.UI
 
             compliancePanel.Children.Add(BuildComplianceFeatureExpander(
                 "settings.risk.enforce_no_protection_flatten",
-                "Flatten and lock account when an open position has no working protective stop within the configured timeout.",
+                "Flatten account once when an open position has no working protective stop within the configured timeout.",
                 sim: out _settingsNoProtectionFlattenSimCheckBox,
                 eval: out _settingsNoProtectionFlattenEvalCheckBox,
                 ap: out _settingsNoProtectionFlattenApCheckBox,
@@ -155,6 +156,32 @@ namespace Glitch.UI
                 includeOffThreshold: false,
                 defaultThreshold: 0,
                 scopesOnly: true));
+
+            var noProtectionTimeoutRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(18, 4, 0, 8)
+            };
+            var noProtectionTimeoutLabel = new TextBlock
+            {
+                Text = L("settings.risk.no_protection_timeout_ms", "No-protection timeout (milliseconds)"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 10, 0),
+                FontSize = ResolveSettingsBodyFontSize()
+            };
+            RegisterLocalizationBinding(() => noProtectionTimeoutLabel.Text = L(
+                "settings.risk.no_protection_timeout_ms", "No-protection timeout (milliseconds)"));
+            ApplySkinResource(noProtectionTimeoutLabel, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
+            noProtectionTimeoutRow.Children.Add(noProtectionTimeoutLabel);
+            _settingsNoProtectionTimeoutMsTextBox = new TextBox
+            {
+                Width = 90,
+                Padding = new Thickness(8, 4, 8, 4),
+                FontSize = ResolveSettingsBodyFontSize(),
+                Style = CreateSettingsLicenseTextBoxStyle(_settingsRootGrid)
+            };
+            noProtectionTimeoutRow.Children.Add(_settingsNoProtectionTimeoutMsTextBox);
+            compliancePanel.Children.Add(noProtectionTimeoutRow);
 
             compliancePanel.Children.Add(BuildAiDailyCloseOptIn());
 
@@ -767,6 +794,14 @@ namespace Glitch.UI
             _runtimePolicySettings.NoProtectionFlattenScopes.Sim = _settingsNoProtectionFlattenSimCheckBox?.IsChecked == true;
             _runtimePolicySettings.NoProtectionFlattenScopes.Eval = _settingsNoProtectionFlattenEvalCheckBox?.IsChecked == true;
             _runtimePolicySettings.NoProtectionFlattenScopes.Ap = _settingsNoProtectionFlattenApCheckBox?.IsChecked == true;
+            if (int.TryParse(
+                    _settingsNoProtectionTimeoutMsTextBox?.Text,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out int noProtectionTimeoutMs)
+                && noProtectionTimeoutMs >= 100
+                && noProtectionTimeoutMs <= 10000)
+                _runtimePolicySettings.NoProtectionTimeoutMs = noProtectionTimeoutMs;
 
             if (!TryReadComplianceThreshold(_settingsBufferFreezeThresholdTextBox, _runtimePolicySettings.BufferFreezeThresholdRatio, 0.01, 0.99, out double bufferFreezeThreshold))
                 bufferFreezeThreshold = _runtimePolicySettings.BufferFreezeThresholdRatio;
@@ -785,7 +820,6 @@ namespace Glitch.UI
             _runtimePolicySettings.UnrealizedFlattenThresholdRatio = unrealizedThreshold;
 
             _runtimePolicySettings.SyncLegacyComplianceFlags();
-            _runtimePolicySettings.FlattenOnCriticalBufferLock = false;
             _runtimePolicySettings.LicenseKey = GetNormalizedSettingsLicenseKeyText();
             _settingsLicenseKeyUnmaskedValue = (_runtimePolicySettings.LicenseKey ?? string.Empty).Trim();
             ApplySettingsLicenseMaskedDisplay();
@@ -905,6 +939,8 @@ namespace Glitch.UI
                 _settingsNoProtectionFlattenEvalCheckBox.IsChecked = _runtimePolicySettings.NoProtectionFlattenScopes.Eval;
             if (_settingsNoProtectionFlattenApCheckBox != null)
                 _settingsNoProtectionFlattenApCheckBox.IsChecked = _runtimePolicySettings.NoProtectionFlattenScopes.Ap;
+            if (_settingsNoProtectionTimeoutMsTextBox != null)
+                _settingsNoProtectionTimeoutMsTextBox.Text = _runtimePolicySettings.NoProtectionTimeoutMs.ToString(CultureInfo.InvariantCulture);
             if (_settingsAiDailyCloseCheckBox != null)
                 _settingsAiDailyCloseCheckBox.IsChecked = _runtimePolicySettings.EnforceAiDailyClose;
 

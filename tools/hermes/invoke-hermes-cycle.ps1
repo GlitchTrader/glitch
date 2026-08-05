@@ -140,7 +140,7 @@ if (-not $mnq) { throw 'MNQ missing from market snapshot.' }
 # is never placed in the capsule that Hermes can read. External inference is
 # permitted only for a fully flat, order-free Sim group; position management
 # remains native bracket/recovery logic until a separately approved design exists.
-$groupPath = Join-Path $gd 'AccountGroups.tsv'
+$groupPath = Join-Path $gd 'Configuration.v1.tsv'
 $groupRowsConfig = @(Get-Content -LiteralPath $groupPath | Where-Object { $_ -and -not $_.StartsWith('#') })
 $masterGroups = @($groupRowsConfig | ForEach-Object {
     $parts = $_ -split "`t"

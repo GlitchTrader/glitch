@@ -13,13 +13,12 @@ namespace Glitch.Services
             return GlitchStateStore.GetDefaultPath(Path.Combine("intents", "decisions.jsonl"));
         }
 
-        public static bool TryRecord(
+        public static bool TryRecordAccepted(
             string intentId,
             string rawJson,
-            GlitchAiRiskDecision decision,
             DateTime recordedUtc)
         {
-            if (string.IsNullOrWhiteSpace(intentId) || string.IsNullOrWhiteSpace(rawJson) || decision == null)
+            if (string.IsNullOrWhiteSpace(intentId) || string.IsNullOrWhiteSpace(rawJson))
                 return false;
 
             lock (SyncRoot)
@@ -40,43 +39,20 @@ namespace Glitch.Services
                     }
                 }
 
-                string status = decision.IsApproved ? "approved" : "rejected";
                 string line = "{"
-                    + "\"schema_version\":" + GlitchSnapshotJson.String("glitch.intent.decision.v1") + ","
+                    + "\"schema_version\":" + GlitchSnapshotJson.String("glitch.intent.accepted.v1") + ","
                     + "\"recorded_utc\":" + GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(recordedUtc)) + ","
-                    + "\"status\":" + GlitchSnapshotJson.String(status) + ","
+                    + "\"status\":" + GlitchSnapshotJson.String("accepted") + ","
                     + "\"intent_id\":" + GlitchSnapshotJson.String(intentId) + ","
-                    + "\"failed_check_number\":" + decision.FailedCheckNumber.ToString(System.Globalization.CultureInfo.InvariantCulture) + ","
-                    + "\"failed_check_code\":" + GlitchSnapshotJson.String(decision.FailedCheckCode ?? string.Empty) + ","
-                    + "\"failed_check_message\":" + GlitchSnapshotJson.String(decision.FailedCheckMessage ?? string.Empty) + ","
-                    + "\"check_trail\":" + BuildTrailJson(decision.CheckTrail) + ","
+                    + "\"accepted_facts\":[\"contract_valid\",\"intent_identity_claimed\"],"
                     + "\"intent\":" + rawJson.Trim()
                     + "}";
 
                 File.AppendAllText(path, line + Environment.NewLine, new UTF8Encoding(false));
-                if (decision.IsApproved)
-                    GlitchAiIntentJournalWriter.AppendAcceptedMirror(intentId, rawJson, recordedUtc);
+                GlitchAiIntentJournalWriter.AppendAcceptedMirror(intentId, rawJson, recordedUtc);
 
                 return true;
             }
-        }
-
-        private static string BuildTrailJson(System.Collections.Generic.IReadOnlyList<string> trail)
-        {
-            if (trail == null || trail.Count == 0)
-                return "[]";
-
-            var sb = new StringBuilder(128);
-            sb.Append('[');
-            for (int i = 0; i < trail.Count; i++)
-            {
-                if (i > 0)
-                    sb.Append(',');
-                sb.Append(GlitchSnapshotJson.String(trail[i]));
-            }
-
-            sb.Append(']');
-            return sb.ToString();
         }
     }
 }

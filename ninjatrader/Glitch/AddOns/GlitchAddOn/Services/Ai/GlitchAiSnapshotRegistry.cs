@@ -120,6 +120,42 @@ namespace Glitch.Services
             }
         }
 
+        public static bool TryGetInstrumentPriceByHash(
+            string snapshotHash,
+            string instrumentRoot,
+            out double price,
+            out string failureCode)
+        {
+            price = 0;
+            failureCode = null;
+            try
+            {
+                string json;
+                if (!TryReadSnapshotByHash(snapshotHash, out json, out failureCode))
+                    return false;
+                string marker = "\"instrument\":"
+                    + GlitchSnapshotJson.String(instrumentRoot.Trim().ToUpperInvariant());
+                int start = json.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+                if (start < 0)
+                {
+                    failureCode = "snapshot_instrument_missing";
+                    return false;
+                }
+                string slice = json.Substring(start, Math.Min(2500, json.Length - start));
+                if (!GlitchAiJsonFields.TryExtractNumber(slice, "current_price", out price) || price <= 0)
+                {
+                    failureCode = "snapshot_price_missing";
+                    return false;
+                }
+                return true;
+            }
+            catch
+            {
+                failureCode = "snapshot_read_failed";
+                return false;
+            }
+        }
+
         public static bool TryGetInstrumentSession(string instrumentRoot, out string sessionName)
         {
             sessionName = null;

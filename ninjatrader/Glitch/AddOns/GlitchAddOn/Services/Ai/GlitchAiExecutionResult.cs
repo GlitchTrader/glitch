@@ -7,6 +7,7 @@ namespace Glitch.Services
         public string Status { get; set; }
         public string Code { get; set; }
         public string Message { get; set; }
+        public string SubmissionDisposition { get; set; }
 
         public static GlitchAiExecutionResult Skipped(string code, string message = null)
         {

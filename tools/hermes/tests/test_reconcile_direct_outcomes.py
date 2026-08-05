@@ -332,7 +332,7 @@ class DirectOutcomeReconcileTests(unittest.TestCase):
             outbox.mkdir(parents=True)
             (gd / "intents").mkdir(parents=True)
             (gd / "snapshots" / "historical" / "portfolio").mkdir(parents=True)
-            (gd / "AccountGroups.tsv").write_text(
+            (gd / "Configuration.v1.tsv").write_text(
                 "G\tg1\tSim101\t100000\n"
                 "M\tg1\tSim102\t100000\t2\t100000\t1\n"
                 "M\tg1\tSim103\t100000\t3\t100000\t1\n",

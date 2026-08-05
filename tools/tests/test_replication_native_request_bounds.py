@@ -1,4 +1,4 @@
-"""Compile and execute the production replication math/request-bound contracts."""
+"""Compile and execute the deterministic Glitch runtime acceptance harnesses."""
 
 import os
 import subprocess
@@ -32,16 +32,27 @@ class ReplicationNativeRequestBoundTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, output)
         return output
 
-    def test_replication_math_and_native_request_bounds(self):
+    def test_pure_runtime_harnesses(self):
+        expected = {
+            "run_glitch_configuration_harness.ps1": "configuration harness passed",
+            "run_glitch_runtime_lifecycle_harness.ps1": "runtime lifecycle harness passed",
+            "run_glitch_state_machine_harness.ps1": "state machine harness passed",
+            "run_glitch_journal_harness.ps1": "journal harness passed",
+        }
+        for script, marker in expected.items():
+            with self.subTest(script=script):
+                self.assertIn(marker, self.run_script(script))
+
+    def test_complete_addon_compiles_against_installed_ninjatrader(self):
         self.assertIn(
-            "replication math harness: PASS",
-            self.run_script("run_replication_math_harness.ps1"),
+            "Glitch AddOn source compile: PASS",
+            self.run_script("run_glitch_addon_source_compile.ps1"),
         )
 
-    def test_replication_sources_compile_against_installed_ninjatrader(self):
+    def test_native_gateway_boundary_compiles_against_installed_ninjatrader(self):
         self.assertIn(
-            "replication source compile: PASS",
-            self.run_script("run_replication_source_compile.ps1"),
+            "native gateway source compile: PASS",
+            self.run_script("run_glitch_native_gateway_compile.ps1"),
         )
 
 

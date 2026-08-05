@@ -80,8 +80,8 @@ namespace Glitch.Services
             string schemaVersion = ExtractString(parsed, "schema_version");
             bool isV2 = string.Equals(schemaVersion, "glitch.intent.v2", StringComparison.Ordinal);
             bool isV3 = string.Equals(schemaVersion, "glitch.intent.v3", StringComparison.Ordinal);
-            if (!isV2 && !isV3)
-                errors.Add("schema_version_must_be_glitch.intent.v2_or_v3");
+            if (!isV3)
+                errors.Add("schema_version_must_be_glitch.intent.v3");
 
             for (int i = 0; i < RequiredFields.Length; i++)
             {

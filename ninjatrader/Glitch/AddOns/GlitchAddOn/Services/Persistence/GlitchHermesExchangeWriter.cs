@@ -337,7 +337,9 @@ namespace Glitch.Services
             IReadOnlyList<string> missingMinuteIds)
         {
             string policy = ReadJsonOrEmpty(GlitchStateStore.GetDefaultPath(Path.Combine("ai", "policy.json")));
-            string accountGroups = ReadTextOrEmpty(GlitchStateStore.GetDefaultPath("AccountGroups.tsv"));
+            string accountGroups = GlitchStateStore.RenderAccountGroupsTsv(
+                GlitchStateStore.LoadAccountGroups(
+                    GlitchStateStore.GetDefaultConfigurationPath()));
             var sb = new StringBuilder(32768);
             sb.Append('{');
             sb.Append("\"schema_version\":").Append(GlitchSnapshotJson.String(PacketSchemaVersion)).Append(',');

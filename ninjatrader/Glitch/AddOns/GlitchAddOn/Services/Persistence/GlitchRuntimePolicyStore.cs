@@ -37,19 +37,7 @@ namespace Glitch.Services
         public ComplianceAccountTypeScope MaxContractsFlattenScopes { get; set; } = new ComplianceAccountTypeScope();
         public ComplianceAccountTypeScope NoProtectionFlattenScopes { get; set; } = new ComplianceAccountTypeScope();
         public bool EvalProfitTargetLockEnabled { get; set; } = false;
-        public bool FlattenOnCriticalBufferLock { get; set; } = false;
-        public int ReplicationDeclaredCapContracts { get; set; } = 0;
-        public int ReplicationMaxDeltaPerCycle { get; set; } = 3;
-        public int ReplicationBurstWindowMs { get; set; } = 1000;
-        public int ReplicationBurstFillCountThreshold { get; set; } = 4;
-        public int ReplicationBurstQtyJumpThreshold { get; set; } = 6;
-        public int FollowerEmergencyStopTicks { get; set; } = 20;
         public int NoProtectionTimeoutMs { get; set; } = 1000;
-        public int NoProtectionTimeoutTicks { get; set; } = 3;
-        public int RearmTimeoutMs { get; set; } = 1500;
-        public int RearmTimeoutTicks { get; set; } = 4;
-        public bool FreezeRequiresManualAcknowledge { get; set; } = true;
-        public bool LockRequiresManualAcknowledge { get; set; } = true;
         public string LicenseKey { get; set; } = string.Empty;
         public string LicenseApiBaseUrl { get; set; } = "https://api.glitchtrader.com";
         public string InstallationId { get; set; } = Guid.NewGuid().ToString("N");
@@ -165,7 +153,7 @@ namespace Glitch.Services
 
         public static string GetDefaultSettingsPath()
         {
-            return GlitchStateStore.GetDefaultPath("RuntimePolicy.tsv");
+            return GlitchStateStore.GetDefaultConfigurationPath();
         }
 
         public static string GetDefaultLicenseCachePath()
@@ -191,21 +179,9 @@ namespace Glitch.Services
             settings.EnforceEvalProfitTargetLock = ReadBool(rows, "ENFORCE_EVAL_PROFIT_TARGET_LOCK", settings.EnforceEvalProfitTargetLock);
             settings.EnforceAiDailyClose = ReadBool(rows, "ENFORCE_AI_DAILY_CLOSE", settings.EnforceAiDailyClose);
             settings.ReplicationUiEnabled = ReadBool(rows, "REPLICATION_UI_ENABLED", settings.ReplicationUiEnabled);
-            settings.FlattenOnCriticalBufferLock = ReadBool(rows, "FLATTEN_ON_CRITICAL_BUFFER_LOCK", settings.FlattenOnCriticalBufferLock);
             LoadComplianceFeatureScopes(settings, rows);
             settings.SyncLegacyComplianceFlags();
-            settings.ReplicationDeclaredCapContracts = ReadInt(rows, "REPLICATION_DECLARED_CAP_CONTRACTS", settings.ReplicationDeclaredCapContracts, 0, 200);
-            settings.ReplicationMaxDeltaPerCycle = ReadInt(rows, "REPLICATION_MAX_DELTA_PER_CYCLE", settings.ReplicationMaxDeltaPerCycle, 1, 25);
-            settings.ReplicationBurstWindowMs = ReadInt(rows, "REPLICATION_BURST_WINDOW_MS", settings.ReplicationBurstWindowMs, 250, 10000);
-            settings.ReplicationBurstFillCountThreshold = ReadInt(rows, "REPLICATION_BURST_FILL_COUNT_THRESHOLD", settings.ReplicationBurstFillCountThreshold, 2, 25);
-            settings.ReplicationBurstQtyJumpThreshold = ReadInt(rows, "REPLICATION_BURST_QTY_JUMP_THRESHOLD", settings.ReplicationBurstQtyJumpThreshold, 2, 100);
-            settings.FollowerEmergencyStopTicks = ReadInt(rows, "FOLLOWER_EMERGENCY_STOP_TICKS", settings.FollowerEmergencyStopTicks, 2, 2000);
             settings.NoProtectionTimeoutMs = ReadInt(rows, "NO_PROTECTION_TIMEOUT_MS", settings.NoProtectionTimeoutMs, 100, 10000);
-            settings.NoProtectionTimeoutTicks = ReadInt(rows, "NO_PROTECTION_TIMEOUT_TICKS", settings.NoProtectionTimeoutTicks, 1, 200);
-            settings.RearmTimeoutMs = ReadInt(rows, "REARM_TIMEOUT_MS", settings.RearmTimeoutMs, 100, 10000);
-            settings.RearmTimeoutTicks = ReadInt(rows, "REARM_TIMEOUT_TICKS", settings.RearmTimeoutTicks, 1, 200);
-            settings.FreezeRequiresManualAcknowledge = ReadBool(rows, "FREEZE_REQUIRES_MANUAL_ACKNOWLEDGE", settings.FreezeRequiresManualAcknowledge);
-            settings.LockRequiresManualAcknowledge = ReadBool(rows, "LOCK_REQUIRES_MANUAL_ACKNOWLEDGE", settings.LockRequiresManualAcknowledge);
             string storedLicenseKey = ReadString(rows, "LICENSE_KEY", settings.LicenseKey);
             bool needsRewrite = false;
             bool decodeFailed = false;
@@ -252,7 +228,6 @@ namespace Glitch.Services
                 $"ENFORCE_EVAL_PROFIT_TARGET_LOCK\t{ToBoolToken(settings.EnforceEvalProfitTargetLock)}",
                 $"ENFORCE_AI_DAILY_CLOSE\t{ToBoolToken(settings.EnforceAiDailyClose)}",
                 $"REPLICATION_UI_ENABLED\t{ToBoolToken(settings.ReplicationUiEnabled)}",
-                $"FLATTEN_ON_CRITICAL_BUFFER_LOCK\t{ToBoolToken(settings.FlattenOnCriticalBufferLock)}",
                 $"ENFORCE_BUFFER_FREEZE_15_SIM\t{ToBoolToken(settings.BufferFreezeScopes.Sim)}",
                 $"ENFORCE_BUFFER_FREEZE_15_EVAL\t{ToBoolToken(settings.BufferFreezeScopes.Eval)}",
                 $"ENFORCE_BUFFER_FREEZE_15_AP\t{ToBoolToken(settings.BufferFreezeScopes.Ap)}",
@@ -273,18 +248,7 @@ namespace Glitch.Services
                 $"ENFORCE_NO_PROTECTION_FLATTEN_SIM\t{ToBoolToken(settings.NoProtectionFlattenScopes.Sim)}",
                 $"ENFORCE_NO_PROTECTION_FLATTEN_EVAL\t{ToBoolToken(settings.NoProtectionFlattenScopes.Eval)}",
                 $"ENFORCE_NO_PROTECTION_FLATTEN_AP\t{ToBoolToken(settings.NoProtectionFlattenScopes.Ap)}",
-                $"REPLICATION_DECLARED_CAP_CONTRACTS\t{settings.ReplicationDeclaredCapContracts.ToString(CultureInfo.InvariantCulture)}",
-                $"REPLICATION_MAX_DELTA_PER_CYCLE\t{settings.ReplicationMaxDeltaPerCycle.ToString(CultureInfo.InvariantCulture)}",
-                $"REPLICATION_BURST_WINDOW_MS\t{settings.ReplicationBurstWindowMs.ToString(CultureInfo.InvariantCulture)}",
-                $"REPLICATION_BURST_FILL_COUNT_THRESHOLD\t{settings.ReplicationBurstFillCountThreshold.ToString(CultureInfo.InvariantCulture)}",
-                $"REPLICATION_BURST_QTY_JUMP_THRESHOLD\t{settings.ReplicationBurstQtyJumpThreshold.ToString(CultureInfo.InvariantCulture)}",
-                $"FOLLOWER_EMERGENCY_STOP_TICKS\t{settings.FollowerEmergencyStopTicks.ToString(CultureInfo.InvariantCulture)}",
                 $"NO_PROTECTION_TIMEOUT_MS\t{settings.NoProtectionTimeoutMs.ToString(CultureInfo.InvariantCulture)}",
-                $"NO_PROTECTION_TIMEOUT_TICKS\t{settings.NoProtectionTimeoutTicks.ToString(CultureInfo.InvariantCulture)}",
-                $"REARM_TIMEOUT_MS\t{settings.RearmTimeoutMs.ToString(CultureInfo.InvariantCulture)}",
-                $"REARM_TIMEOUT_TICKS\t{settings.RearmTimeoutTicks.ToString(CultureInfo.InvariantCulture)}",
-                $"FREEZE_REQUIRES_MANUAL_ACKNOWLEDGE\t{ToBoolToken(settings.FreezeRequiresManualAcknowledge)}",
-                $"LOCK_REQUIRES_MANUAL_ACKNOWLEDGE\t{ToBoolToken(settings.LockRequiresManualAcknowledge)}",
                 $"LICENSE_KEY\t{CleanValue(persistedLicenseValue)}",
                 $"LICENSE_API_BASE_URL\t{CleanValue(NormalizeApiBaseUrl(settings.LicenseApiBaseUrl))}",
                 $"INSTALLATION_ID\t{CleanValue(settings.InstallationId)}"
@@ -353,8 +317,19 @@ namespace Glitch.Services
 
         private static void EnsureSettingsTemplateExists(string settingsPath)
         {
-            if (string.IsNullOrWhiteSpace(settingsPath) || File.Exists(settingsPath))
+            if (string.IsNullOrWhiteSpace(settingsPath))
                 return;
+
+            if (GlitchConfigurationStore.IsCanonicalPath(settingsPath))
+            {
+                if (GlitchConfigurationStore.LoadPolicyRows(
+                    settingsPath, out bool _).Count > 0)
+                    return;
+            }
+            else if (File.Exists(settingsPath))
+            {
+                return;
+            }
 
             SaveSettings(settingsPath, new GlitchRuntimePolicySettings());
         }
@@ -370,35 +345,34 @@ namespace Glitch.Services
         private static Dictionary<string, string> LoadKeyValueRows(string filePath)
         {
             var rows = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            if (string.IsNullOrWhiteSpace(filePath))
                 return rows;
-
-            try
+            IEnumerable<string> source;
+            if (GlitchConfigurationStore.IsCanonicalPath(filePath))
             {
-                foreach (string rawLine in File.ReadAllLines(filePath, Encoding.UTF8))
-                {
-                    if (string.IsNullOrWhiteSpace(rawLine))
-                        continue;
-
-                    string line = rawLine;
-                    if (line.StartsWith("#", StringComparison.Ordinal))
-                        continue;
-
-                    string[] parts = line.Split('\t');
-                    if (parts.Length < 2)
-                        continue;
-
-                    string key = (parts[0] ?? string.Empty).Trim();
-                    if (string.IsNullOrWhiteSpace(key))
-                        continue;
-
-                    string value = string.Join("\t", parts.Skip(1).ToArray()).Trim();
-                    rows[key] = value;
-                }
+                source = GlitchConfigurationStore.LoadPolicyRows(
+                    filePath, out bool _);
             }
-            catch
+            else
             {
-                return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                if (!File.Exists(filePath))
+                    return rows;
+                source = File.ReadAllLines(filePath, Encoding.UTF8);
+            }
+
+            foreach (string rawLine in source)
+            {
+                if (string.IsNullOrWhiteSpace(rawLine)
+                    || rawLine.StartsWith("#", StringComparison.Ordinal))
+                    continue;
+                string[] parts = rawLine.Split('\t');
+                if (parts.Length < 2)
+                    throw new InvalidDataException("Policy configuration contains an invalid row.");
+                string key = (parts[0] ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(key) || rows.ContainsKey(key))
+                    throw new InvalidDataException(
+                        "Policy configuration contains a missing or duplicate key.");
+                rows[key] = string.Join("\t", parts.Skip(1).ToArray()).Trim();
             }
 
             return rows;
@@ -408,17 +382,11 @@ namespace Glitch.Services
         {
             if (string.IsNullOrWhiteSpace(path))
                 return;
-
-            try
+            if (GlitchConfigurationStore.IsCanonicalPath(path))
+                GlitchConfigurationStore.SavePolicyRows(path, lines);
+            else
             {
-                string directory = Path.GetDirectoryName(path);
-                if (!string.IsNullOrWhiteSpace(directory))
-                    Directory.CreateDirectory(directory);
-
                 GlitchStateStore.WriteAllLinesAtomic(path, GlitchStateStore.WithTsvBanner(lines), Utf8NoBom);
-            }
-            catch
-            {
             }
         }
 

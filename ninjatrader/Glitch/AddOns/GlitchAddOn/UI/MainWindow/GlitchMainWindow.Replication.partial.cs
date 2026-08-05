@@ -5,9 +5,10 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
+using Glitch.Core;
+using Glitch.Infrastructure;
 using Glitch.Services;
 using NinjaTrader.Cbi;
 
@@ -30,56 +31,154 @@ namespace Glitch.UI
             return await GlitchReplicationEngine.WaitForAllAccountsFlatAsync(accounts, timeout);
         }
 
-        private void RefreshCopyEngineConfiguration(IReadOnlyList<Account> activeAccounts)
+        private bool RefreshCopyEngineConfiguration(
+            bool? replicationEnabledOverride = null,
+            bool synchronizeChanges = false,
+            bool persistDesiredState = true)
         {
-            if (_copyEngine == null)
-                return;
+            GlitchRuntimeHost host = GlitchRuntimeHost.Active;
+            if (host == null)
+                return false;
 
-            var accountsByName = (activeAccounts ?? Array.Empty<Account>())
-                .Where(account => account != null && !string.IsNullOrWhiteSpace(account.Name))
-                .GroupBy(account => account.Name.Trim(), StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
-
-            var routes = new List<GlitchCopyFollowerRoute>();
-            foreach (AccountGroupDefinition group in _accountGroups ?? new ObservableCollection<AccountGroupDefinition>())
+            if (!TryBuildReplicationRoutes(out List<GlitchRouteDefinition> routes, out string routeError))
             {
-                if (group == null || string.IsNullOrWhiteSpace(group.MasterAccount) || group.Members == null)
-                    continue;
-
-                string masterName = group.MasterAccount.Trim();
-                accountsByName.TryGetValue(masterName, out Account masterAccount);
-                foreach (AccountGroupMemberRow member in group.Members)
-                {
-                    if (member == null || member.IsMasterRow || !member.IsEnabled || string.IsNullOrWhiteSpace(member.FollowerAccount))
-                        continue;
-                    if (string.Equals(member.FollowerAccount.Trim(), masterName, StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    if (double.IsNaN(member.Ratio) || double.IsInfinity(member.Ratio) || member.Ratio <= 0)
-                        continue;
-                    if (!accountsByName.TryGetValue(member.FollowerAccount.Trim(), out Account followerAccount) || followerAccount == null)
-                        continue;
-
-                    routes.Add(new GlitchCopyFollowerRoute
-                    {
-                        MasterAccount = masterName,
-                        MasterAccountInstance = masterAccount,
-                        FollowerAccount = followerAccount,
-                        Ratio = member.Ratio
-                    });
-                }
+                AppendJournal(
+                    "System", "Replication",
+                    "route_configuration_rejected|reason=" + routeError);
+                return false;
             }
 
-            _copyEngine.Configure(_isReplicatingUi, routes);
+            string topologyError = GlitchRuntimeHost.ValidateRouteConfiguration(routes);
+            if (!string.IsNullOrWhiteSpace(topologyError))
+            {
+                AppendJournal(
+                    "System", "Replication",
+                    "route_configuration_rejected|reason=" + topologyError);
+                return false;
+            }
+
+            bool accepted = host.ReplaceRoutes(
+                routes,
+                replicationEnabledOverride ?? _isReplicatingUi,
+                synchronizeChanges,
+                persistDesiredState);
             UpdateReplicateButtonState();
+            return accepted;
+        }
+
+        private bool TryBuildReplicationRoutes(
+            out List<GlitchRouteDefinition> routes,
+            out string error)
+        {
+            routes = new List<GlitchRouteDefinition>();
+            error = string.Empty;
+            foreach (AccountGroupDefinition group in _accountGroups ?? new ObservableCollection<AccountGroupDefinition>())
+            {
+                if (group == null)
+                    continue;
+                if (group.Members == null || group.Members.Count == 0)
+                    continue;
+                if (string.IsNullOrWhiteSpace(group.MasterAccount))
+                {
+                    error = "missing_master";
+                    return false;
+                }
+
+                string masterName = group.MasterAccount.Trim();
+                foreach (AccountGroupMemberRow member in group.Members)
+                {
+                    if (member == null || member.IsMasterRow)
+                        continue;
+                    if (string.IsNullOrWhiteSpace(member.FollowerAccount))
+                    {
+                        error = "missing_follower";
+                        return false;
+                    }
+                    if (string.Equals(member.FollowerAccount.Trim(), masterName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        error = "master_equals_follower";
+                        return false;
+                    }
+                    if (double.IsNaN(member.Ratio) || double.IsInfinity(member.Ratio) || member.Ratio < 0)
+                    {
+                        error = "invalid_ratio";
+                        return false;
+                    }
+
+                    try
+                    {
+                        routes.Add(new GlitchRouteDefinition
+                        {
+                            RouteId = BuildRuntimeRouteId(group, member),
+                            MasterAccount = masterName,
+                            FollowerAccount = member.FollowerAccount.Trim(),
+                            Ratio = (decimal)member.Ratio,
+                            Enabled = member.IsEnabled
+                        });
+                    }
+                    catch (OverflowException)
+                    {
+                        error = "ratio_out_of_range";
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        private bool PersistAndApplyReplicationConfiguration(bool synchronizeChanges)
+        {
+            if (!TryBuildReplicationRoutes(out List<GlitchRouteDefinition> routes, out string routeError))
+            {
+                AppendJournal(
+                    "System", "Replication",
+                    "route_configuration_rejected|reason=" + routeError);
+                return false;
+            }
+
+            string topologyError = GlitchRuntimeHost.ValidateRouteConfiguration(routes);
+            if (!string.IsNullOrWhiteSpace(topologyError))
+            {
+                AppendJournal(
+                    "System", "Replication",
+                    "route_configuration_rejected|reason=" + topologyError);
+                return false;
+            }
+
+            if (!SaveAccountGroupsToDisk())
+                return false;
+
+            GlitchRuntimeHost host = GlitchRuntimeHost.Active;
+            if (!_replicationUserIntentLive || host == null)
+            {
+                AppendJournal(
+                    "System", "Replication",
+                    "route_configuration_persisted|runtime=pending");
+                return true;
+            }
+
+            if (!host.ReplaceRoutes(
+                    routes,
+                    _isReplicatingUi,
+                    synchronizeChanges))
+            {
+                AppendJournal(
+                    "System", "Replication",
+                    "route_configuration_persisted|runtime=blocked_or_pending");
+                return true;
+            }
+
+            return true;
         }
 
         private void SyncGroupFollowers(AccountGroupDefinition group)
         {
-            if (_copyEngine == null || !_isReplicatingUi || _isFlattenAllInProgress || group == null
+            if (!_isReplicatingUi || _isFlattenAllInProgress || group == null
                 || string.IsNullOrWhiteSpace(group.MasterAccount))
                 return;
 
-            RefreshCopyEngineConfiguration(GetActiveAccountsSnapshot());
+            if (!RefreshCopyEngineConfiguration())
+                return;
 
             Account masterAccount = TryFindConnectedAccountByName(group.MasterAccount);
             if (group.Members == null)
@@ -89,7 +188,7 @@ namespace Glitch.UI
             {
                 if (member == null || member.IsMasterRow || !member.IsEnabled || string.IsNullOrWhiteSpace(member.FollowerAccount))
                     continue;
-                if (double.IsNaN(member.Ratio) || double.IsInfinity(member.Ratio) || member.Ratio <= 0)
+                if (double.IsNaN(member.Ratio) || double.IsInfinity(member.Ratio) || member.Ratio < 0)
                 {
                     AppendJournal(
                         member.FollowerAccount,
@@ -111,20 +210,32 @@ namespace Glitch.UI
                     continue;
                 }
 
-                _copyEngine.SyncFollower(masterAccount, followerAccount, member.Ratio);
+                GlitchRuntimeHost.Active?.SynchronizeRoute(BuildRuntimeRouteId(group, member));
             }
         }
 
-        private void HandleFollowerEnableUserToggle(AccountGroupDefinition group, AccountGroupMemberRow member, bool enabled)
+        private static string BuildRuntimeRouteId(
+            AccountGroupDefinition group,
+            AccountGroupMemberRow member)
+        {
+            string groupId = string.IsNullOrWhiteSpace(group?.GroupId)
+                ? "group"
+                : group.GroupId.Trim();
+            return groupId + "|" + (group?.MasterAccount ?? string.Empty).Trim()
+                + "|" + (member?.FollowerAccount ?? string.Empty).Trim();
+        }
+
+        private bool HandleFollowerEnableUserToggle(AccountGroupDefinition group, AccountGroupMemberRow member, bool enabled)
         {
             if (!_replicationUserIntentLive)
-                return;
+                return true;
             if (group == null || member == null || member.IsMasterRow)
-                return;
+                return false;
 
-            RefreshCopyEngineConfiguration(GetActiveAccountsSnapshot());
+            if (!PersistAndApplyReplicationConfiguration(
+                    synchronizeChanges: enabled && _isReplicatingUi))
+                return false;
 
-            SaveAccountGroupsToDisk();
             AppendJournal(
                 member.FollowerAccount ?? "System",
                 "Replication",
@@ -132,16 +243,18 @@ namespace Glitch.UI
                     ? "follower_enabled|origin=user_toggle"
                     : "follower_disabled|origin=user_toggle");
             PublishGlitchShellState();
+            return true;
         }
 
-        private void HandleFollowerRatioUserChange(AccountGroupDefinition group, AccountGroupMemberRow member)
+        private bool HandleFollowerRatioUserChange(AccountGroupDefinition group, AccountGroupMemberRow member)
         {
             if (!_replicationUserIntentLive)
-                return;
+                return true;
             if (group == null || member == null || member.IsMasterRow)
-                return;
+                return false;
 
-            RefreshCopyEngineConfiguration(GetActiveAccountsSnapshot());
+            return PersistAndApplyReplicationConfiguration(
+                synchronizeChanges: member.IsEnabled && _isReplicatingUi);
         }
 
         private void WireReplicationMemberHandlers(AccountGroupDefinition group)
@@ -165,66 +278,14 @@ namespace Glitch.UI
                     if (nowEnabled == lastEnabled)
                         return;
 
+                    if (!HandleFollowerEnableUserToggle(group, member, nowEnabled))
+                    {
+                        member.IsEnabled = lastEnabled;
+                        return;
+                    }
                     lastEnabled = nowEnabled;
-                    HandleFollowerEnableUserToggle(group, member, nowEnabled);
                 };
             }
-        }
-
-        private void TryProcessCopyExecutionFromRuntimeEvent(
-            string eventName,
-            Account account,
-            object eventArgs,
-            GlitchCopyExecutionContext executionSnapshot)
-        {
-            if (account == null || eventArgs == null || _copyEngine == null)
-                return;
-            if (_isFlattenAllInProgress)
-                return;
-            if (!_isReplicatingUi)
-                return;
-            if (!string.Equals(eventName, "ExecutionUpdate", StringComparison.OrdinalIgnoreCase))
-                return;
-            GlitchCopyExecutionContext context = executionSnapshot;
-            if (context == null && !TryBuildCopyExecutionContext(eventArgs, out context))
-                return;
-
-            _copyEngine.ProcessMasterExecution(account, context);
-        }
-
-        private void TryProcessReplicationOrderStateFromRuntimeEvent(
-            string eventName,
-            Account account,
-            object eventArgs,
-            Order orderSnapshot)
-        {
-            if (account == null || eventArgs == null || _copyEngine == null)
-                return;
-
-            if (_isFlattenAllInProgress)
-                return;
-
-            if (string.Equals(eventName, "PositionUpdate", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(eventName, "ExecutionUpdate", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(eventName, "OrderUpdate", StringComparison.OrdinalIgnoreCase))
-                GlitchAiOrderExecutor.ProcessAccountStateUpdate(account);
-
-            if (string.Equals(eventName, "ExecutionUpdate", StringComparison.OrdinalIgnoreCase))
-                _copyEngine.ProcessFollowerExecution(account);
-
-            if (string.Equals(eventName, "PositionUpdate", StringComparison.OrdinalIgnoreCase))
-                _copyEngine.ProcessAccountStateUpdate(account);
-
-            if (!string.Equals(eventName, "OrderUpdate", StringComparison.OrdinalIgnoreCase))
-                return;
-
-            Order order = orderSnapshot ?? TryGetNestedPropertyValue(eventArgs, "Order") as Order;
-            if (order == null)
-                return;
-
-            GlitchAiOrderExecutor.ProcessOrderUpdate(account, order);
-            _copyEngine.ProcessMasterOrderUpdate(account, order);
-            _copyEngine.ProcessFollowerOrderUpdate(account, order);
         }
 
         private List<Account> ResolveFlattenAllAccounts(out List<string> unresolvedConfiguredAccounts)
@@ -311,9 +372,14 @@ namespace Glitch.UI
                 int instrumentFlattenCount = 0;
                 try
                 {
-                    if (GlitchReplicationEngine.TryFlattenAccount(account, out instrumentFlattenCount))
+                    instrumentFlattenCount = GetOpenPositionInstruments(account).Count;
+                    string requestId = "user-flatten-" + Guid.NewGuid().ToString("N");
+                    if (GlitchRuntimeHost.Active?.RequestFlatten(
+                            requestId,
+                            accountName,
+                            "user_flatten_all") == true)
                     {
-                        totalIssued += instrumentFlattenCount;
+                        totalIssued += Math.Max(1, instrumentFlattenCount);
                         resultToken = "issued";
                     }
                     else
@@ -369,135 +435,6 @@ namespace Glitch.UI
             return null;
         }
 
-        private bool TryBuildCopyExecutionContext(object eventArgs, out GlitchCopyExecutionContext context)
-        {
-            context = null;
-            object executionObject = TryGetNestedPropertyValue(eventArgs, "Execution") ?? eventArgs;
-            if (executionObject == null)
-                return false;
-
-            // `Id` can identify the parent order on some provider/event shapes.
-            // Only the execution-specific identifier is safe for fill deduplication;
-            // the copy engine has a timestamp fallback when it is unavailable.
-            string executionId = TryGetNestedPropertyValueAsString(executionObject, "ExecutionId");
-            string quantityText = TryGetNestedPropertyValueAsString(executionObject, "Quantity");
-            if (!int.TryParse(quantityText, NumberStyles.Integer, CultureInfo.InvariantCulture, out int quantity) || quantity <= 0)
-                return false;
-
-            Instrument instrument = TryGetNestedPropertyValue(executionObject, "Instrument") as Instrument;
-            if (instrument == null)
-                return false;
-
-            Order order = TryGetNestedPropertyValue(executionObject, "Order") as Order;
-            string signalName = TryGetNestedPropertyValueAsString(executionObject, "Name");
-            if (string.IsNullOrWhiteSpace(signalName))
-                signalName = order?.Name;
-            if (!string.IsNullOrWhiteSpace(signalName)
-                && (signalName.Trim().StartsWith(GlitchCopyEngine.CopySignalName + "-", StringComparison.OrdinalIgnoreCase)
-                    || signalName.Trim().StartsWith(GlitchCopyEngine.CatchUpSignalName + "-", StringComparison.OrdinalIgnoreCase)))
-                return false;
-
-            OrderAction action;
-            if (order != null)
-            {
-                action = order.OrderAction;
-            }
-            else if (!TryParseOrderActionToken(
-                         TryGetNestedPropertyValueAsString(executionObject, "Order.OrderAction", "OrderAction", "MarketPosition"),
-                         out action))
-            {
-                return false;
-            }
-
-            int entryOrderFilledQuantity = order == null
-                ? quantity
-                : Math.Max(quantity, Math.Max(0, order.Filled));
-            int entryOrderQuantity = order == null
-                ? quantity
-                : Math.Max(quantity, Math.Max(0, order.Quantity));
-            if (order == null)
-            {
-                if (int.TryParse(
-                        TryGetNestedPropertyValueAsString(executionObject, "Order.Filled", "OrderFilled"),
-                        NumberStyles.Integer,
-                        CultureInfo.InvariantCulture,
-                        out int nestedFilled))
-                    entryOrderFilledQuantity = Math.Max(quantity, Math.Max(0, nestedFilled));
-                if (int.TryParse(
-                        TryGetNestedPropertyValueAsString(executionObject, "Order.Quantity", "OrderQuantity"),
-                        NumberStyles.Integer,
-                        CultureInfo.InvariantCulture,
-                        out int nestedQuantity))
-                    entryOrderQuantity = Math.Max(quantity, Math.Max(0, nestedQuantity));
-            }
-
-            context = new GlitchCopyExecutionContext
-            {
-                ExecutionId = executionId,
-                Instrument = instrument,
-                Action = action,
-                OrderType = order?.OrderType ?? OrderType.Market,
-                Quantity = quantity,
-                EntryOrderFilledQuantity = entryOrderFilledQuantity,
-                EntryOrderQuantity = entryOrderQuantity,
-                EntryOrder = order,
-                OrderIdentity = TryGetNestedPropertyValueAsString(
-                    executionObject,
-                    "Order.OrderId",
-                    "Order.Id",
-                    "OrderId"),
-                OrderSignalName = signalName,
-                Oco = order?.Oco,
-                ExecutionTimeUtc = TryReadExecutionTimeUtc(executionObject)
-            };
-            return true;
-        }
-
-        private static DateTime TryReadExecutionTimeUtc(object executionObject)
-        {
-            object value = TryGetNestedPropertyValue(executionObject, "Time")
-                ?? TryGetNestedPropertyValue(executionObject, "ExecutionTime");
-            if (value is DateTime parsed)
-                return parsed.Kind == DateTimeKind.Utc ? parsed : parsed.ToUniversalTime();
-            return DateTime.UtcNow;
-        }
-
-        private static bool TryParseOrderActionToken(string actionToken, out OrderAction action)
-        {
-            action = OrderAction.Buy;
-            if (string.IsNullOrWhiteSpace(actionToken))
-                return false;
-
-            string normalized = actionToken.Trim();
-            if (normalized.Equals("Buy", StringComparison.OrdinalIgnoreCase))
-            {
-                action = OrderAction.Buy;
-                return true;
-            }
-
-            if (normalized.Equals("Sell", StringComparison.OrdinalIgnoreCase))
-            {
-                action = OrderAction.Sell;
-                return true;
-            }
-
-            if (normalized.Equals("SellShort", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Equals("Short", StringComparison.OrdinalIgnoreCase))
-            {
-                action = OrderAction.SellShort;
-                return true;
-            }
-
-            if (normalized.Equals("BuyToCover", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Equals("Cover", StringComparison.OrdinalIgnoreCase))
-            {
-                action = OrderAction.BuyToCover;
-                return true;
-            }
-
-            return Enum.TryParse(normalized, true, out action);
-        }
-
         private static bool IsWorkingOrderState(OrderState state)
         {
             return GlitchReplicationEngine.IsWorkingOrderState(state);
@@ -521,8 +458,9 @@ namespace Glitch.UI
                     if (order == null || !GlitchReplicationEngine.IsWorkingOrderState(order.OrderState))
                         continue;
                     string name = order.Name ?? string.Empty;
-                    if (!name.StartsWith(GlitchCopyEngine.CopySignalName + "-E-", StringComparison.OrdinalIgnoreCase)
-                        && !name.StartsWith(GlitchCopyEngine.CatchUpSignalName + "-E-", StringComparison.OrdinalIgnoreCase))
+                    if (!GlitchNativeIdentity.TryGetRole(name, out string role)
+                        || (!string.Equals(role, "R", StringComparison.OrdinalIgnoreCase)
+                            && !string.Equals(role, "Y", StringComparison.OrdinalIgnoreCase)))
                         continue;
 
                     int actionSign = GlitchReplicationEngine.GetOrderActionSign(order.OrderAction);

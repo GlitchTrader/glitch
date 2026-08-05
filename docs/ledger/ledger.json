@@ -54,6 +54,43 @@
   },
   "items": [
     {
+      "id": "GL-REBUILD-01",
+      "title": "Clean-room NinjaTrader runtime from frozen User, Hermes, and native authority contracts",
+      "status": "in_progress",
+      "priority": "P0",
+      "owner_role": "coder",
+      "scope": "NinjaTrader Standard and Advanced shared deterministic runtime; current UI is the view contract; Topstep is excluded",
+      "authority": [
+        "User owns direct intent and visible configuration",
+        "Hermes owns cognition on the configured master",
+        "Glitch owns deterministic translation, execution, replication, protection, attribution, receipts, and projections",
+        "NinjaTrader owns native account, order, execution, position, and OCO truth"
+      ],
+      "current_evidence": [
+        "docs/specs/GLITCH-NT-REBUILD-CONTRACT.md",
+        "operator froze the builder/equipment fault doctrine and authorized end-to-end implementation on 2026-08-05",
+        "isolated branch rebuild/nt-core-v1 and worktree D:/ab/worktrees/glitch-nt-rebuild",
+        "single AddOn-lifetime runtime, serialized pure reducer, and sole typed NinjaTrader mutation gateway implemented",
+        "manual and Hermes master executions share cumulative delta replication; follower manual executions are observation-only",
+        "native fill-anchored protection, cancellation finality, reversal geometry, and protective-fill races have executable harness coverage",
+        "Hermes cognitive firewall removed; structural validation and deterministic configured-master binding feed the same runtime",
+        "manual account metadata commits before refresh; compliance mutations are granular and off by default",
+        "all six compiled harnesses pass: 83-file AddOn source compile, native gateway boundary, reducer state machine, operation journal/recovery, runtime lifecycle, and canonical configuration",
+        "focused Glitch contract suite passes 70 tests and 4 subtests; repository-wide sweep passes 266 tests with only pre-existing public guide/metadata failures outside this rebuild",
+        "structural audit proves NinjaTraderGateway.cs is the sole native order mutator and no retired replication, protection, intent-state, AI-risk, or Apex-guard engine remains in production",
+        "one complete 93-file AddOn folder deployed to NinjaTrader with exact relative-manifest and SHA-256 parity; prior live folder preserved at D:/ab/deploy-backups/glitch-nt-rebuild-predeploy-20260805-075515",
+        "authoritative public Hermes profile 0.0.2.20 is independently unchanged and installed with 22/22 distribution hashes plus exactly two expected jobs"
+      ],
+      "next_gate": "compile in NinjaTrader, then execute the named bounded Sim fixtures before legacy cutover",
+      "acceptance": [
+        "every native mutation maps to one frozen requirement and one named acceptance fixture",
+        "no deterministic cognition, inferred policy, duplicate mutation, or substituted User/Hermes intent",
+        "all named NinjaTrader Sim reload, partial-fill, manual-interleave, protection-race, rejection, recovery, and final flat/order-free fixtures pass",
+        "operator approves legacy cutover"
+      ],
+      "stop_line": "Sim only. No live-capital test, release promotion, or unattended Codex operation without separate operator authority."
+    },
+    {
       "id": "GL-AI-09",
       "title": "Preserve nonterminal legacy intent outcomes during state reconstruction",
       "status": "done",

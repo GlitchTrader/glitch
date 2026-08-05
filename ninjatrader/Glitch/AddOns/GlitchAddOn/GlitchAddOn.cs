@@ -24,9 +24,11 @@
 #region Using declarations
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using Glitch.Infrastructure;
 using Glitch.UI;
 using NinjaTrader.Gui;
 using NinjaTrader.Gui.Tools;
@@ -45,6 +47,7 @@ namespace NinjaTrader.NinjaScript.AddOns
         private NTMenuItem _menuItem;
         private NTMenuItem _newMenu;
         private GlitchMainWindow _mainWindow;
+        private GlitchRuntimeHost _runtimeHost;
         private static GlitchAddOn _activeInstance;
 
         protected override void OnStateChange()
@@ -58,6 +61,9 @@ namespace NinjaTrader.NinjaScript.AddOns
             {
                 GlitchAddOn previousInstance = _activeInstance;
                 _activeInstance = this;
+                if (previousInstance != null && !ReferenceEquals(previousInstance, this))
+                    previousInstance.StopRuntimeHost();
+                StartRuntimeHost();
                 RunOnUiThread(() =>
                 {
                     if (previousInstance != null && !ReferenceEquals(previousInstance, this))
@@ -71,6 +77,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 if (ReferenceEquals(_activeInstance, this))
                     _activeInstance = null;
 
+                StopRuntimeHost();
                 RunOnUiThread(RetireShellForTermination);
             }
         }
@@ -139,6 +146,21 @@ namespace NinjaTrader.NinjaScript.AddOns
             RemoveMenusFromOpenControlCenters();
             DetachAllChartTraderHosts();
             CloseWindow();
+        }
+
+        private void StartRuntimeHost()
+        {
+            if (_runtimeHost != null)
+                return;
+            _runtimeHost = new GlitchRuntimeHost();
+            _runtimeHost.Start();
+        }
+
+        private void StopRuntimeHost()
+        {
+            GlitchRuntimeHost host = _runtimeHost;
+            _runtimeHost = null;
+            host?.Dispose();
         }
 
         internal static void ShowMainWindowFromExternalSurface()
@@ -448,8 +470,9 @@ namespace NinjaTrader.NinjaScript.AddOns
 
                 window?.Close();
             }
-            catch
+            catch (Exception error)
             {
+                Trace.TraceError("Glitch window shutdown failed: " + error);
             }
         }
     }

@@ -131,6 +131,20 @@ namespace Glitch.Services
                 if (!string.IsNullOrWhiteSpace(userDir))
                 {
                     string runtimeRoot = Path.Combine(userDir, RuntimeDataFolderName);
+                    if (IsCanonicalConfigurationArtifact(fileName))
+                    {
+                        foreach (string legacyName in new[]
+                        {
+                            "RuntimePolicy.tsv", "AccountOverrides.tsv", "AccountGroups.tsv"
+                        })
+                        {
+                            TryMigrateLegacyRuntimeFile(
+                                userDir,
+                                legacyName,
+                                Path.Combine(runtimeRoot, legacyName));
+                        }
+                        return Path.Combine(runtimeRoot, GlitchConfigurationStore.FileName);
+                    }
                     string runtimePath = Path.Combine(runtimeRoot, fileName);
 
                     TryMigrateLegacyRuntimeFile(userDir, fileName, runtimePath);
@@ -142,7 +156,25 @@ namespace Glitch.Services
             }
 
             string fallbackRoot = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            return Path.Combine(fallbackRoot, "Glitch", RuntimeDataFolderName, fileName);
+            return Path.Combine(
+                fallbackRoot,
+                "Glitch",
+                RuntimeDataFolderName,
+                IsCanonicalConfigurationArtifact(fileName)
+                    ? GlitchConfigurationStore.FileName : fileName);
+        }
+
+        public static string GetDefaultConfigurationPath()
+        {
+            return GetDefaultPath(GlitchConfigurationStore.FileName);
+        }
+
+        private static bool IsCanonicalConfigurationArtifact(string fileName)
+        {
+            return string.Equals(fileName, "RuntimePolicy.tsv", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(fileName, "AccountOverrides.tsv", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(fileName, "AccountGroups.tsv", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(fileName, GlitchConfigurationStore.FileName, StringComparison.OrdinalIgnoreCase);
         }
 
         private static void TryMigrateLegacyRuntimeFile(string userDir, string fileName, string runtimePath)
@@ -265,10 +297,13 @@ namespace Glitch.Services
             Func<string, string> normalizeStatus,
             out bool recoveredFromBackup)
         {
-            return LoadValidatedWithBackup(
-                filePath,
-                lines => ParseSelectionOverrides(lines, normalizeStatus),
-                out recoveredFromBackup);
+            if (GlitchConfigurationStore.IsCanonicalPath(filePath))
+                return ParseSelectionOverrides(
+                    GlitchConfigurationStore.LoadAccountOverrideRows(
+                        filePath, out recoveredFromBackup),
+                    normalizeStatus);
+            return LoadValidatedWithBackup(filePath,
+                lines => ParseSelectionOverrides(lines, normalizeStatus), out recoveredFromBackup);
         }
 
         private static Dictionary<string, SelectionOverrideRecord> ParseSelectionOverrides(
@@ -349,7 +384,10 @@ namespace Glitch.Services
                 }
             }
 
-            WriteAllLines(filePath, lines);
+            if (GlitchConfigurationStore.IsCanonicalPath(filePath))
+                GlitchConfigurationStore.SaveAccountOverrideRows(filePath, lines);
+            else
+                WriteAllLines(filePath, lines);
         }
 
         public static List<AccountGroupRecord> LoadAccountGroups(string filePath)
@@ -360,6 +398,10 @@ namespace Glitch.Services
 
         public static List<AccountGroupRecord> LoadAccountGroups(string filePath, out bool recoveredFromBackup)
         {
+            if (GlitchConfigurationStore.IsCanonicalPath(filePath))
+                return ParseAccountGroups(
+                    GlitchConfigurationStore.LoadAccountGroupRows(
+                        filePath, out recoveredFromBackup));
             return LoadValidatedWithBackup(filePath, ParseAccountGroups, out recoveredFromBackup);
         }
 
@@ -387,7 +429,7 @@ namespace Glitch.Services
                         throw new InvalidDataException("AccountGroups.tsv contains a duplicate group: " + groupId);
 
                     if (!double.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out double masterSize)
-                        || masterSize <= 0)
+                        || double.IsNaN(masterSize) || double.IsInfinity(masterSize) || masterSize < 0)
                         throw new InvalidDataException("AccountGroups.tsv contains an invalid master size for: " + groupId);
 
                     groupsById[groupId] = new AccountGroupRecord
@@ -419,13 +461,13 @@ namespace Glitch.Services
                         throw new InvalidDataException("AccountGroups.tsv contains a duplicate follower in group: " + followerAccount);
 
                     if (!double.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out double followerSize)
-                        || followerSize <= 0)
+                        || double.IsNaN(followerSize) || double.IsInfinity(followerSize) || followerSize < 0)
                         throw new InvalidDataException("AccountGroups.tsv contains an invalid follower size for: " + followerAccount);
                     if (!double.TryParse(parts[4], NumberStyles.Float, CultureInfo.InvariantCulture, out double ratio)
-                        || ratio <= 0)
+                        || double.IsNaN(ratio) || double.IsInfinity(ratio) || ratio < 0)
                         throw new InvalidDataException("AccountGroups.tsv contains an invalid ratio for: " + followerAccount);
                     if (!double.TryParse(parts[5], NumberStyles.Float, CultureInfo.InvariantCulture, out double masterSize)
-                        || masterSize <= 0)
+                        || double.IsNaN(masterSize) || double.IsInfinity(masterSize) || masterSize < 0)
                         throw new InvalidDataException("AccountGroups.tsv contains an invalid master size for: " + followerAccount);
 
                     bool isEnabled = true;
@@ -458,44 +500,55 @@ namespace Glitch.Services
         {
             if (string.IsNullOrWhiteSpace(filePath))
                 return;
+            List<string> lines = BuildAccountGroupLines(groups);
 
-            var lines = new List<string> { "# type\tgroupId\taccount\tfollowerSize\tratio\tmasterSize\tenabled" };
-            if (groups != null)
+            if (GlitchConfigurationStore.IsCanonicalPath(filePath))
+                GlitchConfigurationStore.SaveAccountGroupRows(filePath, lines);
+            else
+                WriteAllLines(filePath, lines);
+        }
+
+        public static string RenderAccountGroupsTsv(IEnumerable<AccountGroupRecord> groups)
+        {
+            var lines = BuildAccountGroupLines(groups);
+            return string.Join(Environment.NewLine, lines) + Environment.NewLine;
+        }
+
+        private static List<string> BuildAccountGroupLines(IEnumerable<AccountGroupRecord> groups)
+        {
+            var lines = new List<string>
             {
-                foreach (AccountGroupRecord group in groups
-                    .Where(g => g != null && !string.IsNullOrWhiteSpace(g.GroupId) && !string.IsNullOrWhiteSpace(g.MasterAccount))
-                    .OrderBy(g => g.MasterAccount, StringComparer.OrdinalIgnoreCase)
-                    .ThenBy(g => g.GroupId, StringComparer.OrdinalIgnoreCase))
+                "# type\tgroupId\taccount\tdisplaySizeDeprecated\tratio\tmasterDisplaySizeDeprecated\tenabled"
+            };
+            if (groups == null)
+                return lines;
+            foreach (AccountGroupRecord group in groups
+                .Where(g => g != null && !string.IsNullOrWhiteSpace(g.GroupId)
+                    && !string.IsNullOrWhiteSpace(g.MasterAccount))
+                .OrderBy(g => g.MasterAccount, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(g => g.GroupId, StringComparer.OrdinalIgnoreCase))
+            {
+                double masterSize = group.MasterSize > 0 ? group.MasterSize : 0;
+                lines.Add(string.Join("\t", "G", CleanPersistToken(group.GroupId),
+                    CleanPersistToken(group.MasterAccount),
+                    masterSize.ToString("F8", CultureInfo.InvariantCulture)));
+                foreach (AccountGroupMemberRecord member in (group.Members
+                    ?? new List<AccountGroupMemberRecord>()).Where(m => m != null
+                        && !string.IsNullOrWhiteSpace(m.FollowerAccount)))
                 {
-                    double masterSize = group.MasterSize > 0 ? group.MasterSize : 0;
-                    lines.Add(string.Join("\t",
-                        "G",
-                        CleanPersistToken(group.GroupId),
-                        CleanPersistToken(group.MasterAccount),
-                        masterSize.ToString("F8", CultureInfo.InvariantCulture)));
-
-                    if (group.Members == null)
-                        continue;
-
-                    foreach (AccountGroupMemberRecord member in group.Members.Where(m => m != null && !string.IsNullOrWhiteSpace(m.FollowerAccount)))
-                    {
-                        double followerSize = member.FollowerSize > 0 ? member.FollowerSize : 0;
-                        double ratio = member.Ratio > 0 ? member.Ratio : 0;
-                        double memberMasterSize = member.MasterSize > 0 ? member.MasterSize : masterSize;
-
-                        lines.Add(string.Join("\t",
-                            "M",
-                            CleanPersistToken(group.GroupId),
-                            CleanPersistToken(member.FollowerAccount),
-                            followerSize.ToString("F8", CultureInfo.InvariantCulture),
-                            ratio.ToString("F8", CultureInfo.InvariantCulture),
-                            memberMasterSize.ToString("F8", CultureInfo.InvariantCulture),
-                            member.IsEnabled ? "1" : "0"));
-                    }
+                    double followerSize = member.FollowerSize > 0 ? member.FollowerSize : 0;
+                    double ratio = member.Ratio >= 0 ? member.Ratio : 0;
+                    double memberMasterSize = member.MasterSize > 0
+                        ? member.MasterSize : masterSize;
+                    lines.Add(string.Join("\t", "M", CleanPersistToken(group.GroupId),
+                        CleanPersistToken(member.FollowerAccount),
+                        followerSize.ToString("F8", CultureInfo.InvariantCulture),
+                        ratio.ToString("F8", CultureInfo.InvariantCulture),
+                        memberMasterSize.ToString("F8", CultureInfo.InvariantCulture),
+                        member.IsEnabled ? "1" : "0"));
                 }
             }
-
-            WriteAllLines(filePath, lines);
+            return lines;
         }
 
         public static Dictionary<string, PeakStateRecord> LoadPeakStates(string filePath)
@@ -886,7 +939,23 @@ namespace Glitch.Services
                         writer.WriteLine(line ?? string.Empty);
                     writer.Flush();
                 }
-            });
+            }, preserveExistingBackup: false);
+        }
+
+        internal static void WriteAllLinesAtomicPreservingBackup(
+            string filePath,
+            IEnumerable<string> lines,
+            Encoding encoding = null)
+        {
+            WriteAtomic(filePath, stream =>
+            {
+                using (var writer = new StreamWriter(stream, encoding ?? new UTF8Encoding(false), 4096, true))
+                {
+                    foreach (string line in lines ?? Array.Empty<string>())
+                        writer.WriteLine(line ?? string.Empty);
+                    writer.Flush();
+                }
+            }, preserveExistingBackup: true);
         }
 
         public static void WriteAllTextAtomic(string filePath, string content, Encoding encoding = null)
@@ -898,10 +967,13 @@ namespace Glitch.Services
                     writer.Write(content ?? string.Empty);
                     writer.Flush();
                 }
-            });
+            }, preserveExistingBackup: false);
         }
 
-        private static void WriteAtomic(string filePath, Action<FileStream> writeContent)
+        private static void WriteAtomic(
+            string filePath,
+            Action<FileStream> writeContent,
+            bool preserveExistingBackup)
         {
             if (string.IsNullOrWhiteSpace(filePath))
                 throw new ArgumentException("A persistence path is required.", nameof(filePath));
@@ -931,9 +1003,16 @@ namespace Glitch.Services
 
                 if (File.Exists(fullPath))
                 {
-                    if (File.Exists(backupPath))
-                        File.Delete(backupPath);
-                    File.Replace(tempPath, fullPath, backupPath, true);
+                    if (preserveExistingBackup)
+                    {
+                        File.Replace(tempPath, fullPath, null, true);
+                    }
+                    else
+                    {
+                        if (File.Exists(backupPath))
+                            File.Delete(backupPath);
+                        File.Replace(tempPath, fullPath, backupPath, true);
+                    }
                 }
                 else
                 {

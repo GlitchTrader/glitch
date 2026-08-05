@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Glitch.Infrastructure;
 using Glitch.Services;
 using NinjaTrader.Cbi;
 
@@ -103,7 +104,11 @@ namespace Glitch.UI
             {
                 foreach (Account account in accounts)
                 {
-                    string result = GlitchReplicationEngine.TryFlattenAccount(account, out int instrumentCount)
+                    int instrumentCount = GetOpenPositionInstruments(account).Count;
+                    string result = GlitchRuntimeHost.Active?.RequestFlatten(
+                            "daily-close-" + Guid.NewGuid().ToString("N"),
+                            account.Name,
+                            "opt_in_ai_daily_close") == true
                         ? "issued"
                         : "state_unavailable";
                     AppendJournal(

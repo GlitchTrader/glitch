@@ -2,7 +2,7 @@
 
 import unittest
 
-from replication_lifecycle_sim import (
+from .replication_lifecycle_sim import (
     AccountSim,
     CumulativeAllocationBook,
     can_attach_unlinked_full_position_plan,
