@@ -556,7 +556,7 @@ class DirectCycleTests(unittest.TestCase):
         self.assertIn("account for snapshot-to-fill drift", value)
         self.assertNotIn("Predict and trade the most likely next five minutes", value)
         self.assertNotIn("predict the most likely next one-minute candle", value)
-        self.assertIn('"prompt_version":"direct-v9-clean-experiment"', value)
+        self.assertIn('"prompt_version":"direct-v10-active-management"', value)
         self.assertIn("An anticipatory entry still needs all three", value)
         self.assertIn("materially new evidence such as a reclaim", value)
 
@@ -603,6 +603,9 @@ class DirectCycleTests(unittest.TestCase):
     def test_prompt_makes_management_accountable_and_applies_capacity_mandate(self):
         value = MODULE.build_prompt(packet(), MODULE.build_scenario(packet()), {})
         self.assertIn("A prior change_condition is accountable", value)
+        self.assertIn("mandatory management pass", value)
+        self.assertIn("MOVE_STOP, MOVE_TP, EXIT, and HOLD", value)
+        self.assertIn("60-80% area", value)
         self.assertIn("same-direction protected addition", value)
         self.assertIn("Apply the operator capacity mandate", value)
         self.assertIn("Do not manufacture edge", value)

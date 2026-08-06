@@ -218,18 +218,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 InitializeColorPalettes();
                 _lastPublishUtcByMinutes.Clear();
                 _sessionByMinutes.Clear();
-                _nativeTickSize = (Instrument != null && Instrument.MasterInstrument != null && Instrument.MasterInstrument.TickSize > 0)
-                    ? Instrument.MasterInstrument.TickSize
-                    : 0;
-                _pointValueUsd = (Instrument != null && Instrument.MasterInstrument != null && Instrument.MasterInstrument.PointValue > 0)
-                    ? Instrument.MasterInstrument.PointValue
-                    : 0;
-                _instrumentEconomicsSource = _nativeTickSize > 0 && _pointValueUsd > 0
-                    ? "ninjatrader_master_instrument"
-                    : "ninjatrader_instrument_metadata_incomplete";
-                // Internal analytics still need a finite normalization scale.
-                // The fallback is never published as instrument economics.
-                _tickSize = _nativeTickSize > 0 ? _nativeTickSize : 0.25;
+                RefreshInstrumentEconomics();
                 _cachedSignalByBip = new SignalSnapshot[BarsArray.Length];
                 _hasCachedSignalByBip = new bool[BarsArray.Length];
                 _lastPaintedBarIndex = -1;
@@ -569,6 +558,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             if (!GlitchBridgeBusCompat.IsAvailable())
                 return;
+
+            RefreshInstrumentEconomics();
 
             DateTime nowUtc = DateTime.UtcNow;
             DateTime primaryBarUtc;
@@ -1850,6 +1841,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             SignalSnapshot signal,
             SessionTracker session)
         {
+            RefreshInstrumentEconomics();
             DateTime readingUtc = DateTime.UtcNow;
             return new GlitchBridgeBusCompat.BridgeReading
             {
@@ -1923,6 +1915,37 @@ namespace NinjaTrader.NinjaScript.Indicators
         private double? PublishedTickSize()
         {
             return _nativeTickSize > 0 ? (double?)_nativeTickSize : null;
+        }
+
+        private void RefreshInstrumentEconomics()
+        {
+            if (Instrument == null || Instrument.MasterInstrument == null)
+                return;
+
+            double nativeTickSize = Instrument.MasterInstrument.TickSize;
+            double pointValueUsd = Instrument.MasterInstrument.PointValue;
+
+            // NinjaTrader can finish instrument metadata after State.DataLoaded.
+            // Preserve any valid native value and fill only missing fields on a
+            // later realtime/bootstrap publication; never publish the fallback.
+            if (nativeTickSize > 0)
+                _nativeTickSize = nativeTickSize;
+            if (pointValueUsd > 0)
+                _pointValueUsd = pointValueUsd;
+
+            if (_nativeTickSize > 0 && _pointValueUsd > 0)
+            {
+                _instrumentEconomicsSource = "ninjatrader_master_instrument";
+                _tickSize = _nativeTickSize;
+            }
+            else
+            {
+                _instrumentEconomicsSource = "ninjatrader_instrument_metadata_incomplete";
+                // Internal analytics still need a finite normalization scale.
+                // The fallback is never published as instrument economics.
+                if (_tickSize <= 0)
+                    _tickSize = _nativeTickSize > 0 ? _nativeTickSize : 0.25;
+            }
         }
 
         // GL-AI-12 shadow layer.  This is a descriptive packet only: the
@@ -2344,6 +2367,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             if (!EnableHistoricalSnapshotExport)
                 return;
+
+            RefreshInstrumentEconomics();
 
             // Strategy Analyzer: hosted indicators often stay State.Realtime with no chart surface.
             bool isStrategyAnalyzerHost = ChartControl == null;

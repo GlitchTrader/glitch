@@ -18,7 +18,7 @@ class ProfilePairContractTests(unittest.TestCase):
         ]
         self.assertEqual(len(current), 1)
         self.assertEqual(current[0].get("status"), "experimental")
-        self.assertEqual(current[0].get("hermesProfileVersion"), "0.0.2.22")
+        self.assertEqual(current[0].get("hermesProfileVersion"), "0.0.2.24")
 
     def test_canonical_profile_is_the_public_profile_version(self) -> None:
         version = next(
@@ -26,7 +26,7 @@ class ProfilePairContractTests(unittest.TestCase):
             for line in CANONICAL_PROFILE.read_text(encoding="utf-8").splitlines()
             if line.startswith("version:")
         )
-        self.assertEqual(version, "0.0.2.22")
+        self.assertEqual(version, "0.0.2.24")
 
 
 if __name__ == "__main__":
