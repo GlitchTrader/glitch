@@ -353,7 +353,7 @@ internal static class GlitchTradeLedgerPartialFillHarness
             Contracts = 1,
             EntryPrice = 100,
             ExitPrice = 90,
-            TradeSource = "Manual",
+            TradeSource = "Unknown",
             EntrySignal = "Entry"
         };
         var corrected = new GlitchTradeInsightsService.TradeRoundTrip
@@ -366,7 +366,7 @@ internal static class GlitchTradeLedgerPartialFillHarness
             Contracts = 2,
             EntryPrice = 101,
             ExitPrice = 90,
-            TradeSource = "Manual",
+            TradeSource = "Strategy",
             EntrySignal = "Entry"
         };
 
@@ -380,6 +380,7 @@ internal static class GlitchTradeLedgerPartialFillHarness
             Require(merged.Count == 1, "fallback correction created a second ledger episode");
             Require(merged[0].TradeId == retainedTradeId, "fallback correction did not retain the existing ledger id");
             Near(merged[0].Contracts, 2, "fallback corrected contracts");
+            Require(merged[0].TradeSource == "Strategy", "fallback correction did not replace placeholder source");
             ledger.Flush(entry.AddMinutes(4), true);
         }
         finally

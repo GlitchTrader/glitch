@@ -464,7 +464,11 @@ namespace Glitch.Services
 
         private static bool TryFillString(string currentValue, string candidate, Action<string> setter)
         {
-            if (!string.IsNullOrWhiteSpace(currentValue))
+            // "Unknown" is a placeholder emitted by older/native parsing, not
+            // authoritative metadata. Allow a later deterministic parse to
+            // replace it while preserving every other non-empty value.
+            if (!string.IsNullOrWhiteSpace(currentValue)
+                && !string.Equals(currentValue.Trim(), "Unknown", StringComparison.OrdinalIgnoreCase))
                 return false;
             if (string.IsNullOrWhiteSpace(candidate))
                 return false;
