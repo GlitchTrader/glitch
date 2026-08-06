@@ -10,7 +10,7 @@ CANONICAL_PROFILE = PROFILE_ROOT / "distribution.yaml"
 
 
 class ProfilePairContractTests(unittest.TestCase):
-    def test_current_ai_release_names_the_canonical_profile(self) -> None:
+    def test_latest_exported_ai_release_names_the_profile_version(self) -> None:
         catalog = json.loads(CATALOG.read_text(encoding="utf-8-sig"))
         current = [
             row for row in catalog

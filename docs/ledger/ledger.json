@@ -1,354 +1,268 @@
 {
-  "schema_version": "2.0",
+  "schema_version": "1.0",
   "project": "glitch",
   "updated": "2026-08-06",
-  "release_target": "bounded beta",
-  "products": {
-    "standard": {
-      "version": "0.0.2.5",
-      "maturity": "stable package; native beta acceptance still required",
-      "authority": "NinjaTrader native execution, risk truth, replication, protection, persistence, journal, and UI"
-    },
-    "advanced": {
-      "version": "0.0.2.7",
-      "maturity": "experimental",
-      "source_commit": "1859a98ed4555bb6fddf6dfff5ceed34ada2463c",
-      "hermes_profile_version": "0.0.2.22",
-      "hermes_profile_commit": "1b4cc51c1d4e1e460595f8df1805277099edd575",
-      "authority": "Hermes owns probabilistic judgment and intent; Glitch owns factual executability, native mutation, protection, reconciliation, and receipts"
-    },
-    "topstep": {
-      "repository": "GlitchTrader/glitch-topstep",
-      "authority": "separate ProjectX product and release rail; no NinjaTrader evidence is inherited"
-    }
-  },
-  "constitution": {
-    "intent": "Glitch never creates a trade without manual master execution or authenticated Hermes/user intent and never mutates that intent into a hidden strategy.",
-    "replication": "When enabled, copy exact attributable native execution deltas at the configured ratio; configuration changes alone do not create catch-up trades; explicit Sync owns catch-up.",
-    "risk": "Deterministic blocking is limited to factual execution invalidity, authoritative hard account/venue boundaries, unprovable ownership/protection, duplicate/ambiguous mutation, explicit operator disablement, or granular user opt-in compliance.",
-    "evidence": "Queue admission, source shape, package publication, screenshots, or short-session profit are not native terminal correctness."
-  },
-  "history": {
-    "previous_schema": "1.1",
-    "previous_main_commit": "164a67d8156ac04e796fbbd7e6675d6358b985d4",
-    "previous_ledger_blob": "aa6712eba210d9188e8e32e3c02e86cf1f8f67a3",
-    "note": "The detailed replication, UI, persistence, analytics, compliance, control, audit, and historical rail remains immutable in Git history. This ledger is the smaller active beta authority."
-  },
-  "completed_baseline": {
-    "capabilities": [
-      "producer-neutral native execution replication shared across Standard and Advanced",
-      "cumulative exact-contract ratio allocation with future-only epoch reset",
-      "desired versus effective replication state and explicit Sync ownership",
-      "exact owned OCO protection preservation/resizing from native master geometry",
-      "unknown-safe account provenance and atomic/recoverable configuration stores",
-      "atomic durable intent claim/promotion and raw UTF-8 body limits",
-      "pending-native execution outcomes and current-process reconciliation paths",
-      "durable control receipts and native-complete Flatten All callback surface",
-      "source/package release catalog and edition-specific channels",
-      "AI decision/learning exchange and installed Hermes profile manifests"
-    ],
-    "limitations": [
-      "Native callback/reload/rejection/race fixtures remain open where named below.",
-      "No package or source contract implies evaluation, PA, live, unattended, or profitability readiness.",
-      "Topstep remains a separate provider-native product."
-    ]
-  },
+  "roadmap_ref": "docs/ai-program/roadmap.md",
   "items": [
     {
       "id": "GL-REBUILD-01",
-      "title": "Clean-room NinjaTrader runtime from frozen User, Hermes, and native authority contracts",
-      "status": "in_progress",
+      "title": "Clean-room NinjaTrader runtime implementation epic",
+      "status": "deferred",
       "priority": "P0",
       "owner_role": "coder",
-      "scope": "NinjaTrader Standard and Advanced shared deterministic runtime; current UI is the view contract; Topstep is excluded",
-      "authority": [
-        "User owns direct intent and visible configuration",
-        "Hermes owns cognition on the configured master",
-        "Glitch owns deterministic translation, execution, replication, protection, attribution, receipts, and projections",
-        "NinjaTrader owns native account, order, execution, position, and OCO truth"
-      ],
-      "current_evidence": [
-        "docs/specs/GLITCH-NT-REBUILD-CONTRACT.md",
-        "operator froze the builder/equipment fault doctrine and authorized end-to-end implementation on 2026-08-05",
-        "canonical main branch and worktree D:/ab/worktrees/glitch-nt-rebuild",
-        "single AddOn-lifetime runtime, serialized pure reducer, and sole typed NinjaTrader mutation gateway implemented",
-        "manual and Hermes master executions share cumulative delta replication; follower manual executions are observation-only",
-        "native fill-anchored protection, cancellation finality, reversal geometry, and protective-fill races have executable harness coverage",
-        "Hermes cognitive firewall removed; structural validation and deterministic configured-master binding feed the same runtime",
-        "manual account metadata commits before refresh; compliance mutations are granular and off by default",
-        "all six compiled harnesses pass: 84-file AddOn source compile, native gateway boundary, reducer state machine, operation journal/recovery, runtime lifecycle, and canonical configuration",
-        "focused Glitch and Hermes contract suite passes 257 tests and 4 subtests; repository-wide sweep previously passed 266 tests with only pre-existing public guide/metadata failures outside this rebuild",
-        "structural audit proves NinjaTraderGateway.cs is the sole native order mutator and no retired replication, protection, intent-state, AI-risk, or Apex-guard engine remains in production",
-        "AppDomain-wide runtime ownership now stops the prior NinjaScript assembly before rail binding; failed handoff blocks replacement and stale termination cannot clear the new owner",
-        "one complete 94-file AddOn folder was previously deployed to NinjaTrader with exact relative-manifest and SHA-256 parity; prior live folder preserved at D:/ab/deploy-backups/glitch-nt-rebuild-predeploy-20260805-075515",
-        "2026-08-05 source and live cleanup removed four zero-reference artifacts: localization_keys_extract.tsv, GlitchAiEntryBaselinePlanStore.cs, GlitchAiExitOwnershipPlanStore.cs, and GlitchAiIntentHistoryReader.cs; the canonical source and live AddOn folders now each contain 91 files with zero missing files, zero extras, and zero SHA-256 mismatches",
-        "canonical public Hermes profile is 0.0.2.22 at 1b4cc51c1d4e1e460595f8df1805277099edd575; installed profile update and setup passed 22/22 distribution hashes, plugin enabled, supervised gateway, and exactly two supported jobs; prior fresh epoch evidence remains e7a43a93-ec25-4cdd-8552-1ae27fe3e3e3",
-        "current canonical source is 1859a98ed4555bb6fddf6dfff5ceed34ada2463c on main; the code tree was clean before these ledger/spec documentation edits, and the AddOn source tree contains 91 files",
-        "current live/deployed parity has not been re-verified against 1859a98ed4555bb6fddf6dfff5ceed34ada2463c; the 91-file parity evidence above remains historical evidence for the prior recorded deployment",
-        "paired Hermes profile verified at 1b4cc51c1d4e1e460595f8df1805277099edd575 on main; worktree is clean and the profile version remains 0.0.2.22",
-        "2026-08-06 canonical pairing milestone: Glitch main at code anchor 1859a98ed4555bb6fddf6dfff5ceed34ada2463c is paired with Hermes profile main at 1b4cc51c1d4e1e460595f8df1805277099edd575; this establishes source canon, not deployment or live readiness"
-      ],
-      "next_gate": "compile in NinjaTrader, then execute the named bounded Sim fixtures before legacy cutover",
       "acceptance": [
-        "every native mutation maps to one frozen requirement and one named acceptance fixture",
-        "no deterministic cognition, inferred policy, duplicate mutation, or substituted User/Hermes intent",
-        "all named NinjaTrader Sim reload, partial-fill, manual-interleave, protection-race, rejection, recovery, and final flat/order-free fixtures pass",
-        "operator approves legacy cutover"
+        "Historical implementation epic is represented by the current Glitch main source and the native acceptance items below.",
+        "No new work is selected from this umbrella item while the current main source remains authoritative."
       ],
-      "stop_line": "Sim only. No live-capital test, release promotion, or unattended Codex operation without separate operator authority."
-    },
-    {
-      "id": "GL-AI-09",
-      "title": "Preserve nonterminal legacy intent outcomes during state reconstruction",
-      "status": "done",
-      "priority": "P0",
-      "owner_role": "architect",
-      "issue": 10,
-      "pull_request": 11,
-      "acceptance": [
-        "Legacy pending maps to nonterminal pending through the canonical phase contract.",
-        "Failed and executed remain terminal.",
-        "Unknown or empty historical status becomes explicit failure, never executed.",
-        "No intent admission, risk, geometry, or native mutation behavior changes."
-      ],
+      "depends_on": [],
       "evidence": [
-        "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Ai/GlitchAiIntentStateStore.cs",
-        "tools/hermes/tests/test_legacy_intent_state_contract.py",
-        "docs/specs/GL-AI-09.md",
-        ".github/workflows/source-contracts.yml"
-      ]
+        "Current source authority is the clean Glitch main worktree at D:/ab/worktrees/glitch-nt-rebuild.",
+        "The NinjaTrader source tree last changed at 1859a98, while current main is 2e829e7 after source-pairing and release-plumbing cleanup."
+      ],
+      "notes": "Historical implementation detail remains available in Git history; current work is represented by acceptance, release, and GL-AI-1X items."
     },
     {
       "id": "GL-STAB-01",
-      "title": "Unknown-safe account and risk state across reinstall, reset, disconnect, and partial metadata",
-      "status": "external_acceptance_required",
+      "title": "Native acceptance of unknown-safe account and risk state",
+      "status": "approval_required",
       "priority": "P0",
       "owner_role": "operator_tests",
-      "issue": 2,
-      "code_state": "implemented and source-contracted",
-      "remaining_acceptance": [
-        "bounded native reinstall/reload/disconnect/reset fixture",
-        "mixed valid/unknown/locked fleet UI and aggregation proof",
-        "actual hard-floor breach distinguished from unavailable state"
+      "acceptance": [
+        "Bounded native reinstall, reload, disconnect, and reset fixtures distinguish unavailable state from a real hard-floor breach.",
+        "Mixed valid, unknown, and locked account state is proven in fleet UI and aggregation.",
+        "No beta or live-readiness claim is made from source or package evidence alone."
       ],
-      "stop_line": "No PA/evaluation/live-readiness claim until native fixtures distinguish unavailable state from real risk lock."
+      "depends_on": [],
+      "evidence": [
+        "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Persistence/GlitchConfigurationStore.cs",
+        "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Insights/GlitchRiskLockLedgerService.cs",
+        "tools/tests/GlitchConfigurationHarness.cs"
+      ],
+      "stop_line": "Do not promote until the named native fixtures prove unavailable state is not treated as a risk breach."
     },
     {
       "id": "GL-REP-01",
-      "title": "Native replication, reload, protection-race, and one-click Flatten All acceptance",
-      "status": "external_acceptance_required",
+      "title": "Native acceptance of replication, reload, protection races, and Flatten All",
+      "status": "approval_required",
       "priority": "P0",
       "owner_role": "operator_tests",
-      "issue": 3,
-      "code_state": "cumulative allocation, exact-contract ownership, reload shutdown, same-direction Sync reduce, close-remainder cancellation, and geometry-matched protection implemented",
-      "remaining_acceptance": [
-        "single bounded Sim master fill with exact follower deltas and protection",
-        "0/1/3/10 reload subscription ownership",
-        "protective-fill versus copied reduction race",
-        "manual follower interleave and route disable/removal",
-        "one-click fleet Flatten All ending flat/order-free"
+      "acceptance": [
+        "A bounded native master fill produces exact follower deltas and protection.",
+        "Reload ownership is proven for zero, one, three, and ten subscriptions.",
+        "Protective-fill races, manual follower interleave, route removal, and one-click Flatten All end flat and order-free."
       ],
-      "stop_line": "Sim only; do not close from source-shape or package evidence."
+      "depends_on": [],
+      "evidence": [
+        "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Trading/GlitchReplicationEngine.cs",
+        "tools/tests/replication_lifecycle_sim.py",
+        "tools/tests/test_replication_lifecycle_behavior.py",
+        "tools/tests/GlitchRuntimeLifecycleHarness.cs"
+      ],
+      "stop_line": "Sim acceptance only; do not promote from source shape, package presence, or short-session results."
     },
     {
       "id": "GL-AI-06",
-      "title": "One durable execution owner per intent",
-      "status": "code_complete_external_acceptance",
+      "title": "Native acceptance of one durable execution owner per intent",
+      "status": "approval_required",
       "priority": "P0",
       "owner_role": "operator_tests",
-      "issue": 4,
-      "code_state": [
-        "canonical source has TryPromoteToExecutionStarted expected-phase ownership",
-        "raw request limit is enforced on UTF-8 bytes before decoding",
-        "same UUID/body replays and different body conflicts",
-        "restart path reconciles execution_started, visibility_pending, and pending before replay"
+      "acceptance": [
+        "A barrier fixture proves duplicate and conflicting requests cannot create more than one execution owner.",
+        "Process interruption at each persistence boundary is recoverable.",
+        "Restart reconciliation preserves ownership for pending and execution-started intents."
       ],
-      "remaining_acceptance": [
-        "barrier concurrency fixture with 100+ duplicate/conflicting requests",
-        "process interruption at every persistence boundary",
-        "bounded native restart reconciliation proof"
+      "depends_on": [],
+      "evidence": [
+        "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Ai/GlitchAiIntentServer.cs",
+        "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Ai/GlitchAiIntentValidator.cs",
+        "tools/hermes/tests/test_intent_recovery_state_machine.py",
+        "tools/hermes/tests/test_direct_glitch_cycle.py"
       ],
-      "stop_line": "Localhost/Sim only until execution ownership survives process and native fixtures."
+      "stop_line": "Localhost and Sim only until execution ownership survives process and native fixtures."
     },
     {
       "id": "GL-AI-07",
-      "title": "Keep AI intents pending until exact native position and protection outcomes are proven",
-      "status": "external_acceptance_required",
+      "title": "Native acceptance of pending intent through exact position and protection outcomes",
+      "status": "approval_required",
       "priority": "P0",
       "owner_role": "operator_tests",
-      "issue": 5,
-      "code_state": "synchronous submit/change returns pending; current-process and restart reconciliation require exact correlation-owned position/protection evidence",
-      "remaining_acceptance": [
-        "delayed fill, rejection, partial/late fill, and protection failure",
-        "selected-leg amendment acceptance/rejection",
-        "human partial/full close and exact owned-order cleanup",
-        "restart and reconnect at every named native boundary"
+      "acceptance": [
+        "Delayed, rejected, partial, late, and protection-failure outcomes remain distinct.",
+        "Selected-leg amendments, human partial/full closes, and owned-order cleanup are proven.",
+        "Restart and reconnect preserve exact correlation-owned native evidence."
       ],
-      "stop_line": "No unattended, evaluation, PA, or live-readiness claim before bounded native callback fixtures pass."
+      "depends_on": [],
+      "evidence": [
+        "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Ai/GlitchAiOrderExecutor.cs",
+        "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Ai/GlitchAiExecutionResult.cs",
+        "ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/GlitchExecutionEvidenceWriter.cs",
+        "tools/hermes/tests/test_intent_recovery_state_machine.py"
+      ],
+      "stop_line": "No unattended, evaluation, or live-readiness claim before bounded native callback fixtures pass."
     },
     {
       "id": "GL-CTRL-02",
       "title": "Bind control receipts to command content and reconcile interrupted applying state",
-      "status": "todo",
+      "status": "backlog",
       "priority": "P0",
       "owner_role": "architect",
-      "issue": 12,
+      "acceptance": [
+        "Command receipts are content-bound and reject same-ID different-body conflicts.",
+        "Interrupted applying state reconciles deterministically after restart.",
+        "Control behavior remains bounded by Glitch-owned validation and receipts."
+      ],
       "depends_on": [],
-      "stop_line": "No unattended control authority until content-conflict and interrupted applying-state fixtures pass."
+      "evidence": [
+        "docs/specs/GL-CTRL-02.md",
+        "tools/tests/control_server_sim.py",
+        "tools/tests/test_control_server_behavior.py"
+      ],
+      "stop_line": "No unattended control authority until content-conflict and interrupted-state fixtures pass."
     },
     {
       "id": "GL-REL-01",
-      "title": "Lock Standard, Advanced AddOn, and Hermes profile compatibility",
-      "status": "in_progress",
+      "title": "Export the current Glitch main source with Hermes profile 0.0.2.22",
+      "status": "backlog",
       "priority": "P0",
       "owner_role": "release_architecture",
-      "issue": 6,
-      "current_evidence": [
-        "edition release catalog names source commits and compatible Hermes profile versions",
-        "artifact checksums and profile manifest hashes exist",
-        "Standard and Advanced package identities are distinct"
+      "acceptance": [
+        "The export is built from current Glitch main and the current Hermes profile main at distribution version 0.0.2.22.",
+        "The exported AddOn/profile pair has a machine-readable manifest and reproducible hashes.",
+        "Profile setup and installation fail closed for incompatible inputs.",
+        "The release catalog is updated only after this export exists and is verified."
       ],
-      "remaining_acceptance": [
-        "one enforced machine-readable AddOn/profile/schema/cadence compatibility manifest",
-        "installer/profile setup fail-closed behavior for incompatible pairs",
-        "rollback and preserved GlitchData migration proof",
-        "public docs/download/profile/ABKB version reconciliation"
+      "depends_on": [],
+      "evidence": [
+        "Current Glitch main HEAD is 2e829e732c00cdcc56e4dd9123e07c8404929668.",
+        "Current Hermes profile main is 1b4cc51c1d4e1e460595f8df1805277099edd575 at distribution version 0.0.2.22.",
+        "tools/hermes/build-public-profile.ps1",
+        "tools/hermes/tests/test_profile_pair_contract.py"
       ],
-      "stop_line": "No stable Advanced release declaration until one exact AddOn/profile pair passes compatibility and bounded native acceptance."
+      "notes": "The existing download catalog records the last exported AI package; it is not the source authority for the current unexported pair."
     },
     {
       "id": "GL-BETA-STANDARD",
       "title": "Standard bounded beta promotion",
-      "status": "external_acceptance_required",
+      "status": "deferred",
       "priority": "P0",
       "owner_role": "operator",
-      "depends_on": [
-        "GL-STAB-01",
-        "GL-REP-01",
-        "GL-REL-01"
-      ],
       "acceptance": [
-        "named Standard artifact and installed hashes",
-        "compile, reinstall, restart, replication, Sync, protection, and Flatten All native Sim matrix",
-        "no unexplained mutation or unprotected attributable exposure",
-        "operator approval for beta testers"
-      ]
+        "Current source is exported and named.",
+        "Native stability, replication, protection, restart, and Flatten All acceptance is recorded.",
+        "Operator explicitly promotes the artifact."
+      ],
+      "depends_on": ["GL-STAB-01", "GL-REP-01", "GL-REL-01"],
+      "evidence": [
+        "Promotion remains deferred until the current source pair is exported and native acceptance evidence is recorded."
+      ],
+      "stop_line": "No beta promotion from source or package evidence alone."
     },
     {
       "id": "GL-BETA-ADVANCED",
       "title": "Advanced bounded beta promotion",
-      "status": "external_acceptance_required",
+      "status": "deferred",
       "priority": "P0",
       "owner_role": "operator",
-      "depends_on": [
-        "GL-STAB-01",
-        "GL-REP-01",
-        "GL-AI-06",
-        "GL-AI-07",
-        "GL-CTRL-02",
-        "GL-REL-01",
-        "glitch-hermes-profile:profile-beta"
-      ],
       "acceptance": [
-        "one immutable AddOn/profile combination",
-        "decision, pending, native terminal, learning, pause/resume, and Flatten All evidence",
-        "restart/reconnect/rejection fixtures",
-        "no deterministic hidden strategy or arbitrary compliance gate",
-        "operator approval for named beta artifact"
-      ]
+        "Current Glitch main source and Hermes profile 0.0.2.22 are exported as one named pair.",
+        "Native intent ownership, outcome, replication, stability, control, and compatibility acceptance is recorded.",
+        "Operator explicitly promotes the artifact pair."
+      ],
+      "depends_on": ["GL-STAB-01", "GL-REP-01", "GL-AI-06", "GL-AI-07", "GL-CTRL-02", "GL-REL-01"],
+      "evidence": [
+        "Promotion remains deferred until export and paired native acceptance are complete.",
+        "Profile-side export and acceptance is represented by PROFILE-BETA-01 in the Hermes profile ledger."
+      ],
+      "stop_line": "No beta-ready, profitability, unattended-evaluation, or live-capital claim before paired native acceptance."
     },
     {
       "id": "GL-AI-10",
       "title": "Normalize native outcomes for Hermes learning and calibration",
-      "status": "todo",
+      "status": "backlog",
       "priority": "P1",
       "owner_role": "architect",
-      "issue": 15,
-      "spec": "docs/specs/GL-AI-10.md",
-      "depends_on": [
-        "GL-AI-06",
-        "GL-AI-07"
-      ],
-      "scope": "Advanced NT and paired Hermes learning exchange; no strategy or execution-authority change",
-      "current_evidence": [
-        "Hermes learning requires attributable completed master outcomes, while current native joins and terminal evidence remain the limiting contract",
-        "source candidate: 1859a98ed4555bb6fddf6dfff5ceed34ada2463c; profile: 1b4cc51c1d4e1e460595f8df1805277099edd575"
-      ],
       "acceptance": [
-        "append-only normalized master outcomes join intent, cycle, packet, snapshot, route, account, and trade identities",
-        "outcomes include native terminal state, PnL/R, MAE/MFE, drift/management facts, first-touch facts, attribution status, and unresolved joins",
-        "calibration metrics are computed only for complete attributable outcomes and never promoted into deterministic gates",
-        "tests cover delayed, partial, rejected, manually altered, reconnected, restarted, and unresolved outcomes"
+        "An append-only outcome record joins decision, fill, snapshot, route, account, trade, and native terminal evidence.",
+        "Incomplete and unresolved joins remain distinct from attributable outcomes.",
+        "Calibration consumes only complete attributable records and never becomes a deterministic trading gate."
       ],
-      "stop_line": "No calibration claim or lesson promotion from incomplete or unresolved native attribution."
+      "depends_on": ["GL-AI-06", "GL-AI-07"],
+      "evidence": [
+        "docs/specs/GL-AI-10.md",
+        "Current Hermes learning exchange requires attributable completed master outcomes."
+      ],
+      "stop_line": "No learning or calibration promotion from incomplete, unresolved, or infrastructure-failure outcomes."
     },
     {
       "id": "GL-AI-11",
       "title": "Expose execution drift and protection coverage diagnostics",
-      "status": "todo",
+      "status": "backlog",
       "priority": "P1",
       "owner_role": "architect",
-      "issue": 16,
-      "spec": "docs/specs/GL-AI-11.md",
-      "depends_on": [
-        "GL-AI-07"
-      ],
-      "scope": "Read-only Advanced NT diagnostics for Hermes interpretation and operator audit",
-      "current_evidence": [
-        "native protection and reconciliation are owned by Glitch, but the current Hermes contract lacks a compact diagnostic projection for coverage, drift, and lifecycle state"
-      ],
       "acceptance": [
-        "diagnostics report position quantity, stop/target presence, protected/unprotected coverage, identity, anchors/fills, delay/drift, native lifecycle, and attribution status",
-        "partial, race, rejection, stale, reconnect, and restart states remain explicit rather than collapsed into direction or success",
-        "diagnostics are read-only and do not add trading gates or mutate native state"
+        "Read-only diagnostics expose identity, quantity, protection coverage, drift, lifecycle, delay, and attribution state.",
+        "Partial, race, rejection, stale, reconnect, and restart states remain explicit.",
+        "Serialization is stable for missing and warming states and cannot mutate native state."
       ],
-      "stop_line": "Do not infer protected exposure, successful execution, or strategy failure from missing or stale diagnostics."
+      "depends_on": ["GL-AI-07"],
+      "evidence": [
+        "docs/specs/GL-AI-11.md",
+        "Current Glitch native execution and protection services are the evidence authority."
+      ],
+      "stop_line": "Do not infer protected exposure, execution success, or strategy failure from missing or stale diagnostics."
     },
     {
       "id": "GL-AI-12",
       "title": "Add descriptive path and flow measurements to the NT decision packet",
-      "status": "todo",
+      "status": "backlog",
       "priority": "P2",
       "owner_role": "architect",
-      "issue": 17,
-      "spec": "docs/specs/GL-AI-12.md",
-      "scope": "Descriptive Advanced NT context for Hermes judgment and later attributable learning; no deterministic strategy logic",
-      "current_evidence": [
-        "current snapshot and decision contracts do not provide a stable, freshness-labeled projection of path efficiency, excursion, or flow change for later comparison"
-      ],
       "acceptance": [
-        "packet fields cover descriptive path/flow measurements only where source, freshness, phase, and completeness are known",
-        "candidate measures include ER, CLV, range position, movement in price/ticks/ATR, realized volatility, same-phase percentile, and available flow-change measures",
-        "missing or stale data is represented as uncertainty; no field becomes a hard entry, exit, probability, or risk gate",
-        "tests prove packet compatibility and stable serialization across missing, warming, and reconnect states"
+        "Descriptive path and flow fields include source, freshness, phase, and completeness context.",
+        "Missing, stale, and warming measurements remain uncertainty.",
+        "No measurement changes execution behavior by itself."
       ],
-      "stop_line": "Do not introduce a deterministic trading rule to compensate for missing or weak descriptive context."
+      "depends_on": [],
+      "evidence": [
+        "docs/specs/GL-AI-12.md",
+        "Current decision packets lack a stable freshness-labeled path and flow projection."
+      ],
+      "stop_line": "Do not introduce deterministic strategy logic to compensate for missing descriptive context."
     },
     {
       "id": "GL-AI-13",
       "title": "Define bounded semantic NT management operations for Hermes",
-      "status": "todo",
+      "status": "backlog",
       "priority": "P2",
       "owner_role": "architect",
-      "issue": 18,
-      "spec": "docs/specs/GL-AI-13.md",
-      "depends_on": [
-        "GL-AI-07"
-      ],
-      "scope": "Inventory and, only if safe, expose semantic NT-native management operations through Glitch; no strategy selection or raw NT access",
-      "current_evidence": [
-        "current gateway supports market entry, native stop/target protection, native OCO linkage, explicit stop/target changes, cancellation, and flatten",
-        "current Hermes intent schema has no distinct trailing-stop or ATM/template operation",
-        "current source search found no dedicated trailing or ATM/template command in the NT contract/gateway"
-      ],
       "acceptance": [
-        "a capability matrix distinguishes existing/native, useful, safe to expose, proposed, and deliberately unavailable operations",
-        "any trailing operation has explicit activation/offset/step, leg/account identity, idempotency, native receipt, and tighten-only/no-widening semantics",
-        "OCO is treated as an execution relationship; ATM/template behavior is exposed only if allowlisted, versioned, previewable, and auditable",
-        "Hermes receives semantic tools only through Glitch validation, policy, native callbacks, reconciliation, and receipts",
-        "Sim fixtures cover duplicates, partial brackets, stale state, missing legs, rejection, reconnect, and restart; unsafe or unsupported ATM behavior is documented as not exposed"
+        "A capability matrix records existing, safe, proposed, and deliberately unavailable native management operations.",
+        "Any proposed operation defines schema, identity, idempotency, preconditions, failure behavior, and receipts.",
+        "Unsafe or unsupported ATM/template behavior remains explicitly unavailable."
       ],
-      "stop_line": "Do not expose a new Hermes operation until safety invariants and native lifecycle/reconciliation behavior are implemented and tested."
+      "depends_on": ["GL-AI-07"],
+      "evidence": [
+        "docs/specs/GL-AI-13.md",
+        "Current gateway supports bounded entry, protection, OCO, stop/target changes, cancellation, and flatten; no distinct trailing or ATM operation is exposed."
+      ],
+      "stop_line": "Do not expose a new Hermes operation until native lifecycle and reconciliation invariants are tested."
     }
-  ]
+  ],
+  "extensions": {
+    "source_authority": {
+      "glitch_main": {
+        "path": "D:/ab/worktrees/glitch-nt-rebuild",
+        "branch": "main",
+        "head": "2e829e732c00cdcc56e4dd9123e07c8404929668"
+      },
+      "hermes_profile": {
+        "path": "D:/ab/worktrees/glitch-hermes-profile",
+        "branch": "main",
+        "head": "1b4cc51c1d4e1e460595f8df1805277099edd575",
+        "distribution_version": "0.0.2.22"
+      }
+    },
+    "canonical_rule": "Current source canon is Glitch main plus the current Hermes profile main. Export and download catalog state is separate and does not redefine source canon.",
+    "active_focus": ["GL-AI-10", "GL-AI-11", "GL-AI-12", "GL-AI-13"]
+  }
 }
