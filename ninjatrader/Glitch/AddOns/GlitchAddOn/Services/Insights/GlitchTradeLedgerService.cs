@@ -28,6 +28,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Glitch.Core;
 
 namespace Glitch.Services
 {
@@ -275,6 +276,9 @@ namespace Glitch.Services
                     if (trade == null)
                         continue;
 
+                    if (RepairStoredNativeMetadata(trade))
+                        _dirty = true;
+
                     string tradeId = string.IsNullOrWhiteSpace(trade.TradeId)
                         ? GlitchTradeInsightsService.BuildTradeId(trade)
                         : trade.TradeId;
@@ -375,6 +379,67 @@ namespace Glitch.Services
                 CommissionTotal = parts.Length >= 20 && TryParseDouble(parts[19], out double commissionTotal) ? commissionTotal : 0,
                 EntryOrderIdentity = parts.Length >= 21 ? parts[20] : string.Empty
             };
+        }
+
+        private static bool RepairStoredNativeMetadata(GlitchTradeInsightsService.TradeRoundTrip trade)
+        {
+            if (trade == null)
+                return false;
+
+            string signal = !string.IsNullOrWhiteSpace(trade.EntrySignal)
+                ? trade.EntrySignal.Trim()
+                : trade.EntryOrderIdentity?.Trim();
+            if (!GlitchNativeIdentity.TryGetRole(signal, out string role))
+                return false;
+
+            string source = string.Empty;
+            string entryType = string.Empty;
+            string openReason = string.Empty;
+            if (string.Equals(role, "R", StringComparison.OrdinalIgnoreCase))
+            {
+                source = "Replication";
+                entryType = "REPL";
+                openReason = "Replication";
+            }
+            else if (string.Equals(role, "Y", StringComparison.OrdinalIgnoreCase))
+            {
+                source = "Replication";
+                entryType = "SYNC";
+                openReason = "Replication Sync";
+            }
+            else if (string.Equals(role, "HME", StringComparison.OrdinalIgnoreCase))
+            {
+                source = "Strategy";
+                entryType = "ENTRY";
+                openReason = "Hermes Entry";
+            }
+            else if (string.Equals(role, "HMX", StringComparison.OrdinalIgnoreCase))
+            {
+                source = "Strategy";
+                entryType = "EXIT";
+                openReason = "Hermes Exit";
+            }
+            else if (GlitchNativeIdentity.IsProtectionRole(role))
+            {
+                bool follower = role.StartsWith("P", StringComparison.OrdinalIgnoreCase);
+                source = follower ? "Replication" : "Strategy";
+                entryType = GlitchNativeIdentity.IsStopRole(role) ? "SL" : "TP";
+                openReason = "Protective Follow-up";
+            }
+
+            bool changed = false;
+            if (!string.IsNullOrWhiteSpace(source))
+                changed |= TryFillString(trade.TradeSource, source, value => trade.TradeSource = value);
+            if (!string.IsNullOrWhiteSpace(entryType))
+                changed |= TryFillString(trade.EntryType, entryType, value => trade.EntryType = value);
+            if (!string.IsNullOrWhiteSpace(openReason)
+                && string.Equals(trade.OpenReason?.Trim(), "Manual / Unknown", StringComparison.OrdinalIgnoreCase))
+            {
+                trade.OpenReason = openReason;
+                changed = true;
+            }
+
+            return changed;
         }
 
         private static string ToLine(GlitchTradeInsightsService.TradeRoundTrip trade)
