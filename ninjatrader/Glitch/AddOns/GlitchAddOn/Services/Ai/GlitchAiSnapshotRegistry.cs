@@ -96,18 +96,9 @@ namespace Glitch.Services
                     return false;
                 }
 
-                string marker = "\"instrument\":" + GlitchSnapshotJson.String(instrumentRoot.Trim().ToUpperInvariant());
-                int start = json.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
-                if (start < 0)
+                if (!TryGetInstrumentCurrentPrice(json, instrumentRoot, out price))
                 {
                     failureCode = "snapshot_instrument_missing";
-                    return false;
-                }
-
-                string slice = json.Substring(start, Math.Min(2500, json.Length - start));
-                if (!GlitchAiJsonFields.TryExtractNumber(slice, "current_price", out price) || price <= 0)
-                {
-                    failureCode = "snapshot_price_missing";
                     return false;
                 }
 
@@ -133,18 +124,9 @@ namespace Glitch.Services
                 string json;
                 if (!TryReadSnapshotByHash(snapshotHash, out json, out failureCode))
                     return false;
-                string marker = "\"instrument\":"
-                    + GlitchSnapshotJson.String(instrumentRoot.Trim().ToUpperInvariant());
-                int start = json.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
-                if (start < 0)
+                if (!TryGetInstrumentCurrentPrice(json, instrumentRoot, out price))
                 {
                     failureCode = "snapshot_instrument_missing";
-                    return false;
-                }
-                string slice = json.Substring(start, Math.Min(2500, json.Length - start));
-                if (!GlitchAiJsonFields.TryExtractNumber(slice, "current_price", out price) || price <= 0)
-                {
-                    failureCode = "snapshot_price_missing";
                     return false;
                 }
                 return true;
@@ -194,13 +176,7 @@ namespace Glitch.Services
             try
             {
                 string json = File.ReadAllText(path);
-                string marker = "\"instrument\":" + GlitchSnapshotJson.String(instrumentRoot.Trim().ToUpperInvariant());
-                int start = json.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
-                if (start < 0)
-                    return false;
-
-                string slice = json.Substring(start, Math.Min(2500, json.Length - start));
-                return GlitchAiJsonFields.TryExtractNumber(slice, "current_price", out price);
+                return TryGetInstrumentCurrentPrice(json, instrumentRoot, out price);
             }
             catch
             {
@@ -240,6 +216,47 @@ namespace Glitch.Services
                 ",\"snapshot_hash\"\\s*:\\s*\"[^\"]*\"",
                 string.Empty,
                 System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        }
+
+        private static bool TryGetInstrumentCurrentPrice(
+            string json,
+            string instrumentRoot,
+            out double price)
+        {
+            price = 0;
+            if (string.IsNullOrWhiteSpace(json) || string.IsNullOrWhiteSpace(instrumentRoot))
+                return false;
+
+            try
+            {
+                if (!GlitchAiJsonFields.TryParseObject(json, out System.Collections.IDictionary snapshot)
+                    || !(snapshot["instruments"] is System.Collections.IList instruments))
+                    return false;
+
+                string expectedRoot = instrumentRoot.Trim();
+                foreach (object value in instruments)
+                {
+                    System.Collections.IDictionary instrument = value as System.Collections.IDictionary;
+                    if (instrument == null)
+                        continue;
+
+                    string root = instrument["instrument"] as string;
+                    if (!string.Equals(root, expectedRoot, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    object rawPrice = instrument["current_price"];
+                    if (rawPrice == null)
+                        return false;
+
+                    price = Convert.ToDouble(rawPrice, CultureInfo.InvariantCulture);
+                    return price > 0;
+                }
+            }
+            catch
+            {
+            }
+
+            return false;
         }
 
         private static bool TryReadSnapshotByHash(string snapshotHash, out string json, out string failureCode)

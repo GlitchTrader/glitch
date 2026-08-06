@@ -206,6 +206,18 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             gateway.index("beforeMutation?.Invoke(command);", gateway.index("ValidateProtectionGeometry(command);")),
         )
 
+    def test_snapshot_price_uses_instrument_level_field_not_nested_descriptive_price(self):
+        registry = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Ai/GlitchAiSnapshotRegistry.cs"
+        )
+        self.assertIn("GlitchAiJsonFields.TryParseObject(json, out System.Collections.IDictionary snapshot)", registry)
+        self.assertIn('(snapshot["instruments"] is System.Collections.IList instruments)', registry)
+        self.assertIn('string root = instrument["instrument"] as string;', registry)
+        self.assertIn('object rawPrice = instrument["current_price"];', registry)
+        price_method = registry[registry.index("public static bool TryGetInstrumentPriceByHash("):]
+        price_method = price_method[:price_method.index("public static bool TryGetInstrumentSession(")]
+        self.assertIn("TryGetInstrumentCurrentPrice(json, instrumentRoot, out price)", price_method)
+
     def test_account_size_edit_commits_manual_configuration_before_refresh(self):
         window = read(
             "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.cs"
