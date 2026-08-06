@@ -11,6 +11,7 @@ namespace Glitch.Services
     {
         public string OverallStatus { get; set; }
         public List<string> ReasonCodes { get; set; } = new List<string>();
+        public List<string> LearningReasonCodes { get; set; } = new List<string>();
         public bool AiAutoEnabled { get; set; }
         public bool TradingJobEnabled { get; set; }
         public bool Operating { get; set; }
@@ -43,6 +44,13 @@ namespace Glitch.Services
             {
                 if (i > 0) sb.Append(',');
                 sb.Append(GlitchSnapshotJson.String(ReasonCodes[i]));
+            }
+            sb.Append("],");
+            sb.Append("\"learning_reason_codes\":[");
+            for (int i = 0; i < LearningReasonCodes.Count; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append(GlitchSnapshotJson.String(LearningReasonCodes[i]));
             }
             sb.Append("],");
             sb.Append("\"ai_auto_enabled\":").Append(GlitchSnapshotJson.Bool(AiAutoEnabled)).Append(',');
@@ -204,11 +212,11 @@ namespace Glitch.Services
                 }
             }
             if (string.Equals(result.LearningWorkerStatus, "failed", StringComparison.Ordinal))
-                result.ReasonCodes.Add("learning_worker_failed");
+                result.LearningReasonCodes.Add("learning_worker_failed");
             else if (result.Operating && !File.Exists(learningPath))
-                result.ReasonCodes.Add("learning_worker_status_missing");
+                result.LearningReasonCodes.Add("learning_worker_status_missing");
             else if (result.Operating && result.LearningWorkerAgeSeconds > LearningWorkerStaleAfterSeconds)
-                result.ReasonCodes.Add("learning_worker_stale");
+                result.LearningReasonCodes.Add("learning_worker_stale");
 
             result.OverallStatus = !result.AiAutoEnabled
                 ? "off"

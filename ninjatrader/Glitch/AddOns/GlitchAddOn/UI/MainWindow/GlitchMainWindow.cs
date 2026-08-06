@@ -5502,6 +5502,11 @@ namespace Glitch.UI
                 foreach (AccountGroupDefinition group in loadedGroups)
                     _accountGroups.Add(group);
 
+                // AccountGroups.tsv is the persisted topology authority. Rebuild
+                // the AI scope from the loaded groups so policy.json cannot keep
+                // stale masters or followers after a restart.
+                ReconcileAiTradingScopeWithGroups();
+
                 if (recoveredFromBackup)
                     RaiseCriticalWarning(
                         "System",
@@ -5534,7 +5539,7 @@ namespace Glitch.UI
                     {
                         GroupId = group.GroupId,
                         MasterAccount = group.MasterAccount,
-                        MasterSize = 0,
+                        MasterSize = ResolveAccountSizeForName(group.MasterAccount),
                         Members = new List<GlitchStateStore.AccountGroupMemberRecord>()
                     };
 
@@ -5546,9 +5551,9 @@ namespace Glitch.UI
                             record.Members.Add(new GlitchStateStore.AccountGroupMemberRecord
                             {
                                 FollowerAccount = member.FollowerAccount,
-                                FollowerSize = 0,
+                                FollowerSize = ResolveAccountSizeForName(member.FollowerAccount),
                                 Ratio = ratio,
-                                MasterSize = 0,
+                                MasterSize = ResolveAccountSizeForName(group.MasterAccount),
                                 IsEnabled = member.IsEnabled
                             });
                         }

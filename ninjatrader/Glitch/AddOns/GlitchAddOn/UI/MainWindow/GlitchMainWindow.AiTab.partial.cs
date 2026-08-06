@@ -144,6 +144,8 @@ namespace Glitch.UI
             string healthReason = health.ReasonCodes.Count > 0
                 ? health.ReasonCodes[0]
                 : L("ai.health.operating", "operating");
+            if (health.ReasonCodes.Count == 0 && health.LearningReasonCodes.Count > 0)
+                healthReason += " | learning: " + health.LearningReasonCodes[0];
             _aiFeedStatusText.Text = Lf(
                 "ai.feed.health_status_format",
                 "AI {0}: {1}  |  Latest snapshot {2}  |  Latest decision {3}",

@@ -40,6 +40,9 @@ namespace Glitch.Services
         private static readonly Regex ExecutionBracketTokenRegex = new Regex(
             @"\[(?<key>[A-Za-z]+):(?<value>[^\]]*)\]",
             RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        private static readonly Regex NativeExecutionFieldRegex = new Regex(
+            @"(?:^|\|)(?<key>[a-z_]+)=(?<value>[^|]*)",
+            RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
         internal TradeInsightsSnapshot BuildSnapshot(
             IReadOnlyList<TradeJournalEvent> journalEvents,
@@ -364,6 +367,10 @@ namespace Glitch.Services
             if (source == null || string.IsNullOrWhiteSpace(source.Message))
                 return null;
 
+            ExecutionEvent native = TryParseNativeExecutionEvent(source);
+            if (native != null)
+                return native;
+
             Match match = ExecutionRegex.Match(source.Message.Trim());
             if (!match.Success)
                 return null;
@@ -402,6 +409,60 @@ namespace Glitch.Services
                 Source = executionSource,
                 SignalTag = signalTag,
                 Commission = commission
+            };
+        }
+
+        private static ExecutionEvent TryParseNativeExecutionEvent(TradeJournalEvent source)
+        {
+            string message = source?.Message?.Trim() ?? string.Empty;
+            if (!message.StartsWith("native_execution|", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (Match match in NativeExecutionFieldRegex.Matches(message.Substring("native_execution|".Length)))
+            {
+                if (match.Success)
+                    fields[match.Groups["key"].Value] = match.Groups["value"].Value;
+            }
+
+            if (!fields.TryGetValue("operation", out string operation)
+                || !string.Equals(operation, "Add", StringComparison.OrdinalIgnoreCase))
+                return null;
+            if (!fields.TryGetValue("representable", out string representable)
+                || !string.Equals(representable, "True", StringComparison.OrdinalIgnoreCase))
+                return null;
+            if (!fields.TryGetValue("signed_quantity", out string signedQuantityRaw)
+                || !TryParseFlexibleDouble(signedQuantityRaw, out double signedQuantity)
+                || Math.Abs(signedQuantity) <= Epsilon)
+                return null;
+            if (!fields.TryGetValue("price", out string priceRaw)
+                || !TryParseFlexibleDouble(priceRaw, out double price)
+                || price <= 0)
+                return null;
+
+            string instrument = fields.TryGetValue("instrument", out string instrumentRaw)
+                ? CleanToken(instrumentRaw)
+                : string.Empty;
+            if (string.IsNullOrWhiteSpace(instrument))
+                return null;
+
+            fields.TryGetValue("account", out string account);
+            fields.TryGetValue("execution_id", out string executionId);
+            fields.TryGetValue("native_order", out string orderIdentity);
+            fields.TryGetValue("correlation", out string correlation);
+            return new ExecutionEvent
+            {
+                UtcTime = source.UtcTime,
+                AccountName = string.IsNullOrWhiteSpace(account) ? source.AccountName : account,
+                Action = signedQuantity > 0 ? "BUY" : "SELLSHORT",
+                Quantity = Math.Abs(signedQuantity),
+                Instrument = instrument,
+                Price = price,
+                ExecutionId = CleanToken(executionId),
+                OrderIdentity = CleanToken(orderIdentity),
+                Source = "native_execution",
+                SignalTag = CleanToken(correlation),
+                Commission = 0
             };
         }
 
