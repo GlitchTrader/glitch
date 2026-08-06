@@ -276,6 +276,21 @@ namespace Glitch.Services
             bool hasTarget3 = GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_3", out double target3);
             bool hasStop2 = GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss_2", out double stop2);
             bool hasStop3 = GlitchAiJsonFields.TryExtractNumber(rawJson, "stop_loss_3", out double stop3);
+            if (!IsEntryProtectionGeometryValid(
+                    isLong,
+                    decisionPrice,
+                    stop1,
+                    target1,
+                    hasTarget2,
+                    hasStop2 ? stop2 : stop1,
+                    target2,
+                    hasTarget3,
+                    hasStop3 ? stop3 : hasStop2 ? stop2 : stop1,
+                    target3))
+            {
+                failure = "entry_protection_geometry_invalid";
+                return false;
+            }
             int quantity1 = quantity;
             int quantity2 = 0;
             int quantity3 = 0;
@@ -324,6 +339,55 @@ namespace Glitch.Services
                 "intent_dispatched",
                 action);
             return true;
+        }
+
+        private static bool IsEntryProtectionGeometryValid(
+            bool isLong,
+            double decisionPrice,
+            double stop1,
+            double target1,
+            bool hasTarget2,
+            double stop2,
+            double target2,
+            bool hasTarget3,
+            double stop3,
+            double target3)
+        {
+            if (!IsFinitePositive(decisionPrice)
+                || !IsFinitePositive(stop1)
+                || !IsFinitePositive(target1)
+                || !IsProtectivePriceOnCorrectSide(isLong, decisionPrice, stop1, isStop: true)
+                || !IsProtectivePriceOnCorrectSide(isLong, decisionPrice, target1, isStop: false))
+                return false;
+
+            return (!hasTarget2
+                    || (IsFinitePositive(stop2)
+                        && IsFinitePositive(target2)
+                        && IsProtectivePriceOnCorrectSide(isLong, decisionPrice, stop2, isStop: true)
+                        && IsProtectivePriceOnCorrectSide(isLong, decisionPrice, target2, isStop: false)))
+                && (!hasTarget3
+                    || (IsFinitePositive(stop3)
+                        && IsFinitePositive(target3)
+                        && IsProtectivePriceOnCorrectSide(isLong, decisionPrice, stop3, isStop: true)
+                        && IsProtectivePriceOnCorrectSide(isLong, decisionPrice, target3, isStop: false)));
+        }
+
+        private static bool IsProtectivePriceOnCorrectSide(
+            bool isLong,
+            double referencePrice,
+            double price,
+            bool isStop)
+        {
+            return isLong
+                ? (isStop ? price < referencePrice : price > referencePrice)
+                : (isStop ? price > referencePrice : price < referencePrice);
+        }
+
+        private static bool IsFinitePositive(double value)
+        {
+            return !double.IsNaN(value)
+                && !double.IsInfinity(value)
+                && value > 0;
         }
 
         private static bool TryParseProtectionUpdates(

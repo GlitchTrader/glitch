@@ -187,6 +187,25 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("public static void TryAppend(", writer)
         self.assertIn("Decision in progress ({0}s)", ai_tab)
 
+    def test_entry_protection_geometry_is_rejected_before_native_submission(self):
+        executor = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Ai/GlitchAiOrderExecutor.cs"
+        )
+        gateway = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/NinjaTraderGateway.cs"
+        )
+        self.assertIn('failure = "entry_protection_geometry_invalid"', executor)
+        self.assertIn("IsEntryProtectionGeometryValid", executor)
+        self.assertIn("price < referencePrice", executor)
+        self.assertIn("price > referencePrice", executor)
+        self.assertIn("ValidateProtectionGeometry(command);", gateway)
+        self.assertIn("protection_geometry_invalid", gateway)
+        self.assertIn("beforeMutation?.Invoke(command);", gateway)
+        self.assertLess(
+            gateway.index("ValidateProtectionGeometry(command);"),
+            gateway.index("beforeMutation?.Invoke(command);", gateway.index("ValidateProtectionGeometry(command);")),
+        )
+
     def test_account_size_edit_commits_manual_configuration_before_refresh(self):
         window = read(
             "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.cs"

@@ -774,6 +774,7 @@ namespace Glitch.Infrastructure
             if (account == null || instrument == null)
                 throw new InvalidOperationException(
                     "Native account or instrument is unavailable for " + command.CommandId + ".");
+            ValidateProtectionGeometry(command);
 
             OrderAction exitAction = command.SignedEntryQuantity > 0
                 ? OrderAction.Sell
@@ -875,6 +876,45 @@ namespace Glitch.Infrastructure
                 + "|instrument=" + Clean(instrument.FullName)
                 + "|quantity=" + Math.Abs(command.SignedEntryQuantity)
                 + "|legs=" + command.Targets.Count);
+        }
+
+        private static void ValidateProtectionGeometry(SubmitProtectionCommand command)
+        {
+            // EntryPrice is optional on legacy/manual commands. The engine supplies it
+            // for fill-anchored AI and replication protections, where this invariant is
+            // required before any native OCO children are created.
+            if (command.EntryPrice <= 0 || command.SignedEntryQuantity == 0)
+                return;
+
+            bool isLong = command.SignedEntryQuantity > 0;
+            foreach (ProtectionTarget target in command.Targets)
+            {
+                if (target.StopPrice.HasValue
+                    && !IsProtectionPriceOnCorrectSide(
+                        isLong, command.EntryPrice, target.StopPrice.Value, isStop: true))
+                    throw new InvalidOperationException(
+                        "protection_geometry_invalid|command=" + command.CommandId
+                        + "|kind=stop|entry=" + command.EntryPrice.ToString(CultureInfo.InvariantCulture)
+                        + "|price=" + target.StopPrice.Value.ToString(CultureInfo.InvariantCulture));
+                if (target.Price.HasValue
+                    && !IsProtectionPriceOnCorrectSide(
+                        isLong, command.EntryPrice, target.Price.Value, isStop: false))
+                    throw new InvalidOperationException(
+                        "protection_geometry_invalid|command=" + command.CommandId
+                        + "|kind=target|entry=" + command.EntryPrice.ToString(CultureInfo.InvariantCulture)
+                        + "|price=" + target.Price.Value.ToString(CultureInfo.InvariantCulture));
+            }
+        }
+
+        private static bool IsProtectionPriceOnCorrectSide(
+            bool isLong,
+            decimal referencePrice,
+            decimal price,
+            bool isStop)
+        {
+            return isLong
+                ? (isStop ? price < referencePrice : price > referencePrice)
+                : (isStop ? price > referencePrice : price < referencePrice);
         }
 
         private static string HermesIntentId(string exposureId)
