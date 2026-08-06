@@ -450,6 +450,21 @@ namespace Glitch.Services
             fields.TryGetValue("execution_id", out string executionId);
             fields.TryGetValue("native_order", out string orderIdentity);
             string signalName = CleanToken(orderIdentity);
+            string executionSource = "Manual";
+            if (GlitchNativeIdentity.TryGetRole(signalName, out string role))
+            {
+                if (string.Equals(role, "R", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(role, "Y", StringComparison.OrdinalIgnoreCase)
+                    || (GlitchNativeIdentity.IsProtectionRole(role)
+                        && role.StartsWith("P", StringComparison.OrdinalIgnoreCase)))
+                    executionSource = "Replication";
+                else if (string.Equals(role, "HME", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(role, "HMX", StringComparison.OrdinalIgnoreCase)
+                    || (GlitchNativeIdentity.IsProtectionRole(role)
+                        && role.StartsWith("H", StringComparison.OrdinalIgnoreCase)))
+                    executionSource = "Strategy";
+            }
+
             return new ExecutionEvent
             {
                 UtcTime = source.UtcTime,
@@ -461,11 +476,7 @@ namespace Glitch.Services
                 SignalName = signalName,
                 ExecutionId = CleanToken(executionId),
                 OrderIdentity = CleanToken(orderIdentity),
-                Source = GlitchNativeIdentity.TryGetRole(signalName, out string role)
-                    && (string.Equals(role, "HME", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(role, "HMX", StringComparison.OrdinalIgnoreCase))
-                    ? "Strategy"
-                    : "native_execution",
+                Source = executionSource,
                 SignalTag = ResolveSignalTag(signalName),
                 Commission = 0
             };

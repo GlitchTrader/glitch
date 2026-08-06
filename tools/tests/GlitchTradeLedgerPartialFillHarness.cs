@@ -250,16 +250,21 @@ internal static class GlitchTradeLedgerPartialFillHarness
         var accumulator = new GlitchTradeInsightsService.ExecutionAccumulator();
         var events = new List<GlitchTradeInsightsService.TradeJournalEvent>
         {
-            NativeExecution(start, "GL1-G1D7A1CB4A410356FFF7-HME", 1, 100, "native-entry"),
-            NativeExecution(start.AddMinutes(1), "GL1-G1D7A1CB4A410356FFF7-HT0-LB853106C57B5D7A", -1, 105, "native-exit")
+            NativeExecution(start, "GL1-G1D7A1CB4A410356FFF7-R", 1, 100, "native-repl-entry"),
+            NativeExecution(start.AddMinutes(1), "GL1-G1D7A1CB4A410356FFF7-R", -1, 105, "native-repl-exit"),
+            NativeExecution(start.AddMinutes(2), "GL1-G1D7A1CB4A410356FFF8-HME", 1, 100, "native-entry"),
+            NativeExecution(start.AddMinutes(3), "GL1-G1D7A1CB4A410356FFF8-HT0-LB853106C57B5D7A", -1, 105, "native-exit")
         };
 
         IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> closed = accumulator.Process(events, events);
-        Require(closed.Count == 1, "native Hermes execution did not close a trade");
-        Require(closed[0].TradeSource == "Strategy", "native Hermes trade source was lost");
-        Require(closed[0].OpenReason == "Hermes Entry", "native Hermes open reason was lost");
-        Require(closed[0].EntryType == "ENTRY", "native Hermes entry type was lost");
-        Require(closed[0].EntrySignal == "GL1-G1D7A1CB4A410356FFF7-HME", "native Hermes entry signal was lost");
+        Require(closed.Count == 2, "native executions did not close both trades");
+        GlitchTradeInsightsService.TradeRoundTrip replication = closed.Single(trade => trade.EntrySignal.EndsWith("-R", StringComparison.Ordinal));
+        GlitchTradeInsightsService.TradeRoundTrip hermes = closed.Single(trade => trade.EntrySignal.EndsWith("-HME", StringComparison.Ordinal));
+        Require(replication.TradeSource == "Replication", "native replication trade source was lost");
+        Require(hermes.TradeSource == "Strategy", "native Hermes trade source was lost");
+        Require(hermes.OpenReason == "Hermes Entry", "native Hermes open reason was lost");
+        Require(hermes.EntryType == "ENTRY", "native Hermes entry type was lost");
+        Require(hermes.EntrySignal == "GL1-G1D7A1CB4A410356FFF8-HME", "native Hermes entry signal was lost");
     }
 
     private static void AiThenManualAdditionUsesDistinctFifoLots()
