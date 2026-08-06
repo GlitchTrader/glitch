@@ -70,6 +70,12 @@ namespace NinjaTrader.NinjaScript.Indicators
             public double? OrderFlowAggressionBalance { get; set; }
             public double? OrderFlowDepthImbalance { get; set; }
             public string OrderFlowHint { get; set; }
+            public double? InstrumentPointValueUsd { get; set; }
+            public double? InstrumentTickSize { get; set; }
+            public string InstrumentEconomicsSource { get; set; }
+            // Shadow-mode JSON keeps the descriptive layer additive while the
+            // legacy scalar fields remain compatible with existing consumers.
+            public string DescriptiveStateJson { get; set; }
             public string SessionName { get; set; }
             public double? SessionHigh { get; set; }
             public double? SessionLow { get; set; }
@@ -429,6 +435,10 @@ namespace NinjaTrader.NinjaScript.Indicators
             SetProperty(message, "OrderFlowAggressionBalance", reading.OrderFlowAggressionBalance);
             SetProperty(message, "OrderFlowDepthImbalance", reading.OrderFlowDepthImbalance);
             SetProperty(message, "OrderFlowHint", reading.OrderFlowHint);
+            SetProperty(message, "InstrumentPointValueUsd", reading.InstrumentPointValueUsd);
+            SetProperty(message, "InstrumentTickSize", reading.InstrumentTickSize);
+            SetProperty(message, "InstrumentEconomicsSource", reading.InstrumentEconomicsSource);
+            SetProperty(message, "DescriptiveStateJson", reading.DescriptiveStateJson);
             SetProperty(message, "SessionName", reading.SessionName);
             SetProperty(message, "SessionHigh", reading.SessionHigh);
             SetProperty(message, "SessionLow", reading.SessionLow);

@@ -17,7 +17,7 @@
       "depends_on": [],
       "evidence": [
         "Current source authority is the clean Glitch main worktree at D:/ab/worktrees/glitch-nt-rebuild.",
-        "The NinjaTrader source tree last changed at 1859a98, while current main is 2e829e7 after source-pairing and release-plumbing cleanup."
+        "The current source authority before this bounded handoff is main at 66304b068afea6e1cffb312d5d0611749dfcd9fe."
       ],
       "notes": "Historical implementation detail remains available in Git history; current work is represented by acceptance, release, and GL-AI-1X items."
     },
@@ -133,7 +133,7 @@
       ],
       "depends_on": [],
       "evidence": [
-        "Current Glitch main HEAD is 2e829e732c00cdcc56e4dd9123e07c8404929668.",
+        "Current Glitch main HEAD before this bounded handoff is 66304b068afea6e1cffb312d5d0611749dfcd9fe.",
         "Current Hermes profile main is 1b4cc51c1d4e1e460595f8df1805277099edd575 at distribution version 0.0.2.22.",
         "tools/hermes/build-public-profile.ps1",
         "tools/hermes/tests/test_profile_pair_contract.py"
@@ -178,7 +178,7 @@
     {
       "id": "GL-AI-10",
       "title": "Normalize native outcomes for Hermes learning and calibration",
-      "status": "backlog",
+      "status": "approval_required",
       "priority": "P1",
       "owner_role": "architect",
       "acceptance": [
@@ -189,14 +189,16 @@
       "depends_on": ["GL-AI-06", "GL-AI-07"],
       "evidence": [
         "docs/specs/GL-AI-10.md",
+        "tools/hermes/reconcile-hermes-outcomes.py",
         "Current Hermes learning exchange requires attributable completed master outcomes."
       ],
+      "notes": "Canonical outcome layers and optional non-gating forecast scoring are implemented; native GL-AI-06/07 acceptance remains required before promotion.",
       "stop_line": "No learning or calibration promotion from incomplete, unresolved, or infrastructure-failure outcomes."
     },
     {
       "id": "GL-AI-11",
       "title": "Expose execution drift and protection coverage diagnostics",
-      "status": "backlog",
+      "status": "approval_required",
       "priority": "P1",
       "owner_role": "architect",
       "acceptance": [
@@ -207,14 +209,16 @@
       "depends_on": ["GL-AI-07"],
       "evidence": [
         "docs/specs/GL-AI-11.md",
+        "tools/hermes/reconcile-hermes-outcomes.py",
         "Current Glitch native execution and protection services are the evidence authority."
       ],
+      "notes": "Read-only intent-fidelity projection is implemented; native acknowledgement, reconnect, restart, and partial-failure fixtures remain acceptance work.",
       "stop_line": "Do not infer protected exposure, execution success, or strategy failure from missing or stale diagnostics."
     },
     {
       "id": "GL-AI-12",
       "title": "Add descriptive path and flow measurements to the NT decision packet",
-      "status": "backlog",
+      "status": "approval_required",
       "priority": "P2",
       "owner_role": "architect",
       "acceptance": [
@@ -225,14 +229,17 @@
       "depends_on": [],
       "evidence": [
         "docs/specs/GL-AI-12.md",
-        "Current decision packets lack a stable freshness-labeled path and flow projection."
+        "ninjatrader/Glitch/Indicators/glitch/GlitchAnalyticsBridge.cs",
+        "ninjatrader/Glitch/Indicators/glitch/GlitchMarketSnapshotRawJson.cs",
+        "Current decision packets now carry a shadow freshness-labeled path and flow projection."
       ],
+      "notes": "12A/12B shadow serialization is implemented with NT-sourced economics and explicitly limited depth provenance; native reconnect/depth fixtures remain.",
       "stop_line": "Do not introduce deterministic strategy logic to compensate for missing descriptive context."
     },
     {
       "id": "GL-AI-13",
       "title": "Define bounded semantic NT management operations for Hermes",
-      "status": "backlog",
+      "status": "approval_required",
       "priority": "P2",
       "owner_role": "architect",
       "acceptance": [
@@ -245,6 +252,7 @@
         "docs/specs/GL-AI-13.md",
         "Current gateway supports bounded entry, protection, OCO, stop/target changes, cancellation, and flatten; no distinct trailing or ATM operation is exposed."
       ],
+      "notes": "Capability matrix reconciled without adding ATM, trailing, breakeven, or raw mutators; native receipt/idempotency/partial-failure/reconnect acceptance remains.",
       "stop_line": "Do not expose a new Hermes operation until native lifecycle and reconciliation invariants are tested."
     }
   ],
@@ -253,7 +261,7 @@
       "glitch_main": {
         "path": "D:/ab/worktrees/glitch-nt-rebuild",
         "branch": "main",
-        "head": "2e829e732c00cdcc56e4dd9123e07c8404929668"
+        "head": "66304b068afea6e1cffb312d5d0611749dfcd9fe"
       },
       "hermes_profile": {
         "path": "D:/ab/worktrees/glitch-hermes-profile",

@@ -2,7 +2,7 @@
 
 Issue: #16
 Priority: P1
-Status: Proposed
+Status: Read-only projection landed; native acceptance pending
 
 ## Intent
 
@@ -15,6 +15,15 @@ Glitch owns native protection and reconciliation, but the current cognition cont
 ## Proposed change
 
 Expose position quantity, stop/target presence, protected and unprotected quantity, leg/order identity, decision/fill anchors, submission and fill delay, requested-versus-native drift, native lifecycle/protection status, and attribution status. Preserve partial, race, rejection, stale, reconnect, and restart states.
+
+## Landed projection
+
+Completed outcomes now add `execution_diagnostics.intent_fidelity` with the
+intent identity, decision/submission/fill prices, signed adverse drift in
+native ticks, lifecycle timing, protection coverage, unprotected quantity,
+native state, and management history. Missing native acknowledgement remains
+`unavailable_native_receipt`; it is never upgraded to success by inference.
+The projection is additive and read-only.
 
 ## Boundaries
 

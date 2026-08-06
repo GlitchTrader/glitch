@@ -54,6 +54,60 @@ def manual_identity_trade(entry_utc):
 
 
 class DirectOutcomeReconcileTests(unittest.TestCase):
+    def test_canonical_outcome_layers_normalize_risk_and_forecast_without_intrabar_claims(self):
+        intent = {
+            "intent_id": "ai-1",
+            "_cycle_id": "cycle-1",
+            "account": "Sim101",
+            "instrument": "MNQ",
+            "action": "ENTER_LONG",
+            "quantity": 1,
+            "stop_loss": 19990.0,
+            "take_profit_1": 20020.0,
+            "forecast": {
+                "event": "STOP_BEFORE_PRIMARY_TARGET",
+                "probability": 0.25,
+                "method": "bounded descriptive forecast",
+                "confidence": 0.5,
+            },
+        }
+        outcome = {
+            "account": "Sim101",
+            "quantity": 1,
+            "entry_utc": "2099-01-01T14:00:01Z",
+            "entry_price": 20000.25,
+            "exit_price": 19990.0,
+            "realized_pnl_usd": -51.25,
+            "point_value_usd": 5.0,
+            "tick_size": 0.25,
+            "initial_native_risk_usd": 50.0,
+            "sampled_mfe_usd": 5.0,
+            "sampled_mae_usd": -55.0,
+            "close_kind": "stop",
+            "initial_protection_legs": [{"quantity": 1, "initial_stop_price": 19990.0}],
+            "protection_status": "submitted",
+            "protection_evidence": "native_bracket_receipt",
+        }
+        layers = MODULE.canonical_outcome_layers(
+            intent,
+            outcome,
+            None,
+            None,
+            {"current_price": 20000.0, "created_utc": "2099-01-01T14:00:00Z"},
+            [],
+        )
+
+        self.assertEqual(layers["normalized_outcome"]["first_touch"], "STOP_FIRST")
+        self.assertEqual(layers["normalized_outcome"]["realized_r"], -1.025)
+        self.assertEqual(layers["normalized_outcome"]["mfe_r"], 0.1)
+        self.assertFalse(layers["normalized_outcome"]["excursion_eligible"])
+        self.assertEqual(layers["forecast_outcome"]["observed"], True)
+        self.assertEqual(layers["forecast_outcome"]["brier_score"], 0.5625)
+        self.assertEqual(
+            layers["execution_diagnostics"]["intent_fidelity"]["timing"]["full_protection_acknowledgement_status"],
+            "unavailable_native_receipt",
+        )
+
     def test_manual_master_trade_gets_provenance_snapshot_and_ai_comparison(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

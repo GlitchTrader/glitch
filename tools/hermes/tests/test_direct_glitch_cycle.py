@@ -116,6 +116,61 @@ def decision(route, account, suffix, action="NOTHING"):
 
 
 class DirectCycleTests(unittest.TestCase):
+    def test_native_instrument_economics_drive_scenario_and_risk_geometry(self):
+        value = packet()
+        instrument = value["frames"][-1]["market_snapshot"]["instruments"][0]
+        instrument["instrument_economics"] = {
+            "point_value_usd": 5.0,
+            "tick_size": 0.25,
+            "source": "ninjatrader_master_instrument",
+        }
+        scenario = MODULE.build_scenario(value)
+
+        economics = scenario["market"]["instrument_economics"]
+        self.assertEqual(economics["source"], "ninjatrader_master_instrument")
+        self.assertEqual(scenario["books"][0]["position_building_context"]["point_value_usd"], 5.0)
+        intent = decision("glitch", "Sim101", 1, action="ENTER_LONG")
+        legs = MODULE.entry_risk_legs(intent, 20000.0, economics)
+        self.assertEqual(legs[0]["planned_risk_usd"], 150.0)
+
+    def test_forecast_is_recordable_metadata_and_never_a_direction_gate(self):
+        scenario = MODULE.build_scenario(packet())
+        first = decision("glitch", "Sim101", 1)
+        first["forecast"] = {
+            "event": "STOP_BEFORE_PRIMARY_TARGET",
+            "probability": 0.35,
+            "method": "bounded descriptive forecast",
+            "confidence": 0.6,
+        }
+        second = decision("glitch-second", "Sim201", 2)
+        MODULE.validate_batch({
+            "schema_version": "glitch.intent.batch.v1",
+            "cycle_id": scenario["cycle_id"],
+            "decisions": [first, second],
+        }, scenario)
+        first["forecast"]["probability"] = 1.1
+        with self.assertRaisesRegex(ValueError, "forecast_probability_invalid:0"):
+            MODULE.validate_batch({
+                "schema_version": "glitch.intent.batch.v1",
+                "cycle_id": scenario["cycle_id"],
+                "decisions": [first, second],
+            }, scenario)
+
+    def test_model_packet_labels_native_and_heuristic_layers(self):
+        value = packet()
+        scenario = MODULE.build_scenario(value)
+        model_packet = MODULE.packet_for_model(value, scenario)
+        instrument = model_packet["frames"][-1]["market_snapshot"]["instruments"][0]
+        self.assertEqual(instrument["native_observations"]["source"], "ninjatrader")
+        self.assertEqual(
+            instrument["instrument_economics"]["source"],
+            "legacy_fixture_compatibility",
+        )
+        self.assertEqual(
+            instrument["heuristic_projections"]["strategy_semantics"],
+            "none",
+        )
+
     def test_utc_now_matches_glitch_round_trip_precision(self):
         self.assertRegex(MODULE.utc_now(), r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{7}Z$")
 

@@ -310,6 +310,10 @@ namespace Glitch.Services
                 InstrumentFullName = snapshot.InstrumentFullName,
                 UpdatedUtc = snapshot.UpdatedUtc,
                 IsFresh = GlitchAnalyticsFeedBus.IsSnapshotFresh(snapshot, nowUtc, TimeSpan.FromMinutes(5)),
+                InstrumentPointValueUsd = snapshot.InstrumentPointValueUsd,
+                InstrumentTickSize = snapshot.InstrumentTickSize,
+                InstrumentEconomicsSource = snapshot.InstrumentEconomicsSource,
+                DescriptiveStateJson = snapshot.DescriptiveStateJson,
                 CurrentPrice = snapshot.CurrentPrice,
                 SessionName = snapshot.SessionName,
                 SessionHigh = snapshot.SessionHigh,
@@ -331,6 +335,7 @@ namespace Glitch.Services
                 Low = reading.Low,
                 Close = reading.CurrentPrice,
                 Volume = reading.Volume,
+                DescriptiveStateJson = reading.DescriptiveStateJson,
                 Indicators = new GlitchMarketSnapshotRawJson.RawIndicatorsPayload
                 {
                     Atr = reading.Atr,
@@ -346,7 +351,10 @@ namespace Glitch.Services
                     OrderFlowCumulativeDelta = reading.OrderFlowCumulativeDelta,
                     OrderFlowDeltaChange = reading.OrderFlowDeltaChange,
                     OrderFlowVwap = reading.OrderFlowVwap,
-                    OrderFlowVwapDeviation = reading.OrderFlowVwapDeviation
+                    OrderFlowVwapDeviation = reading.OrderFlowVwapDeviation,
+                    OrderFlowAggressionBalance = reading.OrderFlowAggressionBalance,
+                    OrderFlowDepthImbalance = reading.OrderFlowDepthImbalance,
+                    OrderFlowHint = reading.OrderFlowHint
                 },
                 DerivedAnalytics = new GlitchMarketSnapshotRawJson.DerivedAnalyticsPayload
                 {

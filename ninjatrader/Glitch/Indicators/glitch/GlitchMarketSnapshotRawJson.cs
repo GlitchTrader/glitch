@@ -32,6 +32,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             public double? OrderFlowDeltaChange { get; set; }
             public double? OrderFlowVwap { get; set; }
             public double? OrderFlowVwapDeviation { get; set; }
+            public double? OrderFlowAggressionBalance { get; set; }
+            public double? OrderFlowDepthImbalance { get; set; }
+            public string OrderFlowHint { get; set; }
         }
 
         internal sealed class DerivedAnalyticsPayload
@@ -57,6 +60,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             public double? Low { get; set; }
             public double? Close { get; set; }
             public double? Volume { get; set; }
+            public string DescriptiveStateJson { get; set; }
             public RawIndicatorsPayload Indicators { get; set; }
             public DerivedAnalyticsPayload DerivedAnalytics { get; set; }
         }
@@ -67,6 +71,10 @@ namespace NinjaTrader.NinjaScript.Indicators
             public string InstrumentFullName { get; set; }
             public DateTime UpdatedUtc { get; set; }
             public bool IsFresh { get; set; }
+            public double? InstrumentPointValueUsd { get; set; }
+            public double? InstrumentTickSize { get; set; }
+            public string InstrumentEconomicsSource { get; set; }
+            public string DescriptiveStateJson { get; set; }
             public double? CurrentPrice { get; set; }
             public string SessionName { get; set; }
             public double? SessionHigh { get; set; }
@@ -118,7 +126,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
 
                 instrumentJson.Add(BuildInstrumentJson(instrument, missingMinutes));
-                coverageRows.Add(BuildCoverageJson(instrument.InstrumentRoot, presentMinutes, missingMinutes));
+                coverageRows.Add(BuildCoverageJson(instrument.InstrumentRoot, instrument.IsFresh, presentMinutes, missingMinutes));
             }
 
             if (instrumentJson.Count == 0)
@@ -147,6 +155,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private static string BuildCoverageJson(
             string root,
+            bool isFresh,
             HashSet<int> presentMinutes,
             List<int> missingMinutes)
         {
@@ -156,6 +165,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             return "{"
                 + "\"instrument_root\":" + JsonString(root) + ","
+                + "\"is_fresh\":" + (isFresh ? "true" : "false") + ","
                 + "\"present_timeframes_minutes\":" + JsonIntArray(present) + ","
                 + "\"missing_timeframes_minutes\":" + JsonIntArray(missingMinutes == null ? Array.Empty<int>() : missingMinutes.ToArray())
                 + "}";
@@ -174,7 +184,21 @@ namespace NinjaTrader.NinjaScript.Indicators
                 + "\"instrument\":" + JsonString(snapshot.InstrumentRoot) + ","
                 + "\"instrument_full_name\":" + JsonString(snapshot.InstrumentFullName) + ","
                 + "\"timestamp_utc\":" + JsonString(GlitchMarketSnapshotJson.FormatUtc(snapshot.UpdatedUtc)) + ","
+                + "\"is_fresh\":" + (snapshot.IsFresh ? "true" : "false") + ","
+                + "\"native_observations\":{"
+                + "\"source\":\"ninjatrader\","
+                + "\"instrument_economics\":{"
+                + "\"point_value_usd\":" + JsonNullableNumber(snapshot.InstrumentPointValueUsd) + ","
+                + "\"tick_size\":" + JsonNullableNumber(snapshot.InstrumentTickSize) + ","
+                + "\"source\":" + JsonString(snapshot.InstrumentEconomicsSource)
+                + "}},"
+                + "\"descriptive_state\":" + JsonRawObjectOrNull(snapshot.DescriptiveStateJson) + ","
                 + "\"current_price\":" + JsonNullableNumber(snapshot.CurrentPrice) + ","
+                + "\"instrument_economics\":{"
+                + "\"point_value_usd\":" + JsonNullableNumber(snapshot.InstrumentPointValueUsd) + ","
+                + "\"tick_size\":" + JsonNullableNumber(snapshot.InstrumentTickSize) + ","
+                + "\"source\":" + JsonString(snapshot.InstrumentEconomicsSource)
+                + "},"
                 + "\"session\":{"
                 + "\"name\":" + JsonString(snapshot.SessionName) + ","
                 + "\"high\":" + JsonNullableNumber(snapshot.SessionHigh) + ","
@@ -199,6 +223,14 @@ namespace NinjaTrader.NinjaScript.Indicators
                 + "\"low\":" + JsonNullableNumber(bar.Low) + ","
                 + "\"close\":" + JsonNullableNumber(bar.Close) + ","
                 + "\"volume\":" + JsonNullableNumber(bar.Volume) + ","
+                + "\"native_observations\":{"
+                + "\"open\":" + JsonNullableNumber(bar.Open) + ","
+                + "\"high\":" + JsonNullableNumber(bar.High) + ","
+                + "\"low\":" + JsonNullableNumber(bar.Low) + ","
+                + "\"close\":" + JsonNullableNumber(bar.Close) + ","
+                + "\"volume\":" + JsonNullableNumber(bar.Volume)
+                + "},"
+                + "\"descriptive_state\":" + JsonRawObjectOrNull(bar.DescriptiveStateJson) + ","
                 + "\"indicators\":{"
                 + "\"atr\":" + JsonNullableNumber(ind.Atr) + ","
                 + "\"adx\":" + JsonNullableNumber(ind.Adx) + ","
@@ -213,9 +245,24 @@ namespace NinjaTrader.NinjaScript.Indicators
                 + "\"order_flow_cumulative_delta\":" + JsonNullableNumber(ind.OrderFlowCumulativeDelta) + ","
                 + "\"order_flow_delta_change\":" + JsonNullableNumber(ind.OrderFlowDeltaChange) + ","
                 + "\"order_flow_vwap\":" + JsonNullableNumber(ind.OrderFlowVwap) + ","
-                + "\"order_flow_vwap_deviation\":" + JsonNullableNumber(ind.OrderFlowVwapDeviation)
+                + "\"order_flow_vwap_deviation\":" + JsonNullableNumber(ind.OrderFlowVwapDeviation) + ","
+                + "\"order_flow_aggression_balance\":" + JsonNullableNumber(ind.OrderFlowAggressionBalance) + ","
+                + "\"order_flow_depth_imbalance\":" + JsonNullableNumber(ind.OrderFlowDepthImbalance) + ","
+                + "\"order_flow_hint\":" + JsonString(ind.OrderFlowHint)
                 + "},"
                 + "\"derived_analytics\":{"
+                + "\"raw_score\":" + JsonNullableNumber(derived.RawScore) + ","
+                + "\"directional_score\":" + JsonNullableNumber(derived.DirectionalScore) + ","
+                + "\"tradeability_score\":" + JsonNullableNumber(derived.TradeabilityScore) + ","
+                + "\"ema_alignment\":" + JsonNullableNumber(derived.EmaAlignment) + ","
+                + "\"regime_weight\":" + JsonNullableNumber(derived.RegimeWeight) + ","
+                + "\"oscillator_composite_score\":" + JsonNullableNumber(derived.OscillatorCompositeScore) + ","
+                + "\"ma_composite_score\":" + JsonNullableNumber(derived.MaCompositeScore) + ","
+                + "\"order_flow_score\":" + JsonNullableNumber(derived.OrderFlowScore) + ","
+                + "\"order_flow_confidence\":" + JsonNullableNumber(derived.OrderFlowConfidence) + ","
+                + "\"order_flow_reliability\":" + JsonNullableNumber(derived.OrderFlowReliability)
+                + "}"
+                + ",\"heuristic_projections\":{"
                 + "\"raw_score\":" + JsonNullableNumber(derived.RawScore) + ","
                 + "\"directional_score\":" + JsonNullableNumber(derived.DirectionalScore) + ","
                 + "\"tradeability_score\":" + JsonNullableNumber(derived.TradeabilityScore) + ","
@@ -240,6 +287,17 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (!value.HasValue || double.IsNaN(value.Value) || double.IsInfinity(value.Value))
                 return "null";
             return value.Value.ToString("R", CultureInfo.InvariantCulture);
+        }
+
+        private static string JsonRawObjectOrNull(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return "null";
+
+            string trimmed = value.Trim();
+            if (trimmed.Length < 2 || trimmed[0] != '{' || trimmed[trimmed.Length - 1] != '}')
+                return "null";
+            return trimmed;
         }
 
         private static string JsonIntArray(IReadOnlyList<int> values)

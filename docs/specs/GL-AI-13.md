@@ -2,7 +2,7 @@
 
 Issue: #18
 Priority: P2
-Status: Proposed
+Status: Capability matrix reconciled; native acceptance pending
 
 ## Intent
 
@@ -17,6 +17,23 @@ The current NT gateway supports market entry, native stop/target protection, nat
 Produce a capability matrix for account/position/order inspection, OCO bracket create/verify/replace, trailing-stop management, and ATM/template operations. A trailing operation must specify activation/offset/step, side and leg identity, idempotency, native receipt/reconciliation, and tighten-only/no-widening behavior. Treat OCO as an execution relationship. Treat ATM/template behavior as a composite native policy: expose it only if it is allowlisted, versioned, previewable, and auditable; otherwise document it as unavailable to Hermes.
 
 If approved, define corresponding semantic tool guidance in the Hermes profile and management-method fields for learning. Hermes must call only Glitch-owned validated operations; it must never receive raw NinjaTrader mutators.
+
+## Reconciled capability matrix
+
+| Capability | Current boundary | Hermes exposure | Acceptance gap |
+|---|---|---|---|
+| Account/position/order inspection | Native read-only facts | Context only | Reconnect/restart fixtures |
+| Market entry with stop/target OCO | Glitch-owned validated intent | `ENTER_LONG` / `ENTER_SHORT` | Native receipt and partial-failure fixtures |
+| Move stop by leg | Leg-identified semantic update | `MOVE_STOP` | Exact preview, tighten/widen classification, idempotency |
+| Move target by leg | Leg-identified semantic update | `MOVE_TP` | Exact preview, idempotency, native acknowledgement |
+| Exit / flatten | Glitch-owned validated exit | `EXIT` and explicit Flatten All UI | Partial failure and restart/reconnect evidence |
+| Trailing stop | Not exposed | None | No raw or opaque mutator is permitted |
+| Breakeven/autobreakeven | Not exposed | None | No deterministic strategy behavior is permitted |
+| ATM/template operations | Not exposed | None | Require allowlisted, versioned, previewable, auditable native contract |
+
+The matrix is documentation of the existing bounded surface, not a claim that
+native acceptance is complete. No ATM, trailing, breakeven, or raw mutator was
+added.
 
 NT reference points for the design review:
 

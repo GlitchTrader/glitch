@@ -88,6 +88,14 @@ namespace Glitch.UI
                     state.InstrumentFullName = normalizedReading.InstrumentFullName;
                 if (normalizedReading.CurrentPrice.HasValue && normalizedReading.CurrentPrice.Value > 0)
                     state.CurrentPrice = normalizedReading.CurrentPrice;
+                if (normalizedReading.InstrumentPointValueUsd.HasValue)
+                    state.InstrumentPointValueUsd = normalizedReading.InstrumentPointValueUsd;
+                if (normalizedReading.InstrumentTickSize.HasValue)
+                    state.InstrumentTickSize = normalizedReading.InstrumentTickSize;
+                if (!string.IsNullOrWhiteSpace(normalizedReading.InstrumentEconomicsSource))
+                    state.InstrumentEconomicsSource = normalizedReading.InstrumentEconomicsSource;
+                if (!string.IsNullOrWhiteSpace(normalizedReading.DescriptiveStateJson) && normalizedReading.Minutes == 1)
+                    state.DescriptiveStateJson = normalizedReading.DescriptiveStateJson;
 
                 if (!string.IsNullOrWhiteSpace(normalizedReading.SessionName))
                     state.SessionName = normalizedReading.SessionName;
@@ -257,6 +265,15 @@ namespace Glitch.UI
                             continue;
                         if (!TryNormalizeIncomingReading(reading, out GlitchIndicatorReading normalized))
                             continue;
+
+                        if (HasPositiveValue(normalized.InstrumentPointValueUsd))
+                            state.InstrumentPointValueUsd = normalized.InstrumentPointValueUsd;
+                        if (HasPositiveValue(normalized.InstrumentTickSize))
+                            state.InstrumentTickSize = normalized.InstrumentTickSize;
+                        if (!string.IsNullOrWhiteSpace(normalized.InstrumentEconomicsSource))
+                            state.InstrumentEconomicsSource = normalized.InstrumentEconomicsSource;
+                        if (normalized.Minutes == 1 && !string.IsNullOrWhiteSpace(normalized.DescriptiveStateJson))
+                            state.DescriptiveStateJson = normalized.DescriptiveStateJson;
 
                         GlitchIndicatorReading existing;
                         if (!state.TimeframeReadings.TryGetValue(normalized.Minutes, out existing) ||
@@ -693,6 +710,10 @@ namespace Glitch.UI
                 CurrentPrice = freshestPriceReading != null && HasPositiveValue(freshestPriceReading.CurrentPrice)
                     ? freshestPriceReading.CurrentPrice
                     : state.CurrentPrice,
+                InstrumentPointValueUsd = state.InstrumentPointValueUsd,
+                InstrumentTickSize = state.InstrumentTickSize,
+                InstrumentEconomicsSource = state.InstrumentEconomicsSource,
+                DescriptiveStateJson = state.DescriptiveStateJson,
                 SessionName = freshestSessionReading != null && !string.IsNullOrWhiteSpace(freshestSessionReading.SessionName)
                     ? freshestSessionReading.SessionName
                     : state.SessionName,
@@ -911,6 +932,13 @@ namespace Glitch.UI
             clone.OrderFlowVwapDeviation = NormalizeFinite(clone.OrderFlowVwapDeviation);
             clone.OrderFlowAggressionBalance = NormalizeFinite(clone.OrderFlowAggressionBalance);
             clone.OrderFlowDepthImbalance = NormalizeFinite(clone.OrderFlowDepthImbalance);
+            clone.InstrumentPointValueUsd = NormalizePositiveFinite(clone.InstrumentPointValueUsd);
+            clone.InstrumentTickSize = NormalizePositiveFinite(clone.InstrumentTickSize);
+            clone.InstrumentEconomicsSource = ClampText(clone.InstrumentEconomicsSource, 96);
+            clone.DescriptiveStateJson = ClampText(clone.DescriptiveStateJson, 24000);
+            if (!string.IsNullOrWhiteSpace(clone.DescriptiveStateJson) &&
+                (clone.DescriptiveStateJson[0] != '{' || clone.DescriptiveStateJson[clone.DescriptiveStateJson.Length - 1] != '}'))
+                clone.DescriptiveStateJson = string.Empty;
             clone.SessionHigh = NormalizePositiveFinite(clone.SessionHigh);
             clone.SessionLow = NormalizePositiveFinite(clone.SessionLow);
             clone.PreviousSessionHigh = NormalizePositiveFinite(clone.PreviousSessionHigh);
@@ -1199,6 +1227,10 @@ namespace Glitch.UI
             reading.OrderFlowAggressionBalance = ReadLegacyNullableDouble(legacyReading, "OrderFlowAggressionBalance");
             reading.OrderFlowDepthImbalance = ReadLegacyNullableDouble(legacyReading, "OrderFlowDepthImbalance");
             reading.OrderFlowHint = ReadLegacyString(legacyReading, "OrderFlowHint");
+            reading.InstrumentPointValueUsd = ReadLegacyNullableDouble(legacyReading, "InstrumentPointValueUsd");
+            reading.InstrumentTickSize = ReadLegacyNullableDouble(legacyReading, "InstrumentTickSize");
+            reading.InstrumentEconomicsSource = ReadLegacyString(legacyReading, "InstrumentEconomicsSource");
+            reading.DescriptiveStateJson = ReadLegacyString(legacyReading, "DescriptiveStateJson");
             reading.SessionName = ReadLegacyString(legacyReading, "SessionName");
             reading.SessionHigh = ReadLegacyNullableDouble(legacyReading, "SessionHigh");
             reading.SessionLow = ReadLegacyNullableDouble(legacyReading, "SessionLow");
@@ -1405,6 +1437,10 @@ namespace Glitch.UI
             public string InstrumentFullName { get; set; }
             public DateTime LastUpdatedUtc { get; set; }
             public double? CurrentPrice { get; set; }
+            public double? InstrumentPointValueUsd { get; set; }
+            public double? InstrumentTickSize { get; set; }
+            public string InstrumentEconomicsSource { get; set; }
+            public string DescriptiveStateJson { get; set; }
             public string SessionName { get; set; }
             public double? SessionHigh { get; set; }
             public double? SessionLow { get; set; }
@@ -1444,6 +1480,10 @@ namespace Glitch.UI
         public string InstrumentFullName { get; set; }
         public DateTime UpdatedUtc { get; set; }
         public double? CurrentPrice { get; set; }
+        public double? InstrumentPointValueUsd { get; set; }
+        public double? InstrumentTickSize { get; set; }
+        public string InstrumentEconomicsSource { get; set; }
+        public string DescriptiveStateJson { get; set; }
         public string SessionName { get; set; }
         public double? SessionHigh { get; set; }
         public double? SessionLow { get; set; }
@@ -1463,6 +1503,10 @@ namespace Glitch.UI
         public double? Low { get; set; }
         public double? Volume { get; set; }
         public double? CurrentPrice { get; set; }
+        public double? InstrumentPointValueUsd { get; set; }
+        public double? InstrumentTickSize { get; set; }
+        public string InstrumentEconomicsSource { get; set; }
+        public string DescriptiveStateJson { get; set; }
         public double? AveragePrice { get; set; }
         public double? Atr { get; set; }
         public double? Adx { get; set; }
@@ -1515,6 +1559,10 @@ namespace Glitch.UI
                 Low = Low,
                 Volume = Volume,
                 CurrentPrice = CurrentPrice,
+                InstrumentPointValueUsd = InstrumentPointValueUsd,
+                InstrumentTickSize = InstrumentTickSize,
+                InstrumentEconomicsSource = InstrumentEconomicsSource,
+                DescriptiveStateJson = DescriptiveStateJson,
                 AveragePrice = AveragePrice,
                 Atr = Atr,
                 Adx = Adx,

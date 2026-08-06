@@ -380,9 +380,21 @@ namespace NinjaTrader.NinjaScript.Indicators
                     readingUtc = barTime.ToUniversalTime();
             }
 
+            Instrument instrument = BarsArray[bip] == null ? null : BarsArray[bip].Instrument;
+            double? pointValue = instrument != null && instrument.MasterInstrument != null && instrument.MasterInstrument.PointValue > 0
+                ? (double?)instrument.MasterInstrument.PointValue
+                : null;
+            double? tickSize = instrument != null && instrument.MasterInstrument != null && instrument.MasterInstrument.TickSize > 0
+                ? (double?)instrument.MasterInstrument.TickSize
+                : null;
+            string economicsSource = pointValue.HasValue && tickSize.HasValue
+                ? "ninjatrader_master_instrument"
+                : "ninjatrader_instrument_metadata_incomplete";
+
             return new GlitchBridgeBusCompat.BridgeReading
             {
                 InstrumentRoot = root,
+                InstrumentFullName = instrument == null ? null : instrument.FullName,
                 Minutes = minutes,
                 UtcTime = readingUtc,
                 CurrentPrice = close,
@@ -400,12 +412,74 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Rsi = rsi,
                 EmaAlignment = emaAlignment,
                 RegimeWeight = tradeabilityScore,
+                InstrumentPointValueUsd = pointValue,
+                InstrumentTickSize = tickSize,
+                InstrumentEconomicsSource = economicsSource,
+                DescriptiveStateJson = BuildDescriptiveStateJson(
+                    root,
+                    instrument,
+                    bip,
+                    minutes,
+                    readingUtc,
+                    pointValue,
+                    tickSize,
+                    economicsSource),
                 SessionName = session.Name,
                 SessionHigh = session.CurrentHigh,
                 SessionLow = session.CurrentLow,
                 PreviousSessionHigh = session.PreviousHigh,
                 PreviousSessionLow = session.PreviousLow
             };
+        }
+
+        private string BuildDescriptiveStateJson(
+            string root,
+            Instrument instrument,
+            int bip,
+            int minutes,
+            DateTime readingUtc,
+            double? pointValue,
+            double? tickSize,
+            string economicsSource)
+        {
+            string fullName = instrument == null ? null : instrument.FullName;
+            double close = Closes[bip][0];
+            double high = Highs[bip][0];
+            double low = Lows[bip][0];
+            double? clv = high > low ? (double?)Clamp(((2d * close) - high - low) / (high - low), -1, 1) : null;
+            return "{"
+                + "\"schema_version\":\"glitch.market.descriptive.v1\","
+                + "\"native_observations\":{"
+                + "\"instrument_root\":" + GlitchMarketSnapshotJsonInject.String(root) + ","
+                + "\"instrument_full_name\":" + GlitchMarketSnapshotJsonInject.String(fullName) + ","
+                + "\"bar\":{"
+                + "\"minutes\":" + minutes.ToString(CultureInfo.InvariantCulture) + ","
+                + "\"utc_time\":" + GlitchMarketSnapshotJsonInject.String(readingUtc.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture)) + ","
+                + "\"open\":" + Number(Opens[bip][0]) + ","
+                + "\"high\":" + Number(high) + ","
+                + "\"low\":" + Number(low) + ","
+                + "\"close\":" + Number(close) + ","
+                + "\"volume\":" + Number(Volumes[bip][0]) + "},"
+                + "\"instrument_economics\":{"
+                + "\"point_value_usd\":" + Number(pointValue) + ","
+                + "\"tick_size\":" + Number(tickSize) + ","
+                + "\"source\":" + GlitchMarketSnapshotJsonInject.String(economicsSource) + "}},"
+                + "\"descriptive_state\":{"
+                + "\"path\":{\"clv\":" + Number(clv) + "},"
+                + "\"quality\":{"
+                + "\"as_of_utc\":" + GlitchMarketSnapshotJsonInject.String(readingUtc.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture)) + ","
+                + "\"bar_completeness\":\"in_progress\","
+                + "\"packet_contiguity\":\"validated_by_hermes_exchange_writer\"}},"
+                + "\"heuristic_projections\":{"
+                + "\"source\":\"glitch_ai_market_ingest\",\"strategy_semantics\":\"none\"}"
+                + "}";
+        }
+
+        private static string Number(double? value)
+        {
+            if (!value.HasValue || double.IsNaN(value.Value) || double.IsInfinity(value.Value))
+                return "null";
+            return value.Value.ToString("R", CultureInfo.InvariantCulture);
         }
 
         private SessionTracker UpdateSessionTracker(string root, int minutes, int bip)

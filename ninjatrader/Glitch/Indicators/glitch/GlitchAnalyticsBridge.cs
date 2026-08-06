@@ -27,6 +27,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
+using System.Text;
 using System.Windows.Media;
 using NinjaTrader.Cbi;
 using NinjaTrader.Data;
@@ -93,6 +94,9 @@ namespace NinjaTrader.NinjaScript.Indicators
         private DateTime _lastBridgeTouchUtc = DateTime.MinValue;
         private DateTime _lastBootstrapRegisterUtc = DateTime.MinValue;
         private double _tickSize;
+        private double _nativeTickSize;
+        private double _pointValueUsd;
+        private string _instrumentEconomicsSource;
         private SignalSnapshot[] _cachedSignalByBip;
         private bool[] _hasCachedSignalByBip;
         private OrderFlowCumulativeDelta[] _orderFlowDeltaByBip;
@@ -104,6 +108,9 @@ namespace NinjaTrader.NinjaScript.Indicators
         private readonly Queue<OrderFlowTapeSample> _orderFlowTape = new Queue<OrderFlowTapeSample>();
         private double _orderFlowTapeBuyVolume;
         private double _orderFlowTapeSellVolume;
+        private double _orderFlowAtQuoteVolume;
+        private double _orderFlowTickRuleVolume;
+        private double _orderFlowAmbiguousVolume;
         private DateTime _lastOrderFlowTapeUtc = DateTime.MinValue;
         private readonly double[] _depthBidByLevel = new double[OrderFlowDepthLevels];
         private readonly double[] _depthAskByLevel = new double[OrderFlowDepthLevels];
@@ -211,9 +218,18 @@ namespace NinjaTrader.NinjaScript.Indicators
                 InitializeColorPalettes();
                 _lastPublishUtcByMinutes.Clear();
                 _sessionByMinutes.Clear();
-                _tickSize = (Instrument != null && Instrument.MasterInstrument != null && Instrument.MasterInstrument.TickSize > 0)
+                _nativeTickSize = (Instrument != null && Instrument.MasterInstrument != null && Instrument.MasterInstrument.TickSize > 0)
                     ? Instrument.MasterInstrument.TickSize
-                    : 0.25;
+                    : 0;
+                _pointValueUsd = (Instrument != null && Instrument.MasterInstrument != null && Instrument.MasterInstrument.PointValue > 0)
+                    ? Instrument.MasterInstrument.PointValue
+                    : 0;
+                _instrumentEconomicsSource = _nativeTickSize > 0 && _pointValueUsd > 0
+                    ? "ninjatrader_master_instrument"
+                    : "ninjatrader_instrument_metadata_incomplete";
+                // Internal analytics still need a finite normalization scale.
+                // The fallback is never published as instrument economics.
+                _tickSize = _nativeTickSize > 0 ? _nativeTickSize : 0.25;
                 _cachedSignalByBip = new SignalSnapshot[BarsArray.Length];
                 _hasCachedSignalByBip = new bool[BarsArray.Length];
                 _lastPaintedBarIndex = -1;
@@ -231,6 +247,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                 _orderFlowTape.Clear();
                 _orderFlowTapeBuyVolume = 0;
                 _orderFlowTapeSellVolume = 0;
+                _orderFlowAtQuoteVolume = 0;
+                _orderFlowTickRuleVolume = 0;
+                _orderFlowAmbiguousVolume = 0;
                 Array.Clear(_depthBidByLevel, 0, _depthBidByLevel.Length);
                 Array.Clear(_depthAskByLevel, 0, _depthAskByLevel.Length);
                 _orderFlowTickBip = ResolveOrderFlowTickBip();
@@ -291,6 +310,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                 _orderFlowTape.Clear();
                 _orderFlowTapeBuyVolume = 0;
                 _orderFlowTapeSellVolume = 0;
+                _orderFlowAtQuoteVolume = 0;
+                _orderFlowTickRuleVolume = 0;
+                _orderFlowAmbiguousVolume = 0;
 
                 GlitchBridgeBusCompat.UnregisterBridgeBootstrapPublisher(_instrumentRoot, RequestBootstrapFromExternal);
                 GlitchBridgeBusCompat.UnregisterBridge(_instrumentRoot);
@@ -444,24 +466,36 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             double buyVolume = 0;
             double sellVolume = 0;
+            double atQuoteVolume = 0;
+            double tickRuleVolume = 0;
+            double ambiguousVolume = 0;
             if (_lastAskPrice > 0 && tradePrice >= _lastAskPrice)
             {
                 buyVolume = tradeVolume;
+                atQuoteVolume = tradeVolume;
             }
             else if (_lastBidPrice > 0 && tradePrice <= _lastBidPrice)
             {
                 sellVolume = tradeVolume;
+                atQuoteVolume = tradeVolume;
             }
             else
             {
                 if (previousTradePrice > 0 && tradePrice > previousTradePrice)
+                {
                     buyVolume = tradeVolume;
+                    tickRuleVolume = tradeVolume;
+                }
                 else if (previousTradePrice > 0 && tradePrice < previousTradePrice)
+                {
                     sellVolume = tradeVolume;
+                    tickRuleVolume = tradeVolume;
+                }
                 else
                 {
                     buyVolume = tradeVolume * 0.5;
                     sellVolume = tradeVolume * 0.5;
+                    ambiguousVolume = tradeVolume;
                 }
             }
 
@@ -472,10 +506,16 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 UtcTime = nowUtc,
                 BuyVolume = buyVolume,
-                SellVolume = sellVolume
+                SellVolume = sellVolume,
+                AtQuoteVolume = atQuoteVolume,
+                TickRuleVolume = tickRuleVolume,
+                AmbiguousVolume = ambiguousVolume
             });
             _orderFlowTapeBuyVolume += buyVolume;
             _orderFlowTapeSellVolume += sellVolume;
+            _orderFlowAtQuoteVolume += atQuoteVolume;
+            _orderFlowTickRuleVolume += tickRuleVolume;
+            _orderFlowAmbiguousVolume += ambiguousVolume;
             _lastOrderFlowTapeUtc = nowUtc;
             PruneOrderFlowTape(nowUtc);
         }
@@ -603,6 +643,16 @@ namespace NinjaTrader.NinjaScript.Indicators
                     OrderFlowAggressionBalance = signal.OrderFlowAggressionBalance,
                     OrderFlowDepthImbalance = signal.OrderFlowDepthImbalance,
                     OrderFlowHint = signal.OrderFlowHint,
+                    InstrumentPointValueUsd = PublishedPointValueUsd(),
+                    InstrumentTickSize = PublishedTickSize(),
+                    InstrumentEconomicsSource = _instrumentEconomicsSource,
+                    DescriptiveStateJson = BuildDescriptiveStateJson(
+                        bip,
+                        minutes,
+                        signal,
+                        session,
+                        nowUtc,
+                        State != State.Realtime || IsFirstTickOfBar),
                     SessionName = session.Name,
                     SessionHigh = session.CurrentHigh,
                     SessionLow = session.CurrentLow,
@@ -962,6 +1012,9 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 _orderFlowTapeBuyVolume -= oldest.BuyVolume;
                 _orderFlowTapeSellVolume -= oldest.SellVolume;
+                _orderFlowAtQuoteVolume -= oldest.AtQuoteVolume;
+                _orderFlowTickRuleVolume -= oldest.TickRuleVolume;
+                _orderFlowAmbiguousVolume -= oldest.AmbiguousVolume;
                 _orderFlowTape.Dequeue();
             }
 
@@ -969,6 +1022,12 @@ namespace NinjaTrader.NinjaScript.Indicators
                 _orderFlowTapeBuyVolume = 0;
             if (_orderFlowTapeSellVolume < 0)
                 _orderFlowTapeSellVolume = 0;
+            if (_orderFlowAtQuoteVolume < 0)
+                _orderFlowAtQuoteVolume = 0;
+            if (_orderFlowTickRuleVolume < 0)
+                _orderFlowTickRuleVolume = 0;
+            if (_orderFlowAmbiguousVolume < 0)
+                _orderFlowAmbiguousVolume = 0;
         }
 
         private bool TryGetOrderFlowTapeBalance(DateTime nowUtc, out double balance)
@@ -1781,7 +1840,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             DateTime barLocal = Times[bip][0].ToLocalTime();
             SessionBlock block = SessionBlock.Resolve(barLocal);
-            tracker.Update(block.Key, block.Name, Highs[bip][0], Lows[bip][0]);
+            tracker.Update(block.Key, block.Name, block.StartLocal, Opens[bip][0], Highs[bip][0], Lows[bip][0]);
             return tracker;
         }
 
@@ -1836,12 +1895,327 @@ namespace NinjaTrader.NinjaScript.Indicators
                 OrderFlowAggressionBalance = signal.OrderFlowAggressionBalance,
                 OrderFlowDepthImbalance = signal.OrderFlowDepthImbalance,
                 OrderFlowHint = signal.OrderFlowHint,
+                InstrumentPointValueUsd = PublishedPointValueUsd(),
+                InstrumentTickSize = PublishedTickSize(),
+                InstrumentEconomicsSource = _instrumentEconomicsSource,
+                DescriptiveStateJson = minutes == 1
+                    ? BuildDescriptiveStateJson(
+                        bip,
+                        minutes,
+                        signal,
+                        session,
+                        readingUtc,
+                        State != State.Realtime || IsFirstTickOfBar)
+                    : null,
                 SessionName = session == null ? null : session.Name,
                 SessionHigh = session == null ? null : session.CurrentHigh,
                 SessionLow = session == null ? null : session.CurrentLow,
                 PreviousSessionHigh = session == null ? null : session.PreviousHigh,
                 PreviousSessionLow = session == null ? null : session.PreviousLow
             };
+        }
+
+        private double? PublishedPointValueUsd()
+        {
+            return _pointValueUsd > 0 ? (double?)_pointValueUsd : null;
+        }
+
+        private double? PublishedTickSize()
+        {
+            return _nativeTickSize > 0 ? (double?)_nativeTickSize : null;
+        }
+
+        // GL-AI-12 shadow layer.  This is a descriptive packet only: the
+        // existing scalar fields and heuristic scores stay available for
+        // compatibility, while this object preserves provenance and nulls
+        // unavailable evidence instead of manufacturing a strategy signal.
+        private string BuildDescriptiveStateJson(
+            int bip,
+            int minutes,
+            SignalSnapshot signal,
+            SessionTracker session,
+            DateTime asOfUtc,
+            bool barComplete)
+        {
+            if (bip < 0 || bip >= BarsArray.Length || minutes <= 0 || CurrentBars[bip] < 0)
+                return null;
+
+            double close = Closes[bip][0];
+            DateTime barLocal = Times[bip][0].ToLocalTime();
+            double? clv = null;
+            double high = Highs[bip][0];
+            double low = Lows[bip][0];
+            if (high > low)
+                clv = Clamp(((2d * close) - high - low) / (high - low), -1d, 1d);
+
+            double? movement5 = TryComputeSignedMovementPoints(bip, 5);
+            double? movement15 = TryComputeSignedMovementPoints(bip, 15);
+            double? movement60 = TryComputeSignedMovementPoints(bip, 60);
+            double? acceleration5Over15 = TryComputeAccelerationRatio(bip, 5, 15);
+            double? acceleration15Over60 = TryComputeAccelerationRatio(bip, 15, 60);
+
+            double? deltaVelocity = null;
+            double? deltaAcceleration = null;
+            TryGetOrderFlowDeltaPath(bip, out deltaVelocity, out deltaAcceleration);
+
+            double? priceVelocity = null;
+            double? priceImpact = null;
+            if (CurrentBars[bip] >= 1)
+            {
+                priceVelocity = close - Closes[bip][1];
+                double volume = Volumes != null && bip < Volumes.Length && Volumes[bip] != null
+                    ? Math.Max(Volumes[bip][0], 0)
+                    : 0;
+                if (volume > 0)
+                    priceImpact = priceVelocity / volume;
+            }
+
+            DateTime? depthUpdateUtc = _lastDepthUpdateUtc == DateTime.MinValue
+                ? (DateTime?)null
+                : _lastDepthUpdateUtc;
+            if (_isOrderFlowRuntimeAvailable)
+                PruneOrderFlowTape(asOfUtc);
+            bool depthFresh = depthUpdateUtc.HasValue && (asOfUtc - depthUpdateUtc.Value) <= OrderFlowDepthFreshness;
+            double flowTotal = _orderFlowTapeBuyVolume + _orderFlowTapeSellVolume;
+            double classifiedFlow = _orderFlowAtQuoteVolume + _orderFlowTickRuleVolume;
+            double? flowCoverage = flowTotal > 1e-8
+                ? (double?)Clamp(classifiedFlow / flowTotal, 0d, 1d)
+                : null;
+            string sessionPhase = SessionPhaseName(session == null ? null : session.Name);
+            double? sessionMinutes = null;
+            if (session != null && session.StartLocal != DateTime.MinValue)
+                sessionMinutes = Math.Max(0d, (barLocal - session.StartLocal).TotalMinutes);
+
+            var sb = new StringBuilder(4096);
+            sb.Append('{');
+            sb.Append("\"schema_version\":\"glitch.market.descriptive.v1\",");
+            sb.Append("\"native_observations\":{");
+            sb.Append("\"instrument_root\":").Append(JsonStringValue(_instrumentRoot)).Append(',');
+            sb.Append("\"instrument_full_name\":").Append(JsonStringValue(Instrument == null ? null : Instrument.FullName)).Append(',');
+            sb.Append("\"current_price\":").Append(JsonNullableNumber(close)).Append(',');
+            sb.Append("\"bar\":{");
+            sb.Append("\"minutes\":").Append(minutes.ToString(CultureInfo.InvariantCulture)).Append(',');
+            sb.Append("\"utc_time\":").Append(JsonStringValue(Times[bip][0].ToUniversalTime().ToString("o", CultureInfo.InvariantCulture))).Append(',');
+            sb.Append("\"open\":").Append(JsonNullableNumber(Opens[bip][0])).Append(',');
+            sb.Append("\"high\":").Append(JsonNullableNumber(high)).Append(',');
+            sb.Append("\"low\":").Append(JsonNullableNumber(low)).Append(',');
+            sb.Append("\"close\":").Append(JsonNullableNumber(close)).Append(',');
+            sb.Append("\"volume\":").Append(JsonNullableNumber(Volumes[bip][0])).Append("},");
+            sb.Append("\"instrument_economics\":{");
+            sb.Append("\"point_value_usd\":").Append(JsonNullableNumber(PublishedPointValueUsd())).Append(',');
+            sb.Append("\"tick_size\":").Append(JsonNullableNumber(PublishedTickSize())).Append(',');
+            sb.Append("\"source\":").Append(JsonStringValue(_instrumentEconomicsSource)).Append("}},");
+
+            sb.Append("\"descriptive_state\":{");
+            sb.Append("\"location\":{");
+            sb.Append("\"current_price\":").Append(JsonNullableNumber(close)).Append(',');
+            sb.Append("\"session_open\":").Append(JsonNullableNumber(session == null ? (double?)null : session.SessionOpen)).Append(',');
+            sb.Append("\"session_high\":").Append(JsonNullableNumber(session == null ? (double?)null : session.CurrentHigh)).Append(',');
+            sb.Append("\"session_low\":").Append(JsonNullableNumber(session == null ? (double?)null : session.CurrentLow)).Append(',');
+            sb.Append("\"previous_session_high\":").Append(JsonNullableNumber(session == null ? (double?)null : session.PreviousHigh)).Append(',');
+            sb.Append("\"previous_session_low\":").Append(JsonNullableNumber(session == null ? (double?)null : session.PreviousLow)).Append(',');
+            sb.Append("\"distances\":{");
+            sb.Append("\"session_open_points\":").Append(JsonNullableNumber(SignedDistance(close, session == null ? (double?)null : session.SessionOpen))).Append(',');
+            sb.Append("\"session_high_points\":").Append(JsonNullableNumber(SignedDistance(close, session == null ? (double?)null : session.CurrentHigh))).Append(',');
+            sb.Append("\"session_low_points\":").Append(JsonNullableNumber(SignedDistance(close, session == null ? (double?)null : session.CurrentLow))).Append(',');
+            sb.Append("\"previous_session_high_points\":").Append(JsonNullableNumber(SignedDistance(close, session == null ? (double?)null : session.PreviousHigh))).Append(',');
+            sb.Append("\"previous_session_low_points\":").Append(JsonNullableNumber(SignedDistance(close, session == null ? (double?)null : session.PreviousLow))).Append("}},");
+
+            sb.Append("\"session\":{");
+            sb.Append("\"name\":").Append(JsonStringValue(session == null ? null : session.Name)).Append(',');
+            sb.Append("\"phase\":").Append(JsonStringValue(sessionPhase)).Append(',');
+            sb.Append("\"minutes_from_session_start\":").Append(JsonNullableNumber(sessionMinutes)).Append(',');
+            sb.Append("\"same_phase_percentiles\":{\"status\":\"unavailable\",\"reason\":\"historical_percentile_store_not_loaded\"}},");
+
+            sb.Append("\"path\":{");
+            sb.Append("\"clv\":").Append(JsonNullableNumber(clv)).Append(',');
+            sb.Append("\"trend_efficiency\":{");
+            sb.Append("\"5\":").Append(JsonNullableNumber(TryComputeTrendEfficiency(bip, 5))).Append(',');
+            sb.Append("\"15\":").Append(JsonNullableNumber(TryComputeTrendEfficiency(bip, 15))).Append(',');
+            sb.Append("\"60\":").Append(JsonNullableNumber(TryComputeTrendEfficiency(bip, 60))).Append("},");
+            sb.Append("\"signed_movement\":{");
+            sb.Append("\"5\":").Append(BuildMovementJson(movement5, signal.Atr)).Append(',');
+            sb.Append("\"15\":").Append(BuildMovementJson(movement15, signal.Atr)).Append(',');
+            sb.Append("\"60\":").Append(BuildMovementJson(movement60, signal.Atr)).Append("},");
+            sb.Append("\"acceleration_ratio\":{");
+            sb.Append("\"5_over_15\":").Append(JsonNullableNumber(acceleration5Over15)).Append(',');
+            sb.Append("\"15_over_60\":").Append(JsonNullableNumber(acceleration15Over60)).Append("},");
+            sb.Append("\"realized_volatility_log_return_stddev\":{");
+            sb.Append("\"5\":").Append(JsonNullableNumber(TryComputeRealizedVolatility(bip, 5))).Append(',');
+            sb.Append("\"15\":").Append(JsonNullableNumber(TryComputeRealizedVolatility(bip, 15))).Append(',');
+            sb.Append("\"60\":").Append(JsonNullableNumber(TryComputeRealizedVolatility(bip, 60))).Append("}},");
+
+            sb.Append("\"volatility\":{");
+            sb.Append("\"atr\":").Append(JsonNullableNumber(signal.Atr)).Append(',');
+            sb.Append("\"movement_5_points\":").Append(JsonNullableNumber(movement5)).Append(',');
+            sb.Append("\"movement_15_points\":").Append(JsonNullableNumber(movement15)).Append(',');
+            sb.Append("\"movement_60_points\":").Append(JsonNullableNumber(movement60)).Append("},");
+
+            sb.Append("\"flow\":{");
+            sb.Append("\"cumulative_delta\":").Append(JsonNullableNumber(signal.OrderFlowCumulativeDelta)).Append(',');
+            sb.Append("\"delta_change\":").Append(JsonNullableNumber(signal.OrderFlowDeltaChange)).Append(',');
+            sb.Append("\"delta_velocity\":").Append(JsonNullableNumber(deltaVelocity)).Append(',');
+            sb.Append("\"delta_acceleration\":").Append(JsonNullableNumber(deltaAcceleration)).Append(',');
+            sb.Append("\"price_velocity_points\":").Append(JsonNullableNumber(priceVelocity)).Append(',');
+            sb.Append("\"price_impact_points_per_volume\":").Append(JsonNullableNumber(priceImpact)).Append(',');
+            sb.Append("\"price_flow_divergence\":").Append(JsonNullableBool(HasPriceFlowDivergence(priceVelocity, deltaVelocity))).Append(',');
+            sb.Append("\"aggression_balance\":").Append(JsonNullableNumber(signal.OrderFlowAggressionBalance)).Append(',');
+            sb.Append("\"depth_imbalance\":").Append(JsonNullableNumber(signal.OrderFlowDepthImbalance)).Append(',');
+            sb.Append("\"quote_classified_volume\":").Append(JsonNullableNumber(_orderFlowAtQuoteVolume)).Append(',');
+            sb.Append("\"tick_rule_volume\":").Append(JsonNullableNumber(_orderFlowTickRuleVolume)).Append(',');
+            sb.Append("\"ambiguous_volume\":").Append(JsonNullableNumber(_orderFlowAmbiguousVolume)).Append(',');
+            sb.Append("\"classification_coverage\":").Append(JsonNullableNumber(flowCoverage)).Append(',');
+            sb.Append("\"classification_method\":").Append(JsonStringValue("quote_at_bid_ask_then_tick_rule_then_ambiguous_50_50")).Append("},");
+
+            sb.Append("\"liquidity\":{");
+            sb.Append("\"depth_levels\":").Append(OrderFlowDepthLevels.ToString(CultureInfo.InvariantCulture)).Append(',');
+            sb.Append("\"book_reconstruction\":\"position_volume_only\",");
+            sb.Append("\"quality\":").Append(JsonStringValue(depthFresh ? "limited" : "stale_or_unavailable")).Append(',');
+            sb.Append("\"last_quote_age_seconds\":").Append(JsonNullableNumber(depthUpdateUtc.HasValue ? (asOfUtc - depthUpdateUtc.Value).TotalSeconds : (double?)null)).Append("},");
+
+            sb.Append("\"quality\":{");
+            sb.Append("\"as_of_utc\":").Append(JsonStringValue(asOfUtc.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture))).Append(',');
+            sb.Append("\"trading_day_id\":").Append(JsonStringValue(barLocal.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))).Append(',');
+            sb.Append("\"session_phase\":").Append(JsonStringValue(sessionPhase)).Append(',');
+            sb.Append("\"bar_completeness\":").Append(JsonStringValue(barComplete ? "complete" : "in_progress")).Append(',');
+            sb.Append("\"partial_1m\":").Append(minutes == 1 && !barComplete ? "true" : "false").Append(',');
+            sb.Append("\"packet_contiguity\":\"validated_by_hermes_exchange_writer\",");
+            sb.Append("\"order_flow_status\":").Append(JsonStringValue(_isOrderFlowRuntimeAvailable && EnableOrderFlowLayer ? "available" : "unavailable")).Append(',');
+            sb.Append("\"depth_status\":").Append(JsonStringValue(depthFresh ? "limited_position_volume_only" : "stale_or_unavailable")).Append("}},");
+
+            sb.Append("\"heuristic_projections\":{");
+            sb.Append("\"source\":\"glitch_analytics_bridge_legacy\",");
+            sb.Append("\"strategy_semantics\":\"none\",");
+            sb.Append("\"raw_score\":").Append(JsonNullableNumber(signal.RawScore)).Append(',');
+            sb.Append("\"directional_score\":").Append(JsonNullableNumber(signal.DirectionalScore)).Append(',');
+            sb.Append("\"tradeability_score\":").Append(JsonNullableNumber(signal.TradeabilityScore)).Append(',');
+            sb.Append("\"order_flow_score\":").Append(JsonNullableNumber(signal.OrderFlowScore)).Append(',');
+            sb.Append("\"order_flow_confidence\":").Append(JsonNullableNumber(signal.OrderFlowConfidence)).Append(',');
+            sb.Append("\"order_flow_reliability\":").Append(JsonNullableNumber(signal.OrderFlowReliability)).Append("}");
+            sb.Append('}');
+            return sb.ToString();
+        }
+
+        private static string SessionPhaseName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return null;
+            return name.Trim().ToLowerInvariant() == "nyc" ? "new_york" : name.Trim().ToLowerInvariant();
+        }
+
+        private static double? SignedDistance(double current, double? reference)
+        {
+            return reference.HasValue ? (double?)(current - reference.Value) : null;
+        }
+
+        private string BuildMovementJson(double? points, double atr)
+        {
+            if (!points.HasValue)
+                return "{\"points\":null,\"ticks\":null,\"atr\":null}";
+            double? ticks = _nativeTickSize > 0 ? (double?)(points.Value / _nativeTickSize) : null;
+            double? normalizedAtr = atr > 0 ? (double?)(points.Value / atr) : null;
+            return "{\"points\":" + JsonNullableNumber(points)
+                + ",\"ticks\":" + JsonNullableNumber(ticks)
+                + ",\"atr\":" + JsonNullableNumber(normalizedAtr) + "}";
+        }
+
+        private double? TryComputeTrendEfficiency(int bip, int length)
+        {
+            if (bip < 0 || bip >= CurrentBars.Length || CurrentBars[bip] < length || length <= 0)
+                return null;
+            double path = 0;
+            for (int i = 0; i < length; i++)
+                path += Math.Abs(Closes[bip][i] - Closes[bip][i + 1]);
+            if (path <= 1e-8)
+                return null;
+            return Clamp(Math.Abs(Closes[bip][0] - Closes[bip][length]) / path, 0, 1);
+        }
+
+        private double? TryComputeSignedMovementPoints(int bip, int length)
+        {
+            if (bip < 0 || bip >= CurrentBars.Length || CurrentBars[bip] < length || length <= 0)
+                return null;
+            return Closes[bip][0] - Closes[bip][length];
+        }
+
+        private double? TryComputeAccelerationRatio(int bip, int shortLength, int longLength)
+        {
+            double? shortMove = TryComputeSignedMovementPoints(bip, shortLength);
+            double? longMove = TryComputeSignedMovementPoints(bip, longLength);
+            if (!shortMove.HasValue || !longMove.HasValue || Math.Abs(longMove.Value) <= 1e-8)
+                return null;
+            return (shortMove.Value / shortLength) / (longMove.Value / longLength);
+        }
+
+        private double? TryComputeRealizedVolatility(int bip, int length)
+        {
+            if (bip < 0 || bip >= CurrentBars.Length || CurrentBars[bip] < length || length <= 1)
+                return null;
+            double sum = 0;
+            double sumSquares = 0;
+            int count = 0;
+            for (int i = 0; i < length; i++)
+            {
+                double newer = Closes[bip][i];
+                double older = Closes[bip][i + 1];
+                if (newer <= 0 || older <= 0)
+                    continue;
+                double logReturn = Math.Log(newer / older);
+                sum += logReturn;
+                sumSquares += logReturn * logReturn;
+                count++;
+            }
+            if (count < 2)
+                return null;
+            double variance = (sumSquares - ((sum * sum) / count)) / (count - 1);
+            return variance > 0 ? (double?)Math.Sqrt(variance) : 0d;
+        }
+
+        private void TryGetOrderFlowDeltaPath(int bip, out double? velocity, out double? acceleration)
+        {
+            velocity = null;
+            acceleration = null;
+            if (!_isOrderFlowRuntimeAvailable || _orderFlowDeltaByBip == null || bip < 0 || bip >= _orderFlowDeltaByBip.Length)
+                return;
+            OrderFlowCumulativeDelta delta = _orderFlowDeltaByBip[bip];
+            if (delta == null || CurrentBars[bip] < 2)
+                return;
+            try
+            {
+                double current = delta.DeltaClose[0];
+                double previous = delta.DeltaClose[1];
+                velocity = current - previous;
+                if (CurrentBars[bip] >= 2)
+                    acceleration = (current - previous) - (previous - delta.DeltaClose[2]);
+            }
+            catch
+            {
+            }
+        }
+
+        private static bool? HasPriceFlowDivergence(double? priceVelocity, double? deltaVelocity)
+        {
+            if (!priceVelocity.HasValue || !deltaVelocity.HasValue ||
+                Math.Abs(priceVelocity.Value) <= 1e-8 || Math.Abs(deltaVelocity.Value) <= 1e-8)
+                return null;
+            return Math.Sign(priceVelocity.Value) != Math.Sign(deltaVelocity.Value);
+        }
+
+        private static string JsonStringValue(string value)
+        {
+            return GlitchMarketSnapshotJsonInject.String(value);
+        }
+
+        private static string JsonNullableNumber(double? value)
+        {
+            if (!value.HasValue || double.IsNaN(value.Value) || double.IsInfinity(value.Value))
+                return "null";
+            return value.Value.ToString("R", CultureInfo.InvariantCulture);
+        }
+
+        private static string JsonNullableBool(bool? value)
+        {
+            return value.HasValue ? (value.Value ? "true" : "false") : "null";
         }
 
         private int ResolveBipForMinutes(int minutes)
@@ -1892,6 +2266,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             double? orderFlowDeltaChange = null;
             double? orderFlowVwap = null;
             double? orderFlowVwapDeviation = null;
+            double? orderFlowAggressionBalance = null;
+            double? orderFlowDepthImbalance = null;
+            string orderFlowHint = null;
             if (EnableOrderFlowLayer && _isOrderFlowRuntimeAvailable)
             {
                 double atr = _atrByBip[bip][0];
@@ -1899,9 +2276,6 @@ namespace NinjaTrader.NinjaScript.Indicators
                 double? orderFlowScore;
                 double? orderFlowConfidence;
                 double? orderFlowReliability;
-                double? orderFlowAggressionBalance;
-                double? orderFlowDepthImbalance;
-                string orderFlowHint;
                 TryBuildOrderFlowSnapshot(
                     bip,
                     close,
@@ -1920,6 +2294,18 @@ namespace NinjaTrader.NinjaScript.Indicators
                     out orderFlowHint);
             }
 
+            SignalSnapshot descriptiveSignal;
+            if (!TryBuildSignal(bip, false, out descriptiveSignal))
+                descriptiveSignal = BuildWarmupSignal(bip, false);
+            SessionTracker descriptiveSession = UpdateSessionTracker(minutes, bip);
+            string descriptiveStateJson = BuildDescriptiveStateJson(
+                bip,
+                minutes,
+                descriptiveSignal,
+                descriptiveSession,
+                DateTime.UtcNow,
+                true);
+
             bar = new GlitchMarketSnapshotRawJson.RawTimeframeBarPayload
             {
                 Minutes = minutes,
@@ -1929,6 +2315,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Low = Lows[bip][0],
                 Close = close,
                 Volume = Volumes[bip][0],
+                DescriptiveStateJson = descriptiveStateJson,
                 Indicators = new GlitchMarketSnapshotRawJson.RawIndicatorsPayload
                 {
                     Atr = _atrByBip[bip][0],
@@ -1944,7 +2331,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                     OrderFlowCumulativeDelta = orderFlowDelta,
                     OrderFlowDeltaChange = orderFlowDeltaChange,
                     OrderFlowVwap = orderFlowVwap,
-                    OrderFlowVwapDeviation = orderFlowVwapDeviation
+                    OrderFlowVwapDeviation = orderFlowVwapDeviation,
+                    OrderFlowAggressionBalance = orderFlowAggressionBalance,
+                    OrderFlowDepthImbalance = orderFlowDepthImbalance,
+                    OrderFlowHint = orderFlowHint
                 }
             };
             return true;
@@ -1991,10 +2381,25 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (bars.Count != TargetMinutes.Length)
                 return;
 
+            string historicalDescriptiveStateJson = null;
+            for (int b = 0; b < bars.Count; b++)
+            {
+                if (bars[b] != null && bars[b].Minutes == 1)
+                {
+                    historicalDescriptiveStateJson = bars[b].DescriptiveStateJson;
+                    break;
+                }
+            }
+
             var payload = new GlitchMarketSnapshotRawJson.RawInstrumentPayload
             {
                 InstrumentRoot = _instrumentRoot,
+                InstrumentFullName = Instrument == null ? null : Instrument.FullName,
                 UpdatedUtc = barCloseUtc,
+                InstrumentPointValueUsd = PublishedPointValueUsd(),
+                InstrumentTickSize = PublishedTickSize(),
+                InstrumentEconomicsSource = _instrumentEconomicsSource,
+                DescriptiveStateJson = historicalDescriptiveStateJson,
                 SessionName = primarySession == null ? null : primarySession.Name,
                 SessionHigh = primarySession == null ? null : primarySession.CurrentHigh,
                 SessionLow = primarySession == null ? null : primarySession.CurrentLow,
@@ -2592,18 +2997,23 @@ namespace NinjaTrader.NinjaScript.Indicators
             public DateTime UtcTime;
             public double BuyVolume;
             public double SellVolume;
+            public double AtQuoteVolume;
+            public double TickRuleVolume;
+            public double AmbiguousVolume;
         }
 
         private sealed class SessionTracker
         {
             public string SessionKey { get; private set; }
             public string Name { get; private set; }
+            public DateTime StartLocal { get; private set; }
+            public double? SessionOpen { get; private set; }
             public double? CurrentHigh { get; private set; }
             public double? CurrentLow { get; private set; }
             public double? PreviousHigh { get; private set; }
             public double? PreviousLow { get; private set; }
 
-            public void Update(string sessionKey, string name, double high, double low)
+            public void Update(string sessionKey, string name, DateTime startLocal, double open, double high, double low)
             {
                 if (string.IsNullOrWhiteSpace(sessionKey))
                     return;
@@ -2618,6 +3028,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                     SessionKey = sessionKey;
                     Name = name;
+                    StartLocal = startLocal;
+                    SessionOpen = open;
                     CurrentHigh = high;
                     CurrentLow = low;
                     return;
@@ -2636,10 +3048,12 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 Name = name;
                 Key = name + "|" + startLocal.ToString("yyyyMMddHH");
+                StartLocal = startLocal;
             }
 
             public string Name { get; }
             public string Key { get; }
+            public DateTime StartLocal { get; }
 
             public static SessionBlock Resolve(DateTime nowLocal)
             {
