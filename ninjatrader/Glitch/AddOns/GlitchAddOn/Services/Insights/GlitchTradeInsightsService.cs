@@ -449,7 +449,7 @@ namespace Glitch.Services
             fields.TryGetValue("account", out string account);
             fields.TryGetValue("execution_id", out string executionId);
             fields.TryGetValue("native_order", out string orderIdentity);
-            fields.TryGetValue("correlation", out string correlation);
+            string signalName = CleanToken(orderIdentity);
             return new ExecutionEvent
             {
                 UtcTime = source.UtcTime,
@@ -458,10 +458,15 @@ namespace Glitch.Services
                 Quantity = Math.Abs(signedQuantity),
                 Instrument = instrument,
                 Price = price,
+                SignalName = signalName,
                 ExecutionId = CleanToken(executionId),
                 OrderIdentity = CleanToken(orderIdentity),
-                Source = "native_execution",
-                SignalTag = CleanToken(correlation),
+                Source = GlitchNativeIdentity.TryGetRole(signalName, out string role)
+                    && (string.Equals(role, "HME", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(role, "HMX", StringComparison.OrdinalIgnoreCase))
+                    ? "Strategy"
+                    : "native_execution",
+                SignalTag = ResolveSignalTag(signalName),
                 Commission = 0
             };
         }

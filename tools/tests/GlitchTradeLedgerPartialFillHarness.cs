@@ -16,6 +16,7 @@ internal static class GlitchTradeLedgerPartialFillHarness
             ScaleOutThenScaleInUsesAllFragments();
             IdenticalNoIdFragmentsAreNotCollapsed();
             ManualAndAiAttributionRemainDistinct();
+            NativeExecutionCarriesHermesSignalAttribution();
             ManualThenAiAdditionUsesDistinctFifoLots();
             AiThenManualAdditionUsesDistinctFifoLots();
             DistinctAiIntentsRemainDistinct();
@@ -243,6 +244,24 @@ internal static class GlitchTradeLedgerPartialFillHarness
         Require(manual.TradeSource == "Manual" && ai.TradeSource == "Strategy", "manual->AI provenance crossed lots");
     }
 
+    private static void NativeExecutionCarriesHermesSignalAttribution()
+    {
+        DateTime start = new DateTime(2026, 8, 3, 13, 30, 0, DateTimeKind.Utc);
+        var accumulator = new GlitchTradeInsightsService.ExecutionAccumulator();
+        var events = new List<GlitchTradeInsightsService.TradeJournalEvent>
+        {
+            NativeExecution(start, "GL1-G1D7A1CB4A410356FFF7-HME", 1, 100, "native-entry"),
+            NativeExecution(start.AddMinutes(1), "GL1-G1D7A1CB4A410356FFF7-HT0-LB853106C57B5D7A", -1, 105, "native-exit")
+        };
+
+        IReadOnlyList<GlitchTradeInsightsService.TradeRoundTrip> closed = accumulator.Process(events, events);
+        Require(closed.Count == 1, "native Hermes execution did not close a trade");
+        Require(closed[0].TradeSource == "Strategy", "native Hermes trade source was lost");
+        Require(closed[0].OpenReason == "Hermes Entry", "native Hermes open reason was lost");
+        Require(closed[0].EntryType == "ENTRY", "native Hermes entry type was lost");
+        Require(closed[0].EntrySignal == "GL1-G1D7A1CB4A410356FFF7-HME", "native Hermes entry signal was lost");
+    }
+
     private static void AiThenManualAdditionUsesDistinctFifoLots()
     {
         DateTime start = new DateTime(2026, 8, 3, 14, 30, 0, DateTimeKind.Utc);
@@ -406,6 +425,26 @@ internal static class GlitchTradeLedgerPartialFillHarness
                       price.ToString("0.########", CultureInfo.InvariantCulture) +
                       " (" + signal + ") [SRC:" + source + "]" + tagToken + commissionToken +
                       " [EID:" + executionId + "]" + orderToken
+        };
+    }
+
+    private static GlitchTradeInsightsService.TradeJournalEvent NativeExecution(
+        DateTime utc,
+        string nativeOrder,
+        int signedQuantity,
+        double price,
+        string executionId)
+    {
+        return new GlitchTradeInsightsService.TradeJournalEvent
+        {
+            UtcTime = utc,
+            AccountName = "Sim101",
+            Category = "Execution",
+            Message = "native_execution|operation=Add|execution_id=" + executionId
+                + "|account=Sim101|instrument=MNQ 09-26|native_order=" + nativeOrder
+                + "|signed_quantity=" + signedQuantity.ToString(CultureInfo.InvariantCulture)
+                + "|price=" + price.ToString("0.########", CultureInfo.InvariantCulture)
+                + "|representable=True"
         };
     }
 

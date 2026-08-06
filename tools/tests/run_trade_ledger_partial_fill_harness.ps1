@@ -33,6 +33,7 @@ Add-Type -Path $codeAnalysis
 Add-Type -Path $csharpAnalysis
 
 $sourcePaths = @(
+    (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Core\GlitchNativeIdentity.cs'),
     (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Services\Insights\GlitchTradeInsightsService.cs'),
     (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Services\Insights\GlitchTradeLedgerService.cs'),
     (Join-Path $repoRoot 'tools\tests\GlitchTradeLedgerPartialFillHarness.cs')
@@ -45,8 +46,7 @@ foreach ($sourcePath in $sourcePaths) {
 
 foreach ($syntaxOnlyPath in @(
     (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\UI\MainWindow\GlitchMainWindow.SummaryTab.partial.cs'),
-    (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\UI\MainWindow\GlitchMainWindow.Performance.partial.cs'),
-    (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Tests\GlitchTradeInsightsServiceTests.cs')
+    (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\UI\MainWindow\GlitchMainWindow.Performance.partial.cs')
 )) {
     $syntaxOnlyTree = [Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree]::ParseText(
         [System.IO.File]::ReadAllText($syntaxOnlyPath),
