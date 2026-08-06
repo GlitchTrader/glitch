@@ -370,6 +370,16 @@ namespace Glitch.UI
                 return L("ai.cadence.paused", "Scheduled calls are paused");
             if (!latestDecisionUtc.HasValue)
                 return L("ai.status.waiting_first", "Waiting for the first completed decision");
+            if (health != null
+                && string.Equals(health.DecisionWorkerStatus, "started", StringComparison.Ordinal)
+                && health.DecisionAttemptAgeSeconds >= 0
+                && health.DecisionAttemptAgeSeconds <= 360)
+            {
+                return Lf(
+                    "ai.cadence.in_progress_format",
+                    "Decision in progress ({0}s)",
+                    Math.Max(1, (int)Math.Round(health.DecisionAttemptAgeSeconds)));
+            }
             if (IsAiDecisionWorkerUnhealthy(health))
                 return L("ai.cadence.overdue", "Decision overdue - inspect the background worker");
 

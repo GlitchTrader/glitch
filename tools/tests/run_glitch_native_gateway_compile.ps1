@@ -22,6 +22,7 @@ $sourcePaths = @(
     (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Core\GlitchNativeIdentity.cs'),
     (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Core\GlitchEngine.cs'),
     (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Core\GlitchRuntime.cs'),
+    (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Infrastructure\GlitchExecutionEvidenceWriter.cs'),
     (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Infrastructure\NinjaTraderGateway.cs')
 )
 $syntaxTrees = [System.Collections.Generic.List[Microsoft.CodeAnalysis.SyntaxTree]]::new()

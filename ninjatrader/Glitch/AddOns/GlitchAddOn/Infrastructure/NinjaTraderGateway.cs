@@ -744,6 +744,18 @@ namespace Glitch.Infrastructure
                 });
             beforeMutation?.Invoke(command);
             account.Submit(new[] { order });
+            if (command.Purpose == GlitchCommandPurpose.HermesMasterEntry)
+            {
+                GlitchExecutionEvidenceWriter.TryAppend(
+                    command.ParentCorrelationId,
+                    "pending",
+                    "master_entry_submitted",
+                    "correlation=" + command.CommandId
+                    + "|contract=" + Clean(instrument.FullName)
+                    + "|point_value_usd=" + instrument.MasterInstrument.PointValue.ToString(CultureInfo.InvariantCulture)
+                    + "|tick_size=" + instrument.MasterInstrument.TickSize.ToString(CultureInfo.InvariantCulture),
+                    DateTime.UtcNow);
+            }
             Notice(
                 account.Name,
                 "Order",
@@ -831,6 +843,31 @@ namespace Glitch.Infrastructure
                 throw new InvalidOperationException("Protection command contained no native orders.");
             beforeMutation?.Invoke(command);
             account.Submit(orders);
+            string hermesIntentId = HermesIntentId(command.ExposureId);
+            if (command.PropagatesAsMasterExecution && !string.IsNullOrWhiteSpace(hermesIntentId))
+            {
+                var fields = new StringBuilder()
+                    .Append("account=").Append(Clean(account.Name))
+                    .Append("|fill=").Append(command.EntryPrice.ToString(CultureInfo.InvariantCulture))
+                    .Append("|point_value_usd=").Append(instrument.MasterInstrument.PointValue.ToString(CultureInfo.InvariantCulture))
+                    .Append("|tick_size=").Append(instrument.MasterInstrument.TickSize.ToString(CultureInfo.InvariantCulture));
+                for (int i = 0; i < command.Targets.Count; i++)
+                {
+                    ProtectionTarget target = command.Targets[i];
+                    int leg = i + 1;
+                    fields.Append("|leg").Append(leg).Append("_qty=").Append(target.Quantity);
+                    if (target.StopPrice.HasValue)
+                        fields.Append("|sl").Append(leg).Append('=').Append(target.StopPrice.Value.ToString(CultureInfo.InvariantCulture));
+                    if (target.Price.HasValue)
+                        fields.Append("|tp").Append(leg).Append('=').Append(target.Price.Value.ToString(CultureInfo.InvariantCulture));
+                }
+                GlitchExecutionEvidenceWriter.TryAppend(
+                    hermesIntentId,
+                    "pending",
+                    "group_structural_brackets_submitted",
+                    fields.ToString(),
+                    DateTime.UtcNow);
+            }
             Notice(
                 account.Name,
                 "Protection",
@@ -838,6 +875,14 @@ namespace Glitch.Infrastructure
                 + "|instrument=" + Clean(instrument.FullName)
                 + "|quantity=" + Math.Abs(command.SignedEntryQuantity)
                 + "|legs=" + command.Targets.Count);
+        }
+
+        private static string HermesIntentId(string exposureId)
+        {
+            string[] parts = (exposureId ?? string.Empty).Split('|');
+            return parts.Length >= 2 && string.Equals(parts[0], "HERMES", StringComparison.Ordinal)
+                ? parts[1]
+                : string.Empty;
         }
 
         private void ChangeProtection(

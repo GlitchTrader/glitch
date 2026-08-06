@@ -170,6 +170,23 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("GlitchSnapshotJson.Bool(false)", selfcheck)
         self.assertNotIn("r09_risk_firewall", selfcheck)
 
+    def test_native_hermes_entry_evidence_reaches_outcome_reconciliation(self):
+        gateway = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/NinjaTraderGateway.cs"
+        )
+        writer = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/GlitchExecutionEvidenceWriter.cs"
+        )
+        ai_tab = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.AiTab.partial.cs"
+        )
+        self.assertIn('"master_entry_submitted"', gateway)
+        self.assertIn('"group_structural_brackets_submitted"', gateway)
+        self.assertIn("instrument.MasterInstrument.PointValue", gateway)
+        self.assertIn("instrument.MasterInstrument.TickSize", gateway)
+        self.assertIn("public static void TryAppend(", writer)
+        self.assertIn("Decision in progress ({0}s)", ai_tab)
+
     def test_account_size_edit_commits_manual_configuration_before_refresh(self):
         window = read(
             "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.cs"
