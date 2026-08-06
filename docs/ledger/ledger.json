@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0",
   "project": "glitch",
-  "updated": "2026-08-05",
+  "updated": "2026-08-06",
   "release_target": "bounded beta",
   "products": {
     "standard": {
@@ -85,7 +85,8 @@
         "canonical public Hermes profile is 0.0.2.22 at 1b4cc51c1d4e1e460595f8df1805277099edd575; installed profile update and setup passed 22/22 distribution hashes, plugin enabled, supervised gateway, and exactly two supported jobs; prior fresh epoch evidence remains e7a43a93-ec25-4cdd-8552-1ae27fe3e3e3",
         "current canonical source is 1859a98ed4555bb6fddf6dfff5ceed34ada2463c on main; the code tree was clean before these ledger/spec documentation edits, and the AddOn source tree contains 91 files",
         "current live/deployed parity has not been re-verified against 1859a98ed4555bb6fddf6dfff5ceed34ada2463c; the 91-file parity evidence above remains historical evidence for the prior recorded deployment",
-        "paired Hermes profile verified at 1b4cc51c1d4e1e460595f8df1805277099edd575 on main; worktree is clean and the profile version remains 0.0.2.22"
+        "paired Hermes profile verified at 1b4cc51c1d4e1e460595f8df1805277099edd575 on main; worktree is clean and the profile version remains 0.0.2.22",
+        "2026-08-06 canonical pairing milestone: Glitch main at code anchor 1859a98ed4555bb6fddf6dfff5ceed34ada2463c is paired with Hermes profile main at 1b4cc51c1d4e1e460595f8df1805277099edd575; this establishes source canon, not deployment or live readiness"
       ],
       "next_gate": "compile in NinjaTrader, then execute the named bounded Sim fixtures before legacy cutover",
       "acceptance": [
