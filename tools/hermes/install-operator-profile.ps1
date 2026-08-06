@@ -1,19 +1,22 @@
 param(
-    [string]$ProfilesRoot = (Join-Path $env:LOCALAPPDATA 'hermes\profiles')
+    [string]$ProfilesRoot = (Join-Path $env:LOCALAPPDATA 'hermes\profiles'),
+    [string]$HermesProfileRoot = $env:GLITCH_HERMES_PROFILE_ROOT
 )
 
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$manifest = Get-Content -LiteralPath (Join-Path $repo 'hermes-profile\operator.json') -Raw | ConvertFrom-Json
+if ([string]::IsNullOrWhiteSpace($HermesProfileRoot)) { $HermesProfileRoot = Join-Path (Split-Path $repo -Parent) 'glitch-hermes-profile' }
+$HermesProfileRoot = (Resolve-Path -LiteralPath $HermesProfileRoot).Path
+$manifest = Get-Content -LiteralPath (Join-Path $HermesProfileRoot 'operator.json') -Raw | ConvertFrom-Json
 $name = [string]$manifest.operator_profile
 if ($name -ne 'glitch') { throw 'Canonical Hermes operator profile must be glitch.' }
 $destination = Join-Path $ProfilesRoot $name
 if (-not (Test-Path -LiteralPath $destination -PathType Container)) { throw 'Base Hermes profile glitch is missing.' }
 
-$soulSource = Join-Path $repo 'hermes-profile\profiles\glitch\SOUL.md'
+$soulSource = Join-Path $HermesProfileRoot 'SOUL.md'
 $soulDestination = Join-Path $destination 'SOUL.md'
 Copy-Item -LiteralPath $soulSource -Destination $soulDestination -Force
-$skillsSource = Join-Path $repo 'hermes-profile\skills'
+$skillsSource = Join-Path $HermesProfileRoot 'skills'
 $skillsDestination = Join-Path $destination 'skills'
 foreach ($skillSource in @(Get-ChildItem -LiteralPath $skillsSource -Directory)) {
     $skillDestination = Join-Path $skillsDestination $skillSource.Name

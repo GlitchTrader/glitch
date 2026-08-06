@@ -1,12 +1,15 @@
 param(
     [string]$Profile = 'glitch',
     [string]$ProfilesRoot = (Join-Path $env:LOCALAPPDATA 'hermes\profiles'),
+    [string]$HermesProfileRoot = $env:GLITCH_HERMES_PROFILE_ROOT,
     [switch]$SkipGatewayInstall
 )
 
 $ErrorActionPreference = 'Stop'
 if ($Profile -ne 'glitch') { throw 'The direct operator profile must be glitch.' }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+if ([string]::IsNullOrWhiteSpace($HermesProfileRoot)) { $HermesProfileRoot = Join-Path (Split-Path $repo -Parent) 'glitch-hermes-profile' }
+$HermesProfileRoot = (Resolve-Path -LiteralPath $HermesProfileRoot).Path
 $destination = Join-Path $ProfilesRoot $Profile
 if (-not (Test-Path -LiteralPath $destination -PathType Container)) {
     throw "Hermes profile is missing: $destination"
@@ -17,13 +20,13 @@ if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
     throw "Could not locate the Hermes Python runtime: $python"
 }
 
-Copy-Item -LiteralPath (Join-Path $repo 'hermes-profile\profiles\glitch\SOUL.md') `
+Copy-Item -LiteralPath (Join-Path $HermesProfileRoot 'SOUL.md') `
     -Destination (Join-Path $destination 'SOUL.md') -Force
-Copy-Item -LiteralPath (Join-Path $repo 'hermes-profile\operator.json') `
+Copy-Item -LiteralPath (Join-Path $HermesProfileRoot 'operator.json') `
     -Destination (Join-Path $destination 'operator.json') -Force
 
 $skillsDestination = Join-Path $destination 'skills'
-$skillSources = @(Get-ChildItem -LiteralPath (Join-Path $repo 'hermes-profile\skills') -Directory)
+$skillSources = @(Get-ChildItem -LiteralPath (Join-Path $HermesProfileRoot 'skills') -Directory)
 $sourceSkillNames = @($skillSources | ForEach-Object Name)
 foreach ($installedSkill in @(Get-ChildItem -LiteralPath $skillsDestination -Directory -ErrorAction SilentlyContinue | Where-Object Name -Like 'glitch-*')) {
     if ($sourceSkillNames -notcontains $installedSkill.Name) {
@@ -59,7 +62,7 @@ if (Test-Path -LiteralPath $pluginDestination -PathType Container) {
     Remove-Item -LiteralPath $pluginDestination -Recurse -Force
 }
 New-Item -ItemType Directory -Force -Path $pluginDestination | Out-Null
-Copy-Item -Path (Join-Path $repo 'hermes-profile\plugins\glitch-control\*') `
+Copy-Item -Path (Join-Path $HermesProfileRoot 'plugins\glitch-control\*') `
     -Destination $pluginDestination -Recurse -Force
 
 # The Glitch profile is a host-side operator. Workframe's Hermes remains in its

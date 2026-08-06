@@ -1,14 +1,21 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [string]$TargetRoot
+    [string]$TargetRoot,
+    [string]$HermesProfileRoot = $env:GLITCH_HERMES_PROFILE_ROOT
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$sourceRoot = Join-Path $repoRoot 'hermes-profile'
+if ([string]::IsNullOrWhiteSpace($HermesProfileRoot)) {
+    $HermesProfileRoot = Join-Path (Split-Path $repoRoot -Parent) 'glitch-hermes-profile'
+}
+$sourceRoot = (Resolve-Path -LiteralPath $HermesProfileRoot).Path
+if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot 'distribution.yaml') -PathType Leaf)) {
+    throw "Canonical Hermes profile is unavailable: $sourceRoot"
+}
 $target = [IO.Path]::GetFullPath($TargetRoot)
 if (-not (Test-Path -LiteralPath $target -PathType Container)) {
     New-Item -ItemType Directory -Path $target | Out-Null
@@ -34,7 +41,7 @@ foreach ($directoryName in @('skills', 'plugins', 'scripts')) {
 foreach ($name in @('distribution.yaml', 'operator.json', 'config.yaml', 'setup.ps1', 'README.md', '.gitattributes', '.gitignore')) {
     Copy-Item -LiteralPath (Join-Path $sourceRoot $name) -Destination (Join-Path $target $name) -Force
 }
-Copy-Item -LiteralPath (Join-Path $sourceRoot 'profiles\glitch\SOUL.md') -Destination (Join-Path $target 'SOUL.md') -Force
+Copy-Item -LiteralPath (Join-Path $sourceRoot 'SOUL.md') -Destination (Join-Path $target 'SOUL.md') -Force
 Copy-Item -Path (Join-Path $sourceRoot 'skills\*') -Destination (Join-Path $target 'skills') -Recurse -Force
 Copy-Item -Path (Join-Path $sourceRoot 'plugins\glitch-control') -Destination (Join-Path $target 'plugins') -Recurse -Force
 
@@ -111,7 +118,8 @@ if ($unexpectedAfter.Count -gt 0) { throw "Public profile gained unexpected path
 [ordered]@{
     schema_version = 'glitch.hermes.public_profile_build.v1'
     target = $target
-    version = '0.0.2.20'
+    version = (Get-Content -LiteralPath (Join-Path $sourceRoot 'distribution.yaml') |
+        Where-Object { $_ -match '^version:' } | Select-Object -First 1).Split(':', 2)[1].Trim()
     skills = $skillCount
     scripts = $scriptCount
     files = $textFiles.Count + 1

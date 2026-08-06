@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
+from profile_root import PROFILE_ROOT
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -197,7 +198,7 @@ class DirectCycleTests(unittest.TestCase):
 
     def test_minute_cron_launcher_detaches_the_slow_direct_worker(self):
         source = LAUNCHER_SCRIPT.read_text(encoding="utf-8")
-        setup = (ROOT / "hermes-profile" / "setup.ps1").read_text(encoding="utf-8")
+        setup = (PROFILE_ROOT / "setup.ps1").read_text(encoding="utf-8")
         args = SimpleNamespace(
             glitch_data=Path("C:/GlitchData"),
             profile="glitch",
@@ -753,7 +754,7 @@ class DirectCycleTests(unittest.TestCase):
     def test_prompt_exposes_optional_three_leg_native_scale_out(self):
         value = MODULE.build_prompt(packet(), MODULE.build_scenario(packet()), {})
         trade_skill = (
-            ROOT / "hermes-profile/skills/glitch-trade-mnq/SKILL.md"
+            PROFILE_ROOT / "skills/glitch-trade-mnq/SKILL.md"
         ).read_text(encoding="utf-8")
         self.assertIn("take_profit_2", value)
         self.assertIn("quantity_tp1", value)

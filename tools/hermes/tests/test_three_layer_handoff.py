@@ -1,6 +1,7 @@
 import json
 import unittest
 from pathlib import Path
+from profile_root import PROFILE_ROOT
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -14,7 +15,7 @@ class ThreeLayerHandoffTests(unittest.TestCase):
         self.assertEqual(schema["properties"]["requested_by"]["const"], "hermes-chat")
 
     def test_soul_keeps_codex_out_of_trading_runtime(self):
-        soul = (ROOT / "hermes-profile/profiles/glitch/SOUL.md").read_text()
+        soul = (PROFILE_ROOT / "SOUL.md").read_text()
         self.assertIn("Codex is a separate bounded builder", soul)
         self.assertIn("never part of the market-data or execution loop", soul)
 

@@ -5,6 +5,7 @@ param(
     [string]$NormalizeBatchPath,
     [string]$ExpectedSnapshotHash,
     [string]$Profile = 'glitch',
+    [string]$HermesProfileRoot = $env:GLITCH_HERMES_PROFILE_ROOT,
     [string]$HermesRoot = (Join-Path $env:LOCALAPPDATA 'hermes\hermes-agent'),
     [string]$Capsule = 'D:\ab\projects\glitch\Glitch-Hermes-Data',
     [ValidateRange(30, 600)][int]$HermesTimeoutSeconds = 240
@@ -13,8 +14,10 @@ param(
 $ErrorActionPreference = 'Stop'
 if ($Profile -ne 'glitch') { throw 'The portfolio operator must use the single glitch Hermes profile.' }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+if ([string]::IsNullOrWhiteSpace($HermesProfileRoot)) { $HermesProfileRoot = Join-Path (Split-Path $repo -Parent) 'glitch-hermes-profile' }
+$HermesProfileRoot = (Resolve-Path -LiteralPath $HermesProfileRoot).Path
 $gd = Join-Path $env:USERPROFILE 'Documents\NinjaTrader 8\GlitchData'
-    $manifest = Get-Content -LiteralPath (Join-Path $repo 'hermes-profile\operator.json') -Raw | ConvertFrom-Json
+    $manifest = Get-Content -LiteralPath (Join-Path $HermesProfileRoot 'operator.json') -Raw | ConvertFrom-Json
 $runId = [datetime]::UtcNow.ToString('yyyyMMddTHHmmssZ')
 $cycleId = "glitch-portfolio-$runId"
 $lockPath = Join-Path $gd 'ai\hermes-portfolio-cycle.lock'

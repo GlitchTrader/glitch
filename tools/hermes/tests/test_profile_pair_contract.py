@@ -1,15 +1,16 @@
 import json
 import unittest
 from pathlib import Path
+from profile_root import PROFILE_ROOT
 
 
 ROOT = Path(__file__).resolve().parents[3]
 CATALOG = ROOT / "apps" / "download" / "src" / "lib" / "release-catalog.json"
-EMBEDDED_PROFILE = ROOT / "hermes-profile" / "distribution.yaml"
+CANONICAL_PROFILE = PROFILE_ROOT / "distribution.yaml"
 
 
 class ProfilePairContractTests(unittest.TestCase):
-    def test_current_ai_release_names_the_embedded_profile(self) -> None:
+    def test_current_ai_release_names_the_canonical_profile(self) -> None:
         catalog = json.loads(CATALOG.read_text(encoding="utf-8-sig"))
         current = [
             row for row in catalog
@@ -17,15 +18,15 @@ class ProfilePairContractTests(unittest.TestCase):
         ]
         self.assertEqual(len(current), 1)
         self.assertEqual(current[0].get("status"), "experimental")
-        self.assertEqual(current[0].get("hermesProfileVersion"), "0.0.2.20")
+        self.assertEqual(current[0].get("hermesProfileVersion"), "0.0.2.22")
 
-    def test_embedded_profile_is_the_public_profile_version(self) -> None:
+    def test_canonical_profile_is_the_public_profile_version(self) -> None:
         version = next(
             line.split(":", 1)[1].strip()
-            for line in EMBEDDED_PROFILE.read_text(encoding="utf-8").splitlines()
+            for line in CANONICAL_PROFILE.read_text(encoding="utf-8").splitlines()
             if line.startswith("version:")
         )
-        self.assertEqual(version, "0.0.2.20")
+        self.assertEqual(version, "0.0.2.22")
 
 
 if __name__ == "__main__":

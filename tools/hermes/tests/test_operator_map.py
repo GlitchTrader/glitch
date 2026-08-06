@@ -1,6 +1,7 @@
 import json
 import unittest
 from pathlib import Path
+from profile_root import PROFILE_ROOT
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -10,7 +11,7 @@ class OperatorMapTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.operator = json.loads(
-            (ROOT / "hermes-profile" / "operator.json").read_text(encoding="utf-8")
+            (PROFILE_ROOT / "operator.json").read_text(encoding="utf-8")
         )
         cls.cognitive_map = (
             ROOT
@@ -27,13 +28,13 @@ class OperatorMapTests(unittest.TestCase):
         self.assertTrue(self.operator["skills"]["native_hermes_preserved"])
 
     def test_public_distribution_is_versioned_portable_and_paused_on_fresh_setup(self):
-        profile = ROOT / "hermes-profile"
+        profile = PROFILE_ROOT
         distribution = (profile / "distribution.yaml").read_text(encoding="utf-8")
         config = (profile / "config.yaml").read_text(encoding="utf-8")
         setup = (profile / "setup.ps1").read_text(encoding="utf-8")
         builder = (ROOT / "tools/hermes/build-public-profile.ps1").read_text(encoding="utf-8")
 
-        self.assertIn("version: 0.0.2.20", distribution)
+        self.assertIn("version: 0.0.2.22", distribution)
         self.assertEqual((profile / ".gitattributes").read_text(encoding="utf-8"), "* -text\n")
         self.assertIn("'.gitattributes'", builder)
         self.assertIn('hermes_requires: \">=0.18.2\"', distribution)
@@ -61,7 +62,7 @@ class OperatorMapTests(unittest.TestCase):
         self.assertIn("_write_chain(c, [])", setup)
 
     def test_trade_command_controls_operator_and_learning_together(self):
-        plugin = (ROOT / "hermes-profile/plugins/glitch-control/__init__.py").read_text(encoding="utf-8")
+        plugin = (PROFILE_ROOT / "plugins/glitch-control/__init__.py").read_text(encoding="utf-8")
         self.assertIn('JOB_NAMES = ("glitch-direct-operator", "glitch-learning-supervisor")', plugin)
         self.assertIn('"trade": (_trade,', plugin)
         self.assertIn('"trade-mode": (_trade_mode,', plugin)
@@ -144,10 +145,10 @@ class OperatorMapTests(unittest.TestCase):
         ])
         self.assertEqual(required, [])
 
-        trade = (ROOT / "hermes-profile/skills/glitch-trade-mnq/SKILL.md").read_text(encoding="utf-8")
-        learn = (ROOT / "hermes-profile/skills/glitch-learn/SKILL.md").read_text(encoding="utf-8")
-        runtime = (ROOT / "hermes-profile/skills/glitch-runtime/SKILL.md").read_text(encoding="utf-8")
-        market = (ROOT / "hermes-profile/skills/glitch-market-structure/SKILL.md").read_text(encoding="utf-8")
+        trade = (PROFILE_ROOT / "skills/glitch-trade-mnq/SKILL.md").read_text(encoding="utf-8")
+        learn = (PROFILE_ROOT / "skills/glitch-learn/SKILL.md").read_text(encoding="utf-8")
+        runtime = (PROFILE_ROOT / "skills/glitch-runtime/SKILL.md").read_text(encoding="utf-8")
+        market = (PROFILE_ROOT / "skills/glitch-market-structure/SKILL.md").read_text(encoding="utf-8")
         self.assertIn("competing explanations", trade)
         self.assertIn("no fixed point distance", trade)
         self.assertIn("never as a rule set", market)

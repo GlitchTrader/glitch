@@ -1,12 +1,13 @@
 import pathlib
 import unittest
+from profile_root import PROFILE_ROOT
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 UI = ROOT / "ninjatrader" / "Glitch" / "AddOns" / "GlitchAddOn" / "UI" / "MainWindow"
 POLICY = ROOT / "ninjatrader" / "Glitch" / "AddOns" / "GlitchAddOn" / "Services" / "Ai" / "GlitchAiRailPolicyStore.cs"
 AI_AUTO = ROOT / "ninjatrader" / "Glitch" / "AddOns" / "GlitchAddOn" / "Services" / "Ai" / "GlitchAiAutoRuntimeController.cs"
-CONTROL_PLUGIN = ROOT / "hermes-profile" / "plugins" / "glitch-control" / "__init__.py"
+CONTROL_PLUGIN = PROFILE_ROOT / "plugins" / "glitch-control" / "__init__.py"
 
 
 class GlitchAiUiContractTests(unittest.TestCase):
