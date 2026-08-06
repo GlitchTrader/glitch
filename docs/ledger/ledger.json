@@ -80,9 +80,9 @@
         "focused Glitch and Hermes contract suite passes 257 tests and 4 subtests; repository-wide sweep previously passed 266 tests with only pre-existing public guide/metadata failures outside this rebuild",
         "structural audit proves NinjaTraderGateway.cs is the sole native order mutator and no retired replication, protection, intent-state, AI-risk, or Apex-guard engine remains in production",
         "AppDomain-wide runtime ownership now stops the prior NinjaScript assembly before rail binding; failed handoff blocks replacement and stale termination cannot clear the new owner",
-        "one complete 94-file AddOn folder deployed to NinjaTrader with exact relative-manifest and SHA-256 parity; prior live folder preserved at D:/ab/deploy-backups/glitch-nt-rebuild-predeploy-20260805-075515",
-        "2026-08-05 source cleanup removed four zero-reference artifacts from the candidate worktree: localization_keys_extract.tsv, GlitchAiEntryBaselinePlanStore.cs, GlitchAiExitOwnershipPlanStore.cs, and GlitchAiIntentHistoryReader.cs; the current source tree contains 91 AddOn files, and native deployment evidence must be rerun before acceptance",
-        "canonical public Hermes profile is 0.0.2.22 at 4a3d8a58dc4d9ba5cccae61910dffb3b6d3e1af4; the last recorded installed-profile evidence is profile 0.0.2.20 with 22/22 distribution hashes; fresh epoch e7a43a93-ec25-4cdd-8552-1ae27fe3e3e3 has zero retained memory/request dumps and exactly two expected paused jobs"
+        "one complete 94-file AddOn folder was previously deployed to NinjaTrader with exact relative-manifest and SHA-256 parity; prior live folder preserved at D:/ab/deploy-backups/glitch-nt-rebuild-predeploy-20260805-075515",
+        "2026-08-05 source and live cleanup removed four zero-reference artifacts: localization_keys_extract.tsv, GlitchAiEntryBaselinePlanStore.cs, GlitchAiExitOwnershipPlanStore.cs, and GlitchAiIntentHistoryReader.cs; the canonical source and live AddOn folders now each contain 91 files with zero missing files, zero extras, and zero SHA-256 mismatches",
+        "canonical public Hermes profile is 0.0.2.22 at 4a3d8a58dc4d9ba5cccae61910dffb3b6d3e1af4; installed profile update and setup passed 22/22 distribution hashes, plugin enabled, supervised gateway, and exactly two supported jobs; prior fresh epoch evidence remains e7a43a93-ec25-4cdd-8552-1ae27fe3e3e3"
       ],
       "next_gate": "compile in NinjaTrader, then execute the named bounded Sim fixtures before legacy cutover",
       "acceptance": [
