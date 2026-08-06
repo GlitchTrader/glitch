@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0",
   "project": "glitch",
-  "updated": "2026-08-02",
+  "updated": "2026-08-05",
   "release_target": "bounded beta",
   "products": {
     "standard": {
@@ -12,8 +12,9 @@
     "advanced": {
       "version": "0.0.2.7",
       "maturity": "experimental",
-      "source_commit": "08aec7a43d3ab1510227aa36fc72a37178c8f8dc",
-      "hermes_profile_version": "0.0.2.19",
+      "source_commit": "e7415a209528b356a5963cbd934e0cff7774de3e",
+      "hermes_profile_version": "0.0.2.22",
+      "hermes_profile_commit": "4a3d8a58dc4d9ba5cccae61910dffb3b6d3e1af4",
       "authority": "Hermes owns probabilistic judgment and intent; Glitch owns factual executability, native mutation, protection, reconciliation, and receipts"
     },
     "topstep": {
@@ -80,7 +81,8 @@
         "structural audit proves NinjaTraderGateway.cs is the sole native order mutator and no retired replication, protection, intent-state, AI-risk, or Apex-guard engine remains in production",
         "AppDomain-wide runtime ownership now stops the prior NinjaScript assembly before rail binding; failed handoff blocks replacement and stale termination cannot clear the new owner",
         "one complete 94-file AddOn folder deployed to NinjaTrader with exact relative-manifest and SHA-256 parity; prior live folder preserved at D:/ab/deploy-backups/glitch-nt-rebuild-predeploy-20260805-075515",
-        "authoritative public Hermes profile 0.0.2.20 is independently unchanged and installed with 22/22 distribution hashes; fresh epoch e7a43a93-ec25-4cdd-8552-1ae27fe3e3e3 has zero retained memory/request dumps and exactly two expected paused jobs"
+        "2026-08-05 source cleanup removed four zero-reference artifacts from the candidate worktree: localization_keys_extract.tsv, GlitchAiEntryBaselinePlanStore.cs, GlitchAiExitOwnershipPlanStore.cs, and GlitchAiIntentHistoryReader.cs; the current source tree contains 91 AddOn files, and native deployment evidence must be rerun before acceptance",
+        "canonical public Hermes profile is 0.0.2.22 at 4a3d8a58dc4d9ba5cccae61910dffb3b6d3e1af4; the last recorded installed-profile evidence is profile 0.0.2.20 with 22/22 distribution hashes; fresh epoch e7a43a93-ec25-4cdd-8552-1ae27fe3e3e3 has zero retained memory/request dumps and exactly two expected paused jobs"
       ],
       "next_gate": "compile in NinjaTrader, then execute the named bounded Sim fixtures before legacy cutover",
       "acceptance": [
