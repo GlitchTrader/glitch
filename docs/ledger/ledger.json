@@ -12,9 +12,9 @@
     "advanced": {
       "version": "0.0.2.7",
       "maturity": "experimental",
-      "source_commit": "e7415a209528b356a5963cbd934e0cff7774de3e",
+      "source_commit": "1859a98ed4555bb6fddf6dfff5ceed34ada2463c",
       "hermes_profile_version": "0.0.2.22",
-      "hermes_profile_commit": "4a3d8a58dc4d9ba5cccae61910dffb3b6d3e1af4",
+      "hermes_profile_commit": "1b4cc51c1d4e1e460595f8df1805277099edd575",
       "authority": "Hermes owns probabilistic judgment and intent; Glitch owns factual executability, native mutation, protection, reconciliation, and receipts"
     },
     "topstep": {
@@ -70,7 +70,7 @@
       "current_evidence": [
         "docs/specs/GLITCH-NT-REBUILD-CONTRACT.md",
         "operator froze the builder/equipment fault doctrine and authorized end-to-end implementation on 2026-08-05",
-        "isolated branch rebuild/nt-core-v1 and worktree D:/ab/worktrees/glitch-nt-rebuild",
+        "canonical main branch and worktree D:/ab/worktrees/glitch-nt-rebuild",
         "single AddOn-lifetime runtime, serialized pure reducer, and sole typed NinjaTrader mutation gateway implemented",
         "manual and Hermes master executions share cumulative delta replication; follower manual executions are observation-only",
         "native fill-anchored protection, cancellation finality, reversal geometry, and protective-fill races have executable harness coverage",
@@ -82,7 +82,10 @@
         "AppDomain-wide runtime ownership now stops the prior NinjaScript assembly before rail binding; failed handoff blocks replacement and stale termination cannot clear the new owner",
         "one complete 94-file AddOn folder was previously deployed to NinjaTrader with exact relative-manifest and SHA-256 parity; prior live folder preserved at D:/ab/deploy-backups/glitch-nt-rebuild-predeploy-20260805-075515",
         "2026-08-05 source and live cleanup removed four zero-reference artifacts: localization_keys_extract.tsv, GlitchAiEntryBaselinePlanStore.cs, GlitchAiExitOwnershipPlanStore.cs, and GlitchAiIntentHistoryReader.cs; the canonical source and live AddOn folders now each contain 91 files with zero missing files, zero extras, and zero SHA-256 mismatches",
-        "canonical public Hermes profile is 0.0.2.22 at 4a3d8a58dc4d9ba5cccae61910dffb3b6d3e1af4; installed profile update and setup passed 22/22 distribution hashes, plugin enabled, supervised gateway, and exactly two supported jobs; prior fresh epoch evidence remains e7a43a93-ec25-4cdd-8552-1ae27fe3e3e3"
+        "canonical public Hermes profile is 0.0.2.22 at 1b4cc51c1d4e1e460595f8df1805277099edd575; installed profile update and setup passed 22/22 distribution hashes, plugin enabled, supervised gateway, and exactly two supported jobs; prior fresh epoch evidence remains e7a43a93-ec25-4cdd-8552-1ae27fe3e3e3",
+        "current canonical source is 1859a98ed4555bb6fddf6dfff5ceed34ada2463c on main; the code tree was clean before these ledger/spec documentation edits, and the AddOn source tree contains 91 files",
+        "current live/deployed parity has not been re-verified against 1859a98ed4555bb6fddf6dfff5ceed34ada2463c; the 91-file parity evidence above remains historical evidence for the prior recorded deployment",
+        "paired Hermes profile verified at 1b4cc51c1d4e1e460595f8df1805277099edd575 on main; worktree is clean and the profile version remains 0.0.2.22"
       ],
       "next_gate": "compile in NinjaTrader, then execute the named bounded Sim fixtures before legacy cutover",
       "acceptance": [
@@ -252,6 +255,99 @@
         "no deterministic hidden strategy or arbitrary compliance gate",
         "operator approval for named beta artifact"
       ]
+    },
+    {
+      "id": "GL-AI-10",
+      "title": "Normalize native outcomes for Hermes learning and calibration",
+      "status": "todo",
+      "priority": "P1",
+      "owner_role": "architect",
+      "issue": 15,
+      "spec": "docs/specs/GL-AI-10.md",
+      "depends_on": [
+        "GL-AI-06",
+        "GL-AI-07"
+      ],
+      "scope": "Advanced NT and paired Hermes learning exchange; no strategy or execution-authority change",
+      "current_evidence": [
+        "Hermes learning requires attributable completed master outcomes, while current native joins and terminal evidence remain the limiting contract",
+        "source candidate: 1859a98ed4555bb6fddf6dfff5ceed34ada2463c; profile: 1b4cc51c1d4e1e460595f8df1805277099edd575"
+      ],
+      "acceptance": [
+        "append-only normalized master outcomes join intent, cycle, packet, snapshot, route, account, and trade identities",
+        "outcomes include native terminal state, PnL/R, MAE/MFE, drift/management facts, first-touch facts, attribution status, and unresolved joins",
+        "calibration metrics are computed only for complete attributable outcomes and never promoted into deterministic gates",
+        "tests cover delayed, partial, rejected, manually altered, reconnected, restarted, and unresolved outcomes"
+      ],
+      "stop_line": "No calibration claim or lesson promotion from incomplete or unresolved native attribution."
+    },
+    {
+      "id": "GL-AI-11",
+      "title": "Expose execution drift and protection coverage diagnostics",
+      "status": "todo",
+      "priority": "P1",
+      "owner_role": "architect",
+      "issue": 16,
+      "spec": "docs/specs/GL-AI-11.md",
+      "depends_on": [
+        "GL-AI-07"
+      ],
+      "scope": "Read-only Advanced NT diagnostics for Hermes interpretation and operator audit",
+      "current_evidence": [
+        "native protection and reconciliation are owned by Glitch, but the current Hermes contract lacks a compact diagnostic projection for coverage, drift, and lifecycle state"
+      ],
+      "acceptance": [
+        "diagnostics report position quantity, stop/target presence, protected/unprotected coverage, identity, anchors/fills, delay/drift, native lifecycle, and attribution status",
+        "partial, race, rejection, stale, reconnect, and restart states remain explicit rather than collapsed into direction or success",
+        "diagnostics are read-only and do not add trading gates or mutate native state"
+      ],
+      "stop_line": "Do not infer protected exposure, successful execution, or strategy failure from missing or stale diagnostics."
+    },
+    {
+      "id": "GL-AI-12",
+      "title": "Add descriptive path and flow measurements to the NT decision packet",
+      "status": "todo",
+      "priority": "P2",
+      "owner_role": "architect",
+      "issue": 17,
+      "spec": "docs/specs/GL-AI-12.md",
+      "scope": "Descriptive Advanced NT context for Hermes judgment and later attributable learning; no deterministic strategy logic",
+      "current_evidence": [
+        "current snapshot and decision contracts do not provide a stable, freshness-labeled projection of path efficiency, excursion, or flow change for later comparison"
+      ],
+      "acceptance": [
+        "packet fields cover descriptive path/flow measurements only where source, freshness, phase, and completeness are known",
+        "candidate measures include ER, CLV, range position, movement in price/ticks/ATR, realized volatility, same-phase percentile, and available flow-change measures",
+        "missing or stale data is represented as uncertainty; no field becomes a hard entry, exit, probability, or risk gate",
+        "tests prove packet compatibility and stable serialization across missing, warming, and reconnect states"
+      ],
+      "stop_line": "Do not introduce a deterministic trading rule to compensate for missing or weak descriptive context."
+    },
+    {
+      "id": "GL-AI-13",
+      "title": "Define bounded semantic NT management operations for Hermes",
+      "status": "todo",
+      "priority": "P2",
+      "owner_role": "architect",
+      "issue": 18,
+      "spec": "docs/specs/GL-AI-13.md",
+      "depends_on": [
+        "GL-AI-07"
+      ],
+      "scope": "Inventory and, only if safe, expose semantic NT-native management operations through Glitch; no strategy selection or raw NT access",
+      "current_evidence": [
+        "current gateway supports market entry, native stop/target protection, native OCO linkage, explicit stop/target changes, cancellation, and flatten",
+        "current Hermes intent schema has no distinct trailing-stop or ATM/template operation",
+        "current source search found no dedicated trailing or ATM/template command in the NT contract/gateway"
+      ],
+      "acceptance": [
+        "a capability matrix distinguishes existing/native, useful, safe to expose, proposed, and deliberately unavailable operations",
+        "any trailing operation has explicit activation/offset/step, leg/account identity, idempotency, native receipt, and tighten-only/no-widening semantics",
+        "OCO is treated as an execution relationship; ATM/template behavior is exposed only if allowlisted, versioned, previewable, and auditable",
+        "Hermes receives semantic tools only through Glitch validation, policy, native callbacks, reconciliation, and receipts",
+        "Sim fixtures cover duplicates, partial brackets, stale state, missing legs, rejection, reconnect, and restart; unsafe or unsupported ATM behavior is documented as not exposed"
+      ],
+      "stop_line": "Do not expose a new Hermes operation until safety invariants and native lifecycle/reconciliation behavior are implemented and tested."
     }
   ]
 }
