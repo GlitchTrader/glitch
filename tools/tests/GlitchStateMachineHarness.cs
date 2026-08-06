@@ -809,6 +809,47 @@ internal static class GlitchStateMachineHarness
             "copied exit did not settle deterministically after the protection race");
     }
 
+    private static void TestMasterProtectiveExitReconcilesFollowerNativePosition()
+    {
+        ProtectedRouteBook setup = CreateProtectedRouteLong();
+        GlitchEngine engine = setup.Engine;
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 0));
+        var commands = new List<GlitchCommand>();
+        commands.AddRange(engine.Handle(Order(
+            "Master", setup.MasterStopKey, "Filled", 1, 1,
+            setup.MasterProtection.CommandId, "S0")));
+        commands.AddRange(engine.Handle(Order(
+            "Master", setup.MasterTargetKey, "Cancelled", 1, 0,
+            setup.MasterProtection.CommandId, "T0")));
+        commands.AddRange(ObserveExecution(engine, Execution(
+            "race-master-protective-fill", "Master", -1, 19991m, 0, 0,
+            setup.MasterStopKey,
+            setup.MasterProtection.CommandId,
+            setup.MasterProtection.CommandId,
+            GlitchExecutionOrigin.GlitchProtection)));
+
+        CancelProtectionCommand followerCancel = commands
+            .OfType<CancelProtectionCommand>()
+            .Single(command => command.AccountName == "Follower");
+        Assert(followerCancel.TargetCommandIds.SequenceEqual(
+                new[] { setup.FollowerProtection.CommandId }),
+            "master protective exit did not cancel the exact follower protection");
+
+        commands.AddRange(engine.Handle(Order(
+            "Follower", setup.FollowerStopKey, "Cancelled", 1, 0,
+            setup.FollowerProtection.CommandId, "S0")));
+        commands.AddRange(engine.Handle(Order(
+            "Follower", setup.FollowerTargetKey, "Cancelled", 1, 0,
+            setup.FollowerProtection.CommandId, "T0")));
+
+        Assert(commands.OfType<SubmitMarketCommand>().Count() == 0,
+            "master protective exit emitted an unexpected follower market step");
+        Assert(engine.GetOperationPhase(
+                "REPL|race-route|Master|race-master-protective-fill")
+            == GlitchOperationPhase.Completed,
+            "master protective exit did not reconcile the follower to its native flat position");
+    }
+
     private static void TestManualMasterCloseCancelsOnlyOwnedMasterProtection()
     {
         ProtectedRouteBook setup = CreateProtectedRouteLong();
@@ -1116,6 +1157,7 @@ internal static class GlitchStateMachineHarness
         TestUnknownNativeRequestIsABarrierUntilExplicitFlatten();
         TestProtectionRejectionIsTerminalAndNeverRetried();
         TestMasterExitAndFollowerProtectionFillRace();
+        TestMasterProtectiveExitReconcilesFollowerNativePosition();
         TestManualMasterCloseCancelsOnlyOwnedMasterProtection();
         Console.WriteLine("Glitch state machine harness passed.");
         return 0;

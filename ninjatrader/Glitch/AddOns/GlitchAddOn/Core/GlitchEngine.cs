@@ -791,6 +791,7 @@ namespace Glitch.Core
                     delta,
                     route.Id,
                     null,
+                    false,
                     false);
             }
             _pendingSynchronizations.Remove(pending.RouteId + "|" + pending.Instrument);
@@ -1075,7 +1076,8 @@ namespace Glitch.Core
                     delta,
                     route.Id,
                     scaled,
-                    fillProtection == null && execution.Origin == GlitchExecutionOrigin.External);
+                    fillProtection == null && execution.Origin == GlitchExecutionOrigin.External,
+                    nextTarget == 0);
             }
         }
 
@@ -1088,7 +1090,8 @@ namespace Glitch.Core
             int signedQuantity,
             string routeId,
             ProtectionTemplate protection,
-            bool mirrorsManualMasterProtection)
+            bool mirrorsManualMasterProtection,
+            bool targetFlat)
         {
             bool opening = IsOpeningIncrease(GetBook(account, instrument), signedQuantity);
             int max;
@@ -1097,7 +1100,8 @@ namespace Glitch.Core
                 || Math.Abs(signedQuantity) <= max)
             {
                 EnqueueTrade(operationRoot, causeId, purpose, account, instrument,
-                    signedQuantity, routeId, protection, false, mirrorsManualMasterProtection);
+                    signedQuantity, routeId, protection, false,
+                    mirrorsManualMasterProtection, targetFlat);
                 return;
             }
 
@@ -1118,7 +1122,8 @@ namespace Glitch.Core
                     routeId,
                     slice,
                     false,
-                    mirrorsManualMasterProtection);
+                    mirrorsManualMasterProtection,
+                    targetFlat);
                 remaining -= quantity;
                 offset += quantity;
             }
