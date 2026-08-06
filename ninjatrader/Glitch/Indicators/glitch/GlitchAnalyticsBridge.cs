@@ -1926,17 +1926,38 @@ namespace NinjaTrader.NinjaScript.Indicators
             double pointValueUsd = Instrument.MasterInstrument.PointValue;
 
             // NinjaTrader can finish instrument metadata after State.DataLoaded.
-            // Preserve any valid native value and fill only missing fields on a
-            // later realtime/bootstrap publication; never publish the fallback.
-            if (nativeTickSize > 0)
+            // Preserve native values when available and use only the canonical
+            // metadata service when NinjaTrader exposes incomplete fields. The
+            // internal normalization fallback is never published as economics.
+            if (nativeTickSize > 0 && pointValueUsd > 0)
+            {
                 _nativeTickSize = nativeTickSize;
-            if (pointValueUsd > 0)
                 _pointValueUsd = pointValueUsd;
+                _instrumentEconomicsSource = "ninjatrader_master_instrument";
+                _tickSize = _nativeTickSize;
+                return;
+            }
+
+            Glitch.Services.GlitchInstrumentMetadata metadata;
+            if (Instrument != null
+                && Glitch.Services.GlitchInstrumentMetadataService.TryResolve(Instrument, out metadata)
+                && metadata != null
+                && metadata.PointValue > 0
+                && metadata.TickSize > 0)
+            {
+                _nativeTickSize = metadata.TickSize;
+                _pointValueUsd = metadata.PointValue;
+                _instrumentEconomicsSource = "glitch_instrument_metadata_service";
+                _tickSize = _nativeTickSize;
+                return;
+            }
 
             if (_nativeTickSize > 0 && _pointValueUsd > 0)
             {
-                _instrumentEconomicsSource = "ninjatrader_master_instrument";
-                _tickSize = _nativeTickSize;
+                // Preserve the last valid resolved values if the platform is
+                // temporarily unable to expose instrument metadata.
+                if (string.IsNullOrWhiteSpace(_instrumentEconomicsSource))
+                    _instrumentEconomicsSource = "ninjatrader_instrument_metadata_incomplete";
             }
             else
             {

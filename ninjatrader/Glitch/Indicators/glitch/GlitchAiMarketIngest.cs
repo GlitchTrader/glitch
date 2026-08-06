@@ -381,15 +381,31 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
 
             Instrument instrument = BarsArray[bip] == null ? null : BarsArray[bip].Instrument;
-            double? pointValue = instrument != null && instrument.MasterInstrument != null && instrument.MasterInstrument.PointValue > 0
-                ? (double?)instrument.MasterInstrument.PointValue
-                : null;
-            double? tickSize = instrument != null && instrument.MasterInstrument != null && instrument.MasterInstrument.TickSize > 0
-                ? (double?)instrument.MasterInstrument.TickSize
-                : null;
-            string economicsSource = pointValue.HasValue && tickSize.HasValue
-                ? "ninjatrader_master_instrument"
-                : "ninjatrader_instrument_metadata_incomplete";
+            double? pointValue = null;
+            double? tickSize = null;
+            string economicsSource = "ninjatrader_instrument_metadata_incomplete";
+            if (instrument != null && instrument.MasterInstrument != null
+                && instrument.MasterInstrument.PointValue > 0
+                && instrument.MasterInstrument.TickSize > 0)
+            {
+                pointValue = instrument.MasterInstrument.PointValue;
+                tickSize = instrument.MasterInstrument.TickSize;
+                economicsSource = "ninjatrader_master_instrument";
+            }
+            else
+            {
+                Glitch.Services.GlitchInstrumentMetadata metadata;
+                if (instrument != null
+                    && Glitch.Services.GlitchInstrumentMetadataService.TryResolve(instrument, out metadata)
+                    && metadata != null
+                    && metadata.PointValue > 0
+                    && metadata.TickSize > 0)
+                {
+                    pointValue = metadata.PointValue;
+                    tickSize = metadata.TickSize;
+                    economicsSource = "glitch_instrument_metadata_service";
+                }
+            }
 
             return new GlitchBridgeBusCompat.BridgeReading
             {
