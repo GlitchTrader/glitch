@@ -551,6 +551,7 @@ class LearningCycleTests(unittest.TestCase):
             rail.write_text(json.dumps({
                 "created_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                 "feed_bus": {"fresh_instrument_count": 1},
+                "connection": {"all_accounts_connected": True, "account_count": 1},
             }), encoding="utf-8")
             args = SimpleNamespace(
                 glitch_data=glitch_data, profile="glitch", timeout_seconds=30,

@@ -51,7 +51,11 @@ def packet():
             "minute_id": f"20990101T140{minute}Z",
             "market_snapshot": {
                 "snapshot_hash": "12345",
-                "instruments": [{"instrument": "MNQ", "current_price": 20000.0}],
+                "instruments": [{
+                    "instrument": "MNQ",
+                    "current_price": 20000.0,
+                    "timestamp_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                }],
             },
             "portfolio_snapshot": {"is_replicating": True, "accounts": [
                 {"account": "Sim101", "account_status": "Sim", "prop_firm_id": "ApexTraderFunding", "rule_status": "Eval", "account_size": 250000, "equity": 250000, "liquidation_threshold": 243500, "buffer_margin": 6500, "headroom_ratio": 1.0, "max_drawdown": 6500, "max_contracts": 27, "positions": [], "working_orders": 0, "working_order_details": [], "native_state_available": True, "is_risk_locked": False, "is_eval_target_locked": False, "entry_window_open": True},
@@ -233,6 +237,7 @@ class DirectCycleTests(unittest.TestCase):
         (glitch_data / "selfcheck" / "rail.json").write_text(json.dumps({
             "created_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "feed_bus": {"fresh_instrument_count": 1},
+            "connection": {"all_accounts_connected": True, "account_count": 1},
         }), encoding="utf-8")
         return glitch_data, exchange
 
@@ -507,12 +512,25 @@ class DirectCycleTests(unittest.TestCase):
             rail.write_text(json.dumps({
                 "created_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                 "feed_bus": {"fresh_instrument_count": 1},
+                "connection": {"all_accounts_connected": True, "account_count": 1},
             }), encoding="utf-8")
             self.assertTrue(MODULE.feed_observation_is_fresh(glitch_data))
 
     def test_feed_observation_fails_closed_without_native_rail(self):
         with tempfile.TemporaryDirectory() as root:
             self.assertFalse(MODULE.feed_observation_is_fresh(Path(root)))
+
+    def test_feed_observation_does_not_depend_on_unrelated_native_connections(self):
+        with tempfile.TemporaryDirectory() as root:
+            glitch_data = Path(root)
+            rail = glitch_data / "selfcheck" / "rail.json"
+            rail.parent.mkdir(parents=True)
+            rail.write_text(json.dumps({
+                "created_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                "feed_bus": {"fresh_instrument_count": 1},
+                "connection": {"all_accounts_connected": False, "account_count": 1},
+            }), encoding="utf-8")
+            self.assertTrue(MODULE.feed_observation_is_fresh(glitch_data))
 
     def test_feed_observation_rejects_stale_native_rail(self):
         with tempfile.TemporaryDirectory() as root:
@@ -522,6 +540,7 @@ class DirectCycleTests(unittest.TestCase):
             rail.write_text(json.dumps({
                 "created_utc": "2000-01-01T00:00:00Z",
                 "feed_bus": {"fresh_instrument_count": 1},
+                "connection": {"all_accounts_connected": True, "account_count": 1},
             }), encoding="utf-8")
             self.assertFalse(MODULE.feed_observation_is_fresh(glitch_data))
 
@@ -1483,6 +1502,8 @@ M\tg2\tSim301\t100000\t3\t100000\t1
             ), mock.patch.object(
                 MODULE, "journal_tail", return_value={}
             ), mock.patch.object(
+                MODULE, "llm_maintenance_reason", return_value=None
+            ), mock.patch.object(
                 MODULE, "invoke_hermes", side_effect=RuntimeError("model unavailable")
             ) as invoke:
                 with self.assertRaisesRegex(RuntimeError, "model unavailable"):
@@ -1547,6 +1568,8 @@ M\tg2\tSim301\t100000\t3\t100000\t1
                 MODULE, "reconcile_completed_outcomes"
             ), mock.patch.object(
                 MODULE, "journal_tail", return_value={}
+            ), mock.patch.object(
+                MODULE, "llm_maintenance_reason", return_value=None
             ), mock.patch.object(
                 MODULE, "invoke_hermes", side_effect=[RuntimeError("malformed json"), next_batch]
             ) as invoke:

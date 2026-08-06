@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using Glitch.UI;
+using NinjaTrader.Cbi;
 
 namespace Glitch.Services
 {
@@ -89,6 +91,7 @@ namespace Glitch.Services
             sb.Append("\"instrument_root_count\":").Append(roots.Count.ToString(CultureInfo.InvariantCulture)).Append(',');
             sb.Append("\"fresh_instrument_count\":").Append(freshInstrumentCount.ToString(CultureInfo.InvariantCulture));
             sb.Append("},");
+            sb.Append("\"connection\":").Append(BuildConnectionJson()).Append(',');
             sb.Append("\"snapshots\":{");
             sb.Append("\"market_latest_exists\":").Append(GlitchSnapshotJson.Bool(File.Exists(marketPath))).Append(',');
             sb.Append("\"market_instrument_count\":").Append(marketInstrumentCount.ToString(CultureInfo.InvariantCulture)).Append(',');
@@ -137,6 +140,38 @@ namespace Glitch.Services
             sb.Append(",\"health\":").Append(health.ToJson());
             sb.Append('}');
             return sb.ToString();
+        }
+
+        private static string BuildConnectionJson()
+        {
+            Account[] accounts;
+            try
+            {
+                lock (Account.All)
+                    accounts = Account.All.Where(account => account != null).ToArray();
+            }
+            catch
+            {
+                return "{\"all_accounts_connected\":false,\"account_count\":0,\"connected_count\":0}";
+            }
+
+            int connected = 0;
+            foreach (Account account in accounts)
+            {
+                try
+                {
+                    PropertyInfo property = account.GetType().GetProperty("ConnectionStatus");
+                    object value = property?.GetValue(account, null);
+                    if (value != null && string.Equals(value.ToString(), "Connected", StringComparison.OrdinalIgnoreCase))
+                        connected++;
+                }
+                catch { }
+            }
+
+            return "{\"all_accounts_connected\":"
+                + GlitchSnapshotJson.Bool(accounts.Length > 0 && connected == accounts.Length)
+                + ",\"account_count\":" + accounts.Length.ToString(CultureInfo.InvariantCulture)
+                + ",\"connected_count\":" + connected.ToString(CultureInfo.InvariantCulture) + "}";
         }
 
         private static int ReadJsonInt(string path, string key)

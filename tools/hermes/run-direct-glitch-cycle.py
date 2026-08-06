@@ -22,9 +22,10 @@ import time
 import urllib.error
 import urllib.request
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, time as datetime_time, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from win_subprocess import hermes_profile_lock, hide_flags, resolve_python_invocation
 
@@ -57,6 +58,10 @@ CURRENT_PLAN_SCHEMA = "glitch.hermes.portfolio_plan.v2"
 CURRENT_GUIDANCE_SCHEMA = "glitch.hermes.trading_guidance.v2"
 MNQ_POINT_VALUE_USD = 2.0
 MNQ_TICK_SIZE = 0.25
+LLM_MARKET_TIMEZONE = ZoneInfo("America/New_York")
+LLM_SESSION_OPEN = datetime_time(18, 0)
+LLM_SESSION_CLOSE = datetime_time(17, 0)
+LLM_ACTIVATION_STATE = "llm-activation-state.json"
 
 
 def utc_now() -> str:
@@ -1750,7 +1755,7 @@ def market_snapshot_is_fresh(packet: dict[str, Any], max_age_seconds: int | None
         except (TypeError, ValueError):
             max_age_seconds = 180
     age = market_snapshot_age_seconds(packet)
-    return age is None or -60 <= age <= max_age_seconds
+    return age is not None and -60 <= age <= max_age_seconds
 
 
 def feed_observation_is_fresh(glitch_data: Path) -> bool:
@@ -1765,6 +1770,11 @@ def feed_observation_is_fresh(glitch_data: Path) -> bool:
         age_seconds = (datetime.now(timezone.utc) - created.astimezone(timezone.utc)).total_seconds()
         feed_bus = rail.get("feed_bus")
         fresh_count = feed_bus.get("fresh_instrument_count") if isinstance(feed_bus, dict) else None
+        # Account.All includes unrelated NinjaTrader connections.  It is not
+        # the market-feed health signal and must not gate Hermes cognition.
+        # A fresh native feed bus with at least one instrument is sufficient;
+        # execution/account state is validated separately when an intent is
+        # actually submitted.
         return (
             -60 <= age_seconds <= 180
             and isinstance(fresh_count, int)
@@ -1773,6 +1783,47 @@ def feed_observation_is_fresh(glitch_data: Path) -> bool:
         )
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return False
+
+
+def llm_maintenance_reason(now: datetime | None = None) -> str | None:
+    """Return a deterministic CME maintenance/weekend reason, if closed."""
+    local = (now or datetime.now(timezone.utc)).astimezone(LLM_MARKET_TIMEZONE)
+    if local.weekday() == 5:
+        return "weekend"
+    if local.weekday() == 6 and local.time() < LLM_SESSION_OPEN:
+        return "weekend"
+    if local.weekday() == 4 and local.time() >= LLM_SESSION_CLOSE:
+        return "weekend"
+    if LLM_SESSION_CLOSE <= local.time() < LLM_SESSION_OPEN:
+        return "maintenance_window"
+    return None
+
+
+def packet_fingerprint(packet: dict[str, Any]) -> str:
+    stable = {
+        key: value for key, value in packet.items()
+        if key not in {"packet_id", "created_utc", "window_close_utc"}
+    }
+    encoded = json.dumps(stable, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def repeated_packet_is_suppressed(exchange: Path, packet: dict[str, Any]) -> bool:
+    path = exchange / "hermes" / LLM_ACTIVATION_STATE
+    try:
+        state = read_json(path)
+        return state.get("packet_fingerprint") == packet_fingerprint(packet)
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return False
+
+
+def remember_packet_activation(exchange: Path, packet: dict[str, Any]) -> None:
+    write_json_atomic(exchange / "hermes" / LLM_ACTIVATION_STATE, {
+        "schema_version": "glitch.hermes.llm_activation_state.v1",
+        "packet_fingerprint": packet_fingerprint(packet),
+        "packet_id": packet.get("packet_id"),
+        "recorded_utc": utc_now(),
+    })
 
 
 def packet_window_utc(packet: dict[str, Any]) -> datetime:
@@ -1951,12 +2002,32 @@ def run_once(
     if receipt_path.is_file():
         raise ValueError("receipt_without_outbox")
 
+    maintenance_reason = llm_maintenance_reason()
+    if maintenance_reason is not None:
+        append_event(events_path, {
+            "schema_version": "glitch.hermes.cycle_event.v1",
+            "event": "llm_skipped",
+            "reason": maintenance_reason,
+            "recorded_utc": utc_now(),
+            "cycle_id": packet_id,
+        })
+        return 0
+
     if not market_snapshot_is_fresh(packet):
         append_event(events_path, {
             "schema_version": "glitch.hermes.cycle_event.v1",
             "event": "llm_skipped",
             "reason": "stale_market_snapshot",
             "market_age_seconds": market_snapshot_age_seconds(packet),
+            "recorded_utc": utc_now(),
+            "cycle_id": packet_id,
+        })
+        return 0
+    if repeated_packet_is_suppressed(exchange, packet):
+        append_event(events_path, {
+            "schema_version": "glitch.hermes.cycle_event.v1",
+            "event": "llm_skipped",
+            "reason": "repeated_snapshot",
             "recorded_utc": utc_now(),
             "cycle_id": packet_id,
         })
@@ -1978,6 +2049,7 @@ def run_once(
     attempt_path = model_attempt_path(exchange, packet_id)
     if attempt_path.is_file():
         return 0
+    remember_packet_activation(exchange, packet)
     try:
         reconcile_completed_outcomes(glitch_data, exchange, timeout_seconds=10)
     except (OSError, RuntimeError, subprocess.TimeoutExpired) as error:
