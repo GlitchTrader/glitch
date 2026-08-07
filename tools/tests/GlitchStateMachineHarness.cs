@@ -82,8 +82,6 @@ internal static class GlitchStateMachineHarness
             origin,
             commandId,
             protectionCommandId,
-            openingQuantity,
-            postPosition,
             nativeOrderKey,
             false);
     }
@@ -156,6 +154,10 @@ internal static class GlitchStateMachineHarness
             command.CommandId,
             null,
             origin)));
+        commands.AddRange(engine.Handle(new PositionObserved(
+            command.AccountName,
+            command.InstrumentName,
+            postPosition)));
         commands.AddRange(engine.Handle(Order(
             command.AccountName, orderKey, "Filled",
             Math.Abs(command.SignedQuantity), Math.Abs(command.SignedQuantity),
@@ -258,6 +260,7 @@ internal static class GlitchStateMachineHarness
             GlitchExecutionOrigin.HermesMaster))
             .OfType<SubmitProtectionCommand>()
             .Single();
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 1));
         engine.Handle(Order("Master", entryKey, "Filled", 1, 1, entry.CommandId, "M"));
 
         const string stopKey = "stop-order";
@@ -296,6 +299,7 @@ internal static class GlitchStateMachineHarness
             .OfType<SubmitProtectionCommand>().Single();
         SubmitMarketCommand followerEntry = masterFillCommands
             .OfType<SubmitMarketCommand>().Single();
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 1));
         engine.Handle(Order("Master", "race-master-entry", "Filled", 1, 1,
             masterEntry.CommandId, "M"));
         string legId = masterProtection.Targets.Single().LegId;
@@ -313,6 +317,7 @@ internal static class GlitchStateMachineHarness
             "race-follower-entry", followerEntry.CommandId, null,
             GlitchExecutionOrigin.GlitchReplication))
             .OfType<SubmitProtectionCommand>().Single();
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 1));
         engine.Handle(Order("Follower", "race-follower-entry", "Filled", 1, 1,
             followerEntry.CommandId, "M"));
         const string followerStop = "race-follower-stop";
@@ -363,13 +368,12 @@ internal static class GlitchStateMachineHarness
         Assert(close.SignedQuantity == -1 && close.ExpectedSignedPosition == 1,
             "reversal did not emit only the close-to-flat step");
 
-        GlitchInput[] closeFacts =
+        int[][] closeFactPermutations =
         {
-            Order("Master", "close-order", "Filled", 1, 1, close.CommandId, "M"),
-            Execution("close-fill", "Master", -1, 19999m, 0, 0,
-                "close-order", close.CommandId, null, GlitchExecutionOrigin.HermesMaster)
+            new[] { 0, 1, 2 }, new[] { 0, 2, 1 }, new[] { 1, 0, 2 },
+            new[] { 1, 2, 0 }, new[] { 2, 0, 1 }, new[] { 2, 1, 0 }
         };
-        for (int permutationIndex = 0; permutationIndex < closeFacts.Length; permutationIndex++)
+        foreach (int[] permutationOrder in closeFactPermutations)
         {
             ProtectedBook permutation = CreateProtectedLong();
             GlitchEngine candidate = permutation.Engine;
@@ -389,13 +393,22 @@ internal static class GlitchStateMachineHarness
                 "close-fill", "Master", -1, 19999m, 0, 0,
                 "close-order", candidateClose.CommandId, null,
                 GlitchExecutionOrigin.HermesMaster);
-            GlitchInput first = permutationIndex == 0 ? orderFact : executionFact;
-            GlitchInput second = permutationIndex == 0 ? executionFact : orderFact;
-            Assert(candidate.Handle(first).OfType<SubmitMarketCommand>().Count() == 0,
-                "reversal opened before both close facts existed");
-            SubmitMarketCommand open = candidate.Handle(second)
-                .OfType<SubmitMarketCommand>()
-                .Single();
+            GlitchInput positionFact = new PositionObserved(
+                "Master", "MNQ 09-26", 0);
+            GlitchInput[] facts = { orderFact, executionFact, positionFact };
+            var emitted = new List<SubmitMarketCommand>();
+            for (int index = 0; index < permutationOrder.Length; index++)
+            {
+                SubmitMarketCommand[] current = candidate.Handle(
+                        facts[permutationOrder[index]])
+                    .OfType<SubmitMarketCommand>()
+                    .ToArray();
+                if (index < permutationOrder.Length - 1)
+                    Assert(current.Length == 0,
+                        "reversal opened before order, execution, and position facts were complete");
+                emitted.AddRange(current);
+            }
+            SubmitMarketCommand open = emitted.Single();
             Assert(open.SignedQuantity == -1 && open.ExpectedSignedPosition == 0,
                 "reversal did not submit the opening remainder after close finality");
         }
@@ -406,8 +419,10 @@ internal static class GlitchStateMachineHarness
     {
         int[][] permutations =
         {
-            new[] { 0, 1, 2 }, new[] { 0, 2, 1 }, new[] { 1, 0, 2 },
-            new[] { 1, 2, 0 }, new[] { 2, 0, 1 }, new[] { 2, 1, 0 }
+            new[] { 0, 1, 2, 3 }, new[] { 0, 2, 1, 3 },
+            new[] { 1, 0, 3, 2 }, new[] { 1, 3, 0, 2 },
+            new[] { 2, 0, 3, 1 }, new[] { 2, 3, 1, 0 },
+            new[] { 3, 0, 1, 2 }, new[] { 3, 2, 1, 0 }
         };
         foreach (int[] permutation in permutations)
         {
@@ -427,7 +442,9 @@ internal static class GlitchStateMachineHarness
                     "protective-fill", "Master", -1, 19990m, 0, 0,
                     setup.StopKey, setup.Protection.CommandId,
                     setup.Protection.CommandId,
-                    GlitchExecutionOrigin.HermesMasterProtection))
+                    GlitchExecutionOrigin.HermesMasterProtection)),
+                () => engine.Handle(new PositionObserved(
+                    "Master", "MNQ 09-26", 0))
             };
             var markets = new List<SubmitMarketCommand>();
             for (int i = 0; i < permutation.Length; i++)
@@ -439,6 +456,12 @@ internal static class GlitchStateMachineHarness
                     Assert(emitted.Length == 0,
                         "protection race released before its complete fact set");
                 markets.AddRange(emitted);
+            }
+            if (markets.Count == 0)
+            {
+                markets.AddRange(engine.Handle(new PositionObserved(
+                        "Master", "MNQ 09-26", 0))
+                    .OfType<SubmitMarketCommand>());
             }
             Assert(markets.Count == 1
                 && markets[0].SignedQuantity == -2
@@ -495,11 +518,16 @@ internal static class GlitchStateMachineHarness
             19990m,
             setup.StopKey)).Count == 0,
             "lifecycle evidence alone released a native mutation");
-        SubmitMarketCommand resumed = engine.Handle(Execution(
+        GlitchCommand[] afterExecution = engine.Handle(Execution(
             "amended-fill", "Master", -1, 19990m, 0, 0,
             setup.StopKey, setup.Protection.CommandId,
             setup.Protection.CommandId,
-            GlitchExecutionOrigin.HermesMasterProtection))
+            GlitchExecutionOrigin.HermesMasterProtection)).ToArray();
+        Assert(afterExecution.OfType<SubmitMarketCommand>().Count() == 0
+            && afterExecution.OfType<RefreshPositionCommand>().Count() == 1,
+            "execution callback bypassed authoritative position refresh");
+        SubmitMarketCommand resumed = engine.Handle(new PositionObserved(
+                "Master", "MNQ 09-26", 0))
             .OfType<SubmitMarketCommand>().Single();
         Assert(resumed.SignedQuantity == -2 && resumed.ExpectedSignedPosition == 0,
             "corrected execution evidence did not resume exactly once");
@@ -553,6 +581,67 @@ internal static class GlitchStateMachineHarness
             "ratio zero did not translate explicit Sync to zero exposure");
     }
 
+    private static void TestFollowerReversalUsesOneNativeDeltaAndCurrentPositionTruth()
+    {
+        var engine = new GlitchEngine();
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 0));
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 0));
+        ConfigureRoute(engine, "atomic-reversal", 5m);
+
+        SubmitMarketCommand open = ObserveExecution(engine, Execution(
+            "master-open", "Master", 1, 20000m, 1, 1,
+            "master-open-order", null, null, GlitchExecutionOrigin.External))
+            .OfType<SubmitMarketCommand>().Single();
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 1));
+        int followerPosition = 0;
+        Assert(CompleteTrade(
+                engine, open, ref followerPosition, "atomic-open",
+                GlitchExecutionOrigin.GlitchReplication)
+                .OfType<SubmitMarketCommand>().Count() == 0,
+            "opening copy emitted an extra native request");
+        Assert(followerPosition == 5, "reversal setup did not reach follower +5");
+
+        SubmitMarketCommand reverse = ObserveExecution(engine, Execution(
+            "master-reverse", "Master", -2, 19999m, 1, -1,
+            "master-reverse-order", null, null, GlitchExecutionOrigin.External))
+            .OfType<SubmitMarketCommand>().Single();
+        Assert(reverse.SignedQuantity == -10 && reverse.ExpectedSignedPosition == 5,
+            "follower reversal was split instead of preserving the immutable -10 delta");
+        Assert(engine.Handle(new PositionObserved(
+                "Master", "MNQ 09-26", -1)).Count == 0,
+            "master position confirmation emitted another follower request");
+
+        const string reverseOrder = "follower-reverse-order";
+        Assert(engine.Handle(Order(
+                "Follower", reverseOrder, "Working", 10, 0,
+                reverse.CommandId, "M")).Count == 0,
+            "working reversal order emitted another native request");
+        Assert(ObserveExecution(engine, Execution(
+                "follower-reverse-part-1", "Follower", -2, 19998m, 0, 3,
+                reverseOrder, reverse.CommandId, null,
+                GlitchExecutionOrigin.GlitchReplication)).Count == 0,
+            "partial reversal fill emitted another native request");
+        Assert(engine.Handle(new PositionObserved(
+                "Follower", "MNQ 09-26", 3)).Count == 0,
+            "partial-fill position emitted another native request");
+        Assert(engine.Handle(Order(
+                "Follower", reverseOrder, "Filled", 10, 10,
+                reverse.CommandId, "M")).Count == 0,
+            "terminal order fact outran execution evidence");
+        Assert(ObserveExecution(engine, Execution(
+                "follower-reverse-part-2", "Follower", -8, 19997m, 5, -5,
+                reverseOrder, reverse.CommandId, null,
+                GlitchExecutionOrigin.GlitchReplication)).Count == 0,
+            "final reversal fill reused the stale partial-fill position");
+        Assert(engine.Handle(new PositionObserved(
+                "Follower", "MNQ 09-26", -5)).Count == 0,
+            "final follower position emitted another native request");
+        Assert(engine.GetOperationPhase(
+                "REPL|atomic-reversal|Master|master-reverse")
+                == GlitchOperationPhase.Completed,
+            "atomic follower reversal did not complete from native facts");
+    }
+
     private static void TestReplicationAllocationIsBatchingIndependent()
     {
         foreach (decimal ratio in new[] { 0m, 0.5m, 1m, 2m })
@@ -601,6 +690,9 @@ internal static class GlitchStateMachineHarness
                 null,
                 GlitchExecutionOrigin.External))
                 .OfType<SubmitMarketCommand>().Single();
+            Assert(engine.Handle(new PositionObserved(
+                    "Master", "MNQ 09-26", masterPosition)).Count == 0,
+                "master position observation created an extra mutation");
             Assert(command.SignedQuantity == signedQuantity,
                 "later master delta was changed by follower-local activity");
             CompleteTrade(
@@ -626,6 +718,9 @@ internal static class GlitchStateMachineHarness
                 null,
                 GlitchExecutionOrigin.External)).Count == 0,
                 "manual follower " + identity + " caused a Glitch mutation");
+            Assert(engine.Handle(new PositionObserved(
+                    "Follower", "MNQ 09-26", postPosition)).Count == 0,
+                "manual follower position observation caused a Glitch mutation");
             followerPosition = postPosition;
         };
 
@@ -671,6 +766,9 @@ internal static class GlitchStateMachineHarness
             "master-after-remove-order", null, null,
             GlitchExecutionOrigin.External)).Count == 0,
             "removed route copied a future execution");
+        Assert(engine.Handle(new PositionObserved(
+                "Master", "MNQ 09-26", 5)).Count == 0,
+            "removed-route position observation created a mutation");
 
         Assert(engine.Handle(new RouteConfigurationChanged(
             true,
@@ -703,6 +801,7 @@ internal static class GlitchStateMachineHarness
             "reject-entry", entry.CommandId, null,
             GlitchExecutionOrigin.HermesMaster))
             .OfType<SubmitProtectionCommand>().Single();
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 1));
         engine.Handle(Order("Master", "reject-entry", "Filled", 1, 1,
             entry.CommandId, "M"));
         Assert(engine.Handle(new NativeOrderObserved(
@@ -763,6 +862,8 @@ internal static class GlitchStateMachineHarness
             setup.FollowerProtection.CommandId,
             setup.FollowerProtection.CommandId,
             GlitchExecutionOrigin.GlitchProtection)));
+        commands.AddRange(engine.Handle(new PositionObserved(
+            "Follower", "MNQ 09-26", 0)));
         return commands;
     }
 
@@ -809,7 +910,41 @@ internal static class GlitchStateMachineHarness
             "copied exit did not settle deterministically after the protection race");
     }
 
-    private static void TestMasterProtectiveExitReconcilesFollowerNativePosition()
+    private static void TestHermesExitDoesNotReverseAfterProtectionWinsCancellationRace()
+    {
+        ProtectedRouteBook setup = CreateProtectedRouteLong();
+        GlitchEngine engine = setup.Engine;
+        CancelProtectionCommand cancel = engine.Handle(new HermesExitRequested(
+            "master-protection-race-exit", "Master", "MNQ 09-26"))
+            .OfType<CancelProtectionCommand>().Single();
+
+        var commands = new List<GlitchCommand>();
+        commands.AddRange(engine.Handle(Order(
+            "Master", setup.MasterStopKey, "Filled", 1, 1,
+            setup.MasterProtection.CommandId, "S0")));
+        commands.AddRange(engine.Handle(Order(
+            "Master", setup.MasterTargetKey, "Cancelled", 1, 0,
+            setup.MasterProtection.CommandId, "T0")));
+        commands.AddRange(ObserveExecution(engine, Execution(
+            "master-protection-race-fill", "Master", -1, 19991m, 0, 0,
+            setup.MasterStopKey,
+            setup.MasterProtection.CommandId,
+            setup.MasterProtection.CommandId,
+            GlitchExecutionOrigin.HermesMasterProtection)));
+        commands.AddRange(engine.Handle(new PositionObserved(
+            "Master", "MNQ 09-26", 0)));
+        commands.AddRange(engine.Handle(
+            new ProtectionCancellationCompletedObserved(cancel.CommandId)));
+
+        Assert(commands.OfType<SubmitMarketCommand>()
+                .Count(command => command.AccountName == "Master") == 0,
+            "Hermes EXIT reversed the master after protection had already flattened it");
+        Assert(engine.GetOperationPhase("HERMES|master-protection-race-exit")
+                == GlitchOperationPhase.Completed,
+            "Hermes EXIT did not complete from authoritative native flat state");
+    }
+
+    private static void TestMasterProtectiveExitCopiesDeltaDespiteManualFollowerFlat()
     {
         ProtectedRouteBook setup = CreateProtectedRouteLong();
         GlitchEngine engine = setup.Engine;
@@ -842,12 +977,74 @@ internal static class GlitchStateMachineHarness
             "Follower", setup.FollowerTargetKey, "Cancelled", 1, 0,
             setup.FollowerProtection.CommandId, "T0")));
 
-        Assert(commands.OfType<SubmitMarketCommand>().Count() == 0,
-            "master protective exit emitted an unexpected follower market step");
+        SubmitMarketCommand copiedExit = commands.OfType<SubmitMarketCommand>()
+            .Single(command => command.AccountName == "Follower");
+        Assert(copiedExit.SignedQuantity == -1
+                && copiedExit.ExpectedSignedPosition == 0,
+            "manual follower flat state vetoed or resized the later master delta");
+        Assert(commands.OfType<SubmitMarketCommand>().Count() == 1,
+            "one master execution emitted more than one follower allocation");
+    }
+
+    private static void TestMisreportedExecutionSideCannotCreateReplicationLoop()
+    {
+        ProtectedRouteBook setup = CreateProtectedRouteLong();
+        GlitchEngine engine = setup.Engine;
+        var commands = new List<GlitchCommand>();
+        commands.AddRange(engine.Handle(Order(
+            "Master", setup.MasterTargetKey, "Filled", 1, 1,
+            setup.MasterProtection.CommandId, "T0")));
+        commands.AddRange(engine.Handle(Order(
+            "Master", setup.MasterStopKey, "Cancelled", 1, 0,
+            setup.MasterProtection.CommandId, "S0")));
+        commands.AddRange(ObserveExecution(engine, Execution(
+            "incident-master-target-fill", "Master", -1, 20020m,
+            1, -1,
+            setup.MasterTargetKey,
+            setup.MasterProtection.CommandId,
+            setup.MasterProtection.CommandId,
+            GlitchExecutionOrigin.HermesMasterProtection)));
+        commands.AddRange(engine.Handle(new PositionObserved(
+            "Master", "MNQ 09-26", 0)));
+
+        CancelProtectionCommand followerCancel = commands
+            .OfType<CancelProtectionCommand>()
+            .Single(command => command.AccountName == "Follower");
+        commands.AddRange(engine.Handle(Order(
+            "Follower", setup.FollowerStopKey, "Cancelled", 1, 0,
+            setup.FollowerProtection.CommandId, "S0")));
+        commands.AddRange(engine.Handle(Order(
+            "Follower", setup.FollowerTargetKey, "Cancelled", 1, 0,
+            setup.FollowerProtection.CommandId, "T0")));
+
+        SubmitMarketCommand copiedExit = commands.OfType<SubmitMarketCommand>()
+            .Single(command => command.AccountName == "Follower");
+        string orderKey = "incident-follower-close";
+        var afterCopiedExit = new List<GlitchCommand>();
+        afterCopiedExit.AddRange(engine.Handle(Order(
+            "Follower", orderKey, "Working", 1, 0,
+            copiedExit.CommandId, "M")));
+        afterCopiedExit.AddRange(ObserveExecution(engine, Execution(
+            "incident-follower-close-fill", "Follower", -1, 20019m,
+            1, -1,
+            orderKey,
+            copiedExit.CommandId,
+            null,
+            GlitchExecutionOrigin.GlitchReplication)));
+        afterCopiedExit.AddRange(engine.Handle(new PositionObserved(
+            "Follower", "MNQ 09-26", 0)));
+        afterCopiedExit.AddRange(engine.Handle(Order(
+            "Follower", orderKey, "Filled", 1, 1,
+            copiedExit.CommandId, "M")));
+
+        Assert(afterCopiedExit.OfType<SubmitMarketCommand>().Count() == 0,
+            "a copied close fill created a corrective replication order");
+        Assert(afterCopiedExit.OfType<SubmitProtectionCommand>().Count() == 0,
+            "execution-side metadata misclassified a copied close as opening exposure");
         Assert(engine.GetOperationPhase(
-                "REPL|race-route|Master|race-master-protective-fill")
+                "REPL|race-route|Master|incident-master-target-fill")
             == GlitchOperationPhase.Completed,
-            "master protective exit did not reconcile the follower to its native flat position");
+            "the immutable copied delta did not complete after its exact one-contract fill");
     }
 
     private static void TestManualMasterCloseCancelsOnlyOwnedMasterProtection()
@@ -866,6 +1063,7 @@ internal static class GlitchStateMachineHarness
                 null,
                 null,
                 GlitchExecutionOrigin.External));
+        setup.Engine.Handle(new PositionObserved("Master", "MNQ 09-26", 0));
 
         Assert(commands.OfType<SubmitMarketCommand>().Count() == 0,
             "copied close traded before owned follower protection was terminal");
@@ -976,6 +1174,7 @@ internal static class GlitchStateMachineHarness
         SubmitMarketCommand followerEntry = masterFillCommands
             .OfType<SubmitMarketCommand>().Single();
         string legId = masterProtection.Targets[0].LegId;
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 1));
         engine.Handle(Order("Master", "master-entry-order", "Filled", 1, 1,
             masterEntry.CommandId, "M"));
         engine.Handle(Order("Master", "master-stop", "Working", 1, 0,
@@ -990,6 +1189,7 @@ internal static class GlitchStateMachineHarness
             "follower-entry-order", followerEntry.CommandId, null,
             GlitchExecutionOrigin.GlitchReplication))
             .OfType<SubmitProtectionCommand>().Single();
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 1));
         engine.Handle(Order("Follower", "follower-entry-order", "Filled", 1, 1,
             followerEntry.CommandId, "M"));
         engine.Handle(Order("Follower", "follower-stop", "Working", 1, 0,
@@ -1077,6 +1277,7 @@ internal static class GlitchStateMachineHarness
             "manual-follower-entry", followerEntry.CommandId, null,
             GlitchExecutionOrigin.GlitchReplication))
             .OfType<SubmitProtectionCommand>().Single();
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 1));
         Assert(followerProtection.Targets.Single().StopPrice == 19993m
             && followerProtection.Targets.Single().Price == 20023m,
             "manual master protection was not offset from the actual follower fill");
@@ -1146,6 +1347,7 @@ internal static class GlitchStateMachineHarness
         TestProtectionFillCancellationPermutations();
         TestExecutionLifecycleRevisionIsEvidenceOnly();
         TestReplicationMathAndFollowerIndependence();
+        TestFollowerReversalUsesOneNativeDeltaAndCurrentPositionTruth();
         TestReplicationAllocationIsBatchingIndependent();
         TestEveryFollowerManualActionRemainsIndependent();
         TestRouteChangeAndSynchronizationAreOneInput();
@@ -1157,7 +1359,9 @@ internal static class GlitchStateMachineHarness
         TestUnknownNativeRequestIsABarrierUntilExplicitFlatten();
         TestProtectionRejectionIsTerminalAndNeverRetried();
         TestMasterExitAndFollowerProtectionFillRace();
-        TestMasterProtectiveExitReconcilesFollowerNativePosition();
+        TestHermesExitDoesNotReverseAfterProtectionWinsCancellationRace();
+        TestMasterProtectiveExitCopiesDeltaDespiteManualFollowerFlat();
+        TestMisreportedExecutionSideCannotCreateReplicationLoop();
         TestManualMasterCloseCancelsOnlyOwnedMasterProtection();
         Console.WriteLine("Glitch state machine harness passed.");
         return 0;

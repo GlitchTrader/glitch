@@ -92,7 +92,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("class RouteConfigurationChanged", contracts)
         self.assertIn("ReplaceRoutes(routeConfiguration, commands)", engine)
         self.assertIn("configuration.SynchronizeRouteIds", engine)
-        self.assertIn('PostDurably(input, "route_configuration_changed")', host)
+        self.assertIn('"route_configuration_changed",', host)
         self.assertIn("new RouteSynchronizationRequested(routeId)", host)
         self.assertIn("SynchronizeRoute(BuildRuntimeRouteId(group, member))", ui)
 
@@ -108,8 +108,11 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("PublishExternalProtectionSnapshot", gateway)
         self.assertIn("WasProtectionOcoCompletedByFill", gateway)
         self.assertIn("&& !IsGlitchOrder(order)", gateway)
-        self.assertIn("int openingQuantity = OpeningQuantity", gateway)
-        self.assertIn("execution.OpeningQuantity", engine)
+        self.assertNotIn("SignedExecutionPosition(execution)", gateway)
+        self.assertIn("OpeningQuantityFromPrior", engine)
+        self.assertNotIn("book.SignedPosition = execution.PostPosition", engine)
+        self.assertNotIn("OpeningQuantity", contracts)
+        self.assertNotIn("PostPosition", contracts)
 
     def test_execution_lifecycle_facts_cannot_authorize_replication(self):
         contracts = read("ninjatrader/Glitch/AddOns/GlitchAddOn/Core/GlitchContracts.cs")
@@ -182,6 +185,10 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         )
         self.assertIn('"master_entry_submitted"', gateway)
         self.assertIn('"group_structural_brackets_submitted"', gateway)
+        self.assertIn('"follower_structural_brackets_submitted"', gateway)
+        self.assertIn("HermesIntentIdForExecution", read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Core/GlitchEngine.cs"
+        ))
         self.assertIn("instrument.MasterInstrument.PointValue", gateway)
         self.assertIn("instrument.MasterInstrument.TickSize", gateway)
         self.assertIn("public static void TryAppend(", writer)
@@ -199,12 +206,35 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("price < referencePrice", executor)
         self.assertIn("price > referencePrice", executor)
         self.assertIn("ValidateProtectionGeometry(command);", gateway)
+        self.assertIn("ValidateStopMarketSide", gateway)
+        self.assertIn("protection_market_side_invalid", gateway)
+        self.assertIn("instrument.MarketData?.Bid?.Price", gateway)
+        self.assertIn("instrument.MarketData?.Ask?.Price", gateway)
+        self.assertIn("-OrderSign(stopChange.Key.OrderAction)", gateway)
+        self.assertNotIn("protection_change_position_flat", gateway)
         self.assertIn("protection_geometry_invalid", gateway)
         self.assertIn("beforeMutation?.Invoke(command);", gateway)
         self.assertLess(
             gateway.index("ValidateProtectionGeometry(command);"),
             gateway.index("beforeMutation?.Invoke(command);", gateway.index("ValidateProtectionGeometry(command);")),
         )
+
+    def test_native_protection_rejection_and_commission_are_durable_facts(self):
+        contracts = read("ninjatrader/Glitch/AddOns/GlitchAddOn/Core/GlitchContracts.cs")
+        host = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/GlitchRuntimeHost.cs"
+        )
+        journal = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/GlitchOperationJournal.cs"
+        )
+        insights = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Insights/GlitchTradeInsightsService.cs"
+        )
+        self.assertIn("public decimal Commission", contracts)
+        self.assertIn('"commission"', journal)
+        self.assertIn("native_protection_change_rejected", host)
+        self.assertIn("change.HermesIntentId", host)
+        self.assertIn('fields.TryGetValue("commission"', insights)
 
     def test_snapshot_price_uses_instrument_level_field_not_nested_descriptive_price(self):
         registry = read(
@@ -264,11 +294,54 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         main_window = read(
             "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.cs"
         )
-        self.assertIn("replicationEnabledOverride: false", main_window)
-        self.assertIn("persistDesiredState: false", main_window)
+        host = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/GlitchRuntimeHost.cs"
+        )
+        gate = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/GlitchMutationGate.cs"
+        )
+        self.assertIn('SetReplicationFromExternalSurface(false, "flatten_all")', main_window)
+        self.assertNotIn("restoreCopyEngine", main_window)
+        self.assertIn("_mutationGate.Fence(accounts);", host)
+        self.assertIn("RequestFlattenBatch", host)
+        self.assertIn("account_fenced_by_flatten", host)
+        self.assertIn("allowDuringRuntimeFault: true", host)
+        self.assertIn("!(command is FlattenAccountCommand)", host)
+        self.assertIn("lock (_gate)", gate)
+        self.assertIn("allowedWhileFenced", gate)
         self.assertIn("state != OrderState.Cancelled", observations)
         self.assertIn("state != OrderState.Filled", observations)
         self.assertIn("state != OrderState.Rejected", observations)
+
+    def test_replication_delta_is_immutable_and_never_position_reconciled(self):
+        engine = read("ninjatrader/Glitch/AddOns/GlitchAddOn/Core/GlitchEngine.cs")
+        self.assertNotIn("TargetFlat", engine)
+        self.assertNotIn("targetFlat", engine)
+        split = engine[
+            engine.index("private void EnqueueSplitTrade"):
+            engine.index("private void EnqueueTrade", engine.index("private void EnqueueSplitTrade"))
+        ]
+        self.assertNotIn("CloseToFlat", split)
+        self.assertIn("CloseToFlat = closeToFlat", engine)
+        self.assertIn("operation.RequestedSignedQuantity", engine)
+        self.assertIn("native_execution_exceeded_immutable_trade_delta", engine)
+        self.assertIn("operation.RemainingSignedQuantity -= execution.SignedQuantity", engine)
+        self.assertIn("operation.Purpose == GlitchCommandPurpose.Replication", engine)
+        self.assertIn("operation.Purpose == GlitchCommandPurpose.GroupSynchronization", engine)
+        self.assertIn("book.SignedPosition == checked(", engine)
+
+    def test_replication_reversal_is_one_native_market_delta(self):
+        gateway = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/NinjaTraderGateway.cs"
+        )
+        start = gateway.index("private void SubmitMarket(")
+        end = gateway.index("private void SubmitProtection(", start)
+        submit_market = gateway[start:end]
+        self.assertNotIn("cannot cross through flat", submit_market)
+        self.assertEqual(submit_market.count("account.CreateOrder("), 1)
+        self.assertEqual(submit_market.count("account.Submit("), 1)
+        self.assertIn("Math.Abs(command.SignedQuantity)", submit_market)
+        self.assertIn("current > 0 ? OrderAction.Sell : OrderAction.SellShort", submit_market)
 
     def test_command_identity_is_stable_and_native_boundary_is_durable(self):
         engine = read("ninjatrader/Glitch/AddOns/GlitchAddOn/Core/GlitchEngine.cs")
@@ -286,7 +359,10 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn('TryAppend(command, "accepted"', host)
         self.assertIn('"native_request_started"', host)
         self.assertIn("beforeMutation?.Invoke(command)", gateway)
-        self.assertIn("operations.v3.jsonl", journal)
+        self.assertIn("operations.v5.jsonl", journal)
+        self.assertIn("TryPersistReplicationEnabled(priorReplicationEnabled)", host)
+        self.assertIn("if (_runtimeFailed && replicationEnabled)", host)
+        self.assertIn("_replicationEnabled = false;", host)
         self.assertIn("_commandFingerprints", host)
         self.assertIn("Canonical(SerializeCommand(command))", journal)
         identity = read(

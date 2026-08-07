@@ -29,6 +29,7 @@ foreach ($dependency in @(
 $sourcePaths = @(
     (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Core\GlitchContracts.cs'),
     (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Core\GlitchRuntime.cs'),
+    (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Infrastructure\GlitchMutationGate.cs'),
     (Join-Path $repoRoot 'ninjatrader\Glitch\AddOns\GlitchAddOn\Infrastructure\GlitchRuntimeOwnershipLease.cs'),
     (Join-Path $repoRoot 'tools\tests\GlitchRuntimeLifecycleHarness.cs')
 )

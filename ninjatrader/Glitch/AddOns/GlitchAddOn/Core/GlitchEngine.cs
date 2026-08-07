@@ -87,6 +87,7 @@ namespace Glitch.Core
         private sealed class TradeOperation : BookOperation
         {
             public string CauseId;
+            public string HermesIntentId;
             public GlitchCommandPurpose Purpose;
             public string RouteId;
             public int RequestedSignedQuantity;
@@ -94,12 +95,14 @@ namespace Glitch.Core
             public bool CancelExternalProtection;
             public bool MirrorsManualMasterProtection;
             public bool ProtectionCleanupOnly;
-            public bool TargetFlat;
+            public bool CloseToFlat;
             public bool PositionRefreshRequested;
             public int NextStep;
             public string ActiveCommandId;
             public int ActiveRequestedSignedQuantity;
             public int ActiveFilledSignedQuantity;
+            public int ActiveExpectedSignedPosition;
+            public long ActivePositionRevision;
             public string CancelCommandId;
             public bool ExternalCancellationCompleted;
             public ProtectionBundle ManualRevisionBundle;
@@ -116,6 +119,7 @@ namespace Glitch.Core
         private sealed class ProtectionChangeOperation : BookOperation
         {
             public string CommandId;
+            public string HermesIntentId;
             public int Step;
             public readonly List<HermesProtectionUpdate> Updates =
                 new List<HermesProtectionUpdate>();
@@ -432,6 +436,18 @@ namespace Glitch.Core
             book.PositionRevision = observed.Revision > 0
                 ? observed.Revision
                 : ++_positionRevision;
+            foreach (TradeOperation operation in book.Operations
+                .OfType<TradeOperation>()
+                .Where(value => value.PositionRefreshRequested)
+                .ToArray())
+            {
+                operation.PositionRefreshRequested = false;
+                foreach (string commandId in _refreshByCommand
+                    .Where(value => ReferenceEquals(value.Value, operation))
+                    .Select(value => value.Key)
+                    .ToArray())
+                    _refreshByCommand.Remove(commandId);
+            }
         }
 
         private void ObserveOrder(NativeOrderObserved observed)
@@ -542,6 +558,8 @@ namespace Glitch.Core
             operation.ActiveCommandId = null;
             operation.ActiveRequestedSignedQuantity = 0;
             operation.ActiveFilledSignedQuantity = 0;
+            operation.ActiveExpectedSignedPosition = 0;
+            operation.ActivePositionRevision = 0;
             operation.Phase = GlitchOperationPhase.Ready;
         }
 
@@ -554,18 +572,22 @@ namespace Glitch.Core
                 return;
 
             Book book = GetBook(execution.AccountName, execution.InstrumentName);
-            if (execution.PostPosition != int.MinValue)
-            {
-                book.PositionKnown = true;
-                book.SignedPosition = execution.PostPosition;
-                book.PositionRevision = ++_positionRevision;
-            }
 
             ProtectionTemplate replicatedProtection = null;
             bool suppressReplication = false;
-            TradeOperation operation;
-            if (!string.IsNullOrWhiteSpace(execution.CorrelationId)
-                && _tradeByCommand.TryGetValue(execution.CorrelationId, out operation))
+            TradeOperation operation = null;
+            bool ownedExecution = !string.IsNullOrWhiteSpace(execution.CorrelationId)
+                && _tradeByCommand.TryGetValue(execution.CorrelationId, out operation);
+            bool positionIncludesExecution = ownedExecution
+                && operation.Phase != GlitchOperationPhase.Superseded
+                && book.PositionKnown
+                && book.PositionRevision > operation.ActivePositionRevision
+                && book.SignedPosition == checked(
+                    operation.ActiveExpectedSignedPosition
+                    + operation.ActiveFilledSignedQuantity
+                    + execution.SignedQuantity);
+            book.PositionKnown = positionIncludesExecution;
+            if (ownedExecution)
             {
                 if (operation.Phase == GlitchOperationPhase.Superseded)
                 {
@@ -583,19 +605,39 @@ namespace Glitch.Core
                 }
                 else
                 {
+                    int priorSignedPosition = checked(
+                        operation.ActiveExpectedSignedPosition
+                        + operation.ActiveFilledSignedQuantity);
+                    int openingQuantity = OpeningQuantityFromPrior(
+                        priorSignedPosition,
+                        execution.SignedQuantity);
                     operation.ActiveFilledSignedQuantity += execution.SignedQuantity;
                     operation.RemainingSignedQuantity -= execution.SignedQuantity;
+                    int appliedSignedQuantity = checked(
+                        operation.RequestedSignedQuantity
+                        - operation.RemainingSignedQuantity);
+                    if (Math.Sign(appliedSignedQuantity)
+                            != Math.Sign(operation.RequestedSignedQuantity)
+                        || Math.Abs(appliedSignedQuantity)
+                            > Math.Abs(operation.RequestedSignedQuantity))
+                    {
+                        operation.Phase = GlitchOperationPhase.Unknown;
+                        operation.Failure = "native_execution_exceeded_immutable_trade_delta";
+                        suppressReplication = true;
+                        return;
+                    }
 
                     int closingQuantity = Math.Abs(execution.SignedQuantity)
-                        - execution.OpeningQuantity;
+                        - openingQuantity;
                     if (closingQuantity > 0)
                         SettleOwnedExposure(book, -Math.Sign(execution.SignedQuantity), closingQuantity);
 
-                    if (execution.OpeningQuantity > 0)
+                    if (openingQuantity > 0)
                         replicatedProtection = ProtectOpeningFill(
                             book,
                             operation,
                             execution,
+                            openingQuantity,
                             commands);
                 }
                 }
@@ -791,7 +833,6 @@ namespace Glitch.Core
                     delta,
                     route.Id,
                     null,
-                    false,
                     false);
             }
             _pendingSynchronizations.Remove(pending.RouteId + "|" + pending.Instrument);
@@ -827,7 +868,8 @@ namespace Glitch.Core
                 null,
                 protection,
                 false,
-                false);
+                false,
+                hermesIntentId: request.IntentId);
         }
 
         private void RequestHermesExit(HermesExitRequested request)
@@ -870,7 +912,8 @@ namespace Glitch.Core
                 request.InstrumentName,
                 masterUpdates,
                 ProtectionCommandsForUpdates(master, masterUpdates),
-                master);
+                master,
+                hermesIntentId: request.IntentId);
 
             foreach (Route route in _routes.Values.Where(value => value.Enabled
                 && string.Equals(value.Master, request.AccountName, StringComparison.OrdinalIgnoreCase)))
@@ -886,7 +929,8 @@ namespace Glitch.Core
                         request.InstrumentName,
                         followerUpdates,
                         ProtectionCommandsForUpdates(follower, followerUpdates),
-                        follower));
+                        follower,
+                        hermesIntentId: request.IntentId));
                 }
             }
             _operations[masterOperation.Id] = masterOperation;
@@ -901,14 +945,16 @@ namespace Glitch.Core
             IEnumerable<HermesProtectionUpdate> updates,
             IEnumerable<string> targetCommandIds,
             Book book,
-            string sourceRevision = null)
+            string sourceRevision = null,
+            string hermesIntentId = null)
         {
             var operation = new ProtectionChangeOperation
             {
                 Id = id,
                 Account = account,
                 Instrument = instrument,
-                Phase = GlitchOperationPhase.Accepted
+                Phase = GlitchOperationPhase.Accepted,
+                HermesIntentId = hermesIntentId ?? string.Empty
             };
             operation.Updates.AddRange(updates);
             operation.TargetCommandIds.AddRange(targetCommandIds);
@@ -1044,11 +1090,19 @@ namespace Glitch.Core
             ProtectionTemplate fillProtection,
             ICollection<GlitchCommand> commands)
         {
+            FlattenOperation masterFlatten;
+            if (_flattenByAccount.TryGetValue(execution.AccountName, out masterFlatten)
+                && masterFlatten.Phase == GlitchOperationPhase.NativePending)
+                return;
             foreach (Route route in _routes.Values
                 .Where(value => value.Enabled
                     && string.Equals(value.Master, execution.AccountName, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(value => value.Id, StringComparer.OrdinalIgnoreCase))
             {
+                FlattenOperation followerFlatten;
+                if (_flattenByAccount.TryGetValue(route.Follower, out followerFlatten)
+                    && followerFlatten.Phase == GlitchOperationPhase.NativePending)
+                    continue;
                 string allocationKey = route.Id + "|" + execution.InstrumentName;
                 AllocationEpoch allocation;
                 if (!_allocations.TryGetValue(allocationKey, out allocation))
@@ -1077,8 +1131,18 @@ namespace Glitch.Core
                     route.Id,
                     scaled,
                     fillProtection == null && execution.Origin == GlitchExecutionOrigin.External,
-                    nextTarget == 0);
+                    HermesIntentIdForExecution(execution));
             }
+        }
+
+        private string HermesIntentIdForExecution(ExecutionObserved execution)
+        {
+            TradeOperation source;
+            if (execution != null
+                && _tradeByCommand.TryGetValue(execution.CorrelationId ?? string.Empty, out source)
+                && source.Purpose == GlitchCommandPurpose.HermesMasterEntry)
+                return source.HermesIntentId ?? string.Empty;
+            return string.Empty;
         }
 
         private void EnqueueSplitTrade(
@@ -1091,7 +1155,7 @@ namespace Glitch.Core
             string routeId,
             ProtectionTemplate protection,
             bool mirrorsManualMasterProtection,
-            bool targetFlat)
+            string hermesIntentId = null)
         {
             bool opening = IsOpeningIncrease(GetBook(account, instrument), signedQuantity);
             int max;
@@ -1101,7 +1165,7 @@ namespace Glitch.Core
             {
                 EnqueueTrade(operationRoot, causeId, purpose, account, instrument,
                     signedQuantity, routeId, protection, false,
-                    mirrorsManualMasterProtection, targetFlat);
+                    mirrorsManualMasterProtection, hermesIntentId: hermesIntentId);
                 return;
             }
 
@@ -1123,7 +1187,7 @@ namespace Glitch.Core
                     slice,
                     false,
                     mirrorsManualMasterProtection,
-                    targetFlat);
+                    hermesIntentId: hermesIntentId);
                 remaining -= quantity;
                 offset += quantity;
             }
@@ -1140,7 +1204,8 @@ namespace Glitch.Core
             ProtectionTemplate protection,
             bool cancelExternalProtection,
             bool mirrorsManualMasterProtection,
-            bool targetFlat = false)
+            bool closeToFlat = false,
+            string hermesIntentId = null)
         {
             if (signedQuantity == 0 || _operations.ContainsKey(operationId))
                 return;
@@ -1158,6 +1223,7 @@ namespace Glitch.Core
             {
                 Id = operationId,
                 CauseId = causeId,
+                HermesIntentId = hermesIntentId ?? string.Empty,
                 Purpose = purpose,
                 Account = account,
                 Instrument = instrument,
@@ -1166,7 +1232,7 @@ namespace Glitch.Core
                 RemainingSignedQuantity = signedQuantity,
                 CancelExternalProtection = cancelExternalProtection,
                 MirrorsManualMasterProtection = mirrorsManualMasterProtection,
-                TargetFlat = targetFlat,
+                CloseToFlat = closeToFlat,
                 Phase = GlitchOperationPhase.Accepted
             };
             if (protection != null)
@@ -1243,14 +1309,12 @@ namespace Glitch.Core
                         if (_protectionRequests.TryGetValue(requestId, out request))
                             request.Bundle.CancelRequested = true;
                     }
-                    if (operation.TargetFlat && book.PositionKnown)
-                        operation.RemainingSignedQuantity = -book.SignedPosition;
                     operation.Phase = GlitchOperationPhase.Ready;
                 }
 
                 if (operation.Phase == GlitchOperationPhase.NativePending)
                 {
-                    bool stepComplete = TradeStepComplete(operation);
+                    bool stepComplete = TradeStepComplete(book, operation);
                     if (operation.Phase == GlitchOperationPhase.Failed
                         || operation.Phase == GlitchOperationPhase.Unknown)
                         continue;
@@ -1259,7 +1323,9 @@ namespace Glitch.Core
                     operation.ActiveCommandId = null;
                     operation.ActiveRequestedSignedQuantity = 0;
                     operation.ActiveFilledSignedQuantity = 0;
-                    if (operation.TargetFlat && book.PositionKnown)
+                    operation.ActiveExpectedSignedPosition = 0;
+                    operation.ActivePositionRevision = 0;
+                    if (operation.CloseToFlat)
                         operation.RemainingSignedQuantity = -book.SignedPosition;
                     if (operation.RemainingSignedQuantity != 0)
                     {
@@ -1314,6 +1380,26 @@ namespace Glitch.Core
                 if (operation.ManualRevisionBundle != null)
                     ApplyManualProtectionRevision(operation);
 
+                if (operation.CloseToFlat)
+                {
+                    if (!book.PositionKnown)
+                    {
+                        if (!operation.PositionRefreshRequested)
+                        {
+                            operation.PositionRefreshRequested = true;
+                            string refreshCommandId = CommandId(
+                                operation.Id, ++operation.NextStep, "POSITION");
+                            _refreshByCommand[refreshCommandId] = operation;
+                            commands.Add(new RefreshPositionCommand(
+                                refreshCommandId,
+                                operation.Account,
+                                operation.Instrument));
+                        }
+                        return;
+                    }
+                    operation.RemainingSignedQuantity = -book.SignedPosition;
+                }
+
                 if (operation.RemainingSignedQuantity == 0)
                 {
                     if (operation.DirectProtectionBundle != null
@@ -1367,11 +1453,13 @@ namespace Glitch.Core
                     }
                     return;
                 }
-                int step = PlanTradeStep(book.SignedPosition, operation.RemainingSignedQuantity);
+                int step = PlanTradeStep(operation, book.SignedPosition);
                 operation.ActiveCommandId = CommandId(
                     operation.Id, ++operation.NextStep, "TRADE");
                 operation.ActiveRequestedSignedQuantity = step;
                 operation.ActiveFilledSignedQuantity = 0;
+                operation.ActiveExpectedSignedPosition = book.SignedPosition;
+                operation.ActivePositionRevision = book.PositionRevision;
                 operation.Phase = GlitchOperationPhase.NativePending;
                 _tradeByCommand[operation.ActiveCommandId] = operation;
                 commands.Add(new SubmitMarketCommand(
@@ -1413,7 +1501,8 @@ namespace Glitch.Core
                     operation.Account,
                     operation.Instrument,
                     operation.Updates,
-                    operation.TargetCommandIds));
+                    operation.TargetCommandIds,
+                    operation.HermesIntentId));
                 return;
             }
             if (operation.Phase != GlitchOperationPhase.NativePending)
@@ -1536,10 +1625,11 @@ namespace Glitch.Core
             Book book,
             TradeOperation operation,
             ExecutionObserved execution,
+            int openingQuantity,
             ICollection<GlitchCommand> commands)
         {
             ProtectionTemplate allocated = AllocateProtection(
-                operation.RemainingProtection, execution.OpeningQuantity);
+                operation.RemainingProtection, openingQuantity);
             var bundle = new ProtectionBundle
             {
                 Id = operation.Id + "|FILL|" + execution.ExecutionId,
@@ -1563,7 +1653,7 @@ namespace Glitch.Core
                     && observed.Legs.Count > 0
                     && Math.Sign(observed.SignedPosition) == bundle.Direction)
                 {
-                    ConfigureManualBundle(bundle, observed, execution.OpeningQuantity);
+                    ConfigureManualBundle(bundle, observed, openingQuantity);
                     book.Bundles.Add(bundle);
                     SubmitBundleProtection(bundle, operation, commands);
                     return null;
@@ -1571,7 +1661,7 @@ namespace Glitch.Core
                 bundle.Slices.Add(new ProtectionSlice
                 {
                     LegId = CompactLegId(bundle.Id, 0),
-                    RemainingQuantity = execution.OpeningQuantity
+                    RemainingQuantity = openingQuantity
                 });
                 book.Bundles.Add(bundle);
                 return null;
@@ -1664,7 +1754,8 @@ namespace Glitch.Core
                 owner.Purpose == GlitchCommandPurpose.HermesMasterEntry,
                 bundle.EntryPrice,
                 bundle.RouteId,
-                bundle.Id));
+                bundle.Id,
+                owner.HermesIntentId));
         }
 
         private void ReprotectResidualBundles(
@@ -1789,11 +1880,18 @@ namespace Glitch.Core
             ExecutionObserved execution,
             Book book)
         {
-            int closingQuantity = Math.Abs(execution.SignedQuantity) - execution.OpeningQuantity;
+            int exposureDirection = -Math.Sign(execution.SignedQuantity);
+            int protectedQuantity = book.Bundles
+                .Where(value => !value.Superseded
+                    && string.IsNullOrWhiteSpace(value.RouteId)
+                    && value.Direction == exposureDirection)
+                .Sum(value => value.RemainingQuantity);
+            int closingQuantity = Math.Min(
+                Math.Abs(execution.SignedQuantity),
+                protectedQuantity);
             if (closingQuantity <= 0)
                 return;
 
-            int exposureDirection = -Math.Sign(execution.SignedQuantity);
             ProtectionBundle[] directMasterBundles = book.Bundles
                 .Where(value => !value.Superseded
                     && string.IsNullOrWhiteSpace(value.RouteId)
@@ -1847,7 +1945,7 @@ namespace Glitch.Core
             return book.Bundles
                 .Where(bundle => !bundle.Superseded
                     && bundle.RemainingQuantity > 0
-                    && (operation.TargetFlat
+                    && (operation.CloseToFlat
                         || bundle.Direction == -requestedDirection
                         || (book.PositionKnown
                             && (book.SignedPosition == 0
@@ -1899,7 +1997,7 @@ namespace Glitch.Core
             return true;
         }
 
-        private bool TradeStepComplete(TradeOperation operation)
+        private bool TradeStepComplete(Book book, TradeOperation operation)
         {
             NativeOrderObserved[] facts = OrdersForCorrelation(operation.ActiveCommandId).ToArray();
             if (facts.Any(value => string.Equals(
@@ -1921,7 +2019,25 @@ namespace Glitch.Core
                 operation.Failure = "native_trade_terminal_before_requested_fill";
                 return false;
             }
+            if (book == null
+                || !book.PositionKnown
+                || book.PositionRevision <= operation.ActivePositionRevision)
+                return false;
             return true;
+        }
+
+        private static int OpeningQuantityFromPrior(
+            int priorSignedPosition,
+            int signedExecution)
+        {
+            if (signedExecution == 0)
+                return 0;
+            if (priorSignedPosition == 0
+                || Math.Sign(priorSignedPosition) == Math.Sign(signedExecution))
+                return Math.Abs(signedExecution);
+            return Math.Max(
+                0,
+                Math.Abs(signedExecution) - Math.Abs(priorSignedPosition));
         }
 
         private bool ProtectionEstablished(string commandId)
@@ -2117,8 +2233,12 @@ namespace Glitch.Core
             return sign * remaining;
         }
 
-        private static int PlanTradeStep(int signedPosition, int remainingSignedQuantity)
+        private static int PlanTradeStep(TradeOperation operation, int signedPosition)
         {
+            int remainingSignedQuantity = operation.RemainingSignedQuantity;
+            if (operation.Purpose == GlitchCommandPurpose.Replication
+                || operation.Purpose == GlitchCommandPurpose.GroupSynchronization)
+                return remainingSignedQuantity;
             if (signedPosition == 0
                 || Math.Sign(signedPosition) == Math.Sign(remainingSignedQuantity))
                 return remainingSignedQuantity;

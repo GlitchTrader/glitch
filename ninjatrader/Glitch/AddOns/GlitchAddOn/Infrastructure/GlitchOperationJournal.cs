@@ -25,7 +25,7 @@ namespace Glitch.Infrastructure
     /// </summary>
     internal sealed class GlitchOperationJournal
     {
-        private const string Schema = "glitch.operation.v3";
+        private const string Schema = "glitch.operation.v5";
         private readonly object _gate = new object();
         private readonly string _path;
         private readonly JavaScriptSerializer _json = new JavaScriptSerializer
@@ -39,7 +39,7 @@ namespace Glitch.Infrastructure
                 NinjaTrader.Core.Globals.UserDataDir,
                 "glitch",
                 "runtime",
-                "operations.v3.jsonl");
+                "operations.v5.jsonl");
         }
 
         public bool TryAppend(
@@ -154,6 +154,7 @@ namespace Glitch.Infrastructure
                     + "|native_order=" + execution.NativeOrderKey
                     + "|signed_quantity=" + execution.SignedQuantity
                     + "|price=" + execution.Price.ToString(CultureInfo.InvariantCulture)
+                    + "|commission=" + execution.Commission.ToString(CultureInfo.InvariantCulture)
                     + "|representable=" + execution.Representable
                     + "|evidence_gap=" + execution.EvidenceGap
                     + "|correlation=" + execution.CorrelationId;
@@ -168,8 +169,6 @@ namespace Glitch.Infrastructure
                     + "|correlation=" + applied.CorrelationId
                     + "|protection=" + applied.ProtectionCorrelationId
                     + "|native_order=" + applied.NativeOrderKey
-                    + "|post_position=" + applied.PostPosition
-                    + "|opening_quantity=" + applied.OpeningQuantity
                     + "|baseline=" + applied.IsBaseline;
             var order = input as NativeOrderObserved;
             if (order != null)
@@ -275,6 +274,7 @@ namespace Glitch.Infrastructure
                 result["parent"] = protection.ParentCorrelationId ?? string.Empty;
                 result["route"] = protection.RouteId ?? string.Empty;
                 result["exposure"] = protection.ExposureId ?? string.Empty;
+                result["hermes_intent"] = protection.HermesIntentId ?? string.Empty;
                 result["propagates"] = protection.PropagatesAsMasterExecution;
                 result["targets"] = protection.Targets.Select(value =>
                     (object)new Dictionary<string, object>
@@ -299,6 +299,7 @@ namespace Glitch.Infrastructure
                         { "target", value.TargetPrice.HasValue ? (object)value.TargetPrice.Value : null }
                     }).ToArray();
                 result["targets"] = change.TargetCommandIds.ToArray();
+                result["hermes_intent"] = change.HermesIntentId ?? string.Empty;
                 return result;
             }
             var cancel = command as CancelProtectionCommand;
@@ -338,8 +339,6 @@ namespace Glitch.Infrastructure
                 result["origin"] = execution.Origin.ToString();
                 result["correlation"] = execution.CorrelationId ?? string.Empty;
                 result["protection"] = execution.ProtectionCorrelationId ?? string.Empty;
-                result["opening_quantity"] = execution.OpeningQuantity;
-                result["post_position"] = execution.PostPosition;
                 result["native_order_key"] = execution.NativeOrderKey;
                 result["baseline"] = execution.IsBaseline;
                 return result;
@@ -354,6 +353,7 @@ namespace Glitch.Infrastructure
                 result["native_order_key"] = lifecycle.NativeOrderKey;
                 result["signed_quantity"] = lifecycle.SignedQuantity;
                 result["price"] = lifecycle.Price;
+                result["commission"] = lifecycle.Commission;
                 result["representable"] = lifecycle.Representable;
                 result["evidence_gap"] = lifecycle.EvidenceGap;
                 result["correlation"] = lifecycle.CorrelationId;
@@ -588,7 +588,8 @@ namespace Glitch.Infrastructure
                     Boolean(value, "propagates"),
                     DecimalValue(value, "entry_price"),
                     EmptyToNull(Text(value, "route")),
-                    EmptyToNull(Text(value, "exposure")));
+                    EmptyToNull(Text(value, "exposure")),
+                    EmptyToNull(Text(value, "hermes_intent")));
             }
             if (type == nameof(ChangeProtectionCommand))
                 return new ChangeProtectionCommand(
@@ -599,7 +600,8 @@ namespace Glitch.Infrastructure
                         Text(item, "leg_id"),
                         NullableDecimal(item, "stop"),
                         NullableDecimal(item, "target"))),
-                    Strings(value, "targets"));
+                    Strings(value, "targets"),
+                    EmptyToNull(Text(value, "hermes_intent")));
             if (type == nameof(CancelProtectionCommand))
                 return new CancelProtectionCommand(
                     id,
@@ -627,8 +629,6 @@ namespace Glitch.Infrastructure
                     EnumValue(value, "origin", GlitchExecutionOrigin.External),
                     EmptyToNull(Text(value, "correlation")),
                     EmptyToNull(Text(value, "protection")),
-                    Integer(value, "opening_quantity"),
-                    Integer(value, "post_position"),
                     Text(value, "native_order_key"),
                     Boolean(value, "baseline"));
             if (type == nameof(ExecutionLifecycleObserved))
@@ -642,7 +642,8 @@ namespace Glitch.Infrastructure
                     DecimalValue(value, "price"),
                     Boolean(value, "representable"),
                     Text(value, "evidence_gap"),
-                    Text(value, "correlation"));
+                    Text(value, "correlation"),
+                    DecimalValue(value, "commission"));
             if (type == nameof(NativeOrderObserved))
                 return new NativeOrderObserved(
                     Text(value, "account"),

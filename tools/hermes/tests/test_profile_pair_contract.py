@@ -26,7 +26,7 @@ class ProfilePairContractTests(unittest.TestCase):
             for line in CANONICAL_PROFILE.read_text(encoding="utf-8").splitlines()
             if line.startswith("version:")
         )
-        self.assertEqual(version, "0.0.2.24")
+        self.assertEqual(version, "0.0.2.26")
 
 
 if __name__ == "__main__":

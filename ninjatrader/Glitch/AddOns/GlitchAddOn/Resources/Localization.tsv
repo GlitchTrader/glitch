@@ -141,7 +141,7 @@ header.button.replicating	Replicating	Replicando	Replicando	复制中	Réplicati
 header.button.replication_on	Replication On	Replicação ligada	Replicación activa	复制已开启	Réplication activée	Репликация включена
 header.button.start	Start	Iniciar	Iniciar	开始	Démarrer	Старт
 header.button.stop	Stop	Parar	Detener	停止	Arrêter	Стоп
-header.metric.fleet_upnl	Daily PnL	PnL Diário	PnL Diario	当日盈亏	PnL Journalier	Дневной PnL
+header.metric.fleet_upnl	Session PnL	PnL da Sessão	PnL de Sesión	会话盈亏	PnL de session	PnL сессии
 header.metric.eval_pnl	Eval PnL	Eval PnL	Eval PnL	Eval PnL	Eval PnL	Eval PnL
 header.metric.eval_risk	Eval Risk	Risco Eval	Riesgo Eval	Eval 风险	Risque Eval	Eval Риск
 header.metric.global_risk	Global Risk	Risco Global	Riesgo Global	全局风险	Risque Global	Глобальный Риск

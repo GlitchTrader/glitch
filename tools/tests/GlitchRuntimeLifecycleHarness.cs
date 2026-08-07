@@ -152,6 +152,61 @@ internal static class GlitchRuntimeLifecycleHarness
         Assert(drained == 2, "Stop discarded an accepted runtime event");
         drainingRuntime.Dispose();
 
+        var mutationGate = new GlitchMutationGate();
+        int nativeMutations = 0;
+        mutationGate.Fence("Follower");
+        Assert(!mutationGate.TryExecute(
+                "Follower", false, () => nativeMutations++),
+            "a fenced account admitted a non-Flatten native mutation");
+        Assert(nativeMutations == 0,
+            "a fenced account invoked the rejected native mutator");
+        Assert(mutationGate.TryExecute(
+                "Follower", true, () => nativeMutations++),
+            "a fenced account rejected its explicit Flatten mutation");
+        mutationGate.Release("Follower");
+        Assert(mutationGate.TryExecute(
+                "Follower", false, () => nativeMutations++),
+            "terminal Flatten did not release its account fence");
+
+        var inFlightEntered = new ManualResetEventSlim(false);
+        var releaseInFlight = new ManualResetEventSlim(false);
+        var inFlightCompleted = new ManualResetEventSlim(false);
+        var fenceCompleted = new ManualResetEventSlim(false);
+        var inFlightThread = new Thread(() =>
+        {
+            mutationGate.TryExecute("Master", false, () =>
+            {
+                inFlightEntered.Set();
+                releaseInFlight.Wait(TimeSpan.FromSeconds(2));
+            });
+            inFlightCompleted.Set();
+        });
+        inFlightThread.Start();
+        Assert(inFlightEntered.Wait(TimeSpan.FromSeconds(2)),
+            "native mutation did not enter the atomic admission boundary");
+        var fenceThread = new Thread(() =>
+        {
+            mutationGate.Fence("Master");
+            fenceCompleted.Set();
+        });
+        fenceThread.Start();
+        Assert(!fenceCompleted.Wait(TimeSpan.FromMilliseconds(100)),
+            "Flatten fencing crossed through an in-flight native mutator");
+        releaseInFlight.Set();
+        Assert(inFlightCompleted.Wait(TimeSpan.FromSeconds(2))
+                && fenceCompleted.Wait(TimeSpan.FromSeconds(2)),
+            "the atomic mutation/fence handoff did not complete");
+        inFlightThread.Join();
+        fenceThread.Join();
+        Assert(!mutationGate.TryExecute("Master", false, () => nativeMutations++),
+            "a mutation entered after the Flatten fence acquired the boundary");
+
+        mutationGate.Release("Master");
+        mutationGate.Fence(new[] { "Master", "Follower" });
+        Assert(!mutationGate.TryExecute("Master", false, () => nativeMutations++)
+                && !mutationGate.TryExecute("Follower", false, () => nativeMutations++),
+            "batch Flatten did not fence its complete account set atomically");
+
         Console.WriteLine("Glitch runtime lifecycle harness passed.");
         return 0;
     }

@@ -116,7 +116,8 @@ namespace Glitch.Core
             decimal price,
             bool representable,
             string evidenceGap,
-            string correlationId = null)
+            string correlationId = null,
+            decimal commission = 0)
         {
             Operation = operation;
             ExecutionId = executionId ?? string.Empty;
@@ -128,6 +129,7 @@ namespace Glitch.Core
             Representable = representable;
             EvidenceGap = evidenceGap ?? string.Empty;
             CorrelationId = correlationId ?? string.Empty;
+            Commission = commission;
         }
 
         public GlitchNativeOperation Operation { get; }
@@ -140,6 +142,7 @@ namespace Glitch.Core
         public bool Representable { get; }
         public string EvidenceGap { get; }
         public string CorrelationId { get; }
+        public decimal Commission { get; }
     }
 
     /// <summary>
@@ -337,35 +340,7 @@ namespace Glitch.Core
             decimal price,
             GlitchExecutionOrigin origin,
             string correlationId,
-            string protectionCorrelationId = null,
-            bool opensExposure = false)
-            : this(
-                executionId,
-                accountName,
-                instrumentName,
-                signedQuantity,
-                price,
-                origin,
-                correlationId,
-                protectionCorrelationId,
-                opensExposure ? Math.Abs(signedQuantity) : 0,
-                int.MinValue,
-                string.Empty,
-                false)
-        {
-        }
-
-        public ExecutionObserved(
-            string executionId,
-            string accountName,
-            string instrumentName,
-            int signedQuantity,
-            decimal price,
-            GlitchExecutionOrigin origin,
-            string correlationId,
             string protectionCorrelationId,
-            int openingQuantity,
-            int postPosition,
             string nativeOrderKey,
             bool isBaseline)
         {
@@ -388,8 +363,6 @@ namespace Glitch.Core
             Origin = origin;
             CorrelationId = correlationId;
             ProtectionCorrelationId = protectionCorrelationId;
-            OpeningQuantity = Math.Max(0, Math.Min(Math.Abs(signedQuantity), openingQuantity));
-            PostPosition = postPosition;
             NativeOrderKey = nativeOrderKey ?? string.Empty;
             IsBaseline = isBaseline;
         }
@@ -402,9 +375,6 @@ namespace Glitch.Core
         public GlitchExecutionOrigin Origin { get; }
         public string CorrelationId { get; }
         public string ProtectionCorrelationId { get; }
-        public int OpeningQuantity { get; }
-        public bool OpensExposure => OpeningQuantity > 0;
-        public int PostPosition { get; }
         public string NativeOrderKey { get; }
         public bool IsBaseline { get; }
     }
@@ -1077,7 +1047,8 @@ namespace Glitch.Core
             bool propagatesAsMasterExecution = false,
             decimal entryPrice = 0,
             string routeId = null,
-            string exposureId = null)
+            string exposureId = null,
+            string hermesIntentId = null)
             : base(commandId, GlitchCommandPurpose.Protection)
         {
             AccountName = accountName;
@@ -1090,6 +1061,7 @@ namespace Glitch.Core
             EntryPrice = entryPrice;
             RouteId = routeId;
             ExposureId = exposureId;
+            HermesIntentId = hermesIntentId ?? string.Empty;
         }
 
         public string AccountName { get; }
@@ -1102,6 +1074,7 @@ namespace Glitch.Core
         public decimal EntryPrice { get; }
         public string RouteId { get; }
         public string ExposureId { get; }
+        public string HermesIntentId { get; }
     }
 
     public sealed class ChangeProtectionCommand : GlitchCommand
@@ -1111,7 +1084,8 @@ namespace Glitch.Core
             string accountName,
             string instrumentName,
             IEnumerable<HermesProtectionUpdate> updates,
-            IEnumerable<string> targetCommandIds = null)
+            IEnumerable<string> targetCommandIds = null,
+            string hermesIntentId = null)
             : base(commandId, GlitchCommandPurpose.Protection)
         {
             AccountName = accountName;
@@ -1122,12 +1096,14 @@ namespace Glitch.Core
                 .Select(value => value.Trim())
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+            HermesIntentId = hermesIntentId ?? string.Empty;
         }
 
         public string AccountName { get; }
         public string InstrumentName { get; }
         public IReadOnlyList<HermesProtectionUpdate> Updates { get; }
         public IReadOnlyList<string> TargetCommandIds { get; }
+        public string HermesIntentId { get; }
     }
 
     public sealed class CancelProtectionCommand : GlitchCommand

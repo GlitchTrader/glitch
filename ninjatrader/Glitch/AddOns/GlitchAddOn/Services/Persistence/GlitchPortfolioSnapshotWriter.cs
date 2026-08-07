@@ -216,8 +216,8 @@ namespace Glitch.Services
             sb.Append("\"created_utc\":").Append(GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(nowUtc))).Append(',');
             sb.Append("\"snapshot_id\":").Append(GlitchSnapshotJson.String(snapshotId)).Append(',');
             sb.Append("\"source_mode\":\"live\",");
-            sb.Append("\"pnl_basis\":\"nt_account_items\",");
-            sb.Append("\"pnl_commission_note\":\"NT RealizedProfitLoss is treated as net of commissions; trade-level commission detail lives in TradeLedger.\",");
+            sb.Append("\"pnl_basis\":\"nt_current_session_account_items\",");
+            sb.Append("\"pnl_commission_note\":\"NT account items are current-session values; TradeLedger records execution-level commission reported by NinjaTrader.\",");
             sb.Append("\"is_replicating\":").Append(GlitchSnapshotJson.Bool(capture.IsReplicating)).Append(',');
             sb.Append("\"is_replication_effective\":").Append(GlitchSnapshotJson.Bool(capture.IsReplicationEffective)).Append(',');
             sb.Append("\"policy\":{");

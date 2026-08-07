@@ -449,6 +449,9 @@ namespace Glitch.Services
             fields.TryGetValue("account", out string account);
             fields.TryGetValue("execution_id", out string executionId);
             fields.TryGetValue("native_order", out string orderIdentity);
+            double commission = 0;
+            if (fields.TryGetValue("commission", out string commissionRaw))
+                TryParseFlexibleDouble(commissionRaw, out commission);
             string signalName = CleanToken(orderIdentity);
             string executionSource = "Manual";
             if (GlitchNativeIdentity.TryGetRole(signalName, out string role))
@@ -478,7 +481,7 @@ namespace Glitch.Services
                 OrderIdentity = CleanToken(orderIdentity),
                 Source = executionSource,
                 SignalTag = ResolveSignalTag(signalName),
-                Commission = 0
+                Commission = commission
             };
         }
 

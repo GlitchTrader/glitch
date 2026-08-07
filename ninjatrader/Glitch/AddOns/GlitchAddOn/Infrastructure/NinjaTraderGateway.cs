@@ -458,13 +458,12 @@ namespace Glitch.Infrastructure
                 (decimal)price,
                 representable,
                 evidenceGap,
-                metadata?.NativeCommandId));
+                metadata?.NativeCommandId,
+                (decimal)(execution?.Commission ?? 0)));
             if (nativeOperation != GlitchNativeOperation.Add || !representable)
                 return;
 
-            int postPosition = SignedExecutionPosition(execution);
             int signedQuantity = sign * quantity;
-            int openingQuantity = OpeningQuantity(postPosition, signedQuantity);
             GlitchExecutionOrigin origin = ResolveExecutionOrigin(
                 account, instrument, order, metadata);
             Publish(new ExecutionObserved(
@@ -476,19 +475,14 @@ namespace Glitch.Infrastructure
                 origin,
                 metadata?.CommandCorrelation,
                 metadata?.ProtectionCorrelation,
-                openingQuantity,
-                postPosition,
                 nativeOrderKey,
                 isBaseline));
-            if (origin == GlitchExecutionOrigin.GlitchFlatten)
+            lock (_gate)
             {
-                lock (_gate)
-                {
-                    FlattenScope scope;
-                    if (_flattenScopes.TryGetValue(
-                        PositionKey(accountName, instrumentName), out scope))
-                        scope.SawExecution = true;
-                }
+                FlattenScope scope;
+                if (_flattenScopes.TryGetValue(
+                    PositionKey(accountName, instrumentName), out scope))
+                    scope.SawExecution = true;
             }
             ObserveProtectionFillExecution(order);
             TryCompleteFlattenScope(account, instrument);
@@ -707,12 +701,6 @@ namespace Glitch.Infrastructure
                     + "|actual=" + current);
                 return;
             }
-            if (current != 0
-                && Math.Sign(current) != Math.Sign(command.SignedQuantity)
-                && Math.Abs(command.SignedQuantity) > Math.Abs(current))
-                throw new InvalidOperationException(
-                    "A native trade step cannot cross through flat for " + command.CommandId + ".");
-
             OrderAction action = command.SignedQuantity > 0
                 ? (current < 0 ? OrderAction.BuyToCover : OrderAction.Buy)
                 : (current > 0 ? OrderAction.Sell : OrderAction.SellShort);
@@ -775,6 +763,12 @@ namespace Glitch.Infrastructure
                 throw new InvalidOperationException(
                     "Native account or instrument is unavailable for " + command.CommandId + ".");
             ValidateProtectionGeometry(command);
+            ValidateStopMarketSide(
+                instrument,
+                command.SignedEntryQuantity,
+                command.Targets.Where(value => value.StopPrice.HasValue)
+                    .Select(value => value.StopPrice.Value),
+                command.CommandId);
 
             OrderAction exitAction = command.SignedEntryQuantity > 0
                 ? OrderAction.Sell
@@ -844,8 +838,10 @@ namespace Glitch.Infrastructure
                 throw new InvalidOperationException("Protection command contained no native orders.");
             beforeMutation?.Invoke(command);
             account.Submit(orders);
-            string hermesIntentId = HermesIntentId(command.ExposureId);
-            if (command.PropagatesAsMasterExecution && !string.IsNullOrWhiteSpace(hermesIntentId))
+            string hermesIntentId = !string.IsNullOrWhiteSpace(command.HermesIntentId)
+                ? command.HermesIntentId
+                : HermesIntentId(command.ExposureId);
+            if (!string.IsNullOrWhiteSpace(hermesIntentId))
             {
                 var fields = new StringBuilder()
                     .Append("account=").Append(Clean(account.Name))
@@ -865,7 +861,9 @@ namespace Glitch.Infrastructure
                 GlitchExecutionEvidenceWriter.TryAppend(
                     hermesIntentId,
                     "pending",
-                    "group_structural_brackets_submitted",
+                    command.PropagatesAsMasterExecution
+                        ? "group_structural_brackets_submitted"
+                        : "follower_structural_brackets_submitted",
                     fields.ToString(),
                     DateTime.UtcNow);
             }
@@ -972,6 +970,14 @@ namespace Glitch.Infrastructure
 
             if (changes.Count == 0)
                 throw new InvalidOperationException("No working protection matched " + command.CommandId + ".");
+            foreach (KeyValuePair<Order, double> stopChange in stopChanges)
+            {
+                ValidateStopMarketSide(
+                    instrument,
+                    -OrderSign(stopChange.Key.OrderAction),
+                    new[] { (decimal)stopChange.Value },
+                    command.CommandId);
+            }
             beforeMutation?.Invoke(command);
             foreach (KeyValuePair<Order, double> change in stopChanges)
                 change.Key.StopPriceChanged = change.Value;
@@ -1376,6 +1382,8 @@ namespace Glitch.Infrastructure
             Order order,
             NativeOrderMetadata metadata)
         {
+            if (metadata != null)
+                return metadata.Origin;
             if (account != null && instrument != null)
             {
                 lock (_gate)
@@ -1385,7 +1393,7 @@ namespace Glitch.Infrastructure
                         return GlitchExecutionOrigin.GlitchFlatten;
                 }
             }
-            return metadata?.Origin ?? ExternalExecutionOrigin(account, instrument, order);
+            return ExternalExecutionOrigin(account, instrument, order);
         }
 
         private static GlitchExecutionOrigin ExternalExecutionOrigin(
@@ -1406,26 +1414,38 @@ namespace Glitch.Infrastructure
             return GlitchExecutionOrigin.ExternalProtection;
         }
 
-        private static int SignedExecutionPosition(Execution execution)
+        private static void ValidateStopMarketSide(
+            Instrument instrument,
+            int signedPosition,
+            IEnumerable<decimal> stopPrices,
+            string commandId)
         {
-            if (execution == null || execution.MarketPosition == MarketPosition.Flat)
-                return 0;
-            int quantity = Math.Abs(execution.Position);
-            return execution.MarketPosition == MarketPosition.Long ? quantity : -quantity;
-        }
+            decimal[] stops = (stopPrices ?? Enumerable.Empty<decimal>()).ToArray();
+            if (stops.Length == 0)
+                return;
+            if (instrument == null || signedPosition == 0)
+                throw new InvalidOperationException(
+                    "protection_market_side_unresolved|command=" + commandId);
 
-        private static int OpeningQuantity(int postPosition, int signedExecution)
-        {
-            if (signedExecution == 0 || postPosition == 0)
-                return 0;
-            int prior = postPosition - signedExecution;
-            if (Math.Sign(postPosition) != Math.Sign(signedExecution))
-                return 0;
-            if (prior == 0 || Math.Sign(prior) == Math.Sign(signedExecution))
-                return Math.Min(
-                    Math.Abs(signedExecution),
-                    Math.Max(0, Math.Abs(postPosition) - Math.Abs(prior)));
-            return Math.Abs(postPosition);
+            double nativeReference = signedPosition > 0
+                ? instrument.MarketData?.Bid?.Price ?? 0
+                : instrument.MarketData?.Ask?.Price ?? 0;
+            if (nativeReference <= 0)
+                throw new InvalidOperationException(
+                    "protection_market_price_unavailable|command=" + commandId);
+
+            decimal reference = (decimal)nativeReference;
+            foreach (decimal stop in stops)
+            {
+                bool executable = signedPosition > 0
+                    ? stop < reference
+                    : stop > reference;
+                if (!executable)
+                    throw new InvalidOperationException(
+                        "protection_market_side_invalid|command=" + commandId
+                        + "|stop=" + stop.ToString(CultureInfo.InvariantCulture)
+                        + "|market=" + reference.ToString(CultureInfo.InvariantCulture));
+            }
         }
 
         private void TryCompleteFlattenScope(Account account, Instrument instrument)

@@ -28,6 +28,11 @@ internal static class GlitchJournalHarness
         NinjaTrader.Core.Globals.UserDataDir = root;
         try
         {
+            string runtimeRoot = Path.Combine(root, "glitch", "runtime");
+            Directory.CreateDirectory(runtimeRoot);
+            string legacyJournalPath = Path.Combine(runtimeRoot, "operations.v4.jsonl");
+            File.WriteAllText(legacyJournalPath, "not-json" + Environment.NewLine);
+
             var journal = new GlitchOperationJournal();
             var position = new PositionObserved("Master", "MNQ 09-26", 0);
             var input = new HermesEntryRequested(
@@ -64,7 +69,8 @@ internal static class GlitchJournalHarness
                 20001m,
                 true,
                 string.Empty,
-                "command-1");
+                "command-1",
+                1.25m);
             Assert(journal.TryAppendInput(
                 lifecycle, "test", out string lifecycleError), lifecycleError);
             var routeConfiguration = new RouteConfigurationChanged(
@@ -127,7 +133,8 @@ internal static class GlitchJournalHarness
                 "atomic route configuration did not round-trip exactly");
             Assert(loadedLifecycle.Operation == GlitchNativeOperation.Update
                 && loadedLifecycle.NativeOrderKey == "native-order-1"
-                && loadedLifecycle.SignedQuantity == 2,
+                && loadedLifecycle.SignedQuantity == 2
+                && loadedLifecycle.Commission == 1.25m,
                 "execution lifecycle evidence did not round-trip exactly");
             SubmitMarketCommand loadedMarket = records.Select(value => value.Command)
                 .OfType<SubmitMarketCommand>().Last();
@@ -168,7 +175,9 @@ internal static class GlitchJournalHarness
                 "command fingerprint ignored nested protection geometry");
 
             string journalPath = Path.Combine(
-                root, "glitch", "runtime", "operations.v3.jsonl");
+                root, "glitch", "runtime", "operations.v5.jsonl");
+            Assert(File.ReadAllText(legacyJournalPath) == "not-json" + Environment.NewLine,
+                "the new journal epoch mutated legacy incident history");
             File.AppendAllText(journalPath, "not-json" + Environment.NewLine);
             Assert(!journal.TryLoad(out _, out string corruptError)
                     && !string.IsNullOrWhiteSpace(corruptError),

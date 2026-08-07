@@ -66,6 +66,7 @@ namespace Glitch.Infrastructure
         private readonly GlitchRuntime _runtime;
         private readonly NinjaTraderGateway _gateway;
         private readonly GlitchOperationJournal _operationJournal;
+        private readonly GlitchMutationGate _mutationGate = new GlitchMutationGate();
         private readonly Dictionary<string, GlitchRouteDefinition> _configuredRoutes =
             new Dictionary<string, GlitchRouteDefinition>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _commandFingerprints =
@@ -214,10 +215,18 @@ namespace Glitch.Infrastructure
                         .ToArray()
                     : Array.Empty<string>();
                 if (!changed && synchronizeRouteIds.Length == 0)
+                {
+                    lock (_gate)
+                    {
+                        if (_runtimeFailed && replicationEnabled)
+                            return false;
+                    }
                     return true;
+                }
 
-                if (persistDesiredState
-                    && priorReplicationEnabled != replicationEnabled
+                bool desiredStateChanged = persistDesiredState
+                    && priorReplicationEnabled != replicationEnabled;
+                if (desiredStateChanged
                     && !TryPersistReplicationEnabled(replicationEnabled))
                 {
                     return false;
@@ -232,8 +241,15 @@ namespace Glitch.Infrastructure
                         route.Ratio,
                         route.Enabled)),
                     synchronizeRouteIds);
-                if (!PostDurably(input, "route_configuration_changed"))
+                if (!PostDurably(
+                        input,
+                        "route_configuration_changed",
+                        allowDuringRuntimeFault: !replicationEnabled))
+                {
+                    if (desiredStateChanged)
+                        TryPersistReplicationEnabled(priorReplicationEnabled);
                     return false;
+                }
 
                 lock (_gate)
                 {
@@ -409,9 +425,56 @@ namespace Glitch.Infrastructure
 
         public bool RequestFlatten(string requestId, string accountName, string reason)
         {
-            return PostDurably(
-                new FlattenAccountRequested(requestId, accountName, reason),
-                "flatten_requested");
+            if (string.IsNullOrWhiteSpace(accountName))
+                return false;
+            IReadOnlyDictionary<string, bool> results = RequestFlattenBatch(
+                requestId, new[] { accountName }, reason);
+            bool accepted;
+            return results.TryGetValue(accountName.Trim(), out accepted) && accepted;
+        }
+
+        public IReadOnlyDictionary<string, bool> RequestFlattenBatch(
+            string requestRoot,
+            IEnumerable<string> accountNames,
+            string reason)
+        {
+            if (string.IsNullOrWhiteSpace(requestRoot))
+                throw new ArgumentException("Request identity is required.", nameof(requestRoot));
+            string[] accounts = (accountNames ?? Enumerable.Empty<string>())
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var results = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            if (accounts.Length == 0)
+                return results;
+
+            _mutationGate.Fence(accounts);
+            for (int index = 0; index < accounts.Length; index++)
+            {
+                string account = accounts[index];
+                string requestId = accounts.Length == 1
+                    ? requestRoot.Trim()
+                    : requestRoot.Trim() + "-" + index;
+                bool accepted = false;
+                try
+                {
+                    accepted = PostDurably(
+                        new FlattenAccountRequested(requestId, account, reason),
+                        "flatten_requested",
+                        allowDuringRuntimeFault: true);
+                    results[account] = accepted;
+                }
+                catch
+                {
+                    for (int pending = index; pending < accounts.Length; pending++)
+                        _mutationGate.Release(accounts[pending]);
+                    throw;
+                }
+                if (!accepted)
+                    _mutationGate.Release(account);
+            }
+            return results;
         }
 
         public bool SetReplicationOrderLimit(string accountName, int? maxOrderQuantity)
@@ -476,12 +539,16 @@ namespace Glitch.Infrastructure
                 new GlitchRuntimeEvent(Interlocked.Increment(ref _eventSequence), kind, input));
         }
 
-        private bool PostDurably(GlitchInput input, string kind)
+        private bool PostDurably(
+            GlitchInput input,
+            string kind,
+            bool allowDuringRuntimeFault = false)
         {
             long generation;
             lock (_gate)
             {
-                if (!_started || _stopping || _runtimeFailed)
+                if (!_started || _stopping
+                    || (_runtimeFailed && !allowDuringRuntimeFault))
                     return false;
                 generation = _generation;
             }
@@ -535,9 +602,14 @@ namespace Glitch.Infrastructure
             PublishNativeFactNotice(runtimeEvent.Input);
             if (runtimeEvent.Input is AccountStatusObserved)
                 _gateway.RefreshAccountSubscriptions();
+            bool allowedDuringRuntimeFault = runtimeEvent.Input is FlattenAccountRequested
+                || runtimeEvent.Input is FlattenCompletedObserved;
+            var faultRouteConfiguration = runtimeEvent.Input as RouteConfigurationChanged;
+            allowedDuringRuntimeFault |= faultRouteConfiguration != null
+                && !faultRouteConfiguration.ReplicationEnabled;
             lock (_gate)
             {
-                if (_runtimeFailed)
+                if (_runtimeFailed && !allowedDuringRuntimeFault)
                     return;
             }
             IReadOnlyList<GlitchCommand> commands = _engine.Handle(runtimeEvent.Input);
@@ -551,6 +623,15 @@ namespace Glitch.Infrastructure
             }
             foreach (GlitchCommand command in commands)
                 DispatchNewCommand(command, runtimeEvent.Kind);
+            var flattenCompleted = runtimeEvent.Input as FlattenCompletedObserved;
+            if (flattenCompleted != null)
+            {
+                _mutationGate.Release(flattenCompleted.AccountName);
+                PublishNotice(
+                    flattenCompleted.AccountName,
+                    "Order",
+                    "native_mutation_fence_released|reason=flatten_terminal");
+            }
         }
 
         private void BlockMutations(string reason)
@@ -559,6 +640,7 @@ namespace Glitch.Infrastructure
             {
                 _mutationsAllowed = false;
                 _runtimeFailed = true;
+                _replicationEnabled = false;
             }
             PublishNotice(
                 "System", "Persistence",
@@ -685,6 +767,13 @@ namespace Glitch.Infrastructure
 
         private void ApplyRecoveredHostConfiguration(GlitchInput input)
         {
+            var flattenRequested = input as FlattenAccountRequested;
+            if (flattenRequested != null)
+                _mutationGate.Fence(flattenRequested.AccountName);
+            var flattenCompleted = input as FlattenCompletedObserved;
+            if (flattenCompleted != null)
+                _mutationGate.Release(flattenCompleted.AccountName);
+
             var configuration = input as RouteConfigurationChanged;
             if (configuration != null)
             {
@@ -979,7 +1068,9 @@ namespace Glitch.Infrastructure
 
         private void IssueAcceptedCommand(GlitchCommand command)
         {
-            if (!_mutationsAllowed && !(command is RefreshPositionCommand))
+            if (!_mutationsAllowed
+                && !(command is RefreshPositionCommand)
+                && !(command is FlattenAccountCommand))
             {
                 Post(new NativeRequestFailedObserved(
                     command.CommandId, "runtime_mutation_blocked_by_recovery"), "recovery");
@@ -989,17 +1080,37 @@ namespace Glitch.Infrastructure
             bool nativeMutationStarted = false;
             try
             {
-                _gateway.Execute(command, value =>
-                {
-                    if (!_operationJournal.TryAppend(
-                        value, "native_request_started", string.Empty, out string startError))
+                string accountName = CommandAccount(command);
+                bool admitted = _mutationGate.TryExecute(
+                    accountName,
+                    command is FlattenAccountCommand || command is RefreshPositionCommand,
+                    () => _gateway.Execute(command, value =>
                     {
-                        BlockMutations("native_request_start_unwritten");
-                        throw new InvalidOperationException(
-                            "native_request_start_unwritten:" + startError);
-                    }
-                    nativeMutationStarted = true;
-                });
+                        if (!_operationJournal.TryAppend(
+                            value, "native_request_started", string.Empty, out string startError))
+                        {
+                            BlockMutations("native_request_start_unwritten");
+                            throw new InvalidOperationException(
+                                "native_request_start_unwritten:" + startError);
+                        }
+                        nativeMutationStarted = true;
+                    }));
+                if (!admitted)
+                {
+                    _operationJournal.TryAppend(
+                        command,
+                        "native_request_not_started",
+                        "account_fenced_by_flatten",
+                        out _);
+                    PublishNotice(
+                        accountName,
+                        "Order",
+                        "native_command_blocked|command=" + command.CommandId
+                        + "|reason=account_fenced_by_flatten");
+                    Post(new NativeRequestFailedObserved(
+                        command.CommandId, "account_fenced_by_flatten"), "flatten_fence");
+                    return;
+                }
                 if (!_operationJournal.TryAppend(
                     command, "native_request_returned", string.Empty, out string returnedError))
                 {
@@ -1025,6 +1136,7 @@ namespace Glitch.Infrastructure
                     "native_command_" + (nativeMutationStarted ? "unknown" : "failed")
                     + "|command=" + command.CommandId
                     + "|error=" + Clean(error.Message));
+                AppendHermesProtectionFailure(command, error, nativeMutationStarted);
                 Post(
                     nativeMutationStarted
                         ? (GlitchInput)new NativeRequestUnknownObserved(
@@ -1032,6 +1144,43 @@ namespace Glitch.Infrastructure
                         : new NativeRequestFailedObserved(command.CommandId, error.Message),
                     "native_request");
             }
+        }
+
+        private static void AppendHermesProtectionFailure(
+            GlitchCommand command,
+            Exception error,
+            bool nativeMutationStarted)
+        {
+            var change = command as ChangeProtectionCommand;
+            if (nativeMutationStarted
+                || change == null
+                || string.IsNullOrWhiteSpace(change.HermesIntentId))
+                return;
+            GlitchExecutionEvidenceWriter.TryAppend(
+                change.HermesIntentId,
+                "failed",
+                "native_protection_change_rejected",
+                "account=" + Clean(change.AccountName)
+                + "|instrument=" + Clean(change.InstrumentName)
+                + "|command=" + Clean(change.CommandId)
+                + "|error=" + Clean(error.GetType().Name + ":" + error.Message),
+                DateTime.UtcNow);
+        }
+
+        private static string CommandAccount(GlitchCommand command)
+        {
+            var market = command as SubmitMarketCommand;
+            if (market != null) return market.AccountName;
+            var protection = command as SubmitProtectionCommand;
+            if (protection != null) return protection.AccountName;
+            var change = command as ChangeProtectionCommand;
+            if (change != null) return change.AccountName;
+            var cancel = command as CancelProtectionCommand;
+            if (cancel != null) return cancel.AccountName;
+            var flatten = command as FlattenAccountCommand;
+            if (flatten != null) return flatten.AccountName;
+            var refresh = command as RefreshPositionCommand;
+            return refresh?.AccountName;
         }
 
         private void TrackNativeCorrelation(GlitchInput input)
@@ -1147,11 +1296,12 @@ namespace Glitch.Infrastructure
             }
             if (accounts.Length == 0)
                 return false;
+            if (!SetReplicationEnabled(false))
+                return false;
             string requestRoot = "hermes-flatten-" + Guid.NewGuid().ToString("N");
-            bool accepted = true;
-            for (int index = 0; index < accounts.Length; index++)
-                accepted &= RequestFlatten(requestRoot + "-" + index, accounts[index], "hermes_flatten_all");
-            return accepted;
+            IReadOnlyDictionary<string, bool> results = RequestFlattenBatch(
+                requestRoot, accounts, "hermes_flatten_all");
+            return accounts.All(account => results.TryGetValue(account, out bool accepted) && accepted);
         }
 
         private string BuildConfiguredFlattenEvidence()

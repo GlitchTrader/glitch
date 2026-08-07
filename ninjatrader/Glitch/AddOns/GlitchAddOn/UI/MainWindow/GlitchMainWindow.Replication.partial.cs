@@ -362,22 +362,25 @@ namespace Glitch.UI
         private int IssueFlattenOrdersForAccounts(IReadOnlyList<Account> accounts)
         {
             int totalIssued = 0;
-            foreach (Account account in accounts ?? Array.Empty<Account>())
+            Account[] resolvedAccounts = (accounts ?? Array.Empty<Account>())
+                .Where(account => account != null && !string.IsNullOrWhiteSpace(account.Name))
+                .ToArray();
+            IReadOnlyDictionary<string, bool> acceptedByAccount =
+                GlitchRuntimeHost.Active?.RequestFlattenBatch(
+                    "user-flatten-" + Guid.NewGuid().ToString("N"),
+                    resolvedAccounts.Select(account => account.Name),
+                    "user_flatten_all")
+                ?? new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            foreach (Account account in resolvedAccounts)
             {
-                if (account == null || string.IsNullOrWhiteSpace(account.Name))
-                    continue;
-
                 string accountName = account.Name.Trim();
                 string resultToken;
                 int instrumentFlattenCount = 0;
                 try
                 {
                     instrumentFlattenCount = GetOpenPositionInstruments(account).Count;
-                    string requestId = "user-flatten-" + Guid.NewGuid().ToString("N");
-                    if (GlitchRuntimeHost.Active?.RequestFlatten(
-                            requestId,
-                            accountName,
-                            "user_flatten_all") == true)
+                    bool accepted;
+                    if (acceptedByAccount.TryGetValue(accountName, out accepted) && accepted)
                     {
                         totalIssued += Math.Max(1, instrumentFlattenCount);
                         resultToken = "issued";

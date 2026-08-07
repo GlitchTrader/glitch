@@ -1535,14 +1535,17 @@ namespace Glitch.UI
             _isFlattenAllInProgress = true;
             var flattenStopwatch = Stopwatch.StartNew();
             int flattenSubmitCount = 0;
-            bool restoreCopyEngine = _isReplicatingUi;
-            bool verifiedFlatAndOrderFree = false;
             try
             {
-                if (restoreCopyEngine)
-                    RefreshCopyEngineConfiguration(
-                        replicationEnabledOverride: false,
-                        persistDesiredState: false);
+                if (!SetReplicationFromExternalSurface(false, "flatten_all"))
+                {
+                    RaiseCriticalWarning(
+                        "System",
+                        "Flatten All could not establish its durable replication stop; no native flatten was started.",
+                        "FlattenAllReplicationStopFailed",
+                        unlocksTrading: false);
+                    return false;
+                }
 
                 var accounts = ResolveFlattenAllAccounts(out List<string> unresolvedAccounts);
                 foreach (string unresolvedAccount in unresolvedAccounts)
@@ -1576,7 +1579,6 @@ namespace Glitch.UI
                 bool flattened = await WaitForAllAccountsFlatAsync(accounts, TimeSpan.FromSeconds(8));
 
                 bool complete = flattened && unresolvedAccounts.Count == 0;
-                verifiedFlatAndOrderFree = complete;
                 if (complete)
                 {
                     string flattenSummary = flattenSubmitCount > 0
@@ -1613,8 +1615,6 @@ namespace Glitch.UI
             finally
             {
                 _isFlattenAllInProgress = false;
-                if (restoreCopyEngine)
-                    RefreshCopyEngineConfiguration();
             }
         }
 
