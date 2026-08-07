@@ -114,6 +114,28 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertNotIn("OpeningQuantity", contracts)
         self.assertNotIn("PostPosition", contracts)
 
+    def test_manual_protection_snapshot_ignores_glitch_and_position_callbacks(self):
+        gateway = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/NinjaTraderGateway.cs"
+        )
+        position_callback = gateway[
+            gateway.index("private void OnPositionUpdate("):
+            gateway.index("private void PublishRecoverySnapshot(")
+        ]
+        order_callback = gateway[
+            gateway.index("private void OnOrderUpdate("):
+            gateway.index("private void PublishExecutionFact(")
+        ]
+        helper = gateway[
+            gateway.index("private static bool ShouldPublishExternalProtectionSnapshot("):
+            gateway.index("private void PublishExternalProtectionSnapshot(")
+        ]
+        self.assertNotIn("PublishExternalProtectionSnapshot", position_callback)
+        self.assertIn("ShouldPublishExternalProtectionSnapshot(account, e.Order)", order_callback)
+        self.assertIn("!IsGlitchOrder(order)", helper)
+        self.assertIn("IsExitProtection(", helper)
+        self.assertIn("CurrentPosition(account, order.Instrument.FullName)", helper)
+
     def test_execution_lifecycle_facts_cannot_authorize_replication(self):
         contracts = read("ninjatrader/Glitch/AddOns/GlitchAddOn/Core/GlitchContracts.cs")
         engine = read("ninjatrader/Glitch/AddOns/GlitchAddOn/Core/GlitchEngine.cs")
@@ -235,6 +257,11 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("native_protection_change_rejected", host)
         self.assertIn("change.HermesIntentId", host)
         self.assertIn('fields.TryGetValue("commission"', insights)
+        selfcheck = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Persistence/GlitchRailSelfCheckWriter.cs"
+        )
+        self.assertIn("policy?.ValidationError ?? string.Empty", selfcheck)
+        self.assertNotIn('policy?.ValidationError ?? "policy_unavailable"', selfcheck)
 
     def test_snapshot_price_uses_instrument_level_field_not_nested_descriptive_price(self):
         registry = read(

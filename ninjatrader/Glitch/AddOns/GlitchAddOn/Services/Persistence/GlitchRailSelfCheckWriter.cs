@@ -118,7 +118,7 @@ namespace Glitch.Services
             sb.Append("\"executor\":{");
             GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
             sb.Append("\"policy_valid\":").Append(GlitchSnapshotJson.Bool(policy != null && policy.IsValid)).Append(',');
-            sb.Append("\"policy_error\":").Append(GlitchSnapshotJson.String(policy?.ValidationError ?? "policy_unavailable")).Append(',');
+            sb.Append("\"policy_error\":").Append(GlitchSnapshotJson.String(policy?.ValidationError ?? string.Empty)).Append(',');
             sb.Append("\"enabled\":").Append(GlitchSnapshotJson.Bool(GlitchAiOrderExecutor.IsExecutionEnabled(policy))).Append(',');
             sb.Append("\"account\":").Append(GlitchSnapshotJson.String(policy?.ExecutorAccount ?? string.Empty));
             sb.Append("},");

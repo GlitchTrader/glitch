@@ -366,7 +366,6 @@ namespace Glitch.Infrastructure
                 ? quantity
                 : e.MarketPosition == MarketPosition.Short ? -quantity : 0;
             Publish(new PositionObserved(account.Name, instrument.FullName, signed));
-            PublishExternalProtectionSnapshot(account, instrument);
             TryCompleteFlattenScope(account, instrument);
         }
 
@@ -408,7 +407,13 @@ namespace Glitch.Infrastructure
             PublishOrderFact(account, e.Order, e.Error, e.Comment);
             ObserveProtectionCancellation(e.Order);
 
-            if (!WasProtectionOcoCompletedByFill(e.Order))
+            // A Glitch order update (or an unrelated manual entry) must never be
+            // interpreted as an empty manual-protection book. Only a manually
+            // owned exit-protection order is evidence that the master protection
+            // geometry changed. Position updates intentionally do not publish this
+            // snapshot: they carry no ownership information.
+            if (!WasProtectionOcoCompletedByFill(e.Order)
+                && ShouldPublishExternalProtectionSnapshot(account, e.Order))
             {
                 PublishExternalProtectionSnapshot(account, e.Order.Instrument);
             }
@@ -558,6 +563,18 @@ namespace Glitch.Infrastructure
                     && string.Equals(value.Oco, order.Oco, StringComparison.OrdinalIgnoreCase)
                     && value.OrderState == OrderState.Filled);
             }
+        }
+
+        private static bool ShouldPublishExternalProtectionSnapshot(
+            Account account,
+            Order order)
+        {
+            return account != null
+                && order?.Instrument != null
+                && !IsGlitchOrder(order)
+                && IsExitProtection(
+                    order,
+                    CurrentPosition(account, order.Instrument.FullName));
         }
 
         private void PublishExternalProtectionSnapshot(Account account, Instrument instrument)
