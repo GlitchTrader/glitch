@@ -225,7 +225,11 @@ namespace Glitch.Services
             return "Static";
         }
 
-        public static string BuildPeakStateKey(string accountName, string maxLossTracking)
+        public static string BuildPeakStateKey(
+            string accountName,
+            string maxLossTracking,
+            string ruleFirmId,
+            double accountSize)
         {
             if (string.IsNullOrWhiteSpace(accountName))
                 return accountName;
@@ -234,7 +238,12 @@ namespace Glitch.Services
             if (string.IsNullOrWhiteSpace(normalizedTracking))
                 normalizedTracking = "TrailingUnrealized";
 
-            return accountName.Trim() + "|" + normalizedTracking;
+            string normalizedFirm = string.IsNullOrWhiteSpace(ruleFirmId) ? "Unspecified" : ruleFirmId.Trim();
+            string normalizedSize = accountSize > 0 && !double.IsNaN(accountSize) && !double.IsInfinity(accountSize)
+                ? accountSize.ToString("F0", CultureInfo.InvariantCulture)
+                : "Unspecified";
+
+            return accountName.Trim() + "|" + normalizedFirm + "|" + normalizedSize + "|" + normalizedTracking;
         }
 
         public static double TryGetNativeLiquidationThreshold(Account account)

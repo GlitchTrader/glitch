@@ -51,6 +51,30 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn('"Size required"', window)
         self.assertIn('" (simulated)"', window)
 
+    def test_simulation_account_reset_clears_only_that_account_peak_state(self):
+        window = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.cs"
+        )
+        self.assertIn("Account.SimulationAccountReset += OnSimulationAccountReset;", window)
+        self.assertIn("Account.SimulationAccountReset -= OnSimulationAccountReset;", window)
+        self.assertIn("private void OnSimulationAccountReset(object sender, EventArgs e)", window)
+        self.assertIn("private void ClearPeakStatesForSimulationReset(string accountName)", window)
+        self.assertIn('string keyPrefix = normalizedAccountName + "|";', window)
+        self.assertIn("_peakStatesByAccount.TryRemove(stateKey, out ignored)", window)
+
+    def test_peak_state_identity_separates_firm_and_account_size(self):
+        compliance = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Risk/GlitchComplianceEngine.cs"
+        )
+        window = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.cs"
+        )
+        self.assertIn("string ruleFirmId,", compliance)
+        self.assertIn("double accountSize)", compliance)
+        self.assertIn('normalizedFirm + "|" + normalizedSize + "|" + normalizedTracking', compliance)
+        self.assertIn("ruleFirmId,\n                selectedAccountSize", window)
+        self.assertIn('selectedStatus, "Sim", StringComparison.OrdinalIgnoreCase) ? selectedAccountSize : 0', window)
+
     def test_one_native_gateway_owns_every_order_mutator(self):
         mutators = (".CreateOrder(", ".Submit(", ".Change(", ".Cancel(", ".Flatten(")
         offenders = []

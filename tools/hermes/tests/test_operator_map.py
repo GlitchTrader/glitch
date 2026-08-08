@@ -106,16 +106,17 @@ class OperatorMapTests(unittest.TestCase):
         self.assertIn("'hermes\\epoch.json'", reset)
         self.assertIn("Reset the intended NinjaTrader accounts.", reset)
         self.assertIn("Use Glitch Reset Data to clear Journal and Summary statistics.", reset)
+        self.assertIn("Reload the Glitch AddOn before re-enabling AI", reset)
         backend_targets = reset.split("$backendTargets = @(", 1)[1].split(")", 1)[0]
         for preserved in (
             "Journal.tsv",
             "TradeLedger.tsv",
             "CriticalWarnings.tsv",
             "RiskLocks.tsv",
-            "AccountPeaks.tsv",
             "AnalyticsBridgeCache.json",
         ):
             self.assertNotIn(f"'{preserved}'", backend_targets)
+        self.assertIn("'AccountPeaks.tsv'", backend_targets)
         self.assertNotIn("all_accounts_flat_and_order_free", reset)
         self.assertNotIn("unsafeAccounts", reset)
         self.assertNotIn("snapshotPath", reset)

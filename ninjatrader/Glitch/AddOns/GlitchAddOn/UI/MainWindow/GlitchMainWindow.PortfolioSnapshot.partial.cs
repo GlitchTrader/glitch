@@ -75,8 +75,9 @@ namespace Glitch.UI
             {
                 string maxLossTracking = NormalizeMaxLossTracking(ruleFirm.MaxLossTracking, ruleFirm.DrawdownType);
                 double trailingPeak = GetOrUpdateTrailingPeak(
-                    BuildPeakStateKey(row.DisplayName, maxLossTracking),
-                    row.EquityRaw);
+                    BuildPeakStateKey(row.DisplayName, maxLossTracking, ruleFirmId, row.AccountSizeRaw),
+                    row.EquityRaw,
+                    row.AccountSizeRaw);
                 double? modeledThreshold = CalculateMinMargin(
                     ruleStatus,
                     ruleFirm,

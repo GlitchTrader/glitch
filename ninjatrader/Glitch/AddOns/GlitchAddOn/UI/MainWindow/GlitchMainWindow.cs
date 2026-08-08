@@ -312,6 +312,7 @@ namespace Glitch.UI
                 Interval = TimeSpan.FromSeconds(1)
             };
             _refreshTimer.Tick += OnRefreshTimerTick;
+            Account.SimulationAccountReset += OnSimulationAccountReset;
             GlitchShellBridge.RegisterMainWindow(this);
 
             Loaded += OnWindowLoaded;
@@ -3776,6 +3777,7 @@ namespace Glitch.UI
         {
             if (GlitchRuntimeHost.Active != null)
                 GlitchRuntimeHost.Active.Notice -= OnRuntimeNotice;
+            Account.SimulationAccountReset -= OnSimulationAccountReset;
             _isWindowClosed = true;
             _refreshTimer.Stop();
             _refreshTimer.Tick -= OnRefreshTimerTick;
@@ -5693,6 +5695,52 @@ namespace Glitch.UI
             }
         }
 
+        private void OnSimulationAccountReset(object sender, EventArgs e)
+        {
+            Account account = sender as Account;
+            string accountName = account == null ? string.Empty : account.Name;
+            if (_isWindowClosed || string.IsNullOrWhiteSpace(accountName))
+                return;
+
+            if (Dispatcher.CheckAccess())
+            {
+                ClearPeakStatesForSimulationReset(accountName);
+                return;
+            }
+
+            Dispatcher.BeginInvoke(new Action(() => ClearPeakStatesForSimulationReset(accountName)));
+        }
+
+        private void ClearPeakStatesForSimulationReset(string accountName)
+        {
+            if (_isWindowClosed || string.IsNullOrWhiteSpace(accountName))
+                return;
+
+            string normalizedAccountName = accountName.Trim();
+            string keyPrefix = normalizedAccountName + "|";
+            bool removed = false;
+
+            foreach (string stateKey in _peakStatesByAccount.Keys)
+            {
+                if (!string.Equals(stateKey, normalizedAccountName, StringComparison.OrdinalIgnoreCase) &&
+                    !stateKey.StartsWith(keyPrefix, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                PeakState ignored;
+                removed |= _peakStatesByAccount.TryRemove(stateKey, out ignored);
+            }
+
+            if (!removed)
+                return;
+
+            _hasPendingPeakStateWrite = true;
+            SavePeakStatesToDisk(force: true);
+            AppendJournal(
+                normalizedAccountName,
+                "Risk",
+                "Simulation account reset: cleared prior high-water risk state.");
+        }
+
         private void SavePeakStatesToDisk(bool force)
         {
             try
@@ -6803,8 +6851,15 @@ namespace Glitch.UI
             double peakSourceValue = string.Equals(maxLossTracking, "TrailingEod", StringComparison.OrdinalIgnoreCase)
                 ? (cashValue > 0 ? cashValue : currentEquity)
                 : Math.Max(currentEquity, unrealizedEquityCandidate);
-            string peakStateKey = BuildPeakStateKey(account?.Name, maxLossTracking);
-            double trailingPeak = GetOrUpdateTrailingPeak(peakStateKey, peakSourceValue);
+            string peakStateKey = BuildPeakStateKey(
+                account?.Name,
+                maxLossTracking,
+                ruleFirmId,
+                selectedAccountSize);
+            double trailingPeak = GetOrUpdateTrailingPeak(
+                peakStateKey,
+                peakSourceValue,
+                string.Equals(selectedStatus, "Sim", StringComparison.OrdinalIgnoreCase) ? selectedAccountSize : 0);
             // Source B (PropFirmRules semantics + live peak/provider context): modeled liquidation threshold.
             double? modeledMinMargin = CalculateMinMargin(
                 selectedStatus,
@@ -7178,9 +7233,13 @@ namespace Glitch.UI
             return GlitchComplianceEngine.NormalizeMaxLossTracking(maxLossTracking, drawdownType);
         }
 
-        private static string BuildPeakStateKey(string accountName, string maxLossTracking)
+        private static string BuildPeakStateKey(
+            string accountName,
+            string maxLossTracking,
+            string ruleFirmId,
+            double accountSize)
         {
-            return GlitchComplianceEngine.BuildPeakStateKey(accountName, maxLossTracking);
+            return GlitchComplianceEngine.BuildPeakStateKey(accountName, maxLossTracking, ruleFirmId, accountSize);
         }
 
         private static double TryGetNativeLiquidationThreshold(Account account)
@@ -7686,18 +7745,19 @@ namespace Glitch.UI
             return fallbackCashValue > 0 ? fallbackCashValue : 0;
         }
 
-        private double GetOrUpdateTrailingPeak(string accountName, double currentEquity)
+        private double GetOrUpdateTrailingPeak(string accountName, double currentEquity, double baselineEquity = 0)
         {
             if (string.IsNullOrWhiteSpace(accountName) || currentEquity <= 0)
                 return currentEquity;
             accountName = accountName.Trim();
 
-            UpdatePeakState(accountName, currentEquity);
+            double peakCandidate = Math.Max(currentEquity, Math.Max(0, baselineEquity));
+            UpdatePeakState(accountName, peakCandidate);
 
             if (_peakStatesByAccount.TryGetValue(accountName, out PeakState state) && state != null && state.PeakEquity > 0)
                 return state.PeakEquity;
 
-            return currentEquity;
+            return peakCandidate;
         }
 
         private void UpdatePeakState(string accountName, double currentEquity)
