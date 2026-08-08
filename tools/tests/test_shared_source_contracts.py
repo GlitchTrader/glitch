@@ -383,6 +383,18 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("if (isManual && !accountSize.HasValue)", store)
         self.assertIn("if (!kvp.Value.AccountSize.HasValue || kvp.Value.AccountSize.Value <= 0)", store)
 
+    def test_stale_window_save_preserves_newer_complete_manual_configuration(self):
+        window = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.cs"
+        )
+        save = window[
+            window.index("private void SaveSelectionOverridesToDisk"):
+            window.index("private static string CleanPersistToken")
+        ]
+        self.assertIn("GlitchStateStore.LoadSelectionOverrides(", save)
+        self.assertIn("!persistedOverride.IsManual", save)
+        self.assertIn("records[persistedEntry.Key] = persistedOverride", save)
+
     def test_compliance_is_off_by_default_and_each_runtime_action_is_explicit(self):
         store = read(
             "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Persistence/GlitchRuntimePolicyStore.cs"

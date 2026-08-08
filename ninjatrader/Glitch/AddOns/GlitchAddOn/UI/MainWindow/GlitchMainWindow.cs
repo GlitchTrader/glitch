@@ -6522,6 +6522,29 @@ namespace Glitch.UI
                         },
                         StringComparer.OrdinalIgnoreCase);
 
+                // The canonical file may contain a newer user-confirmed row than this
+                // in-memory window (for example, during an F5 replacement). A partial or
+                // stale window must never erase that complete manual selection on close.
+                Dictionary<string, GlitchStateStore.SelectionOverrideRecord> persisted =
+                    GlitchStateStore.LoadSelectionOverrides(
+                        _overridesFilePath,
+                        NormalizeAccountStatus,
+                        out bool _);
+                foreach (var persistedEntry in persisted)
+                {
+                    GlitchStateStore.SelectionOverrideRecord persistedOverride = persistedEntry.Value;
+                    if (records.ContainsKey(persistedEntry.Key) ||
+                        persistedOverride == null ||
+                        !persistedOverride.IsManual ||
+                        !persistedOverride.AccountSize.HasValue ||
+                        persistedOverride.AccountSize.Value <= 0)
+                    {
+                        continue;
+                    }
+
+                    records[persistedEntry.Key] = persistedOverride;
+                }
+
                 GlitchStateStore.SaveSelectionOverrides(_overridesFilePath, records);
             }
             catch (Exception ex)
