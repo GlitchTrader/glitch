@@ -367,6 +367,22 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         closed = window[window.index("private void OnWindowClosed("):window.index("private void OnRefreshTimerTick(")]
         self.assertNotIn("CaptureSelectionOverridesFromRows();", closed)
 
+    def test_manual_account_size_cannot_be_erased_by_another_grid_edit(self):
+        window = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.cs"
+        )
+        store = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Persistence/GlitchStateStore.cs"
+        )
+        upsert = window[
+            window.index("private void UpsertSelectionOverrideFromRow"):
+            window.index("private string GetOverridesFilePath")
+        ]
+        self.assertIn("existingOverride.AccountSize.HasValue", upsert)
+        self.assertIn("selectedSize = existingOverride.AccountSize.Value", upsert)
+        self.assertIn("if (isManual && !accountSize.HasValue)", store)
+        self.assertIn("if (!kvp.Value.AccountSize.HasValue || kvp.Value.AccountSize.Value <= 0)", store)
+
     def test_compliance_is_off_by_default_and_each_runtime_action_is_explicit(self):
         store = read(
             "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Persistence/GlitchRuntimePolicyStore.cs"

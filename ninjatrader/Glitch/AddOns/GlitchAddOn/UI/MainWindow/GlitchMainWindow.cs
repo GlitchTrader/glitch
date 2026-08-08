@@ -352,6 +352,11 @@ namespace Glitch.UI
                             parsedSize = sizeValue;
                         }
 
+                        // A manual selection is atomic: status, firm, and size travel together.
+                        // Do not revive an old workspace-cache row that lacks its required size.
+                        if (!parsedSize.HasValue)
+                            continue;
+
                         _selectionOverrides[accountName] = new AccountSelectionOverride
                         {
                             AccountStatus = status,
@@ -381,7 +386,8 @@ namespace Glitch.UI
 
             foreach (var kvp in _selectionOverrides.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
             {
-                if (string.IsNullOrWhiteSpace(kvp.Key) || kvp.Value == null || !kvp.Value.IsManual)
+                if (string.IsNullOrWhiteSpace(kvp.Key) || kvp.Value == null || !kvp.Value.IsManual ||
+                    !kvp.Value.AccountSize.HasValue || kvp.Value.AccountSize.Value <= 0)
                     continue;
 
                 var accountNode = new System.Xml.Linq.XElement("Account");
@@ -5286,6 +5292,16 @@ namespace Glitch.UI
             if (string.Equals(status, "Sim", StringComparison.OrdinalIgnoreCase))
                 firmId = "None";
             double? selectedSize = ParseAccountSize(row.AccountSizeSelection);
+            if (!selectedSize.HasValue &&
+                _selectionOverrides.TryGetValue(row.DisplayName, out AccountSelectionOverride existingOverride) &&
+                existingOverride != null &&
+                existingOverride.IsManual &&
+                existingOverride.AccountSize.HasValue &&
+                existingOverride.AccountSize.Value > 0)
+            {
+                // Editing status or firm must not erase the user's previously confirmed size.
+                selectedSize = existingOverride.AccountSize.Value;
+            }
 
             _selectionOverrides[row.DisplayName] = new AccountSelectionOverride
             {

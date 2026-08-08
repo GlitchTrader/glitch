@@ -344,6 +344,12 @@ namespace Glitch.Services
                     throw new InvalidDataException("AccountOverrides.tsv contains an invalid manual flag for: " + accountName);
                 string accountSizeSource = parts.Length >= 6 ? parts[5]?.Trim() : string.Empty;
 
+                // A manual override is only authoritative when its complete tuple is present.
+                // Ignore historical malformed rows instead of materializing a "Manual / Size required"
+                // state that can later overwrite a valid user selection.
+                if (isManual && !accountSize.HasValue)
+                    continue;
+
                 results[accountName] = new SelectionOverrideRecord
                 {
                     AccountStatus = status,
@@ -369,7 +375,7 @@ namespace Glitch.Services
                 {
                     if (string.IsNullOrWhiteSpace(kvp.Key) || kvp.Value == null)
                         continue;
-                    if (!kvp.Value.IsManual && (!kvp.Value.AccountSize.HasValue || kvp.Value.AccountSize.Value <= 0))
+                    if (!kvp.Value.AccountSize.HasValue || kvp.Value.AccountSize.Value <= 0)
                         continue;
 
                     string account = CleanPersistToken(kvp.Key);
