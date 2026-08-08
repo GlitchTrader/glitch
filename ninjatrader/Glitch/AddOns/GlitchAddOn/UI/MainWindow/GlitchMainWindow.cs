@@ -363,7 +363,9 @@ namespace Glitch.UI
                 }
             }
 
-            LoadSelectionOverridesFromDisk(overwriteExisting: false);
+            // Configuration.v1.tsv is the durable manual-selection authority.
+            // Workspace XML is a compatibility cache and must never overwrite it.
+            LoadSelectionOverridesFromDisk(overwriteExisting: true);
             LoadAccountGroupsFromDisk();
             RebuildAccountGroupsUi();
         }
@@ -372,8 +374,6 @@ namespace Glitch.UI
         {
             if (element == null)
                 return;
-
-            CaptureSelectionOverridesFromRows();
 
             element.Element("AccountOverrides")?.Remove();
             var overridesNode = new System.Xml.Linq.XElement("AccountOverrides");
@@ -3782,7 +3782,6 @@ namespace Glitch.UI
             // Persist and aggregate the final native execution batch before
             // the bounded journal and TradeLedger are flushed for F5/close.
             FlushPendingJournalEntries(force: true);
-            CaptureSelectionOverridesFromRows();
             SaveSelectionOverridesToDisk();
             SaveAccountGroupsToDisk();
             SavePeakStatesToDisk(force: true);

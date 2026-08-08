@@ -332,6 +332,17 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertNotIn("InferAccountSizeFromName", window)
         self.assertNotIn("GetAccountSizeFromNt", window)
 
+    def test_canonical_manual_configuration_beats_stale_workspace_cache(self):
+        window = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.cs"
+        )
+        restore = window[window.index("public void Restore("):window.index("public void Save(")]
+        self.assertIn("LoadSelectionOverridesFromDisk(overwriteExisting: true);", restore)
+        save = window[window.index("public void Save("):window.index("public WorkspaceOptions")]
+        self.assertNotIn("CaptureSelectionOverridesFromRows();", save)
+        closed = window[window.index("private void OnWindowClosed("):window.index("private void OnRefreshTimerTick(")]
+        self.assertNotIn("CaptureSelectionOverridesFromRows();", closed)
+
     def test_compliance_is_off_by_default_and_each_runtime_action_is_explicit(self):
         store = read(
             "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Persistence/GlitchRuntimePolicyStore.cs"
