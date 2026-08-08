@@ -433,8 +433,6 @@ namespace Glitch.Services
                 return null;
 
             string status = NormalizeAccountStatus(accountStatus);
-            if (status == "Sim")
-                return null;
 
             string normalizedTracking = NormalizeMaxLossTracking(maxLossTracking, drawdownType);
 

@@ -6759,18 +6759,18 @@ namespace Glitch.UI
                 ? (string.IsNullOrWhiteSpace(selectionOverride?.AccountSizeSource)
                     ? "Manual"
                     : selectionOverride.AccountSizeSource.Trim())
-                : "Unspecified";
-
-            // Sim/unknown accounts still need a visible comparison template for
-            // optional compliance projections. This does not limit replication.
-            string ruleFirmId = selectedFirmId;
-            if (string.Equals(selectedStatus, "Sim", StringComparison.OrdinalIgnoreCase) ||
-                string.IsNullOrWhiteSpace(ruleFirmId) ||
-                string.Equals(ruleFirmId, "None", StringComparison.OrdinalIgnoreCase) ||
-                !_firmRules.ContainsKey(ruleFirmId))
+                : (hasManualOverride ? "Size required" : "Unspecified");
+            if (string.Equals(selectedStatus, "Sim", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(accountSizeSource))
             {
-                ruleFirmId = "ApexTraderFunding";
+                accountSizeSource += " (simulated)";
             }
+
+            // Sim accounts use the explicitly disclosed Apex Legacy simulation template.
+            // Unknown real accounts never receive a substituted rule set.
+            string ruleFirmId = selectedFirmId;
+            if (string.Equals(selectedStatus, "Sim", StringComparison.OrdinalIgnoreCase))
+                ruleFirmId = "ApexTraderFunding";
 
             _firmRules.TryGetValue(ruleFirmId, out FirmRuleMetadata selectedFirmRule);
             double currentEquity = GetCurrentEquity(account, cashValue);

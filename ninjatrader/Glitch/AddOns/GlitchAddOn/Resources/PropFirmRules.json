@@ -92,6 +92,212 @@
       }
     },
     {
+      "firmId": "ApexIntraday",
+      "uiDisplayName": "Apex Intraday",
+      "legalName": "Apex Trader Funding Intraday Trailing Drawdown",
+      "officialSourceUrls": [
+        "https://apextraderfunding.com/help-center/intraday-trailing-drawdown-accounts/intraday-trailing-drawdown-evaluations/",
+        "https://apextraderfunding.com/help-center/intraday-trailing-drawdown-accounts/intraday-trailing-drawdown-performance-accounts-pa/",
+        "https://apextraderfunding.com/help-center/additional-helpful-items/daily-loss-limit-explained/"
+      ],
+      "lastVerifiedDate": "2026-08-07",
+      "status": "Supported",
+      "tiers": [
+        {
+          "accountSize": 25000,
+          "statusFilter": "Eval",
+          "maxContracts": 4,
+          "profitTarget": 1500,
+          "maxDrawdown": 1000
+        },
+        {
+          "accountSize": 50000,
+          "statusFilter": "Eval",
+          "maxContracts": 6,
+          "profitTarget": 3000,
+          "maxDrawdown": 2000
+        },
+        {
+          "accountSize": 100000,
+          "statusFilter": "Eval",
+          "maxContracts": 8,
+          "profitTarget": 6000,
+          "maxDrawdown": 3000
+        },
+        {
+          "accountSize": 150000,
+          "statusFilter": "Eval",
+          "maxContracts": 12,
+          "profitTarget": 9000,
+          "maxDrawdown": 4000
+        },
+        {
+          "accountSize": 25000,
+          "statusFilter": "AP",
+          "minProfit": 0,
+          "maxProfit": 1000,
+          "maxContracts": 1,
+          "maxDrawdown": 1000,
+          "dailyLossLimit": 500
+        },
+        {
+          "accountSize": 25000,
+          "statusFilter": "AP",
+          "minProfit": 1000,
+          "maxProfit": 2000,
+          "maxContracts": 2,
+          "maxDrawdown": 1000,
+          "dailyLossLimit": 500
+        },
+        {
+          "accountSize": 25000,
+          "statusFilter": "AP",
+          "minProfit": 2000,
+          "maxContracts": 2,
+          "maxDrawdown": 1000,
+          "dailyLossLimit": 1250
+        },
+        {
+          "accountSize": 50000,
+          "statusFilter": "AP",
+          "minProfit": 0,
+          "maxProfit": 1500,
+          "maxContracts": 2,
+          "maxDrawdown": 2000,
+          "dailyLossLimit": 1000
+        },
+        {
+          "accountSize": 50000,
+          "statusFilter": "AP",
+          "minProfit": 1500,
+          "maxProfit": 3000,
+          "maxContracts": 3,
+          "maxDrawdown": 2000,
+          "dailyLossLimit": 1000
+        },
+        {
+          "accountSize": 50000,
+          "statusFilter": "AP",
+          "minProfit": 3000,
+          "maxProfit": 6000,
+          "maxContracts": 4,
+          "maxDrawdown": 2000,
+          "dailyLossLimit": 2000
+        },
+        {
+          "accountSize": 50000,
+          "statusFilter": "AP",
+          "minProfit": 6000,
+          "maxContracts": 4,
+          "maxDrawdown": 2000,
+          "dailyLossLimit": 3000
+        },
+        {
+          "accountSize": 100000,
+          "statusFilter": "AP",
+          "minProfit": 0,
+          "maxProfit": 2000,
+          "maxContracts": 3,
+          "maxDrawdown": 3000,
+          "dailyLossLimit": 1750
+        },
+        {
+          "accountSize": 100000,
+          "statusFilter": "AP",
+          "minProfit": 2000,
+          "maxProfit": 3000,
+          "maxContracts": 4,
+          "maxDrawdown": 3000,
+          "dailyLossLimit": 1750
+        },
+        {
+          "accountSize": 100000,
+          "statusFilter": "AP",
+          "minProfit": 3000,
+          "maxProfit": 5000,
+          "maxContracts": 5,
+          "maxDrawdown": 3000,
+          "dailyLossLimit": 1750
+        },
+        {
+          "accountSize": 100000,
+          "statusFilter": "AP",
+          "minProfit": 5000,
+          "maxProfit": 10000,
+          "maxContracts": 6,
+          "maxDrawdown": 3000,
+          "dailyLossLimit": 2500
+        },
+        {
+          "accountSize": 100000,
+          "statusFilter": "AP",
+          "minProfit": 10000,
+          "maxContracts": 6,
+          "maxDrawdown": 3000,
+          "dailyLossLimit": 3500
+        },
+        {
+          "accountSize": 150000,
+          "statusFilter": "AP",
+          "minProfit": 0,
+          "maxProfit": 2000,
+          "maxContracts": 4,
+          "maxDrawdown": 4000,
+          "dailyLossLimit": 2500
+        },
+        {
+          "accountSize": 150000,
+          "statusFilter": "AP",
+          "minProfit": 2000,
+          "maxProfit": 3000,
+          "maxContracts": 5,
+          "maxDrawdown": 4000,
+          "dailyLossLimit": 2500
+        },
+        {
+          "accountSize": 150000,
+          "statusFilter": "AP",
+          "minProfit": 3000,
+          "maxProfit": 5000,
+          "maxContracts": 7,
+          "maxDrawdown": 4000,
+          "dailyLossLimit": 2500
+        },
+        {
+          "accountSize": 150000,
+          "statusFilter": "AP",
+          "minProfit": 5000,
+          "maxProfit": 10000,
+          "maxContracts": 10,
+          "maxDrawdown": 4000,
+          "dailyLossLimit": 3000
+        },
+        {
+          "accountSize": 150000,
+          "statusFilter": "AP",
+          "minProfit": 10000,
+          "maxContracts": 10,
+          "maxDrawdown": 4000,
+          "dailyLossLimit": 4000
+        }
+      ],
+      "enforcementSemantics": {
+        "drawdownType": "Intraday",
+        "maxLossTracking": "TrailingUnrealized",
+        "maxLossThresholdUpdate": "Intraday",
+        "maxLossFloorCapMode": "AtInitialPlusOffset",
+        "maxLossFloorCapOffset": 100,
+        "maxLossFloorCapTrigger": "WhenReferenceReachesInitialPlusDrawdownPlusOffset",
+        "maxLossFloorCapStatuses": "AP",
+        "hasDailyLossLimit": true,
+        "useNativeLiquidationThresholdWhenAvailable": true,
+        "microContractRootRegex": "^M[A-Z0-9]+$",
+        "microContractMultiplier": 10,
+        "tradingStartTime": "18:00:00",
+        "tradingEndTime": "16:59:00"
+      }
+    },
+    {
       "firmId": "ApexEod",
       "uiDisplayName": "Apex EOD",
       "legalName": "Apex Trader Funding EOD",

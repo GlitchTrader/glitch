@@ -1,5 +1,6 @@
 """Source architecture contracts for the first-principles NinjaTrader runtime."""
 
+import json
 from pathlib import Path
 import unittest
 
@@ -13,6 +14,43 @@ def read(relative: str) -> str:
 
 
 class SharedSourceArchitectureContractTests(unittest.TestCase):
+    def test_risk_catalog_has_explicit_apex_intraday_tiers_and_sim_projection(self):
+        rules = json.loads(read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Resources/PropFirmRules.json"
+        ))
+        apex_intraday = next(
+            firm for firm in rules["firms"] if firm["firmId"] == "ApexIntraday"
+        )
+        eval_tiers = [
+            tier for tier in apex_intraday["tiers"]
+            if tier.get("statusFilter") == "Eval"
+        ]
+        self.assertEqual(
+            [(tier["accountSize"], tier["maxDrawdown"], tier["maxContracts"])
+             for tier in eval_tiers],
+            [(25000, 1000, 4), (50000, 2000, 6),
+             (100000, 3000, 8), (150000, 4000, 12)],
+        )
+        self.assertEqual(
+            [(tier.get("minProfit", 0), tier.get("maxProfit", 0),
+              tier["maxContracts"], tier["dailyLossLimit"])
+             for tier in apex_intraday["tiers"]
+             if tier.get("statusFilter") == "AP" and tier["accountSize"] == 25000],
+            [(0, 1000, 1, 500), (1000, 2000, 2, 500),
+             (2000, 0, 2, 1250)],
+        )
+        compliance = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Risk/GlitchComplianceEngine.cs"
+        )
+        window = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.cs"
+        )
+        self.assertNotIn('if (status == "Sim")\n                return null;', compliance)
+        self.assertIn('if (string.Equals(selectedStatus, "Sim", StringComparison.OrdinalIgnoreCase))', window)
+        self.assertIn('ruleFirmId = "ApexTraderFunding";', window)
+        self.assertIn('"Size required"', window)
+        self.assertIn('" (simulated)"', window)
+
     def test_one_native_gateway_owns_every_order_mutator(self):
         mutators = (".CreateOrder(", ".Submit(", ".Change(", ".Cancel(", ".Flatten(")
         offenders = []
