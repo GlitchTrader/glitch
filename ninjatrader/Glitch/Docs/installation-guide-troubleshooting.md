@@ -1,6 +1,6 @@
 # Installation Guide & Troubleshooting
 
-This guide covers the standard Glitch setup flow for NinjaTrader 8, from install through license activation, chart setup, replication controls, and troubleshooting.
+This guide covers both Glitch editions for NinjaTrader 8, from installation through activation, chart setup, replication controls, and troubleshooting.
 
 ---
 
@@ -496,3 +496,17 @@ It is the operating layer, not the edge itself.
 - [Glitch Download](https://download.glitchtrader.com/latest)
 - [Docs & Guides](/)
 - [Website](https://www.glitchtrader.com)
+
+---
+
+## Edition and Hermes reference
+
+**Languages:** [English](/installation-guide-troubleshooting) · [Português](/pt/installation-guide-troubleshooting) · [Español](/es/installation-guide-troubleshooting) · [中文](/zh/installation-guide-troubleshooting) · [Français](/fr/installation-guide-troubleshooting) · [Русский](/ru/installation-guide-troubleshooting)
+
+Standard v0.0.2.0 and AI Experimental v0.0.2.2 are alternative packages. Do **not** install both packages. Download AI Experimental from [https://download.glitchtrader.com/latest/ai](https://download.glitchtrader.com/latest/ai). AI Experimental does not promise profitability, unattended operation, or live readiness. The operator can turn **AI Auto** off, use `/pause_trading`, `/flatten_all`, or `/glitch_status`, and use `/trade` only when deliberately requesting a cycle.
+
+The AI package is paired with [the public Hermes profile](https://github.com/GlitchTrader/glitch-hermes-profile). Back up with `hermes profile export glitch`, install with `hermes profile import`, and refresh with `hermes profile update glitch`; run `openai-codex --type oauth` before first use and then the installed `setup.ps1`.
+
+GlitchData retains the exchange. Add `GlitchAnalyticsBridge` and `GlitchAiMarketIngest` to the intended chart workflow, wait for 5/5 snapshots, and confirm the `glitch-direct-operator` and `glitch-learning-supervisor` jobs. The direct worker runs every minute; learning supervision runs every 30 minutes. Capacity remains controlled by the current group configuration, including a 2x ratio where selected; **Flatten All** remains the explicit broad exit control.
+
+Cadence references: every 30 minutes · a cada 30 minutos · cada 30 minutos · æ¯ 30 åˆ†é’Ÿ · toutes les 30 minutes · ÐºÐ°Ð¶Ð´Ñ‹Ðµ 30 Ð¼Ð¸Ð½ÑƒÑ‚.

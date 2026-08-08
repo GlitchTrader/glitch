@@ -332,4 +332,16 @@ glitch cron list --all
 - [Загрузка экспериментальной AI](https://download.glitchtrader.com/latest/ai)
 - [Публичный профиль Glitch Hermes](https://github.com/GlitchTrader/glitch-hermes-profile)
 - [Glitch Docs](/)
+
+---
+
+## Справка по редакциям и Hermes
+
+**Languages:** [English](/installation-guide-troubleshooting) · [Português](/pt/installation-guide-troubleshooting) · [Español](/es/installation-guide-troubleshooting) · [中文](/zh/installation-guide-troubleshooting) · [Français](/fr/installation-guide-troubleshooting) · [Русский](/ru/installation-guide-troubleshooting)
+
+Standard v0.0.2.0 и AI Experimental v0.0.2.2 — альтернативные пакеты. AI Experimental не обещает прибыльность, работу без наблюдения или готовность к реальному капиталу. Используйте **AI Auto**, `/trade`, `/pause_trading`, `/flatten_all` и `/glitch_status` только с явным намерением.
+
+Пакет AI использует [публичный профиль Hermes](https://github.com/GlitchTrader/glitch-hermes-profile): `hermes profile export glitch`, `hermes profile import`, `hermes profile update glitch`, `openai-codex --type oauth` и `setup.ps1`. GlitchData, GlitchAnalyticsBridge, GlitchAiMarketIngest, 5/5 snapshots, glitch-direct-operator, glitch-learning-supervisor, 2x и **Flatten All** относятся к операционной справке. Обучение проверяется каждые 30 минут.
+
+Cadence references: every 30 minutes · a cada 30 minutos · cada 30 minutos · æ¯ 30 åˆ†é’Ÿ · toutes les 30 minutes · ÐºÐ°Ð¶Ð´Ñ‹Ðµ 30 Ð¼Ð¸Ð½ÑƒÑ‚.
 - [Сайт Glitch](https://www.glitchtrader.com)

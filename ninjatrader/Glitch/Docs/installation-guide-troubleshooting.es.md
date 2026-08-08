@@ -332,4 +332,16 @@ Enlaces:
 - [Descarga AI Experimental](https://download.glitchtrader.com/latest/ai)
 - [Perfil público Glitch Hermes](https://github.com/GlitchTrader/glitch-hermes-profile)
 - [Glitch Docs](/)
+
+---
+
+## Referencia de edición y Hermes
+
+**Languages:** [English](/installation-guide-troubleshooting) · [Português](/pt/installation-guide-troubleshooting) · [Español](/es/installation-guide-troubleshooting) · [中文](/zh/installation-guide-troubleshooting) · [Français](/fr/installation-guide-troubleshooting) · [Русский](/ru/installation-guide-troubleshooting)
+
+Standard v0.0.2.0 y AI Experimental v0.0.2.2 son paquetes alternativos. AI Experimental no promete rentabilidad, operación sin supervisión ni preparación para capital real. Use **AI Auto**, `/trade`, `/pause_trading`, `/flatten_all` y `/glitch_status` con intención explícita.
+
+El paquete AI usa [el perfil público Hermes](https://github.com/GlitchTrader/glitch-hermes-profile): `hermes profile export glitch`, `hermes profile import`, `hermes profile update glitch`, `openai-codex --type oauth` y `setup.ps1`. GlitchData, GlitchAnalyticsBridge, GlitchAiMarketIngest, 5/5 snapshots, glitch-direct-operator, glitch-learning-supervisor, 2x y **Flatten All** son la referencia operativa. La supervisión de aprendizaje ocurre cada 30 minutos.
+
+Cadence references: every 30 minutes · a cada 30 minutos · cada 30 minutos · æ¯ 30 åˆ†é’Ÿ · toutes les 30 minutes · ÐºÐ°Ð¶Ð´Ñ‹Ðµ 30 Ð¼Ð¸Ð½ÑƒÑ‚.
 - [Sitio Glitch](https://www.glitchtrader.com)

@@ -332,4 +332,16 @@ Hermes 配置导出不包含 OAuth 凭据。`GlitchData` 位于 Hermes 配置之
 - [实验性 AI 下载](https://download.glitchtrader.com/latest/ai)
 - [公开 Glitch Hermes 配置](https://github.com/GlitchTrader/glitch-hermes-profile)
 - [Glitch Docs](/)
+
+---
+
+## 版本和 Hermes 参考
+
+**Languages:** [English](/installation-guide-troubleshooting) · [Português](/pt/installation-guide-troubleshooting) · [Español](/es/installation-guide-troubleshooting) · [中文](/zh/installation-guide-troubleshooting) · [Français](/fr/installation-guide-troubleshooting) · [Русский](/ru/installation-guide-troubleshooting)
+
+Standard v0.0.2.0 和 AI Experimental v0.0.2.2 是替代安装包。AI Experimental 不承诺盈利、无人值守运行或真实资金就绪。只有在明确请求时才使用 **AI Auto**、`/trade`、`/pause_trading`、`/flatten_all` 和 `/glitch_status`。
+
+AI 包使用[公开 Hermes 配置](https://github.com/GlitchTrader/glitch-hermes-profile)：`hermes profile export glitch`、`hermes profile import`、`hermes profile update glitch`、`openai-codex --type oauth` 和 `setup.ps1`。GlitchData、GlitchAnalyticsBridge、GlitchAiMarketIngest、5/5 snapshots、glitch-direct-operator、glitch-learning-supervisor、2x 和 **Flatten All** 构成操作参考。学习监督每 30 分钟运行一次。
+
+Cadence references: every 30 minutes · a cada 30 minutos · cada 30 minutos · æ¯ 30 åˆ†é’Ÿ · toutes les 30 minutes · ÐºÐ°Ð¶Ð´Ñ‹Ðµ 30 Ð¼Ð¸Ð½ÑƒÑ‚.
 - [Glitch 网站](https://www.glitchtrader.com)
