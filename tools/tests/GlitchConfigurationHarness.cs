@@ -24,6 +24,8 @@ internal static class GlitchConfigurationHarness
             VerifyUnknownSizesAndZeroRatioRoundTrip(root);
             VerifyNegativeRatioIsRejected(root);
             VerifyCanonicalDocumentOwnsEveryTradingConfiguration(root);
+            VerifyManualEditPreservesConfiguredSize();
+            VerifyStaleSameKeyCannotEraseManualSelection();
             VerifyRecoveredBackupSurvivesNextWrite(root);
             VerifyLegacyFilesAreMigrationInputsOnly(root);
             VerifyNativeIdentityGrammar();
@@ -35,6 +37,53 @@ internal static class GlitchConfigurationHarness
             if (Directory.Exists(root))
                 Directory.Delete(root, true);
         }
+    }
+
+    private static void VerifyManualEditPreservesConfiguredSize()
+    {
+        Require(GlitchStateStore.ResolveManualAccountSize(null, 25000) == 25000,
+            "a firm or status edit erased the existing configured account size");
+        Require(GlitchStateStore.ResolveManualAccountSize(50000, 25000) == 50000,
+            "an explicit account-size edit did not win over the previous value");
+        Require(!GlitchStateStore.ResolveManualAccountSize(null, null).HasValue,
+            "an unknown account size was invented");
+    }
+
+    private static void VerifyStaleSameKeyCannotEraseManualSelection()
+    {
+        var persisted = new GlitchStateStore.SelectionOverrideRecord
+        {
+            AccountStatus = "Eval",
+            PropFirmId = "ApexIntraday",
+            AccountSize = 25000,
+            AccountSizeSource = "Manual",
+            IsManual = true
+        };
+        var stale = new GlitchStateStore.SelectionOverrideRecord
+        {
+            AccountStatus = "Eval",
+            PropFirmId = "ApexIntraday",
+            AccountSize = null,
+            AccountSizeSource = "Manual",
+            IsManual = true
+        };
+        Require(ReferenceEquals(
+                GlitchStateStore.PreservePersistedManualSelection(stale, persisted),
+                persisted),
+            "a stale same-key row erased the complete persisted manual selection");
+
+        var edited = new GlitchStateStore.SelectionOverrideRecord
+        {
+            AccountStatus = "Eval",
+            PropFirmId = "ApexIntraday",
+            AccountSize = 50000,
+            AccountSizeSource = "Manual",
+            IsManual = true
+        };
+        Require(ReferenceEquals(
+                GlitchStateStore.PreservePersistedManualSelection(edited, persisted),
+                edited),
+            "a complete current manual edit did not win over the persisted value");
     }
 
     private static void VerifyCanonicalDocumentOwnsEveryTradingConfiguration(string root)

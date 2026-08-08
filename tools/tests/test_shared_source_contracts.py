@@ -378,10 +378,16 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             window.index("private void UpsertSelectionOverrideFromRow"):
             window.index("private string GetOverridesFilePath")
         ]
-        self.assertIn("existingOverride.AccountSize.HasValue", upsert)
-        self.assertIn("selectedSize = existingOverride.AccountSize.Value", upsert)
+        self.assertIn("GlitchStateStore.ResolveManualAccountSize(", upsert)
+        self.assertIn("existingOverride?.AccountSize", upsert)
         self.assertIn("if (isManual && !accountSize.HasValue)", store)
         self.assertIn("if (!kvp.Value.AccountSize.HasValue || kvp.Value.AccountSize.Value <= 0)", store)
+
+        apply_rows = window[
+            window.index("private void ApplyAccountRows"):
+            window.index("private Dictionary<string, int> BuildAccountRowIndexByName")
+        ]
+        self.assertIn("if (_isEditingAccountsGrid || _isCommittingAccountsGridEdit)", apply_rows)
 
     def test_stale_window_save_preserves_newer_complete_manual_configuration(self):
         window = read(
@@ -392,8 +398,9 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             window.index("private static string CleanPersistToken")
         ]
         self.assertIn("GlitchStateStore.LoadSelectionOverrides(", save)
-        self.assertIn("!persistedOverride.IsManual", save)
-        self.assertIn("records[persistedEntry.Key] = persistedOverride", save)
+        self.assertIn("GlitchStateStore.PreservePersistedManualSelection(", save)
+        self.assertIn("currentOverride", save)
+        self.assertIn("persistedOverride", save)
 
     def test_compliance_is_off_by_default_and_each_runtime_action_is_explicit(self):
         store = read(

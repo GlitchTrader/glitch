@@ -4059,6 +4059,7 @@ namespace Glitch.UI
             var editedRow = e.Row?.Item as AccountGridRow;
             Dispatcher.BeginInvoke(new Action(() =>
             {
+                bool committed = false;
                 try
                 {
                     if (editedRow != null)
@@ -4072,13 +4073,18 @@ namespace Glitch.UI
                     }
 
                     SaveSelectionOverridesToDisk();
-                    RefreshAccountData(preferSynchronous: true);
-                    RebuildAccountGroupsUi();
+                    committed = true;
                 }
                 finally
                 {
                     _isCommittingAccountsGridEdit = false;
                     _isEditingAccountsGrid = false;
+                }
+
+                if (committed)
+                {
+                    RefreshAccountData(preferSynchronous: true);
+                    RebuildAccountGroupsUi();
                 }
             }), DispatcherPriority.Background);
         }
@@ -4096,6 +4102,11 @@ namespace Glitch.UI
 
         private void ApplyAccountRows(IReadOnlyList<AccountGridRow> rows)
         {
+            // A queued refresh may have been built before the user opened a ComboBox.
+            // It must not overwrite the row while that edit is being committed.
+            if (_isEditingAccountsGrid || _isCommittingAccountsGridEdit)
+                return;
+
             var incoming = (rows ?? Array.Empty<AccountGridRow>())
                 .Where(row => row != null && !string.IsNullOrWhiteSpace(row.DisplayName))
                 .ToList();
@@ -5292,16 +5303,10 @@ namespace Glitch.UI
             if (string.Equals(status, "Sim", StringComparison.OrdinalIgnoreCase))
                 firmId = "None";
             double? selectedSize = ParseAccountSize(row.AccountSizeSelection);
-            if (!selectedSize.HasValue &&
-                _selectionOverrides.TryGetValue(row.DisplayName, out AccountSelectionOverride existingOverride) &&
-                existingOverride != null &&
-                existingOverride.IsManual &&
-                existingOverride.AccountSize.HasValue &&
-                existingOverride.AccountSize.Value > 0)
-            {
-                // Editing status or firm must not erase the user's previously confirmed size.
-                selectedSize = existingOverride.AccountSize.Value;
-            }
+            _selectionOverrides.TryGetValue(row.DisplayName, out AccountSelectionOverride existingOverride);
+            selectedSize = GlitchStateStore.ResolveManualAccountSize(
+                selectedSize,
+                existingOverride?.AccountSize);
 
             _selectionOverrides[row.DisplayName] = new AccountSelectionOverride
             {
@@ -6533,16 +6538,15 @@ namespace Glitch.UI
                 foreach (var persistedEntry in persisted)
                 {
                     GlitchStateStore.SelectionOverrideRecord persistedOverride = persistedEntry.Value;
-                    if (records.ContainsKey(persistedEntry.Key) ||
-                        persistedOverride == null ||
-                        !persistedOverride.IsManual ||
-                        !persistedOverride.AccountSize.HasValue ||
-                        persistedOverride.AccountSize.Value <= 0)
-                    {
-                        continue;
-                    }
-
-                    records[persistedEntry.Key] = persistedOverride;
+                    records.TryGetValue(
+                        persistedEntry.Key,
+                        out GlitchStateStore.SelectionOverrideRecord currentOverride);
+                    GlitchStateStore.SelectionOverrideRecord resolvedOverride =
+                        GlitchStateStore.PreservePersistedManualSelection(
+                            currentOverride,
+                            persistedOverride);
+                    if (resolvedOverride != null)
+                        records[persistedEntry.Key] = resolvedOverride;
                 }
 
                 GlitchStateStore.SaveSelectionOverrides(_overridesFilePath, records);

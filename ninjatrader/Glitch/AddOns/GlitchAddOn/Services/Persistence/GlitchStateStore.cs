@@ -67,6 +67,30 @@ namespace Glitch.Services
             public bool IsManual { get; set; }
         }
 
+        public static double? ResolveManualAccountSize(double? editedSize, double? configuredSize)
+        {
+            if (editedSize.HasValue && editedSize.Value > 0)
+                return editedSize.Value;
+            if (configuredSize.HasValue && configuredSize.Value > 0)
+                return configuredSize.Value;
+            return null;
+        }
+
+        public static SelectionOverrideRecord PreservePersistedManualSelection(
+            SelectionOverrideRecord current,
+            SelectionOverrideRecord persisted)
+        {
+            bool persistedIsCompleteManual = persisted != null
+                && persisted.IsManual
+                && persisted.AccountSize.HasValue
+                && persisted.AccountSize.Value > 0;
+            bool currentIsCompleteManual = current != null
+                && current.IsManual
+                && current.AccountSize.HasValue
+                && current.AccountSize.Value > 0;
+            return persistedIsCompleteManual && !currentIsCompleteManual ? persisted : current;
+        }
+
         public sealed class AccountGroupRecord
         {
             public string GroupId { get; set; }
