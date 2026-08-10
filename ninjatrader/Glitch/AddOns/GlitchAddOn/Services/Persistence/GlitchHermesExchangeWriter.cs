@@ -336,10 +336,13 @@ namespace Glitch.Services
             int observedSpanMinutes,
             IReadOnlyList<string> missingMinuteIds)
         {
+            GlitchAiRailPolicyStore.EnsureDefaultExists();
             string policy = ReadJsonOrEmpty(GlitchStateStore.GetDefaultPath(Path.Combine("ai", "policy.json")));
+            GlitchAiRailPolicy railPolicy = GlitchAiRailPolicyStore.Load();
             string accountGroups = GlitchStateStore.RenderAccountGroupsTsv(
                 GlitchStateStore.LoadAccountGroups(
                     GlitchStateStore.GetDefaultConfigurationPath()));
+            string scope = BuildScopeJson(railPolicy);
             var sb = new StringBuilder(32768);
             sb.Append('{');
             sb.Append("\"schema_version\":").Append(GlitchSnapshotJson.String(PacketSchemaVersion)).Append(',');
@@ -369,9 +372,51 @@ namespace Glitch.Services
                 sb.Append(frames[i]);
             }
             sb.Append("],\"policy\":").Append(policy).Append(',');
+            sb.Append("\"scope\":").Append(scope).Append(',');
             sb.Append("\"account_groups_tsv\":").Append(GlitchSnapshotJson.String(accountGroups));
             sb.Append('}');
             return sb.ToString();
+        }
+
+        private static string BuildScopeJson(GlitchAiRailPolicy policy)
+        {
+            var scope = new StringBuilder(4096);
+            scope.Append('{');
+            scope.Append("\"eligible_instruments\":[");
+            string[] instruments = (policy?.InstrumentAllowlist ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase))
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            for (int i = 0; i < instruments.Length; i++)
+            {
+                if (i > 0)
+                    scope.Append(',');
+                scope.Append(GlitchSnapshotJson.String(instruments[i]));
+            }
+            scope.Append("],\"ordered_master_books\":[");
+            var bindings = policy?.ProfileAccountBindings ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            int bindingIndex = 0;
+            foreach (KeyValuePair<string, string> binding in bindings.OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                if (bindingIndex++ > 0)
+                    scope.Append(',');
+                scope.Append('{');
+                scope.Append("\"route_id\":").Append(GlitchSnapshotJson.String(binding.Key)).Append(',');
+                scope.Append("\"account\":").Append(GlitchSnapshotJson.String(binding.Value)).Append(',');
+                scope.Append("\"instruments\":[");
+                for (int i = 0; i < instruments.Length; i++)
+                {
+                    if (i > 0)
+                        scope.Append(',');
+                    scope.Append(GlitchSnapshotJson.String(instruments[i]));
+                }
+                scope.Append("]}");
+            }
+            scope.Append("]}");
+
+            string withoutHash = scope.ToString();
+            string hash = GlitchSnapshotJson.ComputeStableHash(withoutHash);
+            return withoutHash.Substring(0, withoutHash.Length - 1)
+                + ",\"scope_hash\":" + GlitchSnapshotJson.String(hash) + "}";
         }
 
         private static bool SnapshotMatches(string json, string snapshotId)
