@@ -670,10 +670,6 @@ namespace Glitch.Infrastructure
                 if (record.Command == null)
                     continue;
                 string fingerprint = GlitchOperationJournal.Fingerprint(record.Command);
-                if (!string.IsNullOrWhiteSpace(record.Fingerprint)
-                    && !string.Equals(record.Fingerprint, fingerprint, StringComparison.Ordinal))
-                    throw new InvalidOperationException(
-                        "journal_command_fingerprint_mismatch:" + record.Command.CommandId);
                 string prior;
                 if (_commandFingerprints.TryGetValue(record.Command.CommandId, out prior)
                     && !string.Equals(prior, fingerprint, StringComparison.Ordinal))
@@ -683,7 +679,11 @@ namespace Glitch.Infrastructure
                 GlitchCommand emitted;
                 if (_recoveryEmittedCommands.TryGetValue(record.Command.CommandId, out emitted)
                     && !string.Equals(
-                        GlitchOperationJournal.Fingerprint(emitted), fingerprint, StringComparison.Ordinal))
+                        GlitchOperationJournal.FingerprintForReplay(
+                            emitted, record.HermesIntentPresent),
+                        GlitchOperationJournal.FingerprintForReplay(
+                            record.Command, record.HermesIntentPresent),
+                        StringComparison.Ordinal))
                     throw new InvalidOperationException(
                         "replayed_command_content_conflict:" + record.Command.CommandId);
                 _recoveryJournalCommands[record.Command.CommandId] = new RecoveryCommandState

@@ -17,6 +17,7 @@ namespace Glitch.Infrastructure
         public GlitchCommand Command { get; set; }
         public GlitchInput Input { get; set; }
         public string Fingerprint { get; set; }
+        public bool HermesIntentPresent { get; set; }
     }
 
     /// <summary>
@@ -55,7 +56,7 @@ namespace Glitch.Infrastructure
                 return false;
             }
             var record = BaseRecord(phase, command.CommandId, command.GetType().Name);
-            record["fingerprint"] = Fingerprint(command);
+            record["fingerprint"] = FingerprintSerializedCommand(SerializeCommand(command));
             record["detail"] = detail ?? string.Empty;
             record["command"] = SerializeCommand(command);
             return TryAppendRecord(record, out error);
@@ -105,6 +106,16 @@ namespace Glitch.Infrastructure
                         Dictionary<string, object> input = Map(value, "input");
                         if (command != null)
                         {
+                            recovered.HermesIntentPresent = command.ContainsKey("hermes_intent");
+                            string payloadFingerprint = FingerprintSerializedCommand(command);
+                            if (!string.IsNullOrWhiteSpace(recovered.Fingerprint)
+                                && !string.Equals(
+                                    recovered.Fingerprint,
+                                    payloadFingerprint,
+                                    StringComparison.Ordinal))
+                                throw new InvalidDataException(
+                                    "journal_command_fingerprint_mismatch:"
+                                    + Text(command, "command_id"));
                             recovered.Command = DeserializeCommand(command);
                             if (recovered.Command == null)
                                 throw new InvalidDataException(
@@ -135,7 +146,24 @@ namespace Glitch.Infrastructure
         {
             if (command == null)
                 return string.Empty;
-            string canonical = Canonical(SerializeCommand(command));
+            return FingerprintSerializedCommand(
+                SerializeCommand(command, HasHermesIntent(command)));
+        }
+
+        internal static string FingerprintForReplay(
+            GlitchCommand command,
+            bool hermesIntentPresent)
+        {
+            if (command == null)
+                return string.Empty;
+            return FingerprintSerializedCommand(
+                SerializeCommand(command, hermesIntentPresent));
+        }
+
+        private static string FingerprintSerializedCommand(
+            Dictionary<string, object> command)
+        {
+            string canonical = Canonical(command);
             using (SHA256 sha = SHA256.Create())
             {
                 return string.Concat(sha.ComputeHash(Encoding.UTF8.GetBytes(canonical))
@@ -240,6 +268,22 @@ namespace Glitch.Infrastructure
 
         private static Dictionary<string, object> SerializeCommand(GlitchCommand command)
         {
+            return SerializeCommand(command, true);
+        }
+
+        private static bool HasHermesIntent(GlitchCommand command)
+        {
+            var protection = command as SubmitProtectionCommand;
+            if (protection != null)
+                return !string.IsNullOrEmpty(protection.HermesIntentId);
+            var change = command as ChangeProtectionCommand;
+            return change != null && !string.IsNullOrEmpty(change.HermesIntentId);
+        }
+
+        private static Dictionary<string, object> SerializeCommand(
+            GlitchCommand command,
+            bool includeHermesIntent)
+        {
             var result = new Dictionary<string, object>
             {
                 { "type", command.GetType().Name },
@@ -274,7 +318,8 @@ namespace Glitch.Infrastructure
                 result["parent"] = protection.ParentCorrelationId ?? string.Empty;
                 result["route"] = protection.RouteId ?? string.Empty;
                 result["exposure"] = protection.ExposureId ?? string.Empty;
-                result["hermes_intent"] = protection.HermesIntentId ?? string.Empty;
+                if (includeHermesIntent)
+                    result["hermes_intent"] = protection.HermesIntentId ?? string.Empty;
                 result["propagates"] = protection.PropagatesAsMasterExecution;
                 result["targets"] = protection.Targets.Select(value =>
                     (object)new Dictionary<string, object>
@@ -299,7 +344,8 @@ namespace Glitch.Infrastructure
                         { "target", value.TargetPrice.HasValue ? (object)value.TargetPrice.Value : null }
                     }).ToArray();
                 result["targets"] = change.TargetCommandIds.ToArray();
-                result["hermes_intent"] = change.HermesIntentId ?? string.Empty;
+                if (includeHermesIntent)
+                    result["hermes_intent"] = change.HermesIntentId ?? string.Empty;
                 return result;
             }
             var cancel = command as CancelProtectionCommand;

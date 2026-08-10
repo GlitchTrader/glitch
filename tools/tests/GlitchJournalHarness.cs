@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Glitch.Core;
@@ -22,6 +23,15 @@ internal static class GlitchJournalHarness
 
     public static int Main()
     {
+        string existingRoot = Environment.GetEnvironmentVariable(
+            "GLITCH_JOURNAL_VERIFY_ROOT");
+        if (!string.IsNullOrWhiteSpace(existingRoot))
+            return VerifyExistingJournal(existingRoot);
+        string replayRoot = Environment.GetEnvironmentVariable(
+            "GLITCH_JOURNAL_REPLAY_VERIFY_ROOT");
+        if (!string.IsNullOrWhiteSpace(replayRoot))
+            return VerifyReplay(replayRoot);
+
         string root = Path.Combine(
             Path.GetTempPath(), "GlitchJournalHarness-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -30,6 +40,7 @@ internal static class GlitchJournalHarness
         {
             string runtimeRoot = Path.Combine(root, "glitch", "runtime");
             Directory.CreateDirectory(runtimeRoot);
+            string journalPath = Path.Combine(runtimeRoot, "operations.v5.jsonl");
             string legacyJournalPath = Path.Combine(runtimeRoot, "operations.v4.jsonl");
             File.WriteAllText(legacyJournalPath, "not-json" + Environment.NewLine);
 
@@ -82,6 +93,10 @@ internal static class GlitchJournalHarness
                 });
             Assert(journal.TryAppendInput(
                 routeConfiguration, "test", out string routeError), routeError);
+
+            const string legacyProtectionRecord =
+                "{\"schema\":\"glitch.operation.v5\",\"created_utc\":\"2026-08-07T00:45:54.5591122Z\",\"phase\":\"accepted\",\"command_id\":\"G3795A7A3BB188E9D9E52\",\"type\":\"SubmitProtectionCommand\",\"fingerprint\":\"4acc26aa34d0136cf463831830948e43ceaebb25b015d4ba52b9ecb6de9cf10a\",\"detail\":\"native\",\"command\":{\"type\":\"SubmitProtectionCommand\",\"command_id\":\"G3795A7A3BB188E9D9E52\",\"purpose\":\"Protection\",\"account\":\"Sim101\",\"instrument\":\"MNQ 09-26\",\"signed_entry\":1,\"entry_price\":29537.25,\"parent\":\"G4CC8863E8A279F23FA50\",\"route\":\"\",\"exposure\":\"HERMES|bb6e7f66-ba55-5bb3-8b98-9fadca213a2c|FILL|061a553845a048e79aa512558004c7f1\",\"propagates\":true,\"targets\":[{\"leg_id\":\"LBB090CDCE7CA8AC\",\"quantity\":1,\"stop\":29485.25,\"target\":29593.00}]}}";
+            File.AppendAllText(journalPath, legacyProtectionRecord + Environment.NewLine);
 
             var originalEngine = new GlitchEngine();
             originalEngine.Handle(position);
@@ -138,6 +153,16 @@ internal static class GlitchJournalHarness
                 "execution lifecycle evidence did not round-trip exactly");
             SubmitMarketCommand loadedMarket = records.Select(value => value.Command)
                 .OfType<SubmitMarketCommand>().Last();
+            SubmitProtectionCommand loadedLegacyProtection = records
+                .Select(value => value.Command)
+                .OfType<SubmitProtectionCommand>()
+                .Single(value => value.CommandId == "G3795A7A3BB188E9D9E52");
+            Assert(loadedLegacyProtection.HermesIntentId == string.Empty
+                && loadedLegacyProtection.Targets.Single().Price == 29593m,
+                "pre-hermes-intent protection record did not replay compatibly");
+            Assert(GlitchOperationJournal.Fingerprint(loadedLegacyProtection)
+                    == "4acc26aa34d0136cf463831830948e43ceaebb25b015d4ba52b9ecb6de9cf10a",
+                "empty Hermes intent changed the legacy semantic fingerprint");
             Assert(GlitchOperationJournal.Fingerprint(loadedMarket)
                     == GlitchOperationJournal.Fingerprint(marketCommand),
                 "market command did not round-trip exactly");
@@ -174,14 +199,25 @@ internal static class GlitchJournalHarness
                 != GlitchOperationJournal.Fingerprint(changed),
                 "command fingerprint ignored nested protection geometry");
 
-            string journalPath = Path.Combine(
-                root, "glitch", "runtime", "operations.v5.jsonl");
             Assert(File.ReadAllText(legacyJournalPath) == "not-json" + Environment.NewLine,
                 "the new journal epoch mutated legacy incident history");
             File.AppendAllText(journalPath, "not-json" + Environment.NewLine);
             Assert(!journal.TryLoad(out _, out string corruptError)
                     && !string.IsNullOrWhiteSpace(corruptError),
                 "a corrupt journal was accepted as recoverable state");
+
+            string tamperRoot = Path.Combine(root, "tamper");
+            string tamperRuntimeRoot = Path.Combine(tamperRoot, "glitch", "runtime");
+            Directory.CreateDirectory(tamperRuntimeRoot);
+            File.WriteAllText(
+                Path.Combine(tamperRuntimeRoot, "operations.v5.jsonl"),
+                legacyProtectionRecord.Replace("\"target\":29593.00", "\"target\":29594.00")
+                    + Environment.NewLine);
+            NinjaTrader.Core.Globals.UserDataDir = tamperRoot;
+            var tamperedJournal = new GlitchOperationJournal();
+            Assert(!tamperedJournal.TryLoad(out _, out string tamperError)
+                    && tamperError.Contains("journal_command_fingerprint_mismatch"),
+                "tampered command payload bypassed journal fingerprint validation");
 
             Console.WriteLine("Glitch journal harness passed.");
             return 0;
@@ -191,5 +227,90 @@ internal static class GlitchJournalHarness
             if (Directory.Exists(root))
                 Directory.Delete(root, true);
         }
+    }
+
+    private static int VerifyExistingJournal(string root)
+    {
+        NinjaTrader.Core.Globals.UserDataDir = root;
+        var journal = new GlitchOperationJournal();
+        Assert(journal.TryLoad(out var records, out string error), error);
+        var identities = new Dictionary<string, string>(StringComparer.Ordinal);
+        int commandCount = 0;
+        foreach (GlitchRecoveryRecord record in records.Where(value => value.Command != null))
+        {
+            commandCount++;
+            string fingerprint = GlitchOperationJournal.Fingerprint(record.Command);
+            if (identities.TryGetValue(record.Command.CommandId, out string prior))
+                Assert(string.Equals(prior, fingerprint, StringComparison.Ordinal),
+                    "journal_command_identity_conflict:" + record.Command.CommandId);
+            identities[record.Command.CommandId] = fingerprint;
+        }
+        Console.WriteLine(
+            "Existing Glitch journal passed: records=" + records.Count
+            + " commands=" + commandCount
+            + " identities=" + identities.Count + ".");
+        return 0;
+    }
+
+    private static int VerifyReplay(string root)
+    {
+        NinjaTrader.Core.Globals.UserDataDir = root;
+        var journal = new GlitchOperationJournal();
+        Assert(journal.TryLoad(out var records, out string error), error);
+        var engine = new GlitchEngine();
+        var emitted = new Dictionary<string, GlitchCommand>(StringComparer.Ordinal);
+        var identities = new Dictionary<string, string>(StringComparer.Ordinal);
+        int index = 0;
+        foreach (GlitchRecoveryRecord record in records)
+        {
+            index++;
+            if (record.Input != null)
+            {
+                foreach (GlitchCommand command in engine.Handle(record.Input))
+                {
+                    if (emitted.TryGetValue(command.CommandId, out GlitchCommand priorEmission))
+                        Assert(string.Equals(
+                                GlitchOperationJournal.FingerprintForReplay(
+                                    priorEmission, record.HermesIntentPresent),
+                                GlitchOperationJournal.FingerprintForReplay(
+                                    command, record.HermesIntentPresent),
+                                StringComparison.Ordinal),
+                            "replayed_command_content_conflict:" + command.CommandId
+                            + "|record=" + index);
+                    emitted[command.CommandId] = command;
+                }
+            }
+            if (record.Command == null)
+                continue;
+            string commandFingerprint = GlitchOperationJournal.Fingerprint(record.Command);
+            if (identities.TryGetValue(record.Command.CommandId, out string prior))
+                Assert(string.Equals(prior, commandFingerprint, StringComparison.Ordinal),
+                    "journal_command_identity_conflict:" + record.Command.CommandId
+                    + "|record=" + index);
+            identities[record.Command.CommandId] = commandFingerprint;
+            if (emitted.TryGetValue(record.Command.CommandId, out GlitchCommand emittedCommand))
+            {
+                string emittedReplayFingerprint = GlitchOperationJournal.FingerprintForReplay(
+                    emittedCommand, record.HermesIntentPresent);
+                string recordedReplayFingerprint = GlitchOperationJournal.FingerprintForReplay(
+                    record.Command, record.HermesIntentPresent);
+                Assert(string.Equals(
+                        emittedReplayFingerprint,
+                        recordedReplayFingerprint,
+                        StringComparison.Ordinal),
+                    "replayed_command_content_conflict:" + record.Command.CommandId
+                    + "|record=" + index
+                    + "|wire_intent=" + record.HermesIntentPresent
+                    + "|emitted_intent=" + (emittedCommand as SubmitProtectionCommand)?.HermesIntentId
+                    + "|recorded_intent=" + (record.Command as SubmitProtectionCommand)?.HermesIntentId
+                    + "|emitted_fp=" + emittedReplayFingerprint
+                    + "|recorded_fp=" + recordedReplayFingerprint);
+            }
+        }
+        Console.WriteLine(
+            "Existing Glitch replay passed: records=" + records.Count
+            + " emissions=" + emitted.Count
+            + " identities=" + identities.Count + ".");
+        return 0;
     }
 }
