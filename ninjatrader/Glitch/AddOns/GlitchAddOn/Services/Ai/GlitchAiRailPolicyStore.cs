@@ -169,6 +169,17 @@ namespace Glitch.Services
                     changed = true;
                 }
 
+                string withoutRetiredExplorationPermission = Regex.Replace(
+                    json,
+                    ",\\s*\"exploration_permission\"\\s*:\\s*\\{[^{}]*\\}",
+                    string.Empty,
+                    RegexOptions.CultureInvariant | RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                if (!string.Equals(withoutRetiredExplorationPermission, json, StringComparison.Ordinal))
+                {
+                    json = withoutRetiredExplorationPermission;
+                    changed = true;
+                }
+
                 string v2Schema = Regex.Replace(
                     json,
                     "\"schema_version\"\\s*:\\s*\"glitch\\.ai\\.policy\\.v1\"",
