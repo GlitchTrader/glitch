@@ -272,15 +272,14 @@ namespace Glitch.UI
                             state.InstrumentTickSize = normalized.InstrumentTickSize;
                         if (!string.IsNullOrWhiteSpace(normalized.InstrumentEconomicsSource))
                             state.InstrumentEconomicsSource = normalized.InstrumentEconomicsSource;
-                        if (normalized.Minutes == 1 && !string.IsNullOrWhiteSpace(normalized.DescriptiveStateJson))
-                            state.DescriptiveStateJson = normalized.DescriptiveStateJson;
-
                         GlitchIndicatorReading existing;
                         if (!state.TimeframeReadings.TryGetValue(normalized.Minutes, out existing) ||
                             existing == null ||
                             normalized.UtcTime >= existing.UtcTime)
                         {
                             state.TimeframeReadings[normalized.Minutes] = normalized;
+                            if (normalized.Minutes == 1 && !string.IsNullOrWhiteSpace(normalized.DescriptiveStateJson))
+                                state.DescriptiveStateJson = normalized.DescriptiveStateJson;
                         }
                     }
                 }
@@ -701,6 +700,12 @@ namespace Glitch.UI
                     reading.SessionLow.HasValue ||
                     reading.PreviousSessionHigh.HasValue ||
                     reading.PreviousSessionLow.HasValue);
+            GlitchIndicatorReading oneMinuteReading;
+            state.TimeframeReadings.TryGetValue(1, out oneMinuteReading);
+            string descriptiveStateJson = oneMinuteReading != null &&
+                !string.IsNullOrWhiteSpace(oneMinuteReading.DescriptiveStateJson)
+                ? oneMinuteReading.DescriptiveStateJson
+                : state.DescriptiveStateJson;
 
             snapshot = new GlitchIndicatorInstrumentSnapshot
             {
@@ -713,7 +718,7 @@ namespace Glitch.UI
                 InstrumentPointValueUsd = state.InstrumentPointValueUsd,
                 InstrumentTickSize = state.InstrumentTickSize,
                 InstrumentEconomicsSource = state.InstrumentEconomicsSource,
-                DescriptiveStateJson = state.DescriptiveStateJson,
+                DescriptiveStateJson = descriptiveStateJson,
                 SessionName = freshestSessionReading != null && !string.IsNullOrWhiteSpace(freshestSessionReading.SessionName)
                     ? freshestSessionReading.SessionName
                     : state.SessionName,
