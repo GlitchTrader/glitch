@@ -1310,6 +1310,56 @@ internal static class GlitchStateMachineHarness
             "manual protection removal did not cancel the exact mirrored request");
     }
 
+    private static void TestFailedEntryProtectionFlattensExposedInstrument()
+    {
+        var engine = new GlitchEngine();
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 0));
+        SubmitMarketCommand entry = engine.Handle(new HermesEntryRequested(
+            "protection-failure", "Master", "MNQ 09-26", 1, 20000m, 19990m,
+            new[] { new HermesTarget(1, 20020m) }))
+            .OfType<SubmitMarketCommand>().Single();
+        engine.Handle(Order("Master", "protection-failure-entry", "Working", 1, 0,
+            entry.CommandId, "M"));
+        SubmitProtectionCommand protection = ObserveExecution(engine, Execution(
+            "protection-failure-fill", "Master", 1, 20001m, 1, 1,
+            "protection-failure-entry", entry.CommandId, null,
+            GlitchExecutionOrigin.HermesMaster))
+            .OfType<SubmitProtectionCommand>().Single();
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 1));
+
+        FlattenAccountCommand flatten = engine.Handle(new NativeRequestFailedObserved(
+            protection.CommandId, "native_protection_not_started"))
+            .OfType<FlattenAccountCommand>().Single();
+        Assert(flatten.AccountName == "Master"
+            && flatten.InstrumentNames.SequenceEqual(new[] { "MNQ 09-26" }),
+            "failed protection did not issue an instrument-scoped flatten");
+    }
+
+    private static void TestUnknownEntryProtectionFlattensExposedInstrument()
+    {
+        var engine = new GlitchEngine();
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 0));
+        SubmitMarketCommand entry = engine.Handle(new HermesEntryRequested(
+            "protection-unknown", "Master", "MNQ 09-26", 1, 20000m, 19990m,
+            new[] { new HermesTarget(1, 20020m) }))
+            .OfType<SubmitMarketCommand>().Single();
+        engine.Handle(Order("Master", "protection-unknown-entry", "Working", 1, 0,
+            entry.CommandId, "M"));
+        SubmitProtectionCommand protection = ObserveExecution(engine, Execution(
+            "protection-unknown-fill", "Master", 1, 20001m, 1, 1,
+            "protection-unknown-entry", entry.CommandId, null,
+            GlitchExecutionOrigin.HermesMaster))
+            .OfType<SubmitProtectionCommand>().Single();
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 1));
+
+        FlattenAccountCommand flatten = engine.Handle(new NativeRequestUnknownObserved(
+            protection.CommandId, "native_protection_submission_unknown"))
+            .OfType<FlattenAccountCommand>().Single();
+        Assert(flatten.AccountName == "Master"
+            && flatten.InstrumentNames.SequenceEqual(new[] { "MNQ 09-26" }),
+            "unknown protection did not issue an instrument-scoped flatten");
+    }
+
     private static void TestUnknownNativeRequestIsABarrierUntilExplicitFlatten()
     {
         var engine = new GlitchEngine();
@@ -1356,6 +1406,8 @@ internal static class GlitchStateMachineHarness
         TestProtectionChangeIsMasterFirstAndExact();
         TestFlattenSupersedesOnlyPriorGlitchWork();
         TestManualMasterProtectionFollowsNativeRevisions();
+        TestFailedEntryProtectionFlattensExposedInstrument();
+        TestUnknownEntryProtectionFlattensExposedInstrument();
         TestUnknownNativeRequestIsABarrierUntilExplicitFlatten();
         TestProtectionRejectionIsTerminalAndNeverRetried();
         TestMasterExitAndFollowerProtectionFillRace();

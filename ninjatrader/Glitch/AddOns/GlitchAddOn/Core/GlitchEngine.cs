@@ -250,7 +250,7 @@ namespace Glitch.Core
             var failed = input as NativeRequestFailedObserved;
             if (failed != null)
             {
-                ObserveRequestFailure(failed);
+                ObserveRequestFailure(failed, commands);
                 PumpAll(commands);
                 return commands;
             }
@@ -258,7 +258,7 @@ namespace Glitch.Core
             var unknown = input as NativeRequestUnknownObserved;
             if (unknown != null)
             {
-                ObserveRequestUnknown(unknown);
+                ObserveRequestUnknown(unknown, commands);
                 PumpAll(commands);
                 return commands;
             }
@@ -461,7 +461,9 @@ namespace Glitch.Core
                 request.RequestFailed = true;
         }
 
-        private void ObserveRequestFailure(NativeRequestFailedObserved failed)
+        private void ObserveRequestFailure(
+            NativeRequestFailedObserved failed,
+            ICollection<GlitchCommand> commands)
         {
             TradeOperation trade;
             if (_tradeByCommand.TryGetValue(failed.CommandId, out trade)
@@ -480,6 +482,10 @@ namespace Glitch.Core
                 {
                     protection.Owner.Phase = GlitchOperationPhase.Failed;
                     protection.Owner.Failure = failed.Error;
+                    RequestFlatten(new FlattenAccountRequested(
+                        "protection-failure|" + failed.CommandId,
+                        protection.Owner.Account,
+                        "native_protection_failed|" + failed.CommandId), commands);
                 }
             }
 
@@ -508,7 +514,9 @@ namespace Glitch.Core
             }
         }
 
-        private void ObserveRequestUnknown(NativeRequestUnknownObserved unknown)
+        private void ObserveRequestUnknown(
+            NativeRequestUnknownObserved unknown,
+            ICollection<GlitchCommand> commands)
         {
             TradeOperation trade;
             if (_tradeByCommand.TryGetValue(unknown.CommandId, out trade)
@@ -527,6 +535,10 @@ namespace Glitch.Core
                 {
                     protection.Owner.Phase = GlitchOperationPhase.Unknown;
                     protection.Owner.Failure = unknown.EvidenceGap;
+                    RequestFlatten(new FlattenAccountRequested(
+                        "protection-unknown|" + unknown.CommandId,
+                        protection.Owner.Account,
+                        "native_protection_unknown|" + unknown.CommandId), commands);
                 }
             }
 
