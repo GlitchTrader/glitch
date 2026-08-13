@@ -2070,6 +2070,26 @@ namespace NinjaTrader.NinjaScript.Indicators
             sb.Append("\"low\":").Append(JsonNullableNumber(low)).Append(',');
             sb.Append("\"close\":").Append(JsonNullableNumber(close)).Append(',');
             sb.Append("\"volume\":").Append(JsonNullableNumber(Volumes[bip][0])).Append("},");
+            sb.Append("\"last_completed_bar\":");
+            if (State == State.Realtime && CurrentBars[bip] >= 1)
+            {
+                sb.Append('{');
+                sb.Append("\"utc_time\":").Append(JsonStringValue(Times[bip][1].ToUniversalTime().ToString("o", CultureInfo.InvariantCulture))).Append(',');
+                sb.Append("\"closed_utc\":").Append(JsonStringValue(Times[bip][0].ToUniversalTime().ToString("o", CultureInfo.InvariantCulture))).Append(',');
+                sb.Append("\"open\":").Append(JsonNullableNumber(Opens[bip][1])).Append(',');
+                sb.Append("\"high\":").Append(JsonNullableNumber(Highs[bip][1])).Append(',');
+                sb.Append("\"low\":").Append(JsonNullableNumber(Lows[bip][1])).Append(',');
+                sb.Append("\"close\":").Append(JsonNullableNumber(Closes[bip][1])).Append(',');
+                sb.Append("\"volume\":").Append(JsonNullableNumber(Volumes[bip][1])).Append(',');
+                sb.Append("\"completeness\":\"complete\",");
+                sb.Append("\"source\":\"ninjatrader_bars_ago_1\"");
+                sb.Append('}');
+            }
+            else
+            {
+                sb.Append("null");
+            }
+            sb.Append(',');
             sb.Append("\"instrument_economics\":{");
             sb.Append("\"point_value_usd\":").Append(JsonNullableNumber(PublishedPointValueUsd())).Append(',');
             sb.Append("\"tick_size\":").Append(JsonNullableNumber(PublishedTickSize())).Append(',');
