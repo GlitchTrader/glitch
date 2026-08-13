@@ -117,6 +117,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         private DateTime _lastDepthUpdateUtc = DateTime.MinValue;
         private double _lastBidPrice;
         private double _lastAskPrice;
+        private DateTime _lastBidUpdateUtc = DateTime.MinValue;
+        private DateTime _lastAskUpdateUtc = DateTime.MinValue;
         private double _lastTradePrice;
 
         [NinjaScriptProperty]
@@ -232,6 +234,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                 _lastDepthUpdateUtc = DateTime.MinValue;
                 _lastBidPrice = 0;
                 _lastAskPrice = 0;
+                _lastBidUpdateUtc = DateTime.MinValue;
+                _lastAskUpdateUtc = DateTime.MinValue;
                 _lastTradePrice = 0;
                 _orderFlowTape.Clear();
                 _orderFlowTapeBuyVolume = 0;
@@ -425,14 +429,20 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (marketDataUpdate.MarketDataType == MarketDataType.Bid)
             {
                 if (marketDataUpdate.Price > 0)
+                {
                     _lastBidPrice = marketDataUpdate.Price;
+                    _lastBidUpdateUtc = nowUtc;
+                }
                 return;
             }
 
             if (marketDataUpdate.MarketDataType == MarketDataType.Ask)
             {
                 if (marketDataUpdate.Price > 0)
+                {
                     _lastAskPrice = marketDataUpdate.Price;
+                    _lastAskUpdateUtc = nowUtc;
+                }
                 return;
             }
 
@@ -2017,6 +2027,21 @@ namespace NinjaTrader.NinjaScript.Indicators
             DateTime? depthUpdateUtc = _lastDepthUpdateUtc == DateTime.MinValue
                 ? (DateTime?)null
                 : _lastDepthUpdateUtc;
+            DateTime latestQuoteUtc = _lastBidUpdateUtc >= _lastAskUpdateUtc
+                ? _lastBidUpdateUtc
+                : _lastAskUpdateUtc;
+            DateTime? quoteUpdateUtc = latestQuoteUtc == DateTime.MinValue
+                ? (DateTime?)null
+                : latestQuoteUtc;
+            double? bestBid = _lastBidPrice > 0 ? (double?)_lastBidPrice : null;
+            double? bestAsk = _lastAskPrice > 0 ? (double?)_lastAskPrice : null;
+            double? spreadPoints = bestBid.HasValue && bestAsk.HasValue && bestAsk.Value >= bestBid.Value
+                ? (double?)(bestAsk.Value - bestBid.Value)
+                : null;
+            double? tickSize = PublishedTickSize();
+            double? spreadTicks = spreadPoints.HasValue && tickSize.HasValue && tickSize.Value > 0
+                ? (double?)(spreadPoints.Value / tickSize.Value)
+                : null;
             if (_isOrderFlowRuntimeAvailable)
                 PruneOrderFlowTape(asOfUtc);
             bool depthFresh = depthUpdateUtc.HasValue && (asOfUtc - depthUpdateUtc.Value) <= OrderFlowDepthFreshness;
@@ -2112,10 +2137,15 @@ namespace NinjaTrader.NinjaScript.Indicators
             sb.Append("\"classification_method\":").Append(JsonStringValue("quote_at_bid_ask_then_tick_rule_then_ambiguous_50_50")).Append("},");
 
             sb.Append("\"liquidity\":{");
+            sb.Append("\"best_bid\":").Append(JsonNullableNumber(bestBid)).Append(',');
+            sb.Append("\"best_ask\":").Append(JsonNullableNumber(bestAsk)).Append(',');
+            sb.Append("\"spread_points\":").Append(JsonNullableNumber(spreadPoints)).Append(',');
+            sb.Append("\"spread_ticks\":").Append(JsonNullableNumber(spreadTicks)).Append(',');
             sb.Append("\"depth_levels\":").Append(OrderFlowDepthLevels.ToString(CultureInfo.InvariantCulture)).Append(',');
             sb.Append("\"book_reconstruction\":\"position_volume_only\",");
             sb.Append("\"quality\":").Append(JsonStringValue(depthFresh ? "limited" : "stale_or_unavailable")).Append(',');
-            sb.Append("\"last_quote_age_seconds\":").Append(JsonNullableNumber(depthUpdateUtc.HasValue ? (asOfUtc - depthUpdateUtc.Value).TotalSeconds : (double?)null)).Append("},");
+            sb.Append("\"last_quote_age_seconds\":").Append(JsonNullableNumber(quoteUpdateUtc.HasValue ? Math.Max(0d, (asOfUtc - quoteUpdateUtc.Value).TotalSeconds) : (double?)null)).Append(',');
+            sb.Append("\"last_depth_age_seconds\":").Append(JsonNullableNumber(depthUpdateUtc.HasValue ? Math.Max(0d, (asOfUtc - depthUpdateUtc.Value).TotalSeconds) : (double?)null)).Append("},");
 
             sb.Append("\"quality\":{");
             sb.Append("\"as_of_utc\":").Append(JsonStringValue(asOfUtc.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture))).Append(',');

@@ -34,7 +34,7 @@ class OperatorMapTests(unittest.TestCase):
         setup = (profile / "setup.ps1").read_text(encoding="utf-8")
         builder = (ROOT / "tools/hermes/build-public-profile.ps1").read_text(encoding="utf-8")
 
-        self.assertIn("version: 0.0.2.27", distribution)
+        self.assertIn("version: 0.0.2.30", distribution)
         self.assertEqual((profile / ".gitattributes").read_text(encoding="utf-8"), "* -text\n")
         self.assertIn("'.gitattributes'", builder)
         self.assertIn('hermes_requires: \">=0.18.2\"', distribution)
@@ -138,11 +138,15 @@ class OperatorMapTests(unittest.TestCase):
         installed = self.operator["skills"]["installed_overlay"]
         required = self.operator["skills"]["required_before_supervisory_activation"]
         self.assertEqual(installed, [
-            "glitch-trade-mnq",
+            "glitch-market-scan",
+            "glitch-setup-state",
+            "glitch-order-flow",
+            "glitch-position-management",
             "glitch-build-intent",
             "glitch-learn",
             "glitch-runtime",
             "glitch-market-structure",
+            "glitch-trade-mnq",
         ])
         self.assertEqual(required, [])
 
@@ -150,10 +154,10 @@ class OperatorMapTests(unittest.TestCase):
         learn = (PROFILE_ROOT / "skills/glitch-learn/SKILL.md").read_text(encoding="utf-8")
         runtime = (PROFILE_ROOT / "skills/glitch-runtime/SKILL.md").read_text(encoding="utf-8")
         market = (PROFILE_ROOT / "skills/glitch-market-structure/SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("competing explanations", trade)
-        self.assertIn("no fixed point distance", trade)
-        self.assertIn("never as a rule set", market)
-        self.assertIn("One outcome remains episodic", learn)
+        self.assertIn("compatibility", trade)
+        self.assertIn("never assume MNQ", trade)
+        self.assertIn("Do not impose a fixed ATR threshold", market)
+        self.assertIn("completed master outcomes", learn)
         self.assertIn("fabricate a fill", runtime)
 
 
