@@ -23,6 +23,19 @@ internal static class GlitchJournalHarness
 
     public static int Main()
     {
+        try
+        {
+            return Run();
+        }
+        catch (Exception error)
+        {
+            Console.Error.WriteLine(error);
+            return 1;
+        }
+    }
+
+    private static int Run()
+    {
         string existingRoot = Environment.GetEnvironmentVariable(
             "GLITCH_JOURNAL_VERIFY_ROOT");
         if (!string.IsNullOrWhiteSpace(existingRoot))
@@ -31,6 +44,10 @@ internal static class GlitchJournalHarness
             "GLITCH_JOURNAL_REPLAY_VERIFY_ROOT");
         if (!string.IsNullOrWhiteSpace(replayRoot))
             return VerifyReplay(replayRoot);
+        string hostReplayRoot = Environment.GetEnvironmentVariable(
+            "GLITCH_JOURNAL_HOST_REPLAY_VERIFY_ROOT");
+        if (!string.IsNullOrWhiteSpace(hostReplayRoot))
+            return VerifyHostReplay(hostReplayRoot);
 
         string root = Path.Combine(
             Path.GetTempPath(), "GlitchJournalHarness-" + Guid.NewGuid().ToString("N"));
@@ -313,4 +330,71 @@ internal static class GlitchJournalHarness
             + " identities=" + identities.Count + ".");
         return 0;
     }
+
+    private static int VerifyHostReplay(string root)
+    {
+        NinjaTrader.Core.Globals.UserDataDir = root;
+        var journal = new GlitchOperationJournal();
+        Assert(journal.TryLoad(out var records, out string error), error);
+        var engine = new GlitchEngine();
+        var emitted = new Dictionary<string, GlitchCommand>(StringComparer.Ordinal);
+        var journalCommands = new Dictionary<string, string>(StringComparer.Ordinal);
+        var commandIdentities = new Dictionary<string, string>(StringComparer.Ordinal);
+        int index = 0;
+        foreach (GlitchRecoveryRecord record in records)
+        {
+            index++;
+            if (record.Input != null)
+            {
+                foreach (GlitchCommand command in engine.Handle(record.Input))
+                {
+                    string fingerprint = GlitchOperationJournal.Fingerprint(command);
+                    if (emitted.TryGetValue(command.CommandId, out GlitchCommand priorEmission))
+                    {
+                        if (!string.Equals(
+                                GlitchOperationJournal.Fingerprint(priorEmission),
+                                fingerprint,
+                                StringComparison.Ordinal))
+                        {
+                            if (journalCommands.ContainsKey(command.CommandId))
+                                continue;
+                            throw new InvalidOperationException(
+                                "replayed_command_identity_conflict:" + command.CommandId
+                                + "|record=" + index);
+                        }
+                    }
+                    if (journalCommands.TryGetValue(command.CommandId, out string journalFingerprint))
+                    {
+                        if (!string.Equals(journalFingerprint, fingerprint, StringComparison.Ordinal))
+                            continue;
+                    }
+                    emitted[command.CommandId] = command;
+                }
+            }
+            if (record.Command == null)
+                continue;
+            string commandFingerprint = GlitchOperationJournal.Fingerprint(record.Command);
+            if (commandIdentities.TryGetValue(record.Command.CommandId, out string prior))
+                Assert(string.Equals(prior, commandFingerprint, StringComparison.Ordinal),
+                    "journal_command_identity_conflict:" + record.Command.CommandId
+                    + "|record=" + index);
+            commandIdentities[record.Command.CommandId] = commandFingerprint;
+            if (emitted.TryGetValue(record.Command.CommandId, out GlitchCommand emittedCommand))
+                Assert(string.Equals(
+                        GlitchOperationJournal.FingerprintForReplay(
+                            emittedCommand, record.HermesIntentPresent),
+                        GlitchOperationJournal.FingerprintForReplay(
+                            record.Command, record.HermesIntentPresent),
+                        StringComparison.Ordinal),
+                    "replayed_command_content_conflict:" + record.Command.CommandId
+                    + "|record=" + index);
+            journalCommands[record.Command.CommandId] = commandFingerprint;
+        }
+        Console.WriteLine(
+            "Existing Glitch host replay passed: records=" + records.Count
+            + " emissions=" + emitted.Count
+            + " identities=" + commandIdentities.Count + ".");
+        return 0;
+    }
+
 }

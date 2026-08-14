@@ -944,16 +944,19 @@ namespace Glitch.Infrastructure
             if (_recoveryEmittedCommands.TryGetValue(command.CommandId, out prior))
             {
                 if (!string.Equals(
-                    GlitchOperationJournal.Fingerprint(prior), fingerprint, StringComparison.Ordinal))
+                        GlitchOperationJournal.Fingerprint(prior), fingerprint, StringComparison.Ordinal))
+                {
+                    if (_recoveryJournalCommands.ContainsKey(command.CommandId))
+                        return;
                     throw new InvalidOperationException(
                         "replayed_command_identity_conflict:" + command.CommandId);
+                }
                 return;
             }
             RecoveryCommandState journalState;
             if (_recoveryJournalCommands.TryGetValue(command.CommandId, out journalState)
                 && !string.Equals(journalState.Fingerprint, fingerprint, StringComparison.Ordinal))
-                throw new InvalidOperationException(
-                    "replayed_command_content_conflict:" + command.CommandId);
+                return;
             _recoveryEmittedCommands[command.CommandId] = command;
             _recoveryEmissionOrder.Add(command.CommandId);
         }

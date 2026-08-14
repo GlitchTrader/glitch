@@ -94,7 +94,7 @@ namespace Glitch.UI
                 Margin = new Thickness(0, 0, 8, 0),
                 VerticalAlignment = VerticalAlignment.Center,
                 ItemsSource = new[] { "Master", "Group", "Fleet" },
-                SelectedItem = "Group"
+                SelectedItem = "Fleet"
             };
             _summaryScopeCombo.SelectionChanged += OnSummaryScopeChanged;
             Grid.SetColumn(_summaryScopeCombo, 1);
@@ -625,7 +625,7 @@ namespace Glitch.UI
             List<GlitchTradeInsightsService.TradeRoundTrip> all = (trades ?? Array.Empty<GlitchTradeInsightsService.TradeRoundTrip>())
                 .Where(trade => trade != null)
                 .ToList();
-            string scope = _summaryScopeCombo?.SelectedItem as string ?? "Group";
+            string scope = _summaryScopeCombo?.SelectedItem as string ?? "Fleet";
             if (string.Equals(scope, "Fleet", StringComparison.OrdinalIgnoreCase))
                 return all;
 
