@@ -56,6 +56,13 @@ namespace Glitch.Services
         public double MaxContracts { get; set; }
         public bool IsRiskLocked { get; set; }
         public bool IsEvalTargetLocked { get; set; }
+        public bool AiDailyCaptureEnabled { get; set; }
+        public bool AiDailyCaptureContextAvailable { get; set; }
+        public double AiDailyCaptureTargetRatio { get; set; }
+        public double AiDailyCaptureTargetUsd { get; set; }
+        public double AiDailyCaptureRemainingUsd { get; set; }
+        public double AiDailyCaptureProgressRatio { get; set; }
+        public bool AiDailyCaptureReached { get; set; }
         public string TradingStartTime { get; set; }
         public string TradingEndTime { get; set; }
         public List<GlitchPortfolioSnapshotPositionRecord> Positions { get; set; }
@@ -288,6 +295,13 @@ namespace Glitch.Services
                 + "\"max_contracts\":" + GlitchSnapshotJson.Number(account.MaxContracts) + ","
                 + "\"is_risk_locked\":" + GlitchSnapshotJson.Bool(account.IsRiskLocked) + ","
                 + "\"is_eval_target_locked\":" + GlitchSnapshotJson.Bool(account.IsEvalTargetLocked) + ","
+                + "\"ai_daily_capture_enabled\":" + GlitchSnapshotJson.Bool(account.AiDailyCaptureEnabled) + ","
+                + "\"ai_daily_capture_context_available\":" + GlitchSnapshotJson.Bool(account.AiDailyCaptureContextAvailable) + ","
+                + "\"ai_daily_capture_target_ratio\":" + GlitchSnapshotJson.Number(account.AiDailyCaptureTargetRatio) + ","
+                + "\"ai_daily_capture_target_usd\":" + GlitchSnapshotJson.Number(account.AiDailyCaptureTargetUsd) + ","
+                + "\"ai_daily_capture_remaining_usd\":" + GlitchSnapshotJson.Number(account.AiDailyCaptureRemainingUsd) + ","
+                + "\"ai_daily_capture_progress_ratio\":" + GlitchSnapshotJson.Number(account.AiDailyCaptureProgressRatio) + ","
+                + "\"ai_daily_capture_reached\":" + GlitchSnapshotJson.Bool(account.AiDailyCaptureReached) + ","
                 + "\"trading_start_time_et\":" + GlitchSnapshotJson.String(account.TradingStartTime) + ","
                 + "\"trading_end_time_et\":" + GlitchSnapshotJson.String(account.TradingEndTime) + ","
                 + "\"trading_window_valid\":" + GlitchSnapshotJson.Bool(tradingWindow.IsValid) + ","

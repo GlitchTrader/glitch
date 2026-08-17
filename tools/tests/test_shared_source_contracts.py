@@ -499,7 +499,7 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("if (_runtimeFailed && replicationEnabled)", host)
         self.assertIn("_replicationEnabled = false;", host)
         self.assertIn("_commandFingerprints", host)
-        self.assertIn("Canonical(SerializeCommand(command))", journal)
+        self.assertIn("string canonical = Canonical(command);", journal)
         identity = read(
             "ninjatrader/Glitch/AddOns/GlitchAddOn/Core/GlitchNativeIdentity.cs"
         )

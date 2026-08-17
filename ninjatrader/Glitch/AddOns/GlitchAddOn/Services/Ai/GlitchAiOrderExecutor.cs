@@ -11,8 +11,8 @@ namespace Glitch.Services
 {
     /// <summary>
     /// Strict Hermes intent translator. It performs contract parsing, identity
-    /// resolution and deduplication only; it contains no strategy, risk, session,
-    /// position-conflict, prop-firm or license veto.
+    /// resolution and deduplication only; the sole visible policy exception is
+    /// the opt-in AI daily-capture entry lock, which never affects management.
     /// </summary>
     internal static class GlitchAiOrderExecutor
     {
@@ -76,6 +76,19 @@ namespace Glitch.Services
                     "failed",
                     "master_identity_not_resolved",
                     accountFailure);
+            }
+            if ((string.Equals(action, "ENTER_LONG", StringComparison.Ordinal)
+                    || string.Equals(action, "ENTER_SHORT", StringComparison.Ordinal))
+                && ShouldBlockAiDailyCaptureEntry(account, nowUtc, out string captureMessage))
+            {
+                return SubmitNoAction(
+                    host,
+                    validation,
+                    rawJson,
+                    contentFingerprint,
+                    "executed",
+                    "ai_daily_capture_reached",
+                    captureMessage);
             }
             string instrumentRoot = validation.Instrument;
             string snapshotHash = GlitchAiJsonFields.ExtractString(rawJson, "snapshot_hash");
@@ -181,6 +194,25 @@ namespace Glitch.Services
                     "intent_not_representable",
                     error.Message);
             }
+        }
+
+        private static bool ShouldBlockAiDailyCaptureEntry(string account, DateTime nowUtc, out string message)
+        {
+            message = null;
+            GlitchRuntimePolicySettings policy = GlitchRuntimePolicyStore.LoadSettings(
+                GlitchRuntimePolicyStore.GetDefaultSettingsPath());
+            if (policy == null || !policy.EnforceAiDailyCaptureEntryLock)
+                return false;
+            if (!GlitchAiPortfolioSnapshotReader.TryGetFreshDailyCaptureState(
+                    account, nowUtc, 10, out bool enabled, out bool contextAvailable,
+                    out bool reached, out double realizedPnl, out double targetUsd, out _))
+                return false;
+            if (!enabled || !contextAvailable || !reached)
+                return false;
+            message = "AI daily capture reached; realized="
+                + realizedPnl.ToString("0.##", CultureInfo.InvariantCulture)
+                + ", target=" + targetUsd.ToString("0.##", CultureInfo.InvariantCulture);
+            return true;
         }
 
         private static GlitchAiExecutionResult SubmitNoAction(

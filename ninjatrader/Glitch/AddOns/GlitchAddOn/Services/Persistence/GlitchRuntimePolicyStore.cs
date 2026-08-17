@@ -26,6 +26,8 @@ namespace Glitch.Services
         public bool EnforceUnrealizedFlatten70Percent { get; set; } = false;
         public bool EnforceEvalProfitTargetLock { get; set; } = false;
         public bool EnforceAiDailyClose { get; set; } = false;
+        public bool EnforceAiDailyCaptureEntryLock { get; set; } = false;
+        public double AiDailyCaptureTargetRatio { get; set; } = 0.005;
         public bool ReplicationUiEnabled { get; set; } = false;
         public ComplianceAccountTypeScope BufferFreezeScopes { get; set; } = new ComplianceAccountTypeScope();
         public double BufferFreezeThresholdRatio { get; set; } = 0.15;
@@ -178,6 +180,8 @@ namespace Glitch.Services
             settings.EnforceUnrealizedFlatten70Percent = ReadBool(rows, "ENFORCE_UNREALIZED_FLATTEN_70_PERCENT", settings.EnforceUnrealizedFlatten70Percent);
             settings.EnforceEvalProfitTargetLock = ReadBool(rows, "ENFORCE_EVAL_PROFIT_TARGET_LOCK", settings.EnforceEvalProfitTargetLock);
             settings.EnforceAiDailyClose = ReadBool(rows, "ENFORCE_AI_DAILY_CLOSE", settings.EnforceAiDailyClose);
+            settings.EnforceAiDailyCaptureEntryLock = ReadBool(rows, "ENFORCE_AI_DAILY_CAPTURE_ENTRY_LOCK", settings.EnforceAiDailyCaptureEntryLock);
+            settings.AiDailyCaptureTargetRatio = ReadDouble(rows, "AI_DAILY_CAPTURE_TARGET_RATIO", settings.AiDailyCaptureTargetRatio, 0.0001, 1.0);
             settings.ReplicationUiEnabled = ReadBool(rows, "REPLICATION_UI_ENABLED", settings.ReplicationUiEnabled);
             LoadComplianceFeatureScopes(settings, rows);
             settings.SyncLegacyComplianceFlags();
@@ -227,6 +231,8 @@ namespace Glitch.Services
                 $"ENFORCE_UNREALIZED_FLATTEN_70_PERCENT\t{ToBoolToken(settings.EnforceUnrealizedFlatten70Percent)}",
                 $"ENFORCE_EVAL_PROFIT_TARGET_LOCK\t{ToBoolToken(settings.EnforceEvalProfitTargetLock)}",
                 $"ENFORCE_AI_DAILY_CLOSE\t{ToBoolToken(settings.EnforceAiDailyClose)}",
+                $"ENFORCE_AI_DAILY_CAPTURE_ENTRY_LOCK\t{ToBoolToken(settings.EnforceAiDailyCaptureEntryLock)}",
+                $"AI_DAILY_CAPTURE_TARGET_RATIO\t{settings.AiDailyCaptureTargetRatio.ToString("0.####", CultureInfo.InvariantCulture)}",
                 $"REPLICATION_UI_ENABLED\t{ToBoolToken(settings.ReplicationUiEnabled)}",
                 $"ENFORCE_BUFFER_FREEZE_15_SIM\t{ToBoolToken(settings.BufferFreezeScopes.Sim)}",
                 $"ENFORCE_BUFFER_FREEZE_15_EVAL\t{ToBoolToken(settings.BufferFreezeScopes.Eval)}",

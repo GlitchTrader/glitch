@@ -97,6 +97,22 @@ namespace Glitch.UI
             double headroomRatio = maxDrawdown > 0 && !double.IsNaN(bufferMargin)
                 ? bufferMargin / maxDrawdown
                 : double.NaN;
+            GlitchAiRailPolicy aiPolicy = GlitchAiRailPolicyStore.Load();
+            bool aiCaptureEnabled = _runtimePolicySettings != null
+                && _runtimePolicySettings.EnforceAiDailyCaptureEntryLock
+                && (aiPolicy?.AccountAllowlist ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase))
+                    .Any(name => string.Equals(name, row.DisplayName, StringComparison.OrdinalIgnoreCase));
+            bool captureContextAvailable = aiCaptureEnabled
+                && row.AccountSizeRaw > 0
+                && !double.IsNaN(row.RealizedPnlRaw)
+                && !double.IsInfinity(row.RealizedPnlRaw);
+            double captureRatio = _runtimePolicySettings?.AiDailyCaptureTargetRatio ?? 0.005;
+            double captureTargetUsd = captureContextAvailable ? row.AccountSizeRaw * captureRatio : double.NaN;
+            double captureRemainingUsd = captureContextAvailable ? Math.Max(0, captureTargetUsd - row.RealizedPnlRaw) : double.NaN;
+            double captureProgressRatio = captureContextAvailable && captureTargetUsd > 0
+                ? row.RealizedPnlRaw / captureTargetUsd
+                : double.NaN;
+            bool captureReached = captureContextAvailable && row.RealizedPnlRaw >= captureTargetUsd;
             bool positionsAvailable = TryBuildPortfolioSnapshotPositions(
                 account,
                 out List<GlitchPortfolioSnapshotPositionRecord> positions);
@@ -131,6 +147,13 @@ namespace Glitch.UI
                 MaxContracts = ruleMaxContracts > 0 ? ruleMaxContracts : row.MaxContractsRaw,
                 IsRiskLocked = false,
                 IsEvalTargetLocked = false,
+                AiDailyCaptureEnabled = aiCaptureEnabled,
+                AiDailyCaptureContextAvailable = captureContextAvailable,
+                AiDailyCaptureTargetRatio = captureContextAvailable ? captureRatio : double.NaN,
+                AiDailyCaptureTargetUsd = captureTargetUsd,
+                AiDailyCaptureRemainingUsd = captureRemainingUsd,
+                AiDailyCaptureProgressRatio = captureProgressRatio,
+                AiDailyCaptureReached = captureReached,
                 TradingStartTime = ruleFirm?.TradingStartTime,
                 TradingEndTime = ruleFirm?.TradingEndTime,
                 Positions = positions,

@@ -36,6 +36,8 @@ namespace Glitch.UI
         private CheckBox _settingsNoProtectionFlattenApCheckBox;
         private TextBox _settingsNoProtectionTimeoutMsTextBox;
         private CheckBox _settingsAiDailyCloseCheckBox;
+        private CheckBox _settingsAiDailyCaptureCheckBox;
+        private TextBox _settingsAiDailyCaptureTargetTextBox;
         private TextBox _settingsLicenseKeyTextBox;
         private Border _settingsPlanBadgeBorder;
         private TextBlock _settingsPlanBadgeText;
@@ -184,6 +186,7 @@ namespace Glitch.UI
             compliancePanel.Children.Add(noProtectionTimeoutRow);
 
             compliancePanel.Children.Add(BuildAiDailyCloseOptIn());
+            compliancePanel.Children.Add(BuildAiDailyCaptureOptIn());
 
             _settingsCopyTradingPolicyNotice = new TextBlock
             {
@@ -411,6 +414,44 @@ namespace Glitch.UI
                 : L("settings.risk.enforce_ai_daily_close_scope",
                     "Action at 16:59 Eastern: enabling submits a broad account flatten and cancels working orders only for these persisted AI accounts (independent of Hermes pause):")
                     + " " + scope + ".";
+        }
+
+        private Expander BuildAiDailyCaptureOptIn()
+        {
+            var panel = new StackPanel { Orientation = Orientation.Vertical };
+            _settingsAiDailyCaptureCheckBox = BuildScopeCheckBox("settings.risk.enable", "Enable");
+            panel.Children.Add(BuildPolicyToggleRow(_settingsAiDailyCaptureCheckBox));
+            var targetRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(18, 4, 0, 0) };
+            var targetLabel = new TextBlock
+            {
+                Text = L("settings.risk.ai_daily_capture_target", "Daily capture target (%)"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 10, 0),
+                FontSize = ResolveSettingsBodyFontSize()
+            };
+            targetRow.Children.Add(targetLabel);
+            _settingsAiDailyCaptureTargetTextBox = new TextBox
+            {
+                Width = 90,
+                Padding = new Thickness(8, 4, 8, 4),
+                FontSize = ResolveSettingsBodyFontSize(),
+                Style = CreateSettingsLicenseTextBoxStyle(_settingsRootGrid)
+            };
+            targetRow.Children.Add(_settingsAiDailyCaptureTargetTextBox);
+            panel.Children.Add(targetRow);
+            var scope = new TextBlock
+            {
+                Text = L("settings.risk.ai_daily_capture_scope", "Blocks only new Hermes AI entries after realized current-session PnL reaches this target for configured AI master accounts; management, exits, and manual orders remain unchanged."),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0),
+                FontSize = ResolveSettingsBodyFontSize()
+            };
+            ApplySkinResource(scope, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
+            panel.Children.Add(scope);
+            Expander expander = CreateDisclosureRowExpander(GetSettingsStyleContext(), "settings.risk.ai_daily_capture", "Enable AI daily-capture entry lock.");
+            expander.IsExpanded = false;
+            expander.Content = WrapDisclosureRowContent(panel);
+            return expander;
         }
 
         private Expander BuildComplianceFeatureExpander(
@@ -776,8 +817,12 @@ namespace Glitch.UI
                 _runtimePolicySettings = new GlitchRuntimePolicySettings();
 
             bool aiDailyCloseWasEnabled = _runtimePolicySettings.EnforceAiDailyClose;
+            bool aiDailyCaptureWasEnabled = _runtimePolicySettings.EnforceAiDailyCaptureEntryLock;
             _runtimePolicySettings.EnforceAccountLevelCompliance = false;
             _runtimePolicySettings.EnforceAiDailyClose = _settingsAiDailyCloseCheckBox?.IsChecked == true;
+            _runtimePolicySettings.EnforceAiDailyCaptureEntryLock = _settingsAiDailyCaptureCheckBox?.IsChecked == true;
+            if (TryReadComplianceThreshold(_settingsAiDailyCaptureTargetTextBox, _runtimePolicySettings.AiDailyCaptureTargetRatio * 100d, 0.01, 100d, out double capturePercent))
+                _runtimePolicySettings.AiDailyCaptureTargetRatio = capturePercent / 100d;
             _runtimePolicySettings.BufferFreezeScopes.Sim = _settingsBufferFreezeSimCheckBox?.IsChecked == true;
             _runtimePolicySettings.BufferFreezeScopes.Eval = _settingsBufferFreezeEvalCheckBox?.IsChecked == true;
             _runtimePolicySettings.BufferFreezeScopes.Ap = _settingsBufferFreezeApCheckBox?.IsChecked == true;
@@ -836,6 +881,8 @@ namespace Glitch.UI
                         + (_runtimePolicySettings.EnforceAiDailyClose ? "enabled" : "disabled")
                         + "|scope=configured_ai_accounts");
             }
+            if (aiDailyCaptureWasEnabled != _runtimePolicySettings.EnforceAiDailyCaptureEntryLock)
+                AppendJournal("System", "Policy", "ai_daily_capture_entry_lock|origin=settings|result=" + (_runtimePolicySettings.EnforceAiDailyCaptureEntryLock ? "enabled" : "disabled"));
             AppendJournal("System", "Policy", "Runtime settings updated by user.");
             AppendJournal("System", "Runtime", BuildRuntimePolicySummaryLogLine());
 
@@ -943,6 +990,10 @@ namespace Glitch.UI
                 _settingsNoProtectionTimeoutMsTextBox.Text = _runtimePolicySettings.NoProtectionTimeoutMs.ToString(CultureInfo.InvariantCulture);
             if (_settingsAiDailyCloseCheckBox != null)
                 _settingsAiDailyCloseCheckBox.IsChecked = _runtimePolicySettings.EnforceAiDailyClose;
+            if (_settingsAiDailyCaptureCheckBox != null)
+                _settingsAiDailyCaptureCheckBox.IsChecked = _runtimePolicySettings.EnforceAiDailyCaptureEntryLock;
+            if (_settingsAiDailyCaptureTargetTextBox != null)
+                _settingsAiDailyCaptureTargetTextBox.Text = (_runtimePolicySettings.AiDailyCaptureTargetRatio * 100d).ToString("0.##", CultureInfo.InvariantCulture);
 
             UpdateComplianceThresholdEnabled(
                 _settingsBufferFreezeSimCheckBox,

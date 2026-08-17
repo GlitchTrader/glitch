@@ -10,6 +10,48 @@ namespace Glitch.Services
 {
     internal static class GlitchAiPortfolioSnapshotReader
     {
+        public static bool TryGetFreshDailyCaptureState(
+            string accountName,
+            DateTime nowUtc,
+            int maxAgeSeconds,
+            out bool enabled,
+            out bool contextAvailable,
+            out bool reached,
+            out double realizedPnl,
+            out double targetUsd,
+            out string failure)
+        {
+            enabled = false;
+            contextAvailable = false;
+            reached = false;
+            realizedPnl = 0;
+            targetUsd = 0;
+            failure = null;
+            try
+            {
+                string path = GlitchPortfolioSnapshotWriter.GetLatestSnapshotPath();
+                if (!File.Exists(path)) { failure = "portfolio_snapshot_missing"; return false; }
+                string json = File.ReadAllText(path);
+                DateTime? createdUtc = GlitchAiJsonFields.TryExtractUtc(json, "created_utc");
+                if (!createdUtc.HasValue || (nowUtc - createdUtc.Value).TotalSeconds < -5 || (nowUtc - createdUtc.Value).TotalSeconds > maxAgeSeconds)
+                { failure = "portfolio_snapshot_stale"; return false; }
+                if (!TryGetAccountBlockFromJson(json, accountName, out string accountJson))
+                { failure = "portfolio_account_missing_" + accountName; return false; }
+                if (!GlitchAiJsonFields.TryExtractBool(accountJson, "ai_daily_capture_enabled", out enabled)
+                    || !GlitchAiJsonFields.TryExtractBool(accountJson, "ai_daily_capture_context_available", out contextAvailable)
+                    || !GlitchAiJsonFields.TryExtractBool(accountJson, "ai_daily_capture_reached", out reached)
+                    || !GlitchAiJsonFields.TryExtractNumber(accountJson, "realized_pnl", out realizedPnl)
+                    || !GlitchAiJsonFields.TryExtractNumber(accountJson, "ai_daily_capture_target_usd", out targetUsd))
+                { failure = "portfolio_capture_fields_missing"; return false; }
+                return true;
+            }
+            catch
+            {
+                failure = "portfolio_snapshot_unreadable";
+                return false;
+            }
+        }
+
         public static bool TryGetFreshRiskState(
             string accountName,
             DateTime nowUtc,

@@ -34,7 +34,7 @@ class OperatorMapTests(unittest.TestCase):
         setup = (profile / "setup.ps1").read_text(encoding="utf-8")
         builder = (ROOT / "tools/hermes/build-public-profile.ps1").read_text(encoding="utf-8")
 
-        self.assertIn("version: 0.0.2.30", distribution)
+        self.assertIn("version: 0.0.2.46", distribution)
         self.assertEqual((profile / ".gitattributes").read_text(encoding="utf-8"), "* -text\n")
         self.assertIn("'.gitattributes'", builder)
         self.assertIn('hermes_requires: \">=0.18.2\"', distribution)
@@ -56,7 +56,7 @@ class OperatorMapTests(unittest.TestCase):
             "reset-hermes-trading-epoch.ps1",
         ):
             self.assertIn(worker, builder)
-        self.assertIn("-Schedule '*/30 * * * *'", setup)
+        self.assertIn("-Schedule '2,32 * * * *'", setup)
         self.assertIn("Remove-ObsoleteCronJobs", setup)
         self.assertIn("a.pop('reasoning_overrides', None)", setup)
         self.assertIn("_write_chain(c, [])", setup)
