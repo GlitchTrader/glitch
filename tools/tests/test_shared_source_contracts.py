@@ -416,6 +416,28 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("_settingsNoProtectionTimeoutMsTextBox", settings)
         self.assertIn("ReplicationQuantityLimitChanged", engine)
 
+    def test_ai_daily_capture_checkbox_persists_immediately_and_reverts_on_failure(self):
+        settings = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.SettingsTab.partial.cs"
+        )
+        localization = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Resources/Localization.tsv"
+        )
+        self.assertIn(
+            "_settingsAiDailyCaptureCheckBox.Click += OnAiDailyCaptureSettingChanged",
+            settings,
+        )
+        self.assertIn(
+            "GlitchRuntimePolicyStore.SaveSettings(_runtimePolicyFilePath, _runtimePolicySettings)",
+            settings,
+        )
+        self.assertIn('ai_daily_capture_entry_lock|origin=settings_toggle|result=', settings)
+        self.assertIn(
+            "_settingsAiDailyCaptureCheckBox.IsChecked = priorEnabled",
+            settings,
+        )
+        self.assertIn("settings.risk.ai_daily_capture_immediate", localization)
+
     def test_user_flatten_is_one_native_account_flatten_request(self):
         engine = read("ninjatrader/Glitch/AddOns/GlitchAddOn/Core/GlitchEngine.cs")
         observations = read(

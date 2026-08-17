@@ -420,7 +420,17 @@ namespace Glitch.UI
         {
             var panel = new StackPanel { Orientation = Orientation.Vertical };
             _settingsAiDailyCaptureCheckBox = BuildScopeCheckBox("settings.risk.enable", "Enable");
+            _settingsAiDailyCaptureCheckBox.Click += OnAiDailyCaptureSettingChanged;
             panel.Children.Add(BuildPolicyToggleRow(_settingsAiDailyCaptureCheckBox));
+            var immediateSaveNotice = new TextBlock
+            {
+                Text = L("settings.risk.ai_daily_capture_immediate", "The Enable checkbox saves immediately."),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(18, 2, 0, 0),
+                FontSize = ResolveSettingsBodyFontSize()
+            };
+            ApplySkinResource(immediateSaveNotice, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
+            panel.Children.Add(immediateSaveNotice);
             var targetRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(18, 4, 0, 0) };
             var targetLabel = new TextBlock
             {
@@ -452,6 +462,49 @@ namespace Glitch.UI
             expander.IsExpanded = false;
             expander.Content = WrapDisclosureRowContent(panel);
             return expander;
+        }
+
+        private void OnAiDailyCaptureSettingChanged(object sender, RoutedEventArgs e)
+        {
+            if (_runtimePolicySettings == null)
+                _runtimePolicySettings = new GlitchRuntimePolicySettings();
+
+            bool priorEnabled = _runtimePolicySettings.EnforceAiDailyCaptureEntryLock;
+            double priorTargetRatio = _runtimePolicySettings.AiDailyCaptureTargetRatio;
+            bool requestedEnabled = _settingsAiDailyCaptureCheckBox?.IsChecked == true;
+            double requestedTargetRatio = priorTargetRatio;
+            if (TryReadComplianceThreshold(
+                    _settingsAiDailyCaptureTargetTextBox,
+                    priorTargetRatio * 100d,
+                    0.01,
+                    100d,
+                    out double capturePercent))
+                requestedTargetRatio = capturePercent / 100d;
+
+            try
+            {
+                _runtimePolicySettings.EnforceAiDailyCaptureEntryLock = requestedEnabled;
+                _runtimePolicySettings.AiDailyCaptureTargetRatio = requestedTargetRatio;
+                GlitchRuntimePolicyStore.SaveSettings(_runtimePolicyFilePath, _runtimePolicySettings);
+                AppendJournal(
+                    "System",
+                    "Policy",
+                    "ai_daily_capture_entry_lock|origin=settings_toggle|result="
+                        + (requestedEnabled ? "enabled" : "disabled")
+                        + "|target_ratio="
+                        + requestedTargetRatio.ToString("0.####", CultureInfo.InvariantCulture));
+                AppendJournal("System", "Runtime", BuildRuntimePolicySummaryLogLine());
+            }
+            catch (Exception error)
+            {
+                _runtimePolicySettings.EnforceAiDailyCaptureEntryLock = priorEnabled;
+                _runtimePolicySettings.AiDailyCaptureTargetRatio = priorTargetRatio;
+                if (_settingsAiDailyCaptureCheckBox != null)
+                    _settingsAiDailyCaptureCheckBox.IsChecked = priorEnabled;
+                if (_settingsAiDailyCaptureTargetTextBox != null)
+                    _settingsAiDailyCaptureTargetTextBox.Text = (priorTargetRatio * 100d).ToString("0.##", CultureInfo.InvariantCulture);
+                RecordSubsystemFault("ai_daily_capture_settings_persistence", error);
+            }
         }
 
         private Expander BuildComplianceFeatureExpander(
