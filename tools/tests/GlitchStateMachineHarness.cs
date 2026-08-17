@@ -843,6 +843,9 @@ internal static class GlitchStateMachineHarness
         Assert(emitted.Length == 1,
             "Hermes EXIT cancellation released " + emitted.Length
             + " trades; phase=" + engine.GetOperationPhase("HERMES|race-exit"));
+        Assert(emitted[0].Purpose == GlitchCommandPurpose.HermesMasterExit
+                && emitted[0].ParentCorrelationId == "race-exit",
+            "Hermes EXIT did not preserve intent identity into native execution");
         return emitted[0];
     }
 

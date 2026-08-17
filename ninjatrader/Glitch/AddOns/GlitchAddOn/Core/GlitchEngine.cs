@@ -902,7 +902,8 @@ namespace Glitch.Core
                 null,
                 true,
                 false,
-                true);
+                true,
+                hermesIntentId: request.IntentId);
         }
 
         private void RequestProtectionChange(

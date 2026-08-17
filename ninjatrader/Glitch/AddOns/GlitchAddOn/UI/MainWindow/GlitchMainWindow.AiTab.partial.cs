@@ -18,6 +18,7 @@ namespace Glitch.UI
     public partial class GlitchMainWindow
     {
         private const int AiDecisionHistoryLimit = 20;
+        private const int AiDecisionHistoryScanLimit = 2000;
 
         private sealed class AiDecisionFeedItem
         {
@@ -530,7 +531,7 @@ namespace Glitch.UI
             string action = GlitchAiJsonFields.ExtractString(decision, "action") ?? L("ai.value.waiting", "Waiting");
             string decisionStatus = GlitchAiJsonFields.ExtractString(decision, "status") ?? "waiting";
             string executionStatus = GlitchAiJsonFields.ExtractString(execution, "status") ?? "waiting";
-            string executionCode = GlitchAiJsonFields.ExtractString(execution, "code") ?? string.Empty;
+            string executionCode = DescribeAiExecutionState(execution);
             List<AiSnapshotPreview> snapshots = item.Snapshots ?? new List<AiSnapshotPreview>();
             bool packetReady = item.PacketFile != null;
 
@@ -595,9 +596,7 @@ namespace Glitch.UI
         {
             string action = GlitchAiJsonFields.ExtractString(item.DecisionJson, "action") ?? L("ai.value.waiting", "Waiting");
             string account = GlitchAiJsonFields.ExtractString(item.DecisionJson, "account") ?? "-";
-            string executionCode = GlitchAiJsonFields.ExtractString(item.ExecutionJson, "code")
-                ?? GlitchAiJsonFields.ExtractString(item.ExecutionJson, "status")
-                ?? "waiting";
+            string executionCode = DescribeAiExecutionState(item.ExecutionJson);
 
             string headerText = string.Join(
                 "   |   ",
@@ -725,7 +724,9 @@ namespace Glitch.UI
                 && executionsWriteUtc == _aiDecisionHistoryExecutionWriteUtc)
                 return _aiDecisionHistoryCache;
 
-            List<string> decisions = ReadLastNonEmptyLines(decisionsPath, AiDecisionHistoryLimit);
+            List<string> decisions = CoalesceAiDecisionHistoryLines(
+                ReadLastNonEmptyLines(decisionsPath, AiDecisionHistoryScanLimit),
+                AiDecisionHistoryLimit);
             var intentIds = new HashSet<string>(
                 decisions.Select(line => GlitchAiJsonFields.ExtractString(line, "intent_id"))
                     .Where(value => !string.IsNullOrWhiteSpace(value)),
@@ -737,7 +738,11 @@ namespace Glitch.UI
                 {
                     string intentId = GlitchAiJsonFields.ExtractString(line, "intent_id");
                     if (!string.IsNullOrWhiteSpace(intentId) && intentIds.Contains(intentId))
-                        executionsByIntent[intentId] = line;
+                    {
+                        if (!executionsByIntent.TryGetValue(intentId, out string prior)
+                            || AiExecutionEvidencePriority(line) >= AiExecutionEvidencePriority(prior))
+                            executionsByIntent[intentId] = line;
+                    }
                 }
             }
 
@@ -784,6 +789,60 @@ namespace Glitch.UI
                     .Distinct(StringComparer.OrdinalIgnoreCase));
             _aiDecisionHistoryCache = items;
             return _aiDecisionHistoryCache;
+        }
+
+        private static List<string> CoalesceAiDecisionHistoryLines(
+            IEnumerable<string> source,
+            int limit)
+        {
+            var retained = new LinkedList<string>();
+            var lastActionByScope = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var latestHoldByScope = new Dictionary<string, LinkedListNode<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (string line in source ?? Enumerable.Empty<string>())
+            {
+                string action = GlitchAiJsonFields.ExtractString(line, "action") ?? string.Empty;
+                string account = GlitchAiJsonFields.ExtractString(line, "account") ?? string.Empty;
+                string instrument = GlitchAiJsonFields.ExtractString(line, "instrument") ?? string.Empty;
+                string scope = account + "|" + instrument;
+                if (string.Equals(action, "HOLD", StringComparison.OrdinalIgnoreCase)
+                    && lastActionByScope.TryGetValue(scope, out string priorAction)
+                    && string.Equals(priorAction, "HOLD", StringComparison.OrdinalIgnoreCase)
+                    && latestHoldByScope.TryGetValue(scope, out LinkedListNode<string> priorHold))
+                {
+                    retained.Remove(priorHold);
+                }
+
+                LinkedListNode<string> node = retained.AddLast(line);
+                lastActionByScope[scope] = action;
+                if (string.Equals(action, "HOLD", StringComparison.OrdinalIgnoreCase))
+                    latestHoldByScope[scope] = node;
+                else
+                    latestHoldByScope.Remove(scope);
+            }
+            return TakeLastCompat(retained, limit).ToList();
+        }
+
+        private static string DescribeAiExecutionState(string executionJson)
+        {
+            string code = GlitchAiJsonFields.ExtractString(executionJson, "code");
+            if (string.Equals(code, "intent_dispatched", StringComparison.OrdinalIgnoreCase))
+                return "pending_native_result";
+            return code
+                ?? GlitchAiJsonFields.ExtractString(executionJson, "status")
+                ?? "waiting";
+        }
+
+        private static int AiExecutionEvidencePriority(string executionJson)
+        {
+            string status = GlitchAiJsonFields.ExtractString(executionJson, "status") ?? string.Empty;
+            string code = GlitchAiJsonFields.ExtractString(executionJson, "code") ?? string.Empty;
+            if (string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase))
+                return 4;
+            if (code.EndsWith("_fill_observed", StringComparison.OrdinalIgnoreCase))
+                return 3;
+            if (string.Equals(status, "executed", StringComparison.OrdinalIgnoreCase))
+                return 2;
+            return 1;
         }
 
         private static FileInfo FindAiDecisionPacket(

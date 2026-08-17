@@ -48,6 +48,11 @@ class GlitchAiUiContractTests(unittest.TestCase):
         self.assertIn('"AI {0}: {1}  |  Latest snapshot {2}  |  Latest decision {3}"', source)
         self.assertNotIn('"Last cycle "', source)
         self.assertIn("AiDecisionHistoryLimit = 20", source)
+        self.assertIn("AiDecisionHistoryScanLimit = 2000", source)
+        self.assertIn("CoalesceAiDecisionHistoryLines(", source)
+        self.assertIn('return "pending_native_result";', source)
+        self.assertIn("AiExecutionEvidencePriority(", source)
+        self.assertIn('code.EndsWith("_fill_observed"', source)
         self.assertIn("CreateDisclosureRowExpander(_aiFeedHost, headerText)", source)
         self.assertNotIn("var header = new Grid", source)
         self.assertIn('L("ai.snapshots.supporting", "Supporting Snapshots")', source)
@@ -72,6 +77,7 @@ class GlitchAiUiContractTests(unittest.TestCase):
         self.assertIn('string outboxRoot = Path.Combine(exchangeRoot, "hermes", "outbox")', source)
         self.assertIn('GlitchAiJsonFields.ExtractString(decision, "snapshot_hash")', source)
         self.assertIn("ReadAiPacketFinalSnapshotHash(packetPath)", source)
+        self.assertIn("CoalesceAiDecisionHistoryLines(", source)
         history_loader = source[
             source.index("private List<AiDecisionFeedItem> LoadAiDecisionHistory"):
             source.index("private static string ReadAiPacketFinalSnapshotHash")

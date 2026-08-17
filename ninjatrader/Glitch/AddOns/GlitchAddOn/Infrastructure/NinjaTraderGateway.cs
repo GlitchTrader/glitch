@@ -26,6 +26,8 @@ namespace Glitch.Infrastructure
             public string ProtectionCorrelation;
             public string ChildRole;
             public string LegId;
+            public string HermesIntentId;
+            public string HermesLifecycleKind;
         }
 
         private sealed class FlattenScope
@@ -540,6 +542,15 @@ namespace Glitch.Infrastructure
             if (nativeOperation != GlitchNativeOperation.Add || !representable)
                 return;
 
+            AppendHermesFillEvidence(
+                metadata,
+                accountName,
+                instrumentName,
+                executionId,
+                nativeOrderKey,
+                sign * quantity,
+                price);
+
             int signedQuantity = sign * quantity;
             GlitchExecutionOrigin origin = ResolveExecutionOrigin(
                 account, instrument, order, metadata);
@@ -817,18 +828,31 @@ namespace Glitch.Infrastructure
                     Origin = OriginForPurpose(command.Purpose),
                     NativeCommandId = command.CommandId,
                     CommandCorrelation = command.CommandId,
-                    ChildRole = "M"
+                    ChildRole = "M",
+                    HermesIntentId = command.Purpose == GlitchCommandPurpose.HermesMasterEntry
+                            || command.Purpose == GlitchCommandPurpose.HermesMasterExit
+                        ? command.ParentCorrelationId
+                        : string.Empty,
+                    HermesLifecycleKind = command.Purpose == GlitchCommandPurpose.HermesMasterEntry
+                        ? "entry"
+                        : command.Purpose == GlitchCommandPurpose.HermesMasterExit ? "exit" : string.Empty
                 });
             beforeMutation?.Invoke(command);
             account.Submit(new[] { order });
-            if (command.Purpose == GlitchCommandPurpose.HermesMasterEntry)
+            if (command.Purpose == GlitchCommandPurpose.HermesMasterEntry
+                || command.Purpose == GlitchCommandPurpose.HermesMasterExit)
             {
+                string lifecycleKind = command.Purpose == GlitchCommandPurpose.HermesMasterEntry
+                    ? "entry"
+                    : "exit";
                 GlitchExecutionEvidenceWriter.TryAppend(
                     command.ParentCorrelationId,
                     "pending",
-                    "master_entry_submitted",
+                    "master_" + lifecycleKind + "_submitted",
                     "correlation=" + command.CommandId
                     + "|contract=" + Clean(instrument.FullName)
+                    + "|account=" + Clean(account.Name)
+                    + "|signed_quantity=" + command.SignedQuantity.ToString(CultureInfo.InvariantCulture)
                     + "|point_value_usd=" + instrument.MasterInstrument.PointValue.ToString(CultureInfo.InvariantCulture)
                     + "|tick_size=" + instrument.MasterInstrument.TickSize.ToString(CultureInfo.InvariantCulture),
                     DateTime.UtcNow);
@@ -1444,6 +1468,33 @@ namespace Glitch.Infrastructure
             if (purpose == GlitchCommandPurpose.GroupSynchronization)
                 return GlitchExecutionOrigin.GlitchSynchronization;
             return GlitchExecutionOrigin.GlitchReplication;
+        }
+
+        private static void AppendHermesFillEvidence(
+            NativeOrderMetadata metadata,
+            string accountName,
+            string instrumentName,
+            string executionId,
+            string nativeOrderKey,
+            int signedQuantity,
+            double price)
+        {
+            if (metadata == null
+                || string.IsNullOrWhiteSpace(metadata.HermesIntentId)
+                || string.IsNullOrWhiteSpace(metadata.HermesLifecycleKind))
+                return;
+
+            GlitchExecutionEvidenceWriter.TryAppend(
+                metadata.HermesIntentId,
+                "executed",
+                "master_" + metadata.HermesLifecycleKind + "_fill_observed",
+                "account=" + Clean(accountName)
+                + "|contract=" + Clean(instrumentName)
+                + "|fill=" + price.ToString(CultureInfo.InvariantCulture)
+                + "|signed_quantity=" + signedQuantity.ToString(CultureInfo.InvariantCulture)
+                + "|execution_id=" + Clean(executionId)
+                + "|native_order=" + Clean(nativeOrderKey),
+                DateTime.UtcNow);
         }
 
         private static GlitchExecutionOrigin OriginFromSignal(string signal)

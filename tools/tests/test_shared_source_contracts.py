@@ -318,7 +318,10 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         ai_tab = read(
             "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.AiTab.partial.cs"
         )
-        self.assertIn('"master_entry_submitted"', gateway)
+        self.assertIn('"master_" + lifecycleKind + "_submitted"', gateway)
+        self.assertIn('"_fill_observed"', gateway)
+        self.assertIn("AppendHermesFillEvidence(", gateway)
+        self.assertIn("GlitchCommandPurpose.HermesMasterExit", gateway)
         self.assertIn('"group_structural_brackets_submitted"', gateway)
         self.assertIn('"follower_structural_brackets_submitted"', gateway)
         self.assertIn("HermesIntentIdForExecution", read(
