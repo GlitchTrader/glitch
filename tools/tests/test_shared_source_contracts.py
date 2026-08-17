@@ -336,6 +336,16 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("public static void TryAppend(", writer)
         self.assertIn("Decision in progress ({0}s)", ai_tab)
 
+    def test_ai_health_uses_packet_freshness_and_explicit_learning_lifecycle(self):
+        source = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Persistence/GlitchAiHealthEvaluator.cs"
+        )
+        self.assertIn('string.Equals(result.PacketStatus, "operating"', source)
+        self.assertIn("result.PacketAgeSeconds < result.FeedAgeSeconds", source)
+        self.assertIn('string.Equals(result.LearningWorkerStatus, "started"', source)
+        self.assertIn('string.Equals(result.LearningWorkerStatus, "running"', source)
+        self.assertIn('result.LearningReasonCodes.Add("learning_worker_stalled")', source)
+
     def test_entry_protection_geometry_is_rejected_before_native_submission(self):
         executor = read(
             "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Ai/GlitchAiOrderExecutor.cs"

@@ -105,6 +105,7 @@ namespace Glitch.Services
         // allow one scheduled interval plus bounded worker/scheduler grace;
         // it must not interpret a quiet, successful no-op loop as a failure.
         private const int LearningWorkerStaleAfterSeconds = 2700;
+        private const int LearningWorkerStalledAfterSeconds = 600;
         private static readonly object LatestAttemptGate = new object();
         private static string _latestAttemptPath;
         private static DateTime _latestAttemptMinuteUtc = DateTime.MinValue;
@@ -144,6 +145,14 @@ namespace Glitch.Services
                 result.PacketStatus = result.PacketAgeSeconds < 0 || result.PacketAgeSeconds > maxPacketAge
                     ? "stale"
                     : result.PacketContiguous ? "operating" : "gapped";
+                // A current decision packet contains the market snapshot used by
+                // Hermes. Treat it as authoritative publication-freshness evidence
+                // when the standalone latest-snapshot pointer briefly lags an
+                // atomic packet rollover or an AI pause/resume transition.
+                if (string.Equals(result.PacketStatus, "operating", StringComparison.Ordinal)
+                    && result.PacketAgeSeconds >= 0
+                    && (result.FeedAgeSeconds < 0 || result.PacketAgeSeconds < result.FeedAgeSeconds))
+                    result.FeedAgeSeconds = result.PacketAgeSeconds;
             }
 
             FileInfo latestAttempt = LatestAttemptFile(
@@ -220,6 +229,10 @@ namespace Glitch.Services
             }
             if (string.Equals(result.LearningWorkerStatus, "failed", StringComparison.Ordinal))
                 result.LearningReasonCodes.Add("learning_worker_failed");
+            else if ((string.Equals(result.LearningWorkerStatus, "started", StringComparison.Ordinal)
+                    || string.Equals(result.LearningWorkerStatus, "running", StringComparison.Ordinal))
+                && result.LearningWorkerAgeSeconds > LearningWorkerStalledAfterSeconds)
+                result.LearningReasonCodes.Add("learning_worker_stalled");
             else if (result.Operating && !File.Exists(learningPath))
                 result.LearningReasonCodes.Add("learning_worker_status_missing");
             else if (result.Operating && result.LearningWorkerAgeSeconds > LearningWorkerStaleAfterSeconds)
