@@ -28,6 +28,9 @@ namespace Glitch.Infrastructure
             public string LegId;
             public string HermesIntentId;
             public string HermesLifecycleKind;
+            public decimal HermesEntryPrice;
+            public int HermesEntrySignedQuantity;
+            public double HermesPointValue;
         }
 
         private sealed class FlattenScope
@@ -886,6 +889,9 @@ namespace Glitch.Infrastructure
             OrderAction exitAction = command.SignedEntryQuantity > 0
                 ? OrderAction.Sell
                 : OrderAction.BuyToCover;
+            string hermesIntentId = !string.IsNullOrWhiteSpace(command.HermesIntentId)
+                ? command.HermesIntentId
+                : HermesIntentId(command.ExposureId);
             var orders = new List<Order>();
             for (int i = 0; i < command.Targets.Count; i++)
             {
@@ -915,7 +921,12 @@ namespace Glitch.Infrastructure
                             CommandCorrelation = command.CommandId,
                             ProtectionCorrelation = command.CommandId,
                             ChildRole = "S" + i.ToString(CultureInfo.InvariantCulture),
-                            LegId = target.LegId
+                            LegId = target.LegId,
+                            HermesIntentId = command.PropagatesAsMasterExecution ? hermesIntentId : string.Empty,
+                            HermesLifecycleKind = command.PropagatesAsMasterExecution ? "stop_exit" : string.Empty,
+                            HermesEntryPrice = command.EntryPrice,
+                            HermesEntrySignedQuantity = command.SignedEntryQuantity,
+                            HermesPointValue = instrument.MasterInstrument.PointValue
                         });
                     orders.Add(stop);
                 }
@@ -941,7 +952,12 @@ namespace Glitch.Infrastructure
                             CommandCorrelation = command.CommandId,
                             ProtectionCorrelation = command.CommandId,
                             ChildRole = "T" + i.ToString(CultureInfo.InvariantCulture),
-                            LegId = target.LegId
+                            LegId = target.LegId,
+                            HermesIntentId = command.PropagatesAsMasterExecution ? hermesIntentId : string.Empty,
+                            HermesLifecycleKind = command.PropagatesAsMasterExecution ? "target_exit" : string.Empty,
+                            HermesEntryPrice = command.EntryPrice,
+                            HermesEntrySignedQuantity = command.SignedEntryQuantity,
+                            HermesPointValue = instrument.MasterInstrument.PointValue
                         });
                     orders.Add(limit);
                 }
@@ -951,9 +967,6 @@ namespace Glitch.Infrastructure
                 throw new InvalidOperationException("Protection command contained no native orders.");
             beforeMutation?.Invoke(command);
             account.Submit(orders);
-            string hermesIntentId = !string.IsNullOrWhiteSpace(command.HermesIntentId)
-                ? command.HermesIntentId
-                : HermesIntentId(command.ExposureId);
             if (!string.IsNullOrWhiteSpace(hermesIntentId))
             {
                 var fields = new StringBuilder()
@@ -1484,16 +1497,33 @@ namespace Glitch.Infrastructure
                 || string.IsNullOrWhiteSpace(metadata.HermesLifecycleKind))
                 return;
 
+            var fields = new StringBuilder()
+                .Append("account=").Append(Clean(accountName))
+                .Append("|contract=").Append(Clean(instrumentName))
+                .Append("|fill=").Append(price.ToString(CultureInfo.InvariantCulture))
+                .Append("|signed_quantity=").Append(signedQuantity.ToString(CultureInfo.InvariantCulture))
+                .Append("|execution_id=").Append(Clean(executionId))
+                .Append("|native_order=").Append(Clean(nativeOrderKey));
+            if (metadata.HermesEntryPrice > 0
+                && metadata.HermesEntrySignedQuantity != 0
+                && metadata.HermesPointValue > 0)
+            {
+                double entryPrice = (double)metadata.HermesEntryPrice;
+                double direction = metadata.HermesEntrySignedQuantity > 0 ? 1.0 : -1.0;
+                double realizedPnl = (price - entryPrice)
+                    * direction
+                    * Math.Abs(signedQuantity)
+                    * metadata.HermesPointValue;
+                fields.Append("|entry=").Append(entryPrice.ToString(CultureInfo.InvariantCulture))
+                    .Append("|point_value_usd=").Append(metadata.HermesPointValue.ToString(CultureInfo.InvariantCulture))
+                    .Append("|realized_pnl_usd=").Append(realizedPnl.ToString(CultureInfo.InvariantCulture));
+            }
+
             GlitchExecutionEvidenceWriter.TryAppend(
                 metadata.HermesIntentId,
                 "executed",
                 "master_" + metadata.HermesLifecycleKind + "_fill_observed",
-                "account=" + Clean(accountName)
-                + "|contract=" + Clean(instrumentName)
-                + "|fill=" + price.ToString(CultureInfo.InvariantCulture)
-                + "|signed_quantity=" + signedQuantity.ToString(CultureInfo.InvariantCulture)
-                + "|execution_id=" + Clean(executionId)
-                + "|native_order=" + Clean(nativeOrderKey),
+                fields.ToString(),
                 DateTime.UtcNow);
         }
 
