@@ -13,6 +13,7 @@ namespace Glitch.Services
         public const string SchemaVersion = "glitch.replay.harness.v1";
         private static readonly TimeSpan WriteThrottle = TimeSpan.FromMinutes(15);
         private static DateTime _lastWriteUtc = DateTime.MinValue;
+        private static DateTime _lastAttemptUtc = DateTime.MinValue;
 
         public static string GetLatestPath()
         {
@@ -21,9 +22,9 @@ namespace Glitch.Services
 
         public static bool TryWriteIfDue(DateTime nowUtc)
         {
-            if (_lastWriteUtc != DateTime.MinValue && (nowUtc - _lastWriteUtc) < WriteThrottle)
+            if (_lastAttemptUtc != DateTime.MinValue && (nowUtc - _lastAttemptUtc) < WriteThrottle)
                 return false;
-
+            _lastAttemptUtc = nowUtc;
             return TryWrite(nowUtc);
         }
 

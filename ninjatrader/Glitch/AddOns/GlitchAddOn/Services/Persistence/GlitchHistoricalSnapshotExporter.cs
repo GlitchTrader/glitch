@@ -115,9 +115,9 @@ namespace Glitch.Services
 
         public static bool TryWriteReplayBundleIfDue(DateTime nowUtc, TimeSpan interval, TimeSpan lookback)
         {
-            if (_lastReplayWriteUtc != DateTime.MinValue && (nowUtc - _lastReplayWriteUtc) < interval)
+            if (_lastReplayAttemptUtc != DateTime.MinValue && (nowUtc - _lastReplayAttemptUtc) < interval)
                 return false;
-
+            _lastReplayAttemptUtc = nowUtc;
             bool wrote = TryWriteReplayBundle(nowUtc - lookback, nowUtc);
             if (wrote)
                 _lastReplayWriteUtc = nowUtc;
@@ -125,6 +125,7 @@ namespace Glitch.Services
         }
 
         private static DateTime _lastReplayWriteUtc = DateTime.MinValue;
+        private static DateTime _lastReplayAttemptUtc = DateTime.MinValue;
         private static readonly Dictionary<string, string> _lastArchivedHashByKind =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string, string> _pendingMarketArchiveBySnapshotId =

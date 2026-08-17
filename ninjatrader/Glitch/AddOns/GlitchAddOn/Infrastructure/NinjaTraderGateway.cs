@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -216,6 +217,77 @@ namespace Glitch.Infrastructure
                 + ",\"all_positions_flat\":" + JsonBool(allFlat)
                 + ",\"all_orders_clear\":" + JsonBool(allClear)
                 + ",\"accounts\":[" + string.Join(",", parts) + "]}";
+        }
+
+        internal string[] SnapshotFlattenEligibleAccountNames()
+        {
+            Account[] accounts;
+            lock (_gate)
+                accounts = _accounts.Values.ToArray();
+            return accounts
+                .Where(IsFlattenEligibleAccount)
+                .Select(account => account.Name.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private static bool IsFlattenEligibleAccount(Account account)
+        {
+            if (account == null || string.IsNullOrWhiteSpace(account.Name))
+                return false;
+            string accountName = account.Name.Trim();
+            if (accountName.Equals("Backtest", StringComparison.OrdinalIgnoreCase)
+                || accountName.StartsWith("Playback", StringComparison.OrdinalIgnoreCase))
+                return false;
+            try
+            {
+                Type accountType = account.GetType();
+                bool? isArchived = TryGetBoolProperty(
+                    account,
+                    accountType,
+                    "IsArchived",
+                    "Archived",
+                    "IsArchive");
+                if (isArchived == true)
+                    return false;
+                bool? isConnected = TryGetBoolProperty(account, accountType, "IsConnected", "Connected");
+                if (isConnected.HasValue && !isConnected.Value)
+                    return false;
+
+                PropertyInfo accountConnectionStatusProperty = accountType.GetProperty("ConnectionStatus");
+                if (accountConnectionStatusProperty != null)
+                {
+                    object status = accountConnectionStatusProperty.GetValue(account, null);
+                    if (status == null
+                        || !string.Equals(status.ToString(), "Connected", StringComparison.OrdinalIgnoreCase))
+                        return false;
+                }
+
+                object connection = accountType.GetProperty("Connection")?.GetValue(account, null);
+                object connectionStatus = connection?.GetType().GetProperty("Status")?.GetValue(connection, null);
+                if (connectionStatus != null
+                    && !string.Equals(connectionStatus.ToString(), "Connected", StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
+            catch
+            {
+                // Match the existing emergency surface: missing optional account
+                // metadata must not hide a native account that can still flatten.
+            }
+            return true;
+        }
+
+        private static bool? TryGetBoolProperty(object instance, Type type, params string[] names)
+        {
+            foreach (string name in names ?? Array.Empty<string>())
+            {
+                PropertyInfo property = type?.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
+                if (property == null || property.PropertyType != typeof(bool))
+                    continue;
+                return (bool)property.GetValue(instance, null);
+            }
+            return null;
         }
 
         internal bool IsFlattenSatisfied(FlattenAccountCommand command)

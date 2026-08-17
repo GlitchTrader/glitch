@@ -5,6 +5,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using Glitch.Services;
@@ -52,6 +54,9 @@ namespace Glitch.UI
         private bool _forceAnalyticsRefresh;
 
         private bool _refreshTimerTickInFlight;
+        private int _backgroundMaintenanceInFlight;
+        private DateTime _lastBackgroundMaintenanceQueuedUtc = DateTime.MinValue;
+        private DateTime _lastRailNativeCaptureUtc = DateTime.MinValue;
 
         private readonly Dictionary<string, SubsystemFaultState> _subsystemFaultStates =
             new Dictionary<string, SubsystemFaultState>(StringComparer.OrdinalIgnoreCase);
@@ -205,6 +210,45 @@ namespace Glitch.UI
 
             for (int i = 0; i < stale.Count; i++)
                 _accountItemUpdateThrottleUtc.Remove(stale[i]);
+        }
+
+        private void QueueBackgroundMaintenance(DateTime nowUtc)
+        {
+            if ((nowUtc - _lastBackgroundMaintenanceQueuedUtc) < TimeSpan.FromSeconds(1))
+                return;
+            if (Interlocked.CompareExchange(ref _backgroundMaintenanceInFlight, 1, 0) != 0)
+                return;
+
+            _lastBackgroundMaintenanceQueuedUtc = nowUtc;
+            Task.Run(() =>
+            {
+                GlitchHistoricalSnapshotExporter.TryWriteReplayBundleIfDue(
+                    nowUtc,
+                    TimeSpan.FromMinutes(15),
+                    TimeSpan.FromHours(24));
+                GlitchRailSelfCheckWriter.TryWriteIfDue(nowUtc);
+                GlitchSnapshotSanityWriter.TryWriteIfDue(nowUtc);
+                GlitchAiReplayHarnessWriter.TryWriteIfDue(nowUtc);
+            }).ContinueWith(task =>
+            {
+                Interlocked.Exchange(ref _backgroundMaintenanceInFlight, 0);
+                if (!task.IsFaulted || _isWindowClosed || Dispatcher == null || Dispatcher.HasShutdownStarted)
+                    return;
+                Exception error = task.Exception?.GetBaseException()
+                    ?? new InvalidOperationException("background_maintenance_failed");
+                Dispatcher.BeginInvoke(
+                    new Action(() => RecordSubsystemFault("background_maintenance", error)),
+                    System.Windows.Threading.DispatcherPriority.Background);
+            }, TaskScheduler.Default);
+        }
+
+        private void CaptureRailNativeStateIfDue(DateTime nowUtc)
+        {
+            if (_lastRailNativeCaptureUtc != DateTime.MinValue
+                && (nowUtc - _lastRailNativeCaptureUtc) < TimeSpan.FromSeconds(30))
+                return;
+            GlitchRailSelfCheckWriter.CaptureNativeConnectionState();
+            _lastRailNativeCaptureUtc = nowUtc;
         }
 
         private void QueueJournalEntry(JournalEntry entry)

@@ -477,6 +477,33 @@ namespace Glitch.Infrastructure
             return results;
         }
 
+        public bool RequestFlattenAllAvailable(string requestRoot, string reason)
+        {
+            string[] accounts = _gateway.SnapshotFlattenEligibleAccountNames();
+            if (accounts.Length == 0)
+            {
+                PublishNotice(
+                    "System",
+                    "Order",
+                    "flatten_all_not_requested|reason=no_connected_native_accounts");
+                return false;
+            }
+            if (!SetReplicationEnabled(false))
+            {
+                PublishNotice(
+                    "System",
+                    "Order",
+                    "flatten_all_not_requested|reason=replication_stop_failed");
+                return false;
+            }
+            IReadOnlyDictionary<string, bool> results = RequestFlattenBatch(
+                requestRoot,
+                accounts,
+                reason);
+            return accounts.All(account =>
+                results.TryGetValue(account, out bool accepted) && accepted);
+        }
+
         public bool SetReplicationOrderLimit(string accountName, int? maxOrderQuantity)
         {
             return PostDurably(

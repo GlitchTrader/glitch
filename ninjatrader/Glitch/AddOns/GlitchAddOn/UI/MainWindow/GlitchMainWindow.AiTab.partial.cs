@@ -4,6 +4,9 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -23,6 +26,7 @@ namespace Glitch.UI
             public string IntentId { get; set; }
             public DateTime? DecisionUtc { get; set; }
             public FileInfo PacketFile { get; set; }
+            public List<AiSnapshotPreview> Snapshots { get; set; } = new List<AiSnapshotPreview>();
         }
 
         private sealed class AiSnapshotPreview
@@ -36,15 +40,30 @@ namespace Glitch.UI
             public double? Atr { get; set; }
         }
 
+        private sealed class AiTabRefreshSnapshot
+        {
+            public DateTime CapturedUtc { get; set; }
+            public bool TradingPaused { get; set; }
+            public bool AiAutoOn { get; set; }
+            public HashSet<string> EnabledMasters { get; set; }
+            public FileInfo LatestFrame { get; set; }
+            public List<AiDecisionFeedItem> History { get; set; }
+            public GlitchAiHealthSnapshot Health { get; set; }
+            public int CurrentFrames { get; set; }
+            public DateTime DecisionsWriteUtc { get; set; }
+            public DateTime ExecutionsWriteUtc { get; set; }
+        }
+
         private readonly HashSet<string> _expandedAiDecisionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private List<AiDecisionFeedItem> _aiDecisionHistoryCache = new List<AiDecisionFeedItem>();
         private DateTime _aiDecisionHistoryDecisionWriteUtc;
         private DateTime _aiDecisionHistoryExecutionWriteUtc;
         private string _aiDecisionHistoryPacketFingerprint;
-        private string _aiSnapshotPreviewCachePath;
-        private DateTime _aiSnapshotPreviewCacheWriteUtc;
-        private List<AiSnapshotPreview> _aiSnapshotPreviewCache = new List<AiSnapshotPreview>();
         private string _aiFeedRenderFingerprint;
+        private string _aiScopeRenderFingerprint;
+        private int _aiTabRefreshInFlight;
+        private DateTime _lastAiTabRefreshQueuedUtc = DateTime.MinValue;
+        private static readonly TimeSpan AiTabRefreshMinInterval = TimeSpan.FromSeconds(2);
 
         private UIElement CreateAiTabImpl()
         {
@@ -93,6 +112,7 @@ namespace Glitch.UI
             RegisterLocalizationBinding(() =>
             {
                 _aiFeedRenderFingerprint = null;
+                _aiScopeRenderFingerprint = null;
                 RefreshAiTab();
             });
             return root;
@@ -110,24 +130,95 @@ namespace Glitch.UI
             return card;
         }
 
-        private void RefreshAiTab()
+        private async void RefreshAiTab()
         {
-            if (_aiScopeRowsHost == null || _aiFeedHost == null)
+            if (_isWindowClosed || _aiScopeRowsHost == null || _aiFeedHost == null)
                 return;
+            DateTime queuedUtc = DateTime.UtcNow;
+            if (_lastAiTabRefreshQueuedUtc != DateTime.MinValue
+                && (queuedUtc - _lastAiTabRefreshQueuedUtc) < AiTabRefreshMinInterval)
+                return;
+            if (Interlocked.CompareExchange(ref _aiTabRefreshInFlight, 1, 0) != 0)
+                return;
+            _lastAiTabRefreshQueuedUtc = queuedUtc;
 
-            GlitchHermesControlState controlState = GlitchHermesControlStateStore.Load();
-            UpdateHermesModeUi(controlState.TradingPaused);
-            RefreshAiScopeRows();
+            try
+            {
+                AiTabRefreshSnapshot snapshot = await Task.Run(BuildAiTabRefreshSnapshot);
+                if (_isWindowClosed || snapshot == null || _aiScopeRowsHost == null || _aiFeedHost == null)
+                    return;
+                ApplyAiTabRefreshSnapshot(snapshot);
+            }
+            catch (Exception error)
+            {
+                if (!_isWindowClosed)
+                    RecordSubsystemFault("ai_tab_refresh", error);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _aiTabRefreshInFlight, 0);
+            }
+        }
 
+        private AiTabRefreshSnapshot BuildAiTabRefreshSnapshot()
+        {
             DateTime nowUtc = DateTime.UtcNow;
             string exchangeRoot = GlitchStateStore.GetDefaultPath(Path.Combine("hermes", "exchange"));
             string minuteRoot = Path.Combine(exchangeRoot, "glitch", "minute-frames");
             string packetRoot = Path.Combine(exchangeRoot, "glitch", "decision-packets");
+            string outboxRoot = Path.Combine(exchangeRoot, "hermes", "outbox");
             string decisionsPath = GlitchStateStore.GetDefaultPath(Path.Combine("intents", "decisions.jsonl"));
             string executionsPath = GlitchStateStore.GetDefaultPath(Path.Combine("intents", "executions.jsonl"));
             FileInfo latestFrame = GetNewestFile(minuteRoot, "*.json");
-            List<AiDecisionFeedItem> history = LoadAiDecisionHistory(decisionsPath, executionsPath, packetRoot);
+            List<AiDecisionFeedItem> history = LoadAiDecisionHistory(
+                decisionsPath,
+                executionsPath,
+                packetRoot,
+                outboxRoot);
             AiDecisionFeedItem latest = history.FirstOrDefault();
+            GlitchAiHealthSnapshot health = GlitchAiHealthEvaluator.Evaluate(nowUtc);
+            GlitchHermesControlState controlState = GlitchHermesControlStateStore.Load();
+            GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
+            bool aiAutoOn = !controlState.TradingPaused && health.TradingJobEnabled;
+            DateTime frameAnchorUtc = latest?.DecisionUtc ?? nowUtc.AddMinutes(-5);
+
+            return new AiTabRefreshSnapshot
+            {
+                CapturedUtc = nowUtc,
+                TradingPaused = controlState.TradingPaused,
+                AiAutoOn = aiAutoOn,
+                EnabledMasters = new HashSet<string>(
+                    policy?.ProfileAccountBindings?.Values ?? Enumerable.Empty<string>(),
+                    StringComparer.OrdinalIgnoreCase),
+                LatestFrame = latestFrame,
+                History = history,
+                Health = health,
+                CurrentFrames = CountFramesAfter(minuteRoot, frameAnchorUtc),
+                DecisionsWriteUtc = File.Exists(decisionsPath)
+                    ? File.GetLastWriteTimeUtc(decisionsPath)
+                    : DateTime.MinValue,
+                ExecutionsWriteUtc = File.Exists(executionsPath)
+                    ? File.GetLastWriteTimeUtc(executionsPath)
+                    : DateTime.MinValue
+            };
+        }
+
+        private void ApplyAiTabRefreshSnapshot(AiTabRefreshSnapshot snapshot)
+        {
+            DateTime nowUtc = snapshot.CapturedUtc;
+            FileInfo latestFrame = snapshot.LatestFrame;
+            List<AiDecisionFeedItem> history = snapshot.History ?? new List<AiDecisionFeedItem>();
+            AiDecisionFeedItem latest = history.FirstOrDefault();
+            _expandedAiDecisionIds.IntersectWith(history
+                .Where(value => !string.IsNullOrWhiteSpace(value.IntentId))
+                .Select(value => value.IntentId));
+            GlitchAiHealthSnapshot health = snapshot.Health ?? new GlitchAiHealthSnapshot
+            {
+                OverallStatus = "degraded",
+                ReasonCodes = new List<string> { "health_unavailable" }
+            };
+            UpdateHermesModeUi(snapshot.TradingPaused);
+            RefreshAiScopeRows(snapshot.EnabledMasters);
 
             string snapshotAge = latestFrame == null
                 ? L("ai.value.none", "none")
@@ -135,7 +226,6 @@ namespace Glitch.UI
             string decisionAge = latest?.DecisionUtc == null
                 ? L("ai.value.none", "none")
                 : Lf("ai.age.ago_format", "{0} ago", FormatAge(nowUtc - latest.DecisionUtc.Value));
-            GlitchAiHealthSnapshot health = GlitchAiHealthEvaluator.Evaluate(nowUtc);
             string healthLabel = string.Equals(health.OverallStatus, "on", StringComparison.Ordinal)
                 ? L("ai.health.on", "On")
                 : string.Equals(health.OverallStatus, "off", StringComparison.Ordinal)
@@ -154,15 +244,14 @@ namespace Glitch.UI
                 snapshotAge,
                 decisionAge);
 
-            bool aiAutoOn = !controlState.TradingPaused && GlitchAiAutoRuntimeController.IsTradingJobEnabled();
-            DateTime frameAnchorUtc = latest?.DecisionUtc ?? nowUtc.AddMinutes(-5);
-            int currentFrames = CountFramesAfter(minuteRoot, frameAnchorUtc);
+            bool aiAutoOn = snapshot.AiAutoOn;
+            int currentFrames = snapshot.CurrentFrames;
             string renderFingerprint = string.Join(
                 "|",
                 aiAutoOn ? "1" : "0",
                 latestFrame?.LastWriteTimeUtc.Ticks.ToString(CultureInfo.InvariantCulture) ?? "0",
-                File.Exists(decisionsPath) ? File.GetLastWriteTimeUtc(decisionsPath).Ticks.ToString(CultureInfo.InvariantCulture) : "0",
-                File.Exists(executionsPath) ? File.GetLastWriteTimeUtc(executionsPath).Ticks.ToString(CultureInfo.InvariantCulture) : "0",
+                snapshot.DecisionsWriteUtc.Ticks.ToString(CultureInfo.InvariantCulture),
+                snapshot.ExecutionsWriteUtc.Ticks.ToString(CultureInfo.InvariantCulture),
                 _aiDecisionHistoryPacketFingerprint ?? "0",
                 currentFrames.ToString(CultureInfo.InvariantCulture));
             if (string.Equals(renderFingerprint, _aiFeedRenderFingerprint, StringComparison.Ordinal))
@@ -209,11 +298,14 @@ namespace Glitch.UI
                 _aiFeedHost.Children.Add(CreateAiDecisionExpander(item));
         }
 
-        private void RefreshAiScopeRows()
+        private void RefreshAiScopeRows(HashSet<string> enabledMasters)
         {
+            enabledMasters = enabledMasters ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string scopeFingerprint = BuildAiScopeFingerprint(enabledMasters);
+            if (string.Equals(scopeFingerprint, _aiScopeRenderFingerprint, StringComparison.Ordinal))
+                return;
+            _aiScopeRenderFingerprint = scopeFingerprint;
             _aiScopeRowsHost.Children.Clear();
-            GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
-            var enabledMasters = new HashSet<string>(policy.ProfileAccountBindings.Values, StringComparer.OrdinalIgnoreCase);
 
             var headings = new Grid { Margin = new Thickness(0, 0, 0, 5) };
             headings.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
@@ -255,6 +347,32 @@ namespace Glitch.UI
             }
             if (_aiScopeRowsHost.Children.Count == 1)
                 _aiScopeRowsHost.Children.Add(new TextBlock { Text = L("ai.scope.empty", "Create a replication group to make an account available to Glitch AI."), Opacity = 0.72 });
+        }
+
+        private string BuildAiScopeFingerprint(HashSet<string> enabledMasters)
+        {
+            var parts = new List<string>();
+            parts.AddRange(enabledMasters.OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                .Select(value => "E:" + value));
+            foreach (AccountGroupDefinition group in _accountGroups
+                .Where(value => value != null && !string.IsNullOrWhiteSpace(value.MasterAccount))
+                .OrderBy(value => value.MasterAccount, StringComparer.OrdinalIgnoreCase))
+            {
+                parts.Add("M:" + group.MasterAccount + ":" + ResolveAiAccountType(
+                    _accountRows.FirstOrDefault(value => string.Equals(
+                        value.DisplayName,
+                        group.MasterAccount,
+                        StringComparison.OrdinalIgnoreCase)),
+                    group.MasterAccount));
+                foreach (AccountGroupMemberRow member in (group.Members ?? new System.Collections.ObjectModel.ObservableCollection<AccountGroupMemberRow>())
+                    .Where(value => value != null && !value.IsMasterRow)
+                    .OrderBy(value => value.FollowerAccount, StringComparer.OrdinalIgnoreCase))
+                {
+                    parts.Add("F:" + member.FollowerAccount + ":" + (member.IsEnabled ? "1" : "0")
+                        + ":" + member.Ratio.ToString("R", CultureInfo.InvariantCulture));
+                }
+            }
+            return string.Join("|", parts);
         }
 
         private static void AddAiScopeHeading(Grid grid, int column, string text)
@@ -413,7 +531,7 @@ namespace Glitch.UI
             string decisionStatus = GlitchAiJsonFields.ExtractString(decision, "status") ?? "waiting";
             string executionStatus = GlitchAiJsonFields.ExtractString(execution, "status") ?? "waiting";
             string executionCode = GlitchAiJsonFields.ExtractString(execution, "code") ?? string.Empty;
-            List<AiSnapshotPreview> snapshots = GetAiSnapshotPreviews(item.PacketFile);
+            List<AiSnapshotPreview> snapshots = item.Snapshots ?? new List<AiSnapshotPreview>();
             bool packetReady = item.PacketFile != null;
 
             var heading = new Grid { Margin = new Thickness(0, 16, 0, 0) };
@@ -514,7 +632,7 @@ namespace Glitch.UI
         {
             var body = new StackPanel();
             body.Children.Add(CreateAiDecisionPanels(item));
-            body.Children.Add(CreateAiSnapshotTable(GetAiSnapshotPreviews(item.PacketFile)));
+            body.Children.Add(CreateAiSnapshotTable(item.Snapshots));
             return body;
         }
 
@@ -594,22 +712,17 @@ namespace Glitch.UI
             }
         }
 
-        private List<AiDecisionFeedItem> LoadAiDecisionHistory(string decisionsPath, string executionsPath, string packetRoot)
+        private List<AiDecisionFeedItem> LoadAiDecisionHistory(
+            string decisionsPath,
+            string executionsPath,
+            string packetRoot,
+            string outboxRoot)
         {
             DateTime decisionsWriteUtc = File.Exists(decisionsPath) ? File.GetLastWriteTimeUtc(decisionsPath) : DateTime.MinValue;
             DateTime executionsWriteUtc = File.Exists(executionsPath) ? File.GetLastWriteTimeUtc(executionsPath) : DateTime.MinValue;
-            FileInfo[] packetFiles = Directory.Exists(packetRoot)
-                ? new DirectoryInfo(packetRoot).GetFiles("*.json")
-                    .OrderByDescending(file => file.LastWriteTimeUtc)
-                    .Take(200)
-                    .ToArray()
-                : new FileInfo[0];
-            string packetFingerprint = packetFiles.Length.ToString(CultureInfo.InvariantCulture) + ":"
-                + (packetFiles.FirstOrDefault()?.LastWriteTimeUtc.Ticks.ToString(CultureInfo.InvariantCulture) ?? "0");
             if (_aiDecisionHistoryCache.Count > 0
                 && decisionsWriteUtc == _aiDecisionHistoryDecisionWriteUtc
-                && executionsWriteUtc == _aiDecisionHistoryExecutionWriteUtc
-                && string.Equals(packetFingerprint, _aiDecisionHistoryPacketFingerprint, StringComparison.Ordinal))
+                && executionsWriteUtc == _aiDecisionHistoryExecutionWriteUtc)
                 return _aiDecisionHistoryCache;
 
             List<string> decisions = ReadLastNonEmptyLines(decisionsPath, AiDecisionHistoryLimit);
@@ -620,7 +733,7 @@ namespace Glitch.UI
             var executionsByIntent = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             if (File.Exists(executionsPath) && intentIds.Count > 0)
             {
-                foreach (string line in File.ReadLines(executionsPath))
+                foreach (string line in ReadLastNonEmptyLines(executionsPath, 2000))
                 {
                     string intentId = GlitchAiJsonFields.ExtractString(line, "intent_id");
                     if (!string.IsNullOrWhiteSpace(intentId) && intentIds.Contains(intentId))
@@ -628,23 +741,28 @@ namespace Glitch.UI
                 }
             }
 
-            var packetsBySnapshotHash = new Dictionary<string, FileInfo>(StringComparer.Ordinal);
-            foreach (FileInfo packetFile in packetFiles)
-            {
-                string snapshotHash = ReadAiPacketFinalSnapshotHash(packetFile.FullName);
-                if (!string.IsNullOrWhiteSpace(snapshotHash) && !packetsBySnapshotHash.ContainsKey(snapshotHash))
-                    packetsBySnapshotHash.Add(snapshotHash, packetFile);
-            }
-
             var items = new List<AiDecisionFeedItem>();
+            var snapshotCache = new Dictionary<string, List<AiSnapshotPreview>>(StringComparer.OrdinalIgnoreCase);
             foreach (string decision in decisions.AsEnumerable().Reverse())
             {
                 string intentId = GlitchAiJsonFields.ExtractString(decision, "intent_id") ?? string.Empty;
                 DateTime? decisionUtc = GlitchAiJsonFields.TryExtractUtc(decision, "created_utc");
                 string snapshotHash = GlitchAiJsonFields.ExtractString(decision, "snapshot_hash") ?? string.Empty;
-                FileInfo packet = null;
-                if (!string.IsNullOrWhiteSpace(snapshotHash))
-                    packetsBySnapshotHash.TryGetValue(snapshotHash, out packet);
+                FileInfo packet = FindAiDecisionPacket(
+                    packetRoot,
+                    outboxRoot,
+                    intentId,
+                    snapshotHash,
+                    decisionUtc);
+                List<AiSnapshotPreview> snapshots = new List<AiSnapshotPreview>();
+                if (packet != null)
+                {
+                    if (!snapshotCache.TryGetValue(packet.FullName, out snapshots))
+                    {
+                        snapshots = ReadAiSnapshotPreviews(packet.FullName);
+                        snapshotCache[packet.FullName] = snapshots;
+                    }
+                }
                 executionsByIntent.TryGetValue(intentId, out string execution);
                 items.Add(new AiDecisionFeedItem
                 {
@@ -652,22 +770,86 @@ namespace Glitch.UI
                     ExecutionJson = execution ?? string.Empty,
                     IntentId = intentId,
                     DecisionUtc = decisionUtc,
-                    PacketFile = packet
+                    PacketFile = packet,
+                    Snapshots = snapshots
                 });
             }
 
             _aiDecisionHistoryDecisionWriteUtc = decisionsWriteUtc;
             _aiDecisionHistoryExecutionWriteUtc = executionsWriteUtc;
-            _aiDecisionHistoryPacketFingerprint = packetFingerprint;
+            _aiDecisionHistoryPacketFingerprint = string.Join(
+                ",",
+                items.Where(value => value.PacketFile != null)
+                    .Select(value => value.PacketFile.Name)
+                    .Distinct(StringComparer.OrdinalIgnoreCase));
             _aiDecisionHistoryCache = items;
             return _aiDecisionHistoryCache;
+        }
+
+        private static FileInfo FindAiDecisionPacket(
+            string packetRoot,
+            string outboxRoot,
+            string intentId,
+            string snapshotHash,
+            DateTime? decisionUtc)
+        {
+            if (!decisionUtc.HasValue || string.IsNullOrWhiteSpace(packetRoot))
+                return null;
+
+            DateTime anchorUtc = new DateTime(
+                decisionUtc.Value.Year,
+                decisionUtc.Value.Month,
+                decisionUtc.Value.Day,
+                decisionUtc.Value.Hour,
+                decisionUtc.Value.Minute,
+                0,
+                DateTimeKind.Utc);
+            for (int offset = 0; offset <= 30; offset++)
+            {
+                string cycleId = anchorUtc.AddMinutes(-offset)
+                    .ToString("yyyyMMdd'T'HHmm'Z'", CultureInfo.InvariantCulture);
+                string outboxPath = Path.Combine(outboxRoot, cycleId + ".json");
+                if (!File.Exists(outboxPath))
+                    continue;
+                string outboxJson = ReadAllTextShared(outboxPath);
+                if (string.IsNullOrWhiteSpace(outboxJson)
+                    || string.IsNullOrWhiteSpace(intentId)
+                    || outboxJson.IndexOf(
+                        "\"intent_id\":" + GlitchSnapshotJson.String(intentId),
+                        StringComparison.Ordinal) < 0)
+                    continue;
+
+                string packetPath = Path.Combine(packetRoot, cycleId + ".json");
+                if (File.Exists(packetPath))
+                    return new FileInfo(packetPath);
+            }
+
+            // Legacy records may predate cycle-linked outboxes. Inspect only the
+            // bounded minute candidates nearest the decision rather than sorting
+            // the complete, permanently growing packet directory.
+            if (string.IsNullOrWhiteSpace(snapshotHash))
+                return null;
+            for (int offset = 0; offset <= 15; offset++)
+            {
+                string cycleId = anchorUtc.AddMinutes(-offset)
+                    .ToString("yyyyMMdd'T'HHmm'Z'", CultureInfo.InvariantCulture);
+                string packetPath = Path.Combine(packetRoot, cycleId + ".json");
+                if (!File.Exists(packetPath))
+                    continue;
+                if (string.Equals(
+                    ReadAiPacketFinalSnapshotHash(packetPath),
+                    snapshotHash,
+                    StringComparison.Ordinal))
+                    return new FileInfo(packetPath);
+            }
+            return null;
         }
 
         private static string ReadAiPacketFinalSnapshotHash(string path)
         {
             try
             {
-                if (!GlitchAiJsonFields.TryParseObject(File.ReadAllText(path), out IDictionary packet))
+                if (!GlitchAiJsonFields.TryParseObject(ReadAllTextShared(path), out IDictionary packet))
                     return null;
                 IList frames = GetAiJsonList(packet, "frames");
                 if (frames == null)
@@ -686,26 +868,12 @@ namespace Glitch.UI
             return null;
         }
 
-        private List<AiSnapshotPreview> GetAiSnapshotPreviews(FileInfo packetFile)
-        {
-            if (packetFile == null || !packetFile.Exists)
-                return new List<AiSnapshotPreview>();
-            if (string.Equals(_aiSnapshotPreviewCachePath, packetFile.FullName, StringComparison.OrdinalIgnoreCase)
-                && _aiSnapshotPreviewCacheWriteUtc == packetFile.LastWriteTimeUtc)
-                return _aiSnapshotPreviewCache;
-
-            _aiSnapshotPreviewCachePath = packetFile.FullName;
-            _aiSnapshotPreviewCacheWriteUtc = packetFile.LastWriteTimeUtc;
-            _aiSnapshotPreviewCache = ReadAiSnapshotPreviews(packetFile.FullName);
-            return _aiSnapshotPreviewCache;
-        }
-
         private static List<AiSnapshotPreview> ReadAiSnapshotPreviews(string path)
         {
             var results = new List<AiSnapshotPreview>();
             try
             {
-                if (!GlitchAiJsonFields.TryParseObject(File.ReadAllText(path), out IDictionary packet))
+                if (!GlitchAiJsonFields.TryParseObject(ReadAllTextShared(path), out IDictionary packet))
                     return results;
                 IList frames = GetAiJsonList(packet, "frames");
                 if (frames == null)
@@ -791,18 +959,106 @@ namespace Glitch.UI
 
         private static List<string> ReadLastNonEmptyLines(string path, int limit)
         {
-            var lines = new Queue<string>();
             if (!File.Exists(path) || limit <= 0)
                 return new List<string>();
-            foreach (string line in File.ReadLines(path))
+
+            const int blockSize = 64 * 1024;
+            const int maxTailBytes = 16 * 1024 * 1024;
+            try
             {
-                if (string.IsNullOrWhiteSpace(line))
-                    continue;
-                lines.Enqueue(line);
-                while (lines.Count > limit)
-                    lines.Dequeue();
+                using (var stream = new FileStream(
+                    path,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete))
+                {
+                    long cursor = stream.Length;
+                    int newlineCount = 0;
+                    int capturedBytes = 0;
+                    var chunks = new List<byte[]>();
+                    while (cursor > 0 && newlineCount <= limit && capturedBytes < maxTailBytes)
+                    {
+                        int count = (int)Math.Min(blockSize, cursor);
+                        cursor -= count;
+                        stream.Position = cursor;
+                        var chunk = new byte[count];
+                        int read = 0;
+                        while (read < count)
+                        {
+                            int next = stream.Read(chunk, read, count - read);
+                            if (next <= 0)
+                                break;
+                            read += next;
+                        }
+                        if (read != count)
+                            Array.Resize(ref chunk, read);
+                        for (int index = 0; index < chunk.Length; index++)
+                        {
+                            if (chunk[index] == (byte)'\n')
+                                newlineCount++;
+                        }
+                        chunks.Add(chunk);
+                        capturedBytes += chunk.Length;
+                    }
+
+                    chunks.Reverse();
+                    var tail = new byte[capturedBytes];
+                    int destination = 0;
+                    foreach (byte[] chunk in chunks)
+                    {
+                        Buffer.BlockCopy(chunk, 0, tail, destination, chunk.Length);
+                        destination += chunk.Length;
+                    }
+                    int start = 0;
+                    if (cursor > 0)
+                    {
+                        while (start < tail.Length && tail[start] != (byte)'\n')
+                            start++;
+                        if (start < tail.Length)
+                            start++;
+                    }
+                    string text = Encoding.UTF8.GetString(tail, start, tail.Length - start);
+                    return TakeLastCompat(
+                        text.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                            .Select(value => value.TrimEnd('\r'))
+                            .Where(value => !string.IsNullOrWhiteSpace(value)),
+                        limit).ToList();
+                }
             }
-            return lines.ToList();
+            catch
+            {
+                return new List<string>();
+            }
+        }
+
+        private static IEnumerable<string> TakeLastCompat(IEnumerable<string> source, int limit)
+        {
+            var queue = new Queue<string>();
+            foreach (string value in source ?? Enumerable.Empty<string>())
+            {
+                queue.Enqueue(value);
+                while (queue.Count > limit)
+                    queue.Dequeue();
+            }
+            return queue;
+        }
+
+        private static string ReadAllTextShared(string path)
+        {
+            try
+            {
+                using (var stream = new FileStream(
+                    path,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete))
+                using (var reader = new StreamReader(stream, Encoding.UTF8, true))
+                    return reader.ReadToEnd();
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         private static int CountFramesAfter(string directory, DateTime anchorUtc)

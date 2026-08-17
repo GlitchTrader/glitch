@@ -16,13 +16,24 @@ namespace Glitch.Services
         public const string SchemaVersion = "glitch.rail.selfcheck.v2";
         private static readonly TimeSpan WriteThrottle = TimeSpan.FromSeconds(30);
         private static DateTime _lastWriteUtc = DateTime.MinValue;
+        private static DateTime _lastAttemptUtc = DateTime.MinValue;
+        private static readonly object NativeConnectionGate = new object();
+        private static string _nativeConnectionJson =
+            "{\"all_accounts_connected\":false,\"account_count\":0,\"connected_count\":0}";
 
         public static bool TryWriteIfDue(DateTime nowUtc)
         {
-            if (_lastWriteUtc != DateTime.MinValue && (nowUtc - _lastWriteUtc) < WriteThrottle)
+            if (_lastAttemptUtc != DateTime.MinValue && (nowUtc - _lastAttemptUtc) < WriteThrottle)
                 return false;
-
+            _lastAttemptUtc = nowUtc;
             return TryWrite(nowUtc);
+        }
+
+        public static void CaptureNativeConnectionState()
+        {
+            string snapshot = BuildNativeConnectionJson();
+            lock (NativeConnectionGate)
+                _nativeConnectionJson = snapshot;
         }
 
         public static bool TryWrite(DateTime nowUtc)
@@ -91,7 +102,7 @@ namespace Glitch.Services
             sb.Append("\"instrument_root_count\":").Append(roots.Count.ToString(CultureInfo.InvariantCulture)).Append(',');
             sb.Append("\"fresh_instrument_count\":").Append(freshInstrumentCount.ToString(CultureInfo.InvariantCulture));
             sb.Append("},");
-            sb.Append("\"connection\":").Append(BuildConnectionJson()).Append(',');
+            sb.Append("\"connection\":").Append(GetNativeConnectionJson()).Append(',');
             sb.Append("\"snapshots\":{");
             sb.Append("\"market_latest_exists\":").Append(GlitchSnapshotJson.Bool(File.Exists(marketPath))).Append(',');
             sb.Append("\"market_instrument_count\":").Append(marketInstrumentCount.ToString(CultureInfo.InvariantCulture)).Append(',');
@@ -142,7 +153,13 @@ namespace Glitch.Services
             return sb.ToString();
         }
 
-        private static string BuildConnectionJson()
+        private static string GetNativeConnectionJson()
+        {
+            lock (NativeConnectionGate)
+                return _nativeConnectionJson;
+        }
+
+        private static string BuildNativeConnectionJson()
         {
             Account[] accounts;
             try

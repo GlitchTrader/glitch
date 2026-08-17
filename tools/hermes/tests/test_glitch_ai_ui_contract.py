@@ -63,14 +63,47 @@ class GlitchAiUiContractTests(unittest.TestCase):
         )
         self.assertNotIn("if (age <= TimeSpan.FromMinutes(12))", source)
 
-    def test_ai_feed_joins_decisions_to_their_source_packet_by_snapshot_hash(self):
+    def test_ai_feed_loads_off_dispatcher_and_uses_bounded_cycle_lookup(self):
         source = (UI / "GlitchMainWindow.AiTab.partial.cs").read_text(encoding="utf-8")
-        self.assertIn('ReadAiPacketFinalSnapshotHash(packetFile.FullName)', source)
+        self.assertIn("await Task.Run(BuildAiTabRefreshSnapshot)", source)
+        self.assertIn("Interlocked.CompareExchange(ref _aiTabRefreshInFlight", source)
+        self.assertIn("AiTabRefreshMinInterval = TimeSpan.FromSeconds(2)", source)
+        self.assertIn("FindAiDecisionPacket(", source)
+        self.assertIn('string outboxRoot = Path.Combine(exchangeRoot, "hermes", "outbox")', source)
         self.assertIn('GlitchAiJsonFields.ExtractString(decision, "snapshot_hash")', source)
-        self.assertIn('packetsBySnapshotHash.TryGetValue(snapshotHash, out packet)', source)
-        self.assertNotIn('decisionUtc.Value.ToString("yyyyMMdd\'T\'HHmm\'Z\'"', source)
-        self.assertIn('string.Equals(packetFingerprint, _aiDecisionHistoryPacketFingerprint', source)
+        self.assertIn("ReadAiPacketFinalSnapshotHash(packetPath)", source)
+        history_loader = source[
+            source.index("private List<AiDecisionFeedItem> LoadAiDecisionHistory"):
+            source.index("private static string ReadAiPacketFinalSnapshotHash")
+        ]
+        self.assertNotIn("GetFiles(\"*.json\")", history_loader)
+        self.assertNotIn("File.ReadLines", history_loader)
+        self.assertIn("FileShare.ReadWrite | FileShare.Delete", source)
         self.assertIn('_aiDecisionHistoryPacketFingerprint ?? "0"', source)
+
+    def test_periodic_maintenance_is_not_run_inline_by_the_dispatcher_tick(self):
+        main = (UI / "GlitchMainWindow.cs").read_text(encoding="utf-8")
+        performance = (UI / "GlitchMainWindow.Performance.partial.cs").read_text(encoding="utf-8")
+        tick = main[
+            main.index("private void OnRefreshTimerTickCore"):
+            main.index("private void OnAccountsGridBeginningEdit")
+        ]
+        self.assertLess(
+            tick.index("CaptureRailNativeStateIfDue(nowUtc);"),
+            tick.index("QueueBackgroundMaintenance(nowUtc);"),
+        )
+        self.assertIn("GlitchRailSelfCheckWriter.CaptureNativeConnectionState();", performance)
+        self.assertIn("QueueBackgroundMaintenance(nowUtc);", tick)
+        for direct_call in (
+            "GlitchHistoricalSnapshotExporter.TryWriteReplayBundleIfDue",
+            "GlitchRailSelfCheckWriter.TryWriteIfDue",
+            "GlitchSnapshotSanityWriter.TryWriteIfDue",
+            "GlitchAiReplayHarnessWriter.TryWriteIfDue",
+        ):
+            self.assertNotIn(direct_call, tick)
+            self.assertIn(direct_call, performance)
+        self.assertIn("Task.Run(() =>", performance)
+        self.assertIn("Interlocked.CompareExchange(ref _backgroundMaintenanceInFlight", performance)
 
     def test_shared_ui_hierarchy_uses_boxed_sections_and_compact_disclosure_rows(self):
         accordion = (UI / "GlitchMainWindow.AccordionLayout.partial.cs").read_text(encoding="utf-8")

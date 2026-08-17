@@ -1575,7 +1575,7 @@ namespace Glitch.UI
                     return false;
                 }
 
-                flattenSubmitCount = await Dispatcher.InvokeAsync(() => IssueFlattenOrdersForAccounts(accounts));
+                flattenSubmitCount = IssueFlattenOrdersForAccounts(accounts);
 
                 flattenStopwatch.Stop();
                 AppendJournal(
@@ -3931,13 +3931,8 @@ namespace Glitch.UI
             UpdateRefreshTimerCadenceIfNeeded();
 
             DateTime nowUtc = DateTime.UtcNow;
-            GlitchHistoricalSnapshotExporter.TryWriteReplayBundleIfDue(
-                nowUtc,
-                TimeSpan.FromMinutes(15),
-                TimeSpan.FromHours(24));
-            GlitchRailSelfCheckWriter.TryWriteIfDue(nowUtc);
-            GlitchSnapshotSanityWriter.TryWriteIfDue(nowUtc);
-            GlitchAiReplayHarnessWriter.TryWriteIfDue(nowUtc);
+            CaptureRailNativeStateIfDue(nowUtc);
+            QueueBackgroundMaintenance(nowUtc);
             PruneRuntimeJournalCaches(nowUtc);
             PruneInformationalWarningJournalCooldowns(nowUtc);
             PruneAccountItemUpdateThrottle(nowUtc);

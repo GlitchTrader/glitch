@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
@@ -7,6 +8,9 @@ namespace Glitch.Services
     internal static class GlitchAiJournalBridge
     {
         private static readonly object SyncRoot = new object();
+        private static readonly HashSet<string> AcceptedIntentIds =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static bool _acceptedIntentIndexLoaded;
 
         public static string GetDecisionsJsonlPath()
         {
@@ -28,16 +32,9 @@ namespace Glitch.Services
                 if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
                     Directory.CreateDirectory(directory);
 
-                string intentToken = "\"intent_id\":" + GlitchSnapshotJson.String(intentId);
-                if (File.Exists(path))
-                {
-                    foreach (string existingLine in File.ReadLines(path))
-                    {
-                        if (!string.IsNullOrWhiteSpace(existingLine)
-                            && existingLine.IndexOf(intentToken, StringComparison.Ordinal) >= 0)
-                            return true;
-                    }
-                }
+                EnsureAcceptedIntentIndexLoaded(path);
+                if (AcceptedIntentIds.Contains(intentId))
+                    return true;
 
                 string line = "{"
                     + "\"schema_version\":" + GlitchSnapshotJson.String("glitch.intent.accepted.v1") + ","
@@ -48,11 +45,43 @@ namespace Glitch.Services
                     + "\"intent\":" + rawJson.Trim()
                     + "}";
 
-                File.AppendAllText(path, line + Environment.NewLine, new UTF8Encoding(false));
+                using (var stream = new FileStream(
+                    path,
+                    FileMode.Append,
+                    FileAccess.Write,
+                    FileShare.ReadWrite | FileShare.Delete))
+                using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
+                    writer.WriteLine(line);
+                AcceptedIntentIds.Add(intentId);
                 GlitchAiIntentJournalWriter.AppendAcceptedMirror(intentId, rawJson, recordedUtc);
 
                 return true;
             }
+        }
+
+        private static void EnsureAcceptedIntentIndexLoaded(string path)
+        {
+            if (_acceptedIntentIndexLoaded)
+                return;
+            if (File.Exists(path))
+            {
+                using (var stream = new FileStream(
+                    path,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete))
+                using (var reader = new StreamReader(stream, Encoding.UTF8, true))
+                {
+                    string line;
+                    while ((line = reader.ReadLine()) != null)
+                    {
+                        string existingIntentId = GlitchAiJsonFields.ExtractString(line, "intent_id");
+                        if (!string.IsNullOrWhiteSpace(existingIntentId))
+                            AcceptedIntentIds.Add(existingIntentId);
+                    }
+                }
+            }
+            _acceptedIntentIndexLoaded = true;
         }
     }
 }

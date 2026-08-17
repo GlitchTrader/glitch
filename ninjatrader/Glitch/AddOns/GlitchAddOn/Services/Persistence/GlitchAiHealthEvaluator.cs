@@ -105,6 +105,10 @@ namespace Glitch.Services
         // allow one scheduled interval plus bounded worker/scheduler grace;
         // it must not interpret a quiet, successful no-op loop as a failure.
         private const int LearningWorkerStaleAfterSeconds = 2700;
+        private static readonly object LatestAttemptGate = new object();
+        private static string _latestAttemptPath;
+        private static DateTime _latestAttemptMinuteUtc = DateTime.MinValue;
+        private static DateTime _latestAttemptMissCheckedUtc = DateTime.MinValue;
 
         public static GlitchAiHealthSnapshot Evaluate(DateTime nowUtc)
         {
@@ -142,7 +146,10 @@ namespace Glitch.Services
                     : result.PacketContiguous ? "operating" : "gapped";
             }
 
-            FileInfo latestAttempt = LatestFile(Path.Combine(exchange, "hermes", "model-attempts"));
+            FileInfo latestAttempt = LatestAttemptFile(
+                Path.Combine(exchange, "hermes", "model-attempts"),
+                packetWindowUtc,
+                nowUtc);
             if (latestAttempt == null)
                 result.DecisionWorkerStatus = result.Operating ? "waiting" : "off";
             else
@@ -224,20 +231,64 @@ namespace Glitch.Services
             return result;
         }
 
-        private static FileInfo LatestFile(string directory)
+        private static FileInfo LatestAttemptFile(
+            string directory,
+            DateTime packetWindowUtc,
+            DateTime nowUtc)
         {
-            try
+            if (!Directory.Exists(directory) || packetWindowUtc == DateTime.MinValue)
+                return null;
+            lock (LatestAttemptGate)
             {
-                return Directory.Exists(directory)
-                    ? new DirectoryInfo(directory).GetFiles("*.json").OrderByDescending(file => file.Name).FirstOrDefault()
-                    : null;
+                DateTime anchorUtc = new DateTime(
+                    packetWindowUtc.Year,
+                    packetWindowUtc.Month,
+                    packetWindowUtc.Day,
+                    packetWindowUtc.Hour,
+                    packetWindowUtc.Minute,
+                    0,
+                    DateTimeKind.Utc);
+                int lookbackMinutes = _latestAttemptMinuteUtc == DateTime.MinValue
+                    ? 1440
+                    : Math.Max(0, Math.Min(
+                        1440,
+                        (int)Math.Ceiling((anchorUtc - _latestAttemptMinuteUtc).TotalMinutes)));
+                if (_latestAttemptMinuteUtc == DateTime.MinValue
+                    && (nowUtc - _latestAttemptMissCheckedUtc) < TimeSpan.FromSeconds(30))
+                    return null;
+
+                for (int offset = 0; offset <= lookbackMinutes; offset++)
+                {
+                    DateTime candidateUtc = anchorUtc.AddMinutes(-offset);
+                    string candidatePath = Path.Combine(
+                        directory,
+                        candidateUtc.ToString("yyyyMMdd'T'HHmm'Z'", CultureInfo.InvariantCulture) + ".json");
+                    if (!File.Exists(candidatePath))
+                        continue;
+                    _latestAttemptPath = candidatePath;
+                    _latestAttemptMinuteUtc = candidateUtc;
+                    return new FileInfo(candidatePath);
+                }
+
+                if (!string.IsNullOrWhiteSpace(_latestAttemptPath) && File.Exists(_latestAttemptPath))
+                    return new FileInfo(_latestAttemptPath);
+                _latestAttemptMissCheckedUtc = nowUtc;
+                return null;
             }
-            catch { return null; }
         }
 
         private static string SafeRead(string path)
         {
-            try { return File.ReadAllText(path); }
+            try
+            {
+                using (var stream = new FileStream(
+                    path,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete))
+                using (var reader = new StreamReader(stream, Encoding.UTF8, true))
+                    return reader.ReadToEnd();
+            }
             catch { return string.Empty; }
         }
 

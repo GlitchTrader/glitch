@@ -126,8 +126,7 @@ namespace Glitch.Services
 
         internal static bool FlattenAll()
         {
-            NinjaTrader.NinjaScript.AddOns.GlitchAddOn.RequestFlattenAll();
-            return true;
+            return NinjaTrader.NinjaScript.AddOns.GlitchAddOn.RequestFlattenAll();
         }
 
         private static bool TryGetMainWindow(out Glitch.UI.GlitchMainWindow window)

@@ -124,6 +124,57 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("public static GlitchRuntimeHost Active", host)
         self.assertNotIn("new GlitchRuntimeHost()", window)
 
+    def test_external_flatten_does_not_wait_for_the_window_dispatcher(self):
+        addon = read("ninjatrader/Glitch/AddOns/GlitchAddOn/GlitchAddOn.cs")
+        host = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/GlitchRuntimeHost.cs"
+        )
+        gateway = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/NinjaTraderGateway.cs"
+        )
+        shell = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/GlitchShellBridge.cs"
+        )
+        flatten = addon[
+            addon.index("private bool RequestFlattenAllCore"):
+            addon.index("private void RestartSingleWindow")
+        ]
+        self.assertIn("host.RequestFlattenAllAvailable(", flatten)
+        self.assertNotIn("Dispatcher", flatten)
+        self.assertNotIn("_mainWindow", flatten)
+        self.assertNotIn("RunOnUiThreadSync", addon)
+        self.assertIn("SnapshotFlattenEligibleAccountNames", gateway)
+        self.assertIn("RequestFlattenBatch(", host)
+        self.assertIn("return NinjaTrader.NinjaScript.AddOns.GlitchAddOn.RequestFlattenAll();", shell)
+
+    def test_ai_decision_journal_does_not_rescan_or_exclusively_lock_the_hot_file(self):
+        journal = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Ai/GlitchAiJournalBridge.cs"
+        )
+        record = journal[
+            journal.index("public static bool TryRecordAccepted"):
+            journal.index("private static void EnsureAcceptedIntentIndexLoaded")
+        ]
+        self.assertIn("AcceptedIntentIds.Contains(intentId)", record)
+        self.assertNotIn("File.ReadLines", record)
+        self.assertIn("FileShare.ReadWrite | FileShare.Delete", journal)
+
+    def test_failed_background_maintenance_obeys_its_normal_retry_cadence(self):
+        for relative in (
+            "Services/Persistence/GlitchHistoricalSnapshotExporter.cs",
+            "Services/Persistence/GlitchRailSelfCheckWriter.cs",
+            "Services/Persistence/GlitchSnapshotSanityWriter.cs",
+            "Services/Persistence/GlitchAiReplayHarnessWriter.cs",
+        ):
+            source = read(
+                "ninjatrader/Glitch/AddOns/GlitchAddOn/" + relative
+            )
+            self.assertIn("AttemptUtc", source, relative)
+            due = source[
+                source.index("TryWrite", source.index("IfDue") - 30):
+            ]
+            self.assertIn("AttemptUtc = nowUtc", due, relative)
+
     def test_legacy_mutation_graveyard_is_absent(self):
         for relative in (
             "Services/Trading/GlitchCopyEngine.cs",
