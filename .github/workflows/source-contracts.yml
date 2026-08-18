@@ -14,8 +14,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check out canonical Hermes profile
+        uses: actions/checkout@v4
+        with:
+          repository: GlitchTrader/glitch-hermes-profile
+          ref: fde6a8b308b057b936b54f2558382315fcad6575
+          path: glitch-hermes-profile
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: AI and Hermes contracts
         run: python -m unittest discover -s tools/hermes/tests -p "test_*.py"
+        env:
+          GLITCH_HERMES_PROFILE_ROOT: ${{ github.workspace }}/glitch-hermes-profile
