@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: GlitchTrader/glitch-hermes-profile
-          ref: fde6a8b308b057b936b54f2558382315fcad6575
+          ref: 11e81e16821abf180724ee305a24341ce343deae
           path: glitch-hermes-profile
       - uses: actions/setup-python@v5
         with:
