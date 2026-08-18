@@ -212,6 +212,7 @@ namespace Glitch.UI
 
             ApplyAccountRows(rows);
             ApplyRiskMitigations(rows, activeAccounts);
+            ApplyAiDailyCaptureProtection(rows, activeAccounts);
             RefreshGroupMasterDropdownOptionsIfNeeded(rows);
             if (_isReplicatingUi && !_isFlattenAllInProgress)
                 RefreshCopyEngineConfiguration();

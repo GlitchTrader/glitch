@@ -451,14 +451,14 @@ namespace Glitch.UI
             panel.Children.Add(targetRow);
             var scope = new TextBlock
             {
-                Text = L("settings.risk.ai_daily_capture_scope", "Blocks only new Hermes AI entries after realized current-session PnL reaches this target for configured AI master accounts; management, exits, and manual orders remain unchanged."),
+                Text = L("settings.risk.ai_daily_capture_scope", "Tightens only Glitch-owned Hermes stops when realized plus open PnL can protect this target with a four-tick-per-contract execution reserve, then blocks new Hermes AI entries after realized PnL reaches it. Stops never loosen; exits and manual orders remain unchanged."),
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 4, 0, 0),
                 FontSize = ResolveSettingsBodyFontSize()
             };
             ApplySkinResource(scope, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
             panel.Children.Add(scope);
-            Expander expander = CreateDisclosureRowExpander(GetSettingsStyleContext(), "settings.risk.ai_daily_capture", "Enable AI daily-capture entry lock.");
+            Expander expander = CreateDisclosureRowExpander(GetSettingsStyleContext(), "settings.risk.ai_daily_capture", "Enable AI daily-capture protection and entry lock.");
             expander.IsExpanded = false;
             expander.Content = WrapDisclosureRowContent(panel);
             return expander;
