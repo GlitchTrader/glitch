@@ -440,9 +440,9 @@ namespace Glitch.UI
                 .OrderBy(name => name, StringComparer.OrdinalIgnoreCase));
             return string.IsNullOrWhiteSpace(scope)
                 ? L("settings.risk.enforce_ai_daily_close_scope_empty",
-                    "Action at 16:59 Eastern: no persisted AI accounts are configured, so this setting cannot flatten any account.")
+                    "Action at 16:54 Eastern: no persisted AI accounts are configured, so this setting cannot flatten any account.")
                 : L("settings.risk.enforce_ai_daily_close_scope",
-                    "Action at 16:59 Eastern: enabling submits a broad account flatten and cancels working orders only for these persisted AI accounts (independent of Hermes pause):")
+                    "Action at 16:54 Eastern: enabling submits a broad account flatten and cancels working orders only for these persisted AI accounts (independent of Hermes pause):")
                     + " " + scope + ".";
         }
 

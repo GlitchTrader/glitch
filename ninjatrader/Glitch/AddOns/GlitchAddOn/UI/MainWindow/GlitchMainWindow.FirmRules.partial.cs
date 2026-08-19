@@ -204,8 +204,9 @@ namespace Glitch.UI
                     {
                         string firmJson = jsonContent.Substring(pos, firmEnd - pos + 1);
                         FirmRuleMetadata metadata = ParseFirmMetadata(firmJson, defaultMicroRegex, defaultMicroMultiplier);
-                        if (metadata != null && !string.IsNullOrWhiteSpace(metadata.FirmId))
-                            firms[metadata.FirmId] = metadata;
+                        if (metadata != null && !string.IsNullOrWhiteSpace(metadata.FirmId)
+                            && !firms.ContainsKey(metadata.FirmId))
+                            firms.Add(metadata.FirmId, metadata);
 
                         pos = firmEnd + 1;
                         continue;
@@ -254,7 +255,8 @@ namespace Glitch.UI
                 if (metadata == null || string.IsNullOrWhiteSpace(metadata.FirmId))
                     continue;
 
-                firms[metadata.FirmId] = metadata;
+                if (!firms.ContainsKey(metadata.FirmId))
+                    firms.Add(metadata.FirmId, metadata);
             }
 
             return firms;
@@ -1087,8 +1089,6 @@ namespace Glitch.UI
 
                 if (string.Equals(firmId, "ApexTraderFunding", StringComparison.OrdinalIgnoreCase))
                     display = "Apex";
-                else                 if (string.Equals(firmId, "TakeProfitTrader", StringComparison.OrdinalIgnoreCase))
-                    display = "TakeProfit";
 
                 if (IsFirmStatusDiscontinued(metadata?.Status))
                     display = display + " (discontinued)";

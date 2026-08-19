@@ -51,6 +51,44 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn('"Size required"', window)
         self.assertIn('" (simulated)"', window)
 
+    def test_prop_rule_catalog_is_unique_and_matches_current_apex_and_tpt_products(self):
+        rules = json.loads(read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Resources/PropFirmRules.json"
+        ))
+        firms = rules["firms"]
+        ids = [firm["firmId"] for firm in firms]
+        self.assertEqual(len(ids), len(set(ids)), "duplicate firm IDs make rule selection order-dependent")
+
+        apex_eod = next(firm for firm in firms if firm["firmId"] == "ApexEod")
+        eval_tiers = [tier for tier in apex_eod["tiers"] if tier.get("statusFilter") == "Eval"]
+        self.assertEqual(
+            [(tier["accountSize"], tier["maxDrawdown"], tier["dailyLossLimit"])
+             for tier in eval_tiers],
+            [(25000, 1000, 500), (50000, 2000, 1000),
+             (100000, 3000, 1500), (150000, 4000, 2000)],
+        )
+        apex_eod_pa = [tier for tier in apex_eod["tiers"] if tier.get("statusFilter") == "AP"]
+        apex_intraday = next(firm for firm in firms if firm["firmId"] == "ApexIntraday")
+        apex_intraday_pa = [tier for tier in apex_intraday["tiers"] if tier.get("statusFilter") == "AP"]
+        pa_shape = lambda rows: [(
+            tier["accountSize"], tier.get("minProfit", 0), tier.get("maxProfit", 0),
+            tier["maxContracts"], tier["maxDrawdown"], tier["dailyLossLimit"],
+        ) for tier in rows]
+        self.assertEqual(pa_shape(apex_eod_pa), pa_shape(apex_intraday_pa))
+
+        tpt = {firm["firmId"]: firm for firm in firms if firm["firmId"].startswith("TakeProfitTrader")}
+        self.assertEqual(set(tpt), {
+            "TakeProfitTrader", "TakeProfitTraderPro", "TakeProfitTraderProPlus",
+        })
+        self.assertEqual(tpt["TakeProfitTrader"]["enforcementSemantics"]["maxLossTracking"], "TrailingEod")
+        self.assertEqual(tpt["TakeProfitTraderPro"]["enforcementSemantics"]["maxLossTracking"], "TrailingUnrealized")
+        self.assertEqual(tpt["TakeProfitTraderProPlus"]["enforcementSemantics"]["maxLossTracking"], "TrailingEod")
+        self.assertTrue(all(
+            firm["copyTradingPolicy"]["allowed"] == "conditional"
+            and firm["copyTradingPolicy"]["sameOwnerOnly"]
+            for firm in tpt.values()
+        ))
+
     def test_simulation_account_reset_clears_only_that_account_peak_state(self):
         window = read(
             "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.cs"
@@ -297,8 +335,9 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("account_not_configured_as_master", executor)
         self.assertIn("ExecutionBindingsValid", executor)
         self.assertNotIn("master_not_allowlisted", executor)
-        for veto in ("RiskFirewall", "TradingWindow", "Apex", "license_required"):
+        for veto in ("RiskFirewall", "Apex", "license_required"):
             self.assertNotIn(veto, executor)
+        self.assertIn("policy.EnforceAiDailyClose", executor)
         self.assertNotIn("GlitchAiRiskFirewall", server)
         self.assertIn("schema_version_must_be_glitch.intent.v3", validator)
         selfcheck = read(
@@ -503,6 +542,22 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("settings.risk.ai_daily_capture_immediate", localization)
         self.assertIn("settings.risk.autosave_applied", localization)
         self.assertIn("settings.license.pending_validation", localization)
+
+    def test_daily_close_is_retryable_and_entry_closed_at_tpt_boundary(self):
+        temporal = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.AiTemporalCompliance.partial.cs"
+        )
+        executor = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Ai/GlitchAiOrderExecutor.cs"
+        )
+        settings = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.SettingsTab.partial.cs"
+        )
+        self.assertIn('"16:55:00"', temporal)
+        self.assertIn("_aiDailyCloseNextRetryUtc", temporal)
+        self.assertIn("ShouldBlockAiDailyCloseEntry", executor)
+        self.assertIn('"ai_daily_close_window"', executor)
+        self.assertIn("Action at 16:54 Eastern", settings)
 
     def test_user_flatten_is_one_native_account_flatten_request(self):
         engine = read("ninjatrader/Glitch/AddOns/GlitchAddOn/Core/GlitchEngine.cs")

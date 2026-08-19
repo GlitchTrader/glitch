@@ -11,8 +11,8 @@ namespace Glitch.UI
     public partial class GlitchMainWindow
     {
         private Task _aiDailyCloseInFlight;
-        private DateTime _aiDailyCloseAttemptedForUtc = DateTime.MinValue;
         private DateTime _aiDailyCloseUnresolvedForUtc = DateTime.MinValue;
+        private DateTime _aiDailyCloseNextRetryUtc = DateTime.MinValue;
 
         private void MaybeEnforceAiDailyClose(IReadOnlyList<Account> activeAccounts)
         {
@@ -23,15 +23,19 @@ namespace Glitch.UI
                 || (_aiDailyCloseInFlight != null && !_aiDailyCloseInFlight.IsCompleted))
                 return;
 
+            DateTime nowUtc = DateTime.UtcNow;
+            if (nowUtc < _aiDailyCloseNextRetryUtc)
+                return;
+
             GlitchAiTradingWindowStatus window = GlitchAiTradingWindow.Evaluate(
-                DateTime.UtcNow,
+                nowUtc,
                 "18:00:00",
-                "16:59:00");
+                "16:55:00");
             if (!window.IsValid || window.IsEntryAllowed)
                 return;
 
             DateTime mustFlatUtc = window.MustFlatUtc ?? DateTime.MinValue;
-            if (mustFlatUtc == DateTime.MinValue || _aiDailyCloseAttemptedForUtc == mustFlatUtc)
+            if (mustFlatUtc == DateTime.MinValue)
                 return;
 
             GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
@@ -93,7 +97,7 @@ namespace Glitch.UI
             if (exposedAccounts.Count == 0)
                 return;
 
-            _aiDailyCloseAttemptedForUtc = mustFlatUtc;
+            _aiDailyCloseNextRetryUtc = nowUtc.AddSeconds(10);
             _aiDailyCloseInFlight = ExecuteAiDailyCloseAsync(exposedAccounts);
         }
 
@@ -121,6 +125,7 @@ namespace Glitch.UI
                 bool flat = await WaitForAllAccountsFlatAsync(accounts, TimeSpan.FromSeconds(8));
                 if (!flat)
                 {
+                    _aiDailyCloseNextRetryUtc = DateTime.UtcNow.AddSeconds(10);
                     AppendJournal(
                         "System",
                         "Risk",
@@ -133,11 +138,13 @@ namespace Glitch.UI
                 }
                 else
                 {
+                    _aiDailyCloseNextRetryUtc = DateTime.UtcNow;
                     AppendJournal("System", "Risk", "ai_daily_close|origin=ai_auto|result=flat_order_free");
                 }
             }
             catch (Exception ex)
             {
+                _aiDailyCloseNextRetryUtc = DateTime.UtcNow.AddSeconds(10);
                 RecordSubsystemFault("ai_daily_close", ex);
                 RaiseCriticalWarning(
                     "System",

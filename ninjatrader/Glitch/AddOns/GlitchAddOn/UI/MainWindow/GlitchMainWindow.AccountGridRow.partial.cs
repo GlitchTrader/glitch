@@ -32,6 +32,7 @@ namespace Glitch.UI
             private double _dailyLossLimitRaw;
             private double _evalProfitTargetLockBalanceRaw;
             private double _equityRaw;
+            private string _equitySource;
             private double _netLiqRaw;
             private double _bufferMarginRaw;
             private double _maxDrawdownRaw;
@@ -84,6 +85,7 @@ namespace Glitch.UI
             public double DailyLossLimitRaw { get => _dailyLossLimitRaw; set => SetField(ref _dailyLossLimitRaw, value); }
             public double EvalProfitTargetLockBalanceRaw { get => _evalProfitTargetLockBalanceRaw; set => SetField(ref _evalProfitTargetLockBalanceRaw, value); }
             public double EquityRaw { get => _equityRaw; set => SetField(ref _equityRaw, value); }
+            public string EquitySource { get => _equitySource; set => SetField(ref _equitySource, value); }
             public double NetLiqRaw { get => _netLiqRaw; set => SetField(ref _netLiqRaw, value); }
             public double BufferMarginRaw { get => _bufferMarginRaw; set => SetField(ref _bufferMarginRaw, value); }
             public double MaxDrawdownRaw { get => _maxDrawdownRaw; set => SetField(ref _maxDrawdownRaw, value); }
@@ -139,6 +141,7 @@ namespace Glitch.UI
                 DailyLossLimitRaw = source.DailyLossLimitRaw;
                 EvalProfitTargetLockBalanceRaw = source.EvalProfitTargetLockBalanceRaw;
                 EquityRaw = source.EquityRaw;
+                EquitySource = source.EquitySource;
                 NetLiqRaw = source.NetLiqRaw;
                 BufferMarginRaw = source.BufferMarginRaw;
                 MaxDrawdownRaw = source.MaxDrawdownRaw;

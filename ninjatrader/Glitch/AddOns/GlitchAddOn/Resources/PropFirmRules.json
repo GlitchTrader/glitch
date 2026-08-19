@@ -1,6 +1,6 @@
 {
   "schemaVersion": "2.2.0",
-  "updatedAtUtc": "2026-07-18T00:00:00Z",
+  "updatedAtUtc": "2026-08-19T00:00:00Z",
   "globalInstrumentSizingDefaults": {
     "microContractRootRegex": "^M[A-Z0-9]+$",
     "microContractMultiplier": 10
@@ -102,6 +102,13 @@
       ],
       "lastVerifiedDate": "2026-08-07",
       "status": "Supported",
+      "copyTradingPolicy": {
+        "allowed": "conditional",
+        "sameOwnerOnly": true,
+        "maxAccounts": 20,
+        "notes": "Same-owner copying only. Cross-user, cross-household, and opposing correlated positions are not permitted.",
+        "sourceUrl": "https://dashboard.apextraderfunding.com/agreement/user-agreement"
+      },
       "tiers": [
         {
           "accountSize": 25000,
@@ -302,19 +309,20 @@
       "uiDisplayName": "Apex EOD",
       "legalName": "Apex Trader Funding EOD",
       "officialSourceUrls": [
-        "https://support.apextraderfunding.com/hc/en-us/articles/39730154872467-Apex-EOD-Evaluations-PA-Accounts",
-        "https://support.apextraderfunding.com/hc/en-us/articles/40463582041371-Apex-EOD-Drawdown-Explained",
-        "https://support.apextraderfunding.com/hc/en-us/articles/40435813415187-Daily-Loss-Limit-DLL",
+        "https://apextraderfunding.com/help-center/eod-trailing-drawdown-accounts/eod-evaluations/",
+        "https://apextraderfunding.com/help-center/eod-trailing-drawdown-accounts/eod-performance-accounts-pa/",
+        "https://apextraderfunding.com/help-center/additional-helpful-items/scaling-levels-pa-explained/",
+        "https://apextraderfunding.com/help-center/additional-helpful-items/daily-loss-limit-explained/",
         "https://apextraderfunding.com/help-center/getting-started/futures-trading-times/",
         "https://dashboard.apextraderfunding.com/agreement/user-agreement"
       ],
-      "lastVerifiedDate": "2026-03-04",
+      "lastVerifiedDate": "2026-08-19",
       "status": "Supported",
       "copyTradingPolicy": {
         "allowed": "conditional",
         "sameOwnerOnly": true,
         "maxAccounts": 20,
-        "notes": "Current Apex agreement: same-owner copying only from manually placed originating orders; autonomous AI/automation is prohibited. Glitch surfaces this as compliance information and does not silently infer account authority.",
+        "notes": "Same-owner copying only. Cross-user, cross-household, and opposing correlated positions are not permitted.",
         "sourceUrl": "https://dashboard.apextraderfunding.com/agreement/user-agreement"
       },
       "tiers": [
@@ -347,164 +355,174 @@
           "statusFilter": "Eval",
           "maxContracts": 12,
           "profitTarget": 9000,
-          "maxDrawdown": 5000,
-          "dailyLossLimit": 2500
+          "maxDrawdown": 4000,
+          "dailyLossLimit": 2000
         },
         {
           "accountSize": 25000,
           "statusFilter": "AP",
           "minProfit": 0,
           "maxProfit": 1000,
-          "maxContracts": 2,
+          "maxContracts": 1,
           "profitTarget": 1500,
           "maxDrawdown": 1000,
-          "dailyLossLimit": 250
+          "dailyLossLimit": 500
         },
         {
           "accountSize": 25000,
           "statusFilter": "AP",
           "minProfit": 1000,
+          "maxProfit": 2000,
+          "maxContracts": 2,
+          "profitTarget": 1500,
+          "maxDrawdown": 1000,
+          "dailyLossLimit": 500
+        },
+        {
+          "accountSize": 25000,
+          "statusFilter": "AP",
+          "minProfit": 2000,
+          "maxContracts": 2,
+          "profitTarget": 1500,
+          "maxDrawdown": 1000,
+          "dailyLossLimit": 1250
+        },
+        {
+          "accountSize": 50000,
+          "statusFilter": "AP",
+          "minProfit": 0,
           "maxProfit": 1500,
-          "maxContracts": 3,
-          "profitTarget": 1500,
-          "maxDrawdown": 1000,
-          "dailyLossLimit": 375
-        },
-        {
-          "accountSize": 25000,
-          "statusFilter": "AP",
-          "minProfit": 1500,
-          "maxProfit": 2500,
-          "maxContracts": 3,
-          "profitTarget": 1500,
-          "maxDrawdown": 1000,
-          "dailyLossLimit": 500
-        },
-        {
-          "accountSize": 25000,
-          "statusFilter": "AP",
-          "minProfit": 2500,
-          "maxContracts": 4,
-          "profitTarget": 1500,
-          "maxDrawdown": 1000,
-          "dailyLossLimit": 625
-        },
-        {
-          "accountSize": 50000,
-          "statusFilter": "AP",
-          "minProfit": 0,
-          "maxProfit": 1000,
           "maxContracts": 2,
-          "profitTarget": 3000,
-          "maxDrawdown": 2000,
-          "dailyLossLimit": 500
-        },
-        {
-          "accountSize": 50000,
-          "statusFilter": "AP",
-          "minProfit": 1000,
-          "maxProfit": 2600,
-          "maxContracts": 3,
-          "profitTarget": 3000,
-          "maxDrawdown": 2000,
-          "dailyLossLimit": 625
-        },
-        {
-          "accountSize": 50000,
-          "statusFilter": "AP",
-          "minProfit": 2600,
-          "maxProfit": 4900,
-          "maxContracts": 4,
-          "profitTarget": 3000,
-          "maxDrawdown": 2000,
-          "dailyLossLimit": 750
-        },
-        {
-          "accountSize": 50000,
-          "statusFilter": "AP",
-          "minProfit": 4900,
-          "maxContracts": 4,
           "profitTarget": 3000,
           "maxDrawdown": 2000,
           "dailyLossLimit": 1000
         },
         {
+          "accountSize": 50000,
+          "statusFilter": "AP",
+          "minProfit": 1500,
+          "maxProfit": 3000,
+          "maxContracts": 3,
+          "profitTarget": 3000,
+          "maxDrawdown": 2000,
+          "dailyLossLimit": 1000
+        },
+        {
+          "accountSize": 50000,
+          "statusFilter": "AP",
+          "minProfit": 3000,
+          "maxProfit": 6000,
+          "maxContracts": 4,
+          "profitTarget": 3000,
+          "maxDrawdown": 2000,
+          "dailyLossLimit": 2000
+        },
+        {
+          "accountSize": 50000,
+          "statusFilter": "AP",
+          "minProfit": 6000,
+          "maxContracts": 4,
+          "profitTarget": 3000,
+          "maxDrawdown": 2000,
+          "dailyLossLimit": 3000
+        },
+        {
           "accountSize": 100000,
           "statusFilter": "AP",
           "minProfit": 0,
-          "maxProfit": 3000,
+          "maxProfit": 2000,
           "maxContracts": 3,
           "profitTarget": 6000,
           "maxDrawdown": 3000,
-          "dailyLossLimit": 1500
+          "dailyLossLimit": 1750
+        },
+        {
+          "accountSize": 100000,
+          "statusFilter": "AP",
+          "minProfit": 2000,
+          "maxProfit": 3000,
+          "maxContracts": 4,
+          "profitTarget": 6000,
+          "maxDrawdown": 3000,
+          "dailyLossLimit": 1750
         },
         {
           "accountSize": 100000,
           "statusFilter": "AP",
           "minProfit": 3000,
-          "maxProfit": 6000,
+          "maxProfit": 5000,
           "maxContracts": 5,
           "profitTarget": 6000,
           "maxDrawdown": 3000,
-          "dailyLossLimit": 1875
+          "dailyLossLimit": 1750
         },
         {
           "accountSize": 100000,
           "statusFilter": "AP",
-          "minProfit": 6000,
-          "maxProfit": 9000,
-          "maxContracts": 7,
+          "minProfit": 5000,
+          "maxProfit": 10000,
+          "maxContracts": 6,
           "profitTarget": 6000,
           "maxDrawdown": 3000,
-          "dailyLossLimit": 2250
+          "dailyLossLimit": 2500
         },
         {
           "accountSize": 100000,
           "statusFilter": "AP",
-          "minProfit": 9000,
-          "maxContracts": 10,
+          "minProfit": 10000,
+          "maxContracts": 6,
           "profitTarget": 6000,
           "maxDrawdown": 3000,
-          "dailyLossLimit": 3000
+          "dailyLossLimit": 3500
         },
         {
           "accountSize": 150000,
           "statusFilter": "AP",
           "minProfit": 0,
-          "maxProfit": 3000,
-          "maxContracts": 3,
+          "maxProfit": 2000,
+          "maxContracts": 4,
           "profitTarget": 9000,
-          "maxDrawdown": 5000,
+          "maxDrawdown": 4000,
+          "dailyLossLimit": 2500
+        },
+        {
+          "accountSize": 150000,
+          "statusFilter": "AP",
+          "minProfit": 2000,
+          "maxProfit": 3000,
+          "maxContracts": 5,
+          "profitTarget": 9000,
+          "maxDrawdown": 4000,
           "dailyLossLimit": 2500
         },
         {
           "accountSize": 150000,
           "statusFilter": "AP",
           "minProfit": 3000,
-          "maxProfit": 6000,
-          "maxContracts": 5,
-          "profitTarget": 9000,
-          "maxDrawdown": 5000,
-          "dailyLossLimit": 3125
-        },
-        {
-          "accountSize": 150000,
-          "statusFilter": "AP",
-          "minProfit": 6000,
-          "maxProfit": 9000,
+          "maxProfit": 5000,
           "maxContracts": 7,
           "profitTarget": 9000,
-          "maxDrawdown": 5000,
-          "dailyLossLimit": 3750
+          "maxDrawdown": 4000,
+          "dailyLossLimit": 2500
         },
         {
           "accountSize": 150000,
           "statusFilter": "AP",
-          "minProfit": 9000,
+          "minProfit": 5000,
+          "maxProfit": 10000,
           "maxContracts": 10,
           "profitTarget": 9000,
-          "maxDrawdown": 5000,
-          "dailyLossLimit": 5000
+          "maxDrawdown": 4000,
+          "dailyLossLimit": 3000
+        },
+        {
+          "accountSize": 150000,
+          "statusFilter": "AP",
+          "minProfit": 10000,
+          "maxContracts": 10,
+          "profitTarget": 9000,
+          "maxDrawdown": 4000,
+          "dailyLossLimit": 4000
         }
       ],
       "enforcementSemantics": {
@@ -512,237 +530,6 @@
         "drawdownType": "EOD",
         "maxLossTracking": "TrailingEod",
         "maxLossThresholdUpdate": "EndOfDay",
-        "maxLossFloorCapMode": "AtInitialBalance",
-        "maxLossFloorCapOffset": 0,
-        "maxLossFloorCapTrigger": "WhenThresholdReachesCap",
-        "maxLossFloorCapStatuses": "AP",
-        "hasDailyLossLimit": true,
-        "evalRithmicThresholdStopsAtProfitTarget": true,
-        "evalTradovateThresholdStopsAtProfitTarget": false,
-        "evalRithmicThresholdStopOffset": 2000,
-        "evalTradovateThresholdStopOffset": 0,
-        "evalProfitTargetLockBuffer": 20,
-        "useNativeLiquidationThresholdWhenAvailable": true,
-        "microContractRootRegex": "^M[A-Z0-9]+$",
-        "microContractMultiplier": 10,
-        "tradingStartTime": "18:00:00",
-        "tradingEndTime": "16:59:00"
-      }
-    },
-    {
-      "firmId": "ApexIntraday",
-      "uiDisplayName": "Apex Intraday",
-      "legalName": "Apex Trader Funding Intraday",
-      "officialSourceUrls": [
-        "https://support.apextraderfunding.com/hc/en-us/articles/39730299425811-Apex-Intraday-Evaluations-PA-Accounts",
-        "https://support.apextraderfunding.com/hc/en-us/articles/40435813415187-Daily-Loss-Limit-DLL",
-        "https://apextraderfunding.com/help-center/getting-started/futures-trading-times/",
-        "https://dashboard.apextraderfunding.com/agreement/user-agreement"
-      ],
-      "lastVerifiedDate": "2026-03-04",
-      "status": "Supported",
-      "copyTradingPolicy": {
-        "allowed": "conditional",
-        "sameOwnerOnly": true,
-        "maxAccounts": 20,
-        "notes": "Current Apex agreement: same-owner copying only from manually placed originating orders; autonomous AI/automation is prohibited. Glitch surfaces this as compliance information and does not silently infer account authority.",
-        "sourceUrl": "https://dashboard.apextraderfunding.com/agreement/user-agreement"
-      },
-      "tiers": [
-        {
-          "accountSize": 25000,
-          "statusFilter": "Eval",
-          "maxContracts": 4,
-          "profitTarget": 1500,
-          "maxDrawdown": 1500,
-          "dailyLossLimit": 500
-        },
-        {
-          "accountSize": 50000,
-          "statusFilter": "Eval",
-          "maxContracts": 10,
-          "profitTarget": 3000,
-          "maxDrawdown": 2500,
-          "dailyLossLimit": 1000
-        },
-        {
-          "accountSize": 100000,
-          "statusFilter": "Eval",
-          "maxContracts": 14,
-          "profitTarget": 6000,
-          "maxDrawdown": 3000,
-          "dailyLossLimit": 1500
-        },
-        {
-          "accountSize": 150000,
-          "statusFilter": "Eval",
-          "maxContracts": 17,
-          "profitTarget": 9000,
-          "maxDrawdown": 5000,
-          "dailyLossLimit": 2500
-        },
-        {
-          "accountSize": 25000,
-          "statusFilter": "AP",
-          "minProfit": 0,
-          "maxProfit": 1000,
-          "maxContracts": 2,
-          "profitTarget": 1500,
-          "maxDrawdown": 1500,
-          "dailyLossLimit": 250
-        },
-        {
-          "accountSize": 25000,
-          "statusFilter": "AP",
-          "minProfit": 1000,
-          "maxProfit": 1500,
-          "maxContracts": 3,
-          "profitTarget": 1500,
-          "maxDrawdown": 1500,
-          "dailyLossLimit": 375
-        },
-        {
-          "accountSize": 25000,
-          "statusFilter": "AP",
-          "minProfit": 1500,
-          "maxProfit": 2500,
-          "maxContracts": 3,
-          "profitTarget": 1500,
-          "maxDrawdown": 1500,
-          "dailyLossLimit": 500
-        },
-        {
-          "accountSize": 25000,
-          "statusFilter": "AP",
-          "minProfit": 2500,
-          "maxContracts": 4,
-          "profitTarget": 1500,
-          "maxDrawdown": 1500,
-          "dailyLossLimit": 625
-        },
-        {
-          "accountSize": 50000,
-          "statusFilter": "AP",
-          "minProfit": 0,
-          "maxProfit": 1000,
-          "maxContracts": 2,
-          "profitTarget": 3000,
-          "maxDrawdown": 2500,
-          "dailyLossLimit": 500
-        },
-        {
-          "accountSize": 50000,
-          "statusFilter": "AP",
-          "minProfit": 1000,
-          "maxProfit": 2600,
-          "maxContracts": 3,
-          "profitTarget": 3000,
-          "maxDrawdown": 2500,
-          "dailyLossLimit": 625
-        },
-        {
-          "accountSize": 50000,
-          "statusFilter": "AP",
-          "minProfit": 2600,
-          "maxProfit": 4900,
-          "maxContracts": 4,
-          "profitTarget": 3000,
-          "maxDrawdown": 2500,
-          "dailyLossLimit": 750
-        },
-        {
-          "accountSize": 50000,
-          "statusFilter": "AP",
-          "minProfit": 4900,
-          "maxContracts": 4,
-          "profitTarget": 3000,
-          "maxDrawdown": 2500,
-          "dailyLossLimit": 1000
-        },
-        {
-          "accountSize": 100000,
-          "statusFilter": "AP",
-          "minProfit": 0,
-          "maxProfit": 3000,
-          "maxContracts": 3,
-          "profitTarget": 6000,
-          "maxDrawdown": 3000,
-          "dailyLossLimit": 1500
-        },
-        {
-          "accountSize": 100000,
-          "statusFilter": "AP",
-          "minProfit": 3000,
-          "maxProfit": 6000,
-          "maxContracts": 5,
-          "profitTarget": 6000,
-          "maxDrawdown": 3000,
-          "dailyLossLimit": 1875
-        },
-        {
-          "accountSize": 100000,
-          "statusFilter": "AP",
-          "minProfit": 6000,
-          "maxProfit": 9000,
-          "maxContracts": 7,
-          "profitTarget": 6000,
-          "maxDrawdown": 3000,
-          "dailyLossLimit": 2250
-        },
-        {
-          "accountSize": 100000,
-          "statusFilter": "AP",
-          "minProfit": 9000,
-          "maxContracts": 10,
-          "profitTarget": 6000,
-          "maxDrawdown": 3000,
-          "dailyLossLimit": 3000
-        },
-        {
-          "accountSize": 150000,
-          "statusFilter": "AP",
-          "minProfit": 0,
-          "maxProfit": 3000,
-          "maxContracts": 3,
-          "profitTarget": 9000,
-          "maxDrawdown": 5000,
-          "dailyLossLimit": 2500
-        },
-        {
-          "accountSize": 150000,
-          "statusFilter": "AP",
-          "minProfit": 3000,
-          "maxProfit": 6000,
-          "maxContracts": 5,
-          "profitTarget": 9000,
-          "maxDrawdown": 5000,
-          "dailyLossLimit": 3125
-        },
-        {
-          "accountSize": 150000,
-          "statusFilter": "AP",
-          "minProfit": 6000,
-          "maxProfit": 9000,
-          "maxContracts": 7,
-          "profitTarget": 9000,
-          "maxDrawdown": 5000,
-          "dailyLossLimit": 3750
-        },
-        {
-          "accountSize": 150000,
-          "statusFilter": "AP",
-          "minProfit": 9000,
-          "maxContracts": 10,
-          "profitTarget": 9000,
-          "maxDrawdown": 5000,
-          "dailyLossLimit": 5000
-        }
-      ],
-      "enforcementSemantics": {
-        "directionalTradingOnly": true,
-        "drawdownType": "Intraday",
-        "maxLossTracking": "TrailingUnrealized",
-        "maxLossThresholdUpdate": "Intraday",
         "maxLossFloorCapMode": "AtInitialBalance",
         "maxLossFloorCapOffset": 0,
         "maxLossFloorCapTrigger": "WhenThresholdReachesCap",
@@ -990,60 +777,37 @@
     },
     {
       "firmId": "TakeProfitTrader",
-      "uiDisplayName": "TPT",
-      "legalName": "Take Profit Trader",
+      "uiDisplayName": "TPT Test",
+      "legalName": "Take Profit Trader Test",
       "officialSourceUrls": [
-        "https://takeprofittraderhelp.zendesk.com/hc/en-us/articles/34593293674395-How-many-contracts-can-I-trade",
-        "https://takeprofittraderhelp.zendesk.com/hc/en-us/categories/4403259779475-Rules"
+        "https://takeprofittraderhelp.zendesk.com/hc/en-us/articles/15170265979165-Rule-3-Do-Not-Hit-End-Of-Day-EOD-Maximum-Trailing-Drawdown",
+        "https://takeprofittraderhelp.zendesk.com/hc/en-us/articles/15170347090461-Rule-4-Trade-Approved-Products-During-Approved-Hours",
+        "https://takeprofittraderhelp.zendesk.com/hc/en-us/articles/15170316538013-Rule-5-Be-Consistent"
       ],
-      "lastVerifiedDate": "2026-02-15",
+      "lastVerifiedDate": "2026-08-19",
       "status": "Supported",
       "copyTradingPolicy": {
-        "allowed": "unverified",
+        "allowed": "conditional",
         "sameOwnerOnly": true,
         "maxAccounts": 5,
-        "notes": "Official Trade Copier Policy prohibits cross-account copy services; secondary sources cite a capped same-owner allowance — confirm with TPT support.",
+        "notes": "Same-owner copying through approved tools, including NinjaTrader platform-native copying. Cross-user and opposing correlated positions are not permitted.",
         "sourceUrl": "https://takeprofittraderhelp.zendesk.com/hc/en-us/articles/34431176505245-Trade-Copier-Policy"
       },
       "tiers": [
-        {
-          "accountSize": 25000,
-          "maxContracts": 3,
-          "maxMicros": 30,
-          "profitTarget": 1500,
-          "maxDrawdown": 1500
-        },
-        {
-          "accountSize": 50000,
-          "maxContracts": 6,
-          "maxMicros": 60,
-          "profitTarget": 3000,
-          "maxDrawdown": 2000
-        },
-        {
-          "accountSize": 75000,
-          "maxContracts": 9,
-          "maxMicros": 90,
-          "profitTarget": 4500,
-          "maxDrawdown": 2500
-        },
-        {
-          "accountSize": 100000,
-          "maxContracts": 12,
-          "maxMicros": 120,
-          "profitTarget": 6000,
-          "maxDrawdown": 3000
-        },
-        {
-          "accountSize": 150000,
-          "maxContracts": 15,
-          "maxMicros": 150,
-          "profitTarget": 9000,
-          "maxDrawdown": 4500
-        }
+        { "accountSize": 25000, "statusFilter": "Eval", "maxContracts": 3, "maxMicros": 30, "profitTarget": 1500, "maxDrawdown": 1500 },
+        { "accountSize": 50000, "statusFilter": "Eval", "maxContracts": 6, "maxMicros": 60, "profitTarget": 3000, "maxDrawdown": 2000 },
+        { "accountSize": 75000, "statusFilter": "Eval", "maxContracts": 9, "maxMicros": 90, "profitTarget": 4500, "maxDrawdown": 2500 },
+        { "accountSize": 100000, "statusFilter": "Eval", "maxContracts": 12, "maxMicros": 120, "profitTarget": 6000, "maxDrawdown": 3000 },
+        { "accountSize": 150000, "statusFilter": "Eval", "maxContracts": 15, "maxMicros": 150, "profitTarget": 9000, "maxDrawdown": 4500 }
       ],
       "enforcementSemantics": {
+        "directionalTradingOnly": true,
         "drawdownType": "EOD",
+        "maxLossTracking": "TrailingEod",
+        "maxLossThresholdUpdate": "EndOfDay",
+        "maxLossFloorCapMode": "AtInitialBalance",
+        "maxLossFloorCapTrigger": "WhenThresholdReachesCap",
+        "maxLossFloorCapStatuses": "Eval",
         "hasDailyLossLimit": false,
         "allowSundayTrading": true,
         "minimumTradingDays": 5,
@@ -1051,7 +815,87 @@
         "microContractRootRegex": "^M[A-Z0-9]+$",
         "microContractMultiplier": 10,
         "tradingStartTime": "18:00:00",
-        "tradingEndTime": "17:00:00"
+        "tradingEndTime": "16:55:00"
+      }
+    },
+    {
+      "firmId": "TakeProfitTraderPro",
+      "uiDisplayName": "TPT PRO",
+      "legalName": "Take Profit Trader PRO",
+      "officialSourceUrls": [
+        "https://takeprofittraderhelp.zendesk.com/hc/en-us/articles/15171769361053-PRO-Account-Rules",
+        "https://takeprofittraderhelp.zendesk.com/hc/en-us/articles/15170347090461-Rule-4-Trade-Approved-Products-During-Approved-Hours"
+      ],
+      "lastVerifiedDate": "2026-08-19",
+      "status": "Supported",
+      "copyTradingPolicy": {
+        "allowed": "conditional",
+        "sameOwnerOnly": true,
+        "maxAccounts": 5,
+        "notes": "Same-owner copying through approved tools, including NinjaTrader platform-native copying. Cross-user and opposing correlated positions are not permitted.",
+        "sourceUrl": "https://takeprofittraderhelp.zendesk.com/hc/en-us/articles/34431176505245-Trade-Copier-Policy"
+      },
+      "tiers": [
+        { "accountSize": 25000, "statusFilter": "AP", "maxContracts": 3, "maxMicros": 30, "maxDrawdown": 1500 },
+        { "accountSize": 50000, "statusFilter": "AP", "maxContracts": 6, "maxMicros": 60, "maxDrawdown": 2000 },
+        { "accountSize": 75000, "statusFilter": "AP", "maxContracts": 9, "maxMicros": 90, "maxDrawdown": 2500 },
+        { "accountSize": 100000, "statusFilter": "AP", "maxContracts": 12, "maxMicros": 120, "maxDrawdown": 3000 },
+        { "accountSize": 150000, "statusFilter": "AP", "maxContracts": 15, "maxMicros": 150, "maxDrawdown": 4500 }
+      ],
+      "enforcementSemantics": {
+        "directionalTradingOnly": true,
+        "drawdownType": "Intraday",
+        "maxLossTracking": "TrailingUnrealized",
+        "maxLossThresholdUpdate": "Intraday",
+        "maxLossFloorCapMode": "AtInitialBalance",
+        "maxLossFloorCapTrigger": "WhenThresholdReachesCap",
+        "maxLossFloorCapStatuses": "AP",
+        "hasDailyLossLimit": false,
+        "allowSundayTrading": true,
+        "microContractRootRegex": "^M[A-Z0-9]+$",
+        "microContractMultiplier": 10,
+        "tradingStartTime": "18:00:00",
+        "tradingEndTime": "16:55:00"
+      }
+    },
+    {
+      "firmId": "TakeProfitTraderProPlus",
+      "uiDisplayName": "TPT PRO+",
+      "legalName": "Take Profit Trader PRO+",
+      "officialSourceUrls": [
+        "https://takeprofittraderhelp.zendesk.com/hc/en-us/articles/15172006753821-PRO-Account-Rules",
+        "https://takeprofittraderhelp.zendesk.com/hc/en-us/articles/15170347090461-Rule-4-Trade-Approved-Products-During-Approved-Hours"
+      ],
+      "lastVerifiedDate": "2026-08-19",
+      "status": "Supported",
+      "copyTradingPolicy": {
+        "allowed": "conditional",
+        "sameOwnerOnly": true,
+        "maxAccounts": 5,
+        "notes": "Same-owner copying through approved tools, including NinjaTrader platform-native copying. Cross-user and opposing correlated positions are not permitted.",
+        "sourceUrl": "https://takeprofittraderhelp.zendesk.com/hc/en-us/articles/34431176505245-Trade-Copier-Policy"
+      },
+      "tiers": [
+        { "accountSize": 25000, "statusFilter": "AP", "maxContracts": 3, "maxMicros": 30, "maxDrawdown": 1500 },
+        { "accountSize": 50000, "statusFilter": "AP", "maxContracts": 6, "maxMicros": 60, "maxDrawdown": 2000 },
+        { "accountSize": 75000, "statusFilter": "AP", "maxContracts": 9, "maxMicros": 90, "maxDrawdown": 2500 },
+        { "accountSize": 100000, "statusFilter": "AP", "maxContracts": 12, "maxMicros": 120, "maxDrawdown": 3000 },
+        { "accountSize": 150000, "statusFilter": "AP", "maxContracts": 15, "maxMicros": 150, "maxDrawdown": 4500 }
+      ],
+      "enforcementSemantics": {
+        "directionalTradingOnly": true,
+        "drawdownType": "EOD",
+        "maxLossTracking": "TrailingEod",
+        "maxLossThresholdUpdate": "EndOfDay",
+        "maxLossFloorCapMode": "AtInitialBalance",
+        "maxLossFloorCapTrigger": "WhenThresholdReachesCap",
+        "maxLossFloorCapStatuses": "AP",
+        "hasDailyLossLimit": false,
+        "allowSundayTrading": true,
+        "microContractRootRegex": "^M[A-Z0-9]+$",
+        "microContractMultiplier": 10,
+        "tradingStartTime": "18:00:00",
+        "tradingEndTime": "16:55:00"
       }
     },
     {

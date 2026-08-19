@@ -126,8 +126,13 @@ class LearningCycleTests(unittest.TestCase):
                 "executor_code": "apex_liquidation_buffer_exceeded",
             },
         }
+        profit_lock = {
+            "http_status": 422,
+            "body": {"failed_check_code": "eval_target_locked"},
+        }
 
         self.assertFalse(MODULE.is_cognitive_rejection(infrastructure))
+        self.assertFalse(MODULE.is_cognitive_rejection(profit_lock))
         self.assertTrue(MODULE.is_cognitive_rejection(geometry))
         self.assertTrue(MODULE.is_cognitive_rejection(unsafe_widening))
 

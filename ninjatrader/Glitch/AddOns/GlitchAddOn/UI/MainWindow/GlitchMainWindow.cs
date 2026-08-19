@@ -4433,41 +4433,124 @@ namespace Glitch.UI
                         _riskLockedAccounts.Remove(accountName);
                 }
 
-                if (enforceEvalLock && evalProfitTargetReached)
+                GlitchEvalTargetLockState evalTargetState = null;
+                bool hasPersistedEvalTargetLock = enforceEvalLock
+                    && GlitchEvalTargetLockStore.TryGetActive(
+                        GlitchEvalTargetLockStore.GetDefaultPath(),
+                        accountName,
+                        nowUtc,
+                        out evalTargetState);
+                if (enforceEvalLock && evalProfitTargetReached && !hasPersistedEvalTargetLock)
                 {
-                    if (!isEvalTargetLocked && !isEvalLockAcknowledged)
+                    try
                     {
-                        const string evalSetting = "ENFORCE_EVAL_PROFIT_TARGET_LOCK_EVAL";
-                        string evalDetail =
-                            "Evaluation equity reached the configured target balance. One account flatten was requested.";
-                        _evalTargetLockedAccounts.Add(accountName);
+                        string connectionState = accountsByName.ContainsKey(accountName)
+                            ? "connected"
+                            : "unavailable";
+                        bool firstDetection = GlitchEvalTargetLockStore.RecordDetected(
+                            GlitchEvalTargetLockStore.GetDefaultPath(),
+                            accountName,
+                            nowUtc,
+                            row.EquityRaw,
+                            row.EvalProfitTargetLockBalanceRaw,
+                            row.EquitySource,
+                            connectionState,
+                            out evalTargetState);
+                        hasPersistedEvalTargetLock = true;
+                        if (firstDetection)
+                        {
+                            const string evalSetting = "ENFORCE_EVAL_PROFIT_TARGET_LOCK_EVAL";
+                            string evalDetail =
+                                "Evaluation equity reached the configured target balance. The lock is durable and flatten will retry until the account is flat and order-free.";
+                            AppendJournal(
+                                accountName,
+                                "Risk",
+                                BuildRuleEvent(
+                                    "EvalTargetFlatten",
+                                    "detected",
+                                    row.EquityRaw,
+                                    row.EvalProfitTargetLockBalanceRaw,
+                                    evalSetting,
+                                    evalDetail)
+                                + $"|session={CleanJournalToken(evalTargetState.SessionId)}"
+                                + $"|equity_source={CleanJournalToken(row.EquitySource)}"
+                                + $"|connection={connectionState}");
+                            RaiseCriticalWarning(
+                                accountName,
+                                evalDetail,
+                                "EvalTargetFlatten",
+                                unlocksTrading: false);
+                        }
+                    }
+                    catch (Exception error)
+                    {
+                        RecordSubsystemFault("eval_target_lock_persistence", error);
+                        RaiseCriticalWarning(
+                            accountName,
+                            "Evaluation target was reached, but its durable compliance state could not be saved.",
+                            "EvalTargetPersistenceFailed",
+                            unlocksTrading: false);
+                    }
+                }
+
+                if (enforceEvalLock && (evalProfitTargetReached || hasPersistedEvalTargetLock))
+                {
+                    _evalTargetLockedAccounts.Add(accountName);
+                    isEvalTargetLocked = true;
+                    if (accountsByName.TryGetValue(accountName, out Account evalTargetLockAccount))
+                    {
+                        bool flatAndOrderFree = GlitchReplicationEngine.IsAccountFlat(evalTargetLockAccount)
+                            && !GlitchReplicationEngine.HasAnyWorkingOrders(evalTargetLockAccount);
+                        if (flatAndOrderFree)
+                        {
+                            if (evalTargetState == null
+                                || !string.Equals(evalTargetState.Status, "satisfied", StringComparison.OrdinalIgnoreCase))
+                            {
+                                TryRecordEvalTargetAttempt(accountName, nowUtc, "flat_order_free", true);
+                                AppendJournal(accountName, "Risk", "eval_target_lock|result=flat_order_free");
+                            }
+                        }
+                        else if (IsEvalTargetRetryDue(evalTargetState, nowUtc))
+                        {
+                            bool issued = GlitchRuntimeHost.Active?.RequestFlatten(
+                                "eval-target-" + Guid.NewGuid().ToString("N"),
+                                accountName,
+                                "eval_profit_target_lock") == true;
+                            string result = issued ? "flatten_issued" : "flatten_not_accepted";
+                            TryRecordEvalTargetAttempt(accountName, nowUtc, result, false);
+                            AppendJournal(
+                                accountName,
+                                "Risk",
+                                $"eval_target_lock|result={result}|connection=connected"
+                                + $"|equity={row.EquityRaw.ToString("0.##", CultureInfo.InvariantCulture)}"
+                                + $"|target={row.EvalProfitTargetLockBalanceRaw.ToString("0.##", CultureInfo.InvariantCulture)}"
+                                + $"|equity_source={CleanJournalToken(row.EquitySource)}");
+                            if (!issued)
+                            {
+                                RaiseCriticalWarning(
+                                    accountName,
+                                    "Evaluation target flatten was not accepted; the durable obligation remains pending and will retry.",
+                                    "EvalTargetFlattenPending",
+                                    unlocksTrading: false);
+                            }
+                        }
+                    }
+                    else if (evalTargetState == null
+                        || !string.Equals(evalTargetState.LastResult, "account_unavailable", StringComparison.OrdinalIgnoreCase))
+                    {
+                        TryRecordEvalTargetAttempt(accountName, nowUtc, "account_unavailable", false);
                         AppendJournal(
                             accountName,
                             "Risk",
-                            BuildRuleEvent(
-                                "EvalTargetFlatten",
-                                "flatten_once",
-                                row.EquityRaw,
-                                row.EvalProfitTargetLockBalanceRaw,
-                                evalSetting,
-                                evalDetail));
+                            "eval_target_lock|result=pending|connection=unavailable");
                         RaiseCriticalWarning(
                             accountName,
-                            evalDetail,
-                            "EvalTargetFlatten",
+                            "Evaluation target lock is pending because the account is unavailable; it will retry on reconnect.",
+                            "EvalTargetAccountUnavailable",
                             unlocksTrading: false);
-                        isEvalTargetLocked = true;
-
-                        if (accountsByName.TryGetValue(accountName, out Account evalTargetLockAccount))
-                        {
-                            TryFlattenAccountForRisk(
-                                evalTargetLockAccount,
-                                $"EVAL|{accountName}",
-                                "Eval profit target lock");
-                        }
                     }
                 }
-                else
+                else if (!enforceEvalLock)
                 {
                     _evalTargetLockedAccounts.Remove(accountName);
                 }
@@ -5353,6 +5436,34 @@ namespace Glitch.UI
         private string GetAccountGroupsFilePath()
         {
             return GlitchStateStore.GetDefaultConfigurationPath();
+        }
+
+        private static bool IsEvalTargetRetryDue(GlitchEvalTargetLockState state, DateTime nowUtc)
+        {
+            return state == null
+                || !state.LastAttemptUtc.HasValue
+                || nowUtc - state.LastAttemptUtc.Value >= TimeSpan.FromSeconds(10);
+        }
+
+        private void TryRecordEvalTargetAttempt(
+            string accountName,
+            DateTime nowUtc,
+            string result,
+            bool satisfied)
+        {
+            try
+            {
+                GlitchEvalTargetLockStore.RecordAttempt(
+                    GlitchEvalTargetLockStore.GetDefaultPath(),
+                    accountName,
+                    nowUtc,
+                    result,
+                    satisfied);
+            }
+            catch (Exception error)
+            {
+                RecordSubsystemFault("eval_target_lock_persistence", error);
+            }
         }
 
         private void LoadAuditFeedsFromDisk()
@@ -6860,7 +6971,7 @@ namespace Glitch.UI
                 ruleFirmId = "ApexTraderFunding";
 
             _firmRules.TryGetValue(ruleFirmId, out FirmRuleMetadata selectedFirmRule);
-            double currentEquity = GetCurrentEquity(account, cashValue);
+            double currentEquity = GetCurrentEquity(account, cashValue, out string equitySource);
             double effectiveBalance = currentEquity > 0 ? currentEquity : cashValue;
             double tierProfitReference = cashValue > 0 ? cashValue : effectiveBalance;
             double tierProfit = Math.Max(0, tierProfitReference - selectedAccountSize);
@@ -6999,6 +7110,7 @@ namespace Glitch.UI
                 DailyLossLimitRaw = dailyLossLimit > 0 ? dailyLossLimit : 0,
                 EvalProfitTargetLockBalanceRaw = evalProfitTargetLockBalance,
                 EquityRaw = effectiveBalance,
+                EquitySource = equitySource,
                 NetLiqRaw = minMargin ?? double.NaN,
                 BufferMarginRaw = bufferMargin ?? double.NaN,
                 MaxDrawdownRaw = maxDrawdown > 0 ? maxDrawdown : 0,
@@ -7773,16 +7885,25 @@ namespace Glitch.UI
             return "Neutral";
         }
 
-        private static double GetCurrentEquity(Account account, double fallbackCashValue)
+        private static double GetCurrentEquity(Account account, double fallbackCashValue, out string source)
         {
+            source = "Unavailable";
             if (account != null)
             {
                 double netLiq = TryGetAccountItem(account, "NetLiquidation", "NetLiquidationValue", "NetLiquidationAmount", "NetLiq");
                 if (netLiq > 0)
+                {
+                    source = "NetLiquidation";
                     return netLiq;
+                }
             }
 
-            return fallbackCashValue > 0 ? fallbackCashValue : 0;
+            if (fallbackCashValue > 0)
+            {
+                source = "CashValue";
+                return fallbackCashValue;
+            }
+            return 0;
         }
 
         private double GetOrUpdateTrailingPeak(string accountName, double currentEquity, double baselineEquity = 0)

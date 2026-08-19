@@ -145,8 +145,14 @@ namespace Glitch.UI
                 NativeStateAvailable = positionsAvailable && ordersAvailable,
                 WorkingOrderCount = workingOrderCount,
                 MaxContracts = ruleMaxContracts > 0 ? ruleMaxContracts : row.MaxContractsRaw,
-                IsRiskLocked = false,
-                IsEvalTargetLocked = false,
+                IsRiskLocked = _riskLockedAccounts.Contains(row.DisplayName),
+                IsEvalTargetLocked = _runtimePolicySettings?.EvalProfitTargetLockEnabled == true
+                    && (_evalTargetLockedAccounts.Contains(row.DisplayName)
+                        || GlitchEvalTargetLockStore.TryGetActive(
+                            GlitchEvalTargetLockStore.GetDefaultPath(),
+                            row.DisplayName,
+                            DateTime.UtcNow,
+                            out _)),
                 AiDailyCaptureEnabled = aiCaptureEnabled,
                 AiDailyCaptureContextAvailable = captureContextAvailable,
                 AiDailyCaptureTargetRatio = captureContextAvailable ? captureRatio : double.NaN,

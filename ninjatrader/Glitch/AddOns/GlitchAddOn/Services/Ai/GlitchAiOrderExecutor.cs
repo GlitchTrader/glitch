@@ -11,8 +11,8 @@ namespace Glitch.Services
 {
     /// <summary>
     /// Strict Hermes intent translator. It performs contract parsing, identity
-    /// resolution and deduplication only; the sole visible policy exception is
-    /// the opt-in AI daily-capture entry lock, which never affects management.
+    /// resolution and deduplication only; visible, opt-in profit locks may block
+    /// new entries, but never affect position management or exits.
     /// </summary>
     internal static class GlitchAiOrderExecutor
     {
@@ -76,6 +76,32 @@ namespace Glitch.Services
                     "failed",
                     "master_identity_not_resolved",
                     accountFailure);
+            }
+            if ((string.Equals(action, "ENTER_LONG", StringComparison.Ordinal)
+                    || string.Equals(action, "ENTER_SHORT", StringComparison.Ordinal))
+                && ShouldBlockEvalTargetEntry(account, nowUtc, out string evalTargetMessage))
+            {
+                return SubmitNoAction(
+                    host,
+                    validation,
+                    rawJson,
+                    contentFingerprint,
+                    "executed",
+                    "eval_profit_target_reached",
+                    evalTargetMessage);
+            }
+            if ((string.Equals(action, "ENTER_LONG", StringComparison.Ordinal)
+                    || string.Equals(action, "ENTER_SHORT", StringComparison.Ordinal))
+                && ShouldBlockAiDailyCloseEntry(nowUtc, out string dailyCloseMessage))
+            {
+                return SubmitNoAction(
+                    host,
+                    validation,
+                    rawJson,
+                    contentFingerprint,
+                    "executed",
+                    "ai_daily_close_window",
+                    dailyCloseMessage);
             }
             if ((string.Equals(action, "ENTER_LONG", StringComparison.Ordinal)
                     || string.Equals(action, "ENTER_SHORT", StringComparison.Ordinal))
@@ -212,6 +238,47 @@ namespace Glitch.Services
             message = "AI daily capture reached; realized="
                 + realizedPnl.ToString("0.##", CultureInfo.InvariantCulture)
                 + ", target=" + targetUsd.ToString("0.##", CultureInfo.InvariantCulture);
+            return true;
+        }
+
+        private static bool ShouldBlockEvalTargetEntry(string account, DateTime nowUtc, out string message)
+        {
+            message = null;
+            GlitchRuntimePolicySettings policy = GlitchRuntimePolicyStore.LoadSettings(
+                GlitchRuntimePolicyStore.GetDefaultSettingsPath());
+            if (policy == null || !policy.EvalProfitTargetLockEnabled)
+                return false;
+            if (!GlitchEvalTargetLockStore.TryGetActive(
+                    GlitchEvalTargetLockStore.GetDefaultPath(),
+                    account,
+                    nowUtc,
+                    out GlitchEvalTargetLockState state))
+                return false;
+
+            message = "Evaluation profit target lock is active; session="
+                + state.SessionId
+                + ", detected_equity=" + state.DetectedEquity.ToString("0.##", CultureInfo.InvariantCulture)
+                + ", target=" + state.TargetEquity.ToString("0.##", CultureInfo.InvariantCulture)
+                + ", source=" + state.EquitySource;
+            return true;
+        }
+
+        private static bool ShouldBlockAiDailyCloseEntry(DateTime nowUtc, out string message)
+        {
+            message = null;
+            GlitchRuntimePolicySettings policy = GlitchRuntimePolicyStore.LoadSettings(
+                GlitchRuntimePolicyStore.GetDefaultSettingsPath());
+            if (policy == null || !policy.EnforceAiDailyClose)
+                return false;
+
+            GlitchAiTradingWindowStatus window = GlitchAiTradingWindow.Evaluate(
+                nowUtc,
+                "18:00:00",
+                "16:55:00");
+            if (!window.IsValid || window.IsEntryAllowed)
+                return false;
+
+            message = "AI daily-close window is active; new entries resume with the next trading session.";
             return true;
         }
 

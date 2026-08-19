@@ -126,6 +126,10 @@ namespace Glitch.Services
                 upperName.Contains("TAKEPROFIT") || upperName.Contains("TPT"))
             {
                 confidence = upperConnection.Contains("TAKEPROFIT") || upperConnection.Contains("TPT") ? "High" : "Medium";
+                if (upperName.Contains("PRO+") || upperName.Contains("PRO PLUS") || upperName.Contains("PROPLUS"))
+                    return "TakeProfitTraderProPlus";
+                if (upperName.Contains("PRO"))
+                    return "TakeProfitTraderPro";
                 return "TakeProfitTrader";
             }
 
