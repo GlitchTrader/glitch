@@ -20,8 +20,8 @@ export interface LicensePolicy {
   };
 }
 
-export const LICENSE_GRACE_WINDOW_SECONDS = 24 * 60 * 60;
-export const LICENSE_DEFAULT_CHECK_IN_SECONDS = 14400;
+export const LICENSE_GRACE_WINDOW_SECONDS = 14 * 24 * 60 * 60;
+export const LICENSE_DEFAULT_CHECK_IN_SECONDS = 7 * 24 * 60 * 60;
 export const LICENSE_POLICY_VERSION = "2026-03-12-v2";
 const DEFAULT_FREE_LITE_PRODUCT_IDS = ["prod_QX1HIqoZcBywS"];
 const DEFAULT_PREMIUM_PRODUCT_IDS = ["prod_nL5dDWWpEq9gF"];

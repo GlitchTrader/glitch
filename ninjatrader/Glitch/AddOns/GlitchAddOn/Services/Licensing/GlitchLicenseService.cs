@@ -42,8 +42,8 @@ namespace Glitch.Services
         public bool LicenseValid { get; set; }
         public string LicenseStatus { get; set; } = "unknown";
         public string Reason { get; set; } = string.Empty;
-        public int NextCheckInSeconds { get; set; } = 14400;
-        public int GraceWindowSeconds { get; set; } = 86400;
+        public int NextCheckInSeconds { get; set; } = 604800;
+        public int GraceWindowSeconds { get; set; } = 1209600;
         public DateTime ReceivedAtUtc { get; set; } = DateTime.UtcNow;
         public GlitchLicensePolicy Policy { get; set; } = new GlitchLicensePolicy();
         public string LicenseToken { get; set; } = string.Empty;
@@ -165,8 +165,8 @@ namespace Glitch.Services
                 LicenseStatus = "unknown",
                 Reason = "request_failed",
                 ReceivedAtUtc = DateTime.UtcNow,
-                NextCheckInSeconds = 14400,
-                GraceWindowSeconds = 86400,
+                NextCheckInSeconds = 604800,
+                GraceWindowSeconds = 1209600,
                 Policy = new GlitchLicensePolicy(),
                 HasVerifiedToken = false,
                 LicenseToken = string.Empty
@@ -305,8 +305,8 @@ namespace Glitch.Services
             snapshot.LicenseValid = ReadBool(license, "valid");
             snapshot.LicenseStatus = ReadString(license, "status", snapshot.LicenseValid ? "active" : "inactive");
             snapshot.Reason = ReadString(license, "reason", string.Empty);
-            snapshot.NextCheckInSeconds = ReadInt(heartbeat, "nextCheckInSeconds", 14400, 15, 14400);
-            snapshot.GraceWindowSeconds = ReadInt(license, "graceWindowSeconds", 86400, 60, 604800);
+            snapshot.NextCheckInSeconds = ReadInt(heartbeat, "nextCheckInSeconds", 604800, 15, 604800);
+            snapshot.GraceWindowSeconds = ReadInt(license, "graceWindowSeconds", 1209600, 60, 1209600);
             snapshot.Policy = ParsePolicy(policy, entitlement);
             snapshot.LicenseToken = ReadString(root, "licenseToken", string.Empty);
             snapshot.UpdateChecked = ReadBool(update, "checked");
@@ -548,14 +548,14 @@ namespace Glitch.Services
         private static int ResolveGraceWindowSeconds(GlitchLicenseTokenClaims claims)
         {
             if (claims == null || claims.ExpiresAtUtc == DateTime.MinValue || claims.GraceUntilUtc == DateTime.MinValue)
-                return 86400;
+                return 1209600;
 
             double deltaSeconds = (claims.GraceUntilUtc - claims.ExpiresAtUtc).TotalSeconds;
             if (double.IsNaN(deltaSeconds) || double.IsInfinity(deltaSeconds))
-                return 86400;
+                return 1209600;
 
             int normalized = (int)Math.Round(deltaSeconds, MidpointRounding.AwayFromZero);
-            return Math.Max(60, Math.Min(604800, normalized));
+            return Math.Max(60, Math.Min(1209600, normalized));
         }
 
         private static bool TryVerifyEs256Signature(string signingInput, byte[] signature)

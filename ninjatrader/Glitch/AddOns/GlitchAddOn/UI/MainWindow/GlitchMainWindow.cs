@@ -73,6 +73,7 @@ namespace Glitch.UI
         private static readonly FontWeight UiTabFontWeight = FontWeights.Medium;
         private const string CurrentClientVersion = "addon-ai-0.0.2.2";
         private const string DefaultLatestDownloadUrl = "https://download.glitchtrader.com/latest";
+        private const int LicenseCheckInSeconds = 7 * 24 * 60 * 60;
         private const double UnrealizedLossFlattenThresholdRatio = 0.80;
         private const double BufferCriticalLockThresholdRatio = 0.15;
         private const double BufferOneContractThresholdRatio = 0.20;
@@ -301,6 +302,7 @@ namespace Glitch.UI
             _latestClientVersion = string.Empty;
             _latestDownloadUrl = DefaultLatestDownloadUrl;
             RehydrateLicenseStateFromSignedCache();
+            _nextLicenseHeartbeatUtc = ResolveNextLicenseHeartbeatUtc(DateTime.UtcNow);
             GlitchRuntimePolicyStore.SaveLicenseCache(_licenseCacheFilePath, _licenseCacheState);
             LoadSelectionOverridesFromDisk(overwriteExisting: true);
             LoadPeakStatesFromDisk();
@@ -1336,6 +1338,15 @@ namespace Glitch.UI
             _ = RefreshLicenseStateAsync(useValidateEndpoint: false, force: false);
         }
 
+        private DateTime ResolveNextLicenseHeartbeatUtc(DateTime nowUtc)
+        {
+            DateTime lastSuccessUtc = _licenseCacheState?.LastSuccessUtc ?? DateTime.MinValue;
+            if (lastSuccessUtc == DateTime.MinValue)
+                return nowUtc;
+            DateTime nextUtc = lastSuccessUtc.AddSeconds(LicenseCheckInSeconds);
+            return nextUtc > nowUtc ? nextUtc : nowUtc;
+        }
+
         private static string ResolveCurrentClientVersion()
         {
             try
@@ -1400,14 +1411,14 @@ namespace Glitch.UI
                         _licenseDeviceFingerprintHash,
                         clientVersion);
                     ApplyClientUpdateStateFromSnapshot(updateSnapshot);
-                    int nextCheckInSeconds = updateSnapshot?.NextCheckInSeconds ?? 14400;
-                    nextCheckInSeconds = Math.Max(900, Math.Min(14400, nextCheckInSeconds));
+                    int nextCheckInSeconds = updateSnapshot?.NextCheckInSeconds ?? LicenseCheckInSeconds;
+                    nextCheckInSeconds = Math.Max(900, Math.Min(LicenseCheckInSeconds, nextCheckInSeconds));
                     _nextLicenseHeartbeatUtc = nowNoKey.AddSeconds(nextCheckInSeconds);
                 }
                 catch (Exception updateError)
                 {
                     AppendJournal("System", "License", $"Update check failed without license key: {updateError.Message}");
-                    _nextLicenseHeartbeatUtc = nowNoKey.AddSeconds(14400);
+                    _nextLicenseHeartbeatUtc = nowNoKey.AddSeconds(LicenseCheckInSeconds);
                 }
                 GlitchRuntimePolicyStore.SaveLicenseCache(_licenseCacheFilePath, _licenseCacheState);
                 UpdateSettingsTabLicenseStatusText();
@@ -1472,8 +1483,8 @@ namespace Glitch.UI
                 UpdateAnalyticsLicenseGateOverlay();
                 UpdateJournalLicenseGateOverlay();
 
-                int nextCheckInSeconds = snapshot?.NextCheckInSeconds ?? 14400;
-                nextCheckInSeconds = Math.Max(15, Math.Min(14400, nextCheckInSeconds));
+                int nextCheckInSeconds = snapshot?.NextCheckInSeconds ?? LicenseCheckInSeconds;
+                nextCheckInSeconds = Math.Max(15, Math.Min(LicenseCheckInSeconds, nextCheckInSeconds));
                 _nextLicenseHeartbeatUtc = nowUtc.AddSeconds(nextCheckInSeconds);
             }
             catch (Exception error)
@@ -1489,7 +1500,7 @@ namespace Glitch.UI
                 UpdateSettingsTabLicenseStatusText();
                 UpdateAnalyticsLicenseGateOverlay();
                 UpdateJournalLicenseGateOverlay();
-                _nextLicenseHeartbeatUtc = nowUtc.AddSeconds(14400);
+                _nextLicenseHeartbeatUtc = nowUtc.AddSeconds(LicenseCheckInSeconds);
             }
             finally
             {
@@ -1544,16 +1555,6 @@ namespace Glitch.UI
             int flattenSubmitCount = 0;
             try
             {
-                if (!SetReplicationFromExternalSurface(false, "flatten_all"))
-                {
-                    RaiseCriticalWarning(
-                        "System",
-                        "Flatten All could not establish its durable replication stop; no native flatten was started.",
-                        "FlattenAllReplicationStopFailed",
-                        unlocksTrading: false);
-                    return false;
-                }
-
                 var accounts = ResolveFlattenAllAccounts(out List<string> unresolvedAccounts);
                 foreach (string unresolvedAccount in unresolvedAccounts)
                 {
@@ -3938,6 +3939,7 @@ namespace Glitch.UI
             PruneAccountItemUpdateThrottle(nowUtc);
             PruneActiveAccountCache(nowUtc);
             MaybeRunLicenseHeartbeat(nowUtc);
+            RefreshRuntimePolicyFromDiskIfChanged();
 
             bool uiActive = IsGlitchShellUiActive();
             if (!uiActive && !_isEditingAccountsGrid && !_isCommittingAccountsGridEdit)

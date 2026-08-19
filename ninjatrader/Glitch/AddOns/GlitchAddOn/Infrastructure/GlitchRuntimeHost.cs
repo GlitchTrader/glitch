@@ -488,14 +488,6 @@ namespace Glitch.Infrastructure
                     "flatten_all_not_requested|reason=no_connected_native_accounts");
                 return false;
             }
-            if (!SetReplicationEnabled(false))
-            {
-                PublishNotice(
-                    "System",
-                    "Order",
-                    "flatten_all_not_requested|reason=replication_stop_failed");
-                return false;
-            }
             IReadOnlyDictionary<string, bool> results = RequestFlattenBatch(
                 requestRoot,
                 accounts,
@@ -1325,8 +1317,6 @@ namespace Glitch.Infrastructure
                     .ToArray();
             }
             if (accounts.Length == 0)
-                return false;
-            if (!SetReplicationEnabled(false))
                 return false;
             string requestRoot = "hermes-flatten-" + Guid.NewGuid().ToString("N");
             IReadOnlyDictionary<string, bool> results = RequestFlattenBatch(

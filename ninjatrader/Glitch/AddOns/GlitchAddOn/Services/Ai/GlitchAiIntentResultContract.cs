@@ -5,12 +5,14 @@ namespace Glitch.Services
         public static string BuildAcceptedJson(
             string intentId,
             string intentCreatedUtc,
+            string promptVersion,
             GlitchAiExecutionResult result)
         {
             return "{"
                 + "\"schema_version\":" + GlitchSnapshotJson.String("glitch.intent.response.v1") + ","
                 + "\"status\":" + GlitchSnapshotJson.String("accepted") + ","
                 + "\"intent_id\":" + GlitchSnapshotJson.String(intentId) + ","
+                + "\"prompt_version\":" + GlitchSnapshotJson.String(promptVersion ?? string.Empty) + ","
                 + "\"executor\":" + GlitchSnapshotJson.String(result?.Status ?? "none") + ","
                 + "\"executor_code\":" + GlitchSnapshotJson.String(result?.Code ?? string.Empty) + ","
                 + "\"created_utc\":" + GlitchSnapshotJson.String(intentCreatedUtc ?? string.Empty) + "}";

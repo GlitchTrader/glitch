@@ -36,7 +36,7 @@ export async function buildLicenseContractBody(input: BuildLicenseContractBodyIn
   const nextCheckInSeconds = clamp(
     input.nextCheckInSeconds ?? LICENSE_DEFAULT_CHECK_IN_SECONDS,
     15,
-    14400,
+    LICENSE_DEFAULT_CHECK_IN_SECONDS,
   );
   const policy = buildPolicy(input.plan);
   const update = await resolveAddonUpdateInfo(input.clientVersion);

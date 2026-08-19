@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -43,6 +44,11 @@ namespace Glitch.UI
         private TextBlock _settingsPlanBadgeText;
         private TextBlock _settingsUpdateBadgeText;
         private Button _settingsSaveButton;
+        private TextBlock _settingsRiskPersistenceStatusText;
+        private TextBlock _settingsLicensePendingNoticeText;
+        private System.Windows.Threading.DispatcherTimer _settingsPolicySaveTimer;
+        private bool _settingsControlsRefreshing;
+        private DateTime _settingsRuntimePolicyObservedWriteUtc;
         private bool _settingsSaveFeedbackActive;
         private bool _settingsLicensePlaceholderActive;
         private bool _settingsLicenseMaskedDisplayActive;
@@ -188,6 +194,16 @@ namespace Glitch.UI
             compliancePanel.Children.Add(BuildAiDailyCloseOptIn());
             compliancePanel.Children.Add(BuildAiDailyCaptureOptIn());
 
+            _settingsRiskPersistenceStatusText = new TextBlock
+            {
+                Text = L("settings.risk.autosave_ready", "Risk settings apply and save immediately."),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 8, 0, 0),
+                FontSize = ResolveSettingsBodyFontSize()
+            };
+            ApplySkinResource(_settingsRiskPersistenceStatusText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
+            compliancePanel.Children.Add(_settingsRiskPersistenceStatusText);
+
             _settingsCopyTradingPolicyNotice = new TextBlock
             {
                 TextWrapping = TextWrapping.Wrap,
@@ -232,6 +248,16 @@ namespace Glitch.UI
 
             licensingPanel.Children.Add(BuildSettingsLabel("settings.license.key", "License Key"));
             licensingPanel.Children.Add(_settingsLicenseKeyTextBox);
+            _settingsLicensePendingNoticeText = new TextBlock
+            {
+                Text = L("settings.license.pending_validation", "License key changes take effect only after Validate License Now."),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 2, 0, 0),
+                FontSize = ResolveSettingsBodyFontSize(),
+                Visibility = Visibility.Collapsed
+            };
+            ApplySkinResource(_settingsLicensePendingNoticeText, TextBlock.ForegroundProperty, "FontControlBrush", "FontTableBrush");
+            licensingPanel.Children.Add(_settingsLicensePendingNoticeText);
             licensingPanel.Children.Add(_settingsPlanBadgeBorder);
 
             var actionHost = new StackPanel
@@ -252,7 +278,7 @@ namespace Glitch.UI
 
             _settingsSaveButton = new Button
             {
-                Content = L("settings.button.save", "Save Settings"),
+                Content = L("settings.button.validate", "Validate License Now"),
                 Margin = new Thickness(0),
                 Padding = new Thickness(10, 3, 10, 3),
                 MinHeight = 28,
@@ -261,7 +287,7 @@ namespace Glitch.UI
                 VerticalAlignment = VerticalAlignment.Top,
                 Style = CreateSettingsActionButtonStyle(root)
             };
-            RegisterLocalizationBinding(() => _settingsSaveButton.Content = L("settings.button.save", "Save Settings"));
+            RegisterLocalizationBinding(() => _settingsSaveButton.Content = L("settings.button.validate", "Validate License Now"));
             _settingsSaveButton.Click += OnSettingsSaveClick;
             actionRow.Children.Add(_settingsSaveButton);
 
@@ -289,7 +315,11 @@ namespace Glitch.UI
             Grid.SetRow(_settingsPageScroll, 0);
             root.Children.Add(_settingsPageScroll);
 
+            WireImmediateRuntimePolicyControls();
             UpdateSettingsControlsFromRuntimePolicy();
+            _settingsRuntimePolicyObservedWriteUtc = File.Exists(_runtimePolicyFilePath)
+                ? File.GetLastWriteTimeUtc(_runtimePolicyFilePath)
+                : DateTime.MinValue;
             UpdateSettingsTabLicenseStatusText();
             UpdateSettingsCopyTradingPolicyNotice();
             SyncSettingsPageScrollViewport();
@@ -420,11 +450,10 @@ namespace Glitch.UI
         {
             var panel = new StackPanel { Orientation = Orientation.Vertical };
             _settingsAiDailyCaptureCheckBox = BuildScopeCheckBox("settings.risk.enable", "Enable");
-            _settingsAiDailyCaptureCheckBox.Click += OnAiDailyCaptureSettingChanged;
             panel.Children.Add(BuildPolicyToggleRow(_settingsAiDailyCaptureCheckBox));
             var immediateSaveNotice = new TextBlock
             {
-                Text = L("settings.risk.ai_daily_capture_immediate", "The Enable checkbox saves immediately."),
+                Text = L("settings.risk.ai_daily_capture_immediate", "Enable and target changes apply immediately."),
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(18, 2, 0, 0),
                 FontSize = ResolveSettingsBodyFontSize()
@@ -464,47 +493,179 @@ namespace Glitch.UI
             return expander;
         }
 
-        private void OnAiDailyCaptureSettingChanged(object sender, RoutedEventArgs e)
+        private void WireImmediateRuntimePolicyControls()
         {
-            if (_runtimePolicySettings == null)
-                _runtimePolicySettings = new GlitchRuntimePolicySettings();
+            foreach (CheckBox checkBox in EnumerateImmediatePolicyCheckBoxes())
+                checkBox.Click += OnImmediateRuntimePolicyControlChanged;
 
-            bool priorEnabled = _runtimePolicySettings.EnforceAiDailyCaptureEntryLock;
-            double priorTargetRatio = _runtimePolicySettings.AiDailyCaptureTargetRatio;
-            bool requestedEnabled = _settingsAiDailyCaptureCheckBox?.IsChecked == true;
-            double requestedTargetRatio = priorTargetRatio;
-            if (TryReadComplianceThreshold(
-                    _settingsAiDailyCaptureTargetTextBox,
-                    priorTargetRatio * 100d,
-                    0.01,
-                    100d,
-                    out double capturePercent))
-                requestedTargetRatio = capturePercent / 100d;
+            foreach (TextBox textBox in EnumerateImmediatePolicyTextBoxes())
+                textBox.TextChanged += OnImmediateRuntimePolicyTextChanged;
+
+            if (_settingsLicenseKeyTextBox != null)
+                _settingsLicenseKeyTextBox.TextChanged += OnSettingsLicenseKeyTextChanged;
+
+            _settingsPolicySaveTimer = new System.Windows.Threading.DispatcherTimer(
+                System.Windows.Threading.DispatcherPriority.Background)
+            {
+                Interval = TimeSpan.FromMilliseconds(400)
+            };
+            _settingsPolicySaveTimer.Tick += OnImmediateRuntimePolicySaveTimerTick;
+        }
+
+        private IEnumerable<CheckBox> EnumerateImmediatePolicyCheckBoxes()
+        {
+            return new[]
+            {
+                _settingsBufferFreezeSimCheckBox,
+                _settingsBufferFreezeEvalCheckBox,
+                _settingsBufferFreezeApCheckBox,
+                _settingsOneContractSimCheckBox,
+                _settingsOneContractEvalCheckBox,
+                _settingsOneContractApCheckBox,
+                _settingsUnrealizedFlattenSimCheckBox,
+                _settingsUnrealizedFlattenEvalCheckBox,
+                _settingsUnrealizedFlattenApCheckBox,
+                _settingsEvalProfitTargetLockEvalCheckBox,
+                _settingsMaxContractsFlattenSimCheckBox,
+                _settingsMaxContractsFlattenEvalCheckBox,
+                _settingsMaxContractsFlattenApCheckBox,
+                _settingsNoProtectionFlattenSimCheckBox,
+                _settingsNoProtectionFlattenEvalCheckBox,
+                _settingsNoProtectionFlattenApCheckBox,
+                _settingsAiDailyCloseCheckBox,
+                _settingsAiDailyCaptureCheckBox
+            }.Where(value => value != null);
+        }
+
+        private IEnumerable<TextBox> EnumerateImmediatePolicyTextBoxes()
+        {
+            return new[]
+            {
+                _settingsBufferFreezeThresholdTextBox,
+                _settingsOneContractOnThresholdTextBox,
+                _settingsOneContractOffThresholdTextBox,
+                _settingsUnrealizedFlattenThresholdTextBox,
+                _settingsNoProtectionTimeoutMsTextBox,
+                _settingsAiDailyCaptureTargetTextBox
+            }.Where(value => value != null);
+        }
+
+        private void OnImmediateRuntimePolicyControlChanged(object sender, RoutedEventArgs e)
+        {
+            if (_settingsControlsRefreshing)
+                return;
+            _settingsPolicySaveTimer?.Stop();
+            PersistImmediateRuntimePolicy("settings_toggle", true);
+        }
+
+        private void OnImmediateRuntimePolicyTextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_settingsControlsRefreshing || _settingsPolicySaveTimer == null)
+                return;
+            _settingsPolicySaveTimer.Stop();
+            _settingsPolicySaveTimer.Start();
+        }
+
+        private void OnImmediateRuntimePolicySaveTimerTick(object sender, EventArgs e)
+        {
+            _settingsPolicySaveTimer?.Stop();
+            PersistImmediateRuntimePolicy("settings_input", false);
+        }
+
+        private void OnSettingsLicenseKeyTextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_settingsControlsRefreshing || _settingsLicensePendingNoticeText == null)
+                return;
+            string current = GetNormalizedSettingsLicenseKeyText();
+            string persisted = (_runtimePolicySettings?.LicenseKey ?? string.Empty).Trim();
+            _settingsLicensePendingNoticeText.Visibility = string.Equals(current, persisted, StringComparison.Ordinal)
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+        }
+
+        private bool PersistImmediateRuntimePolicy(string origin, bool revertUiOnValidationFailure)
+        {
+            GlitchRuntimePolicySettings candidate = GlitchRuntimePolicyStore.LoadSettings(_runtimePolicyFilePath)
+                ?? new GlitchRuntimePolicySettings();
+
+            if (!TryReadComplianceThreshold(_settingsAiDailyCaptureTargetTextBox, candidate.AiDailyCaptureTargetRatio * 100d, 0.01, 100d, out double capturePercent)
+                || !TryReadComplianceThreshold(_settingsBufferFreezeThresholdTextBox, candidate.BufferFreezeThresholdRatio, 0.01, 0.99, out double bufferFreezeThreshold)
+                || !TryReadComplianceThreshold(_settingsOneContractOnThresholdTextBox, candidate.BufferOneContractOnThresholdRatio, 0.01, 0.99, out double oneContractOn)
+                || !TryReadComplianceThreshold(_settingsOneContractOffThresholdTextBox, candidate.BufferOneContractOffThresholdRatio, oneContractOn, 0.99, out double oneContractOff)
+                || !TryReadComplianceThreshold(_settingsUnrealizedFlattenThresholdTextBox, candidate.UnrealizedFlattenThresholdRatio, 0.01, 0.99, out double unrealizedThreshold)
+                || !int.TryParse(_settingsNoProtectionTimeoutMsTextBox?.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int noProtectionTimeoutMs)
+                || noProtectionTimeoutMs < 100
+                || noProtectionTimeoutMs > 10000)
+            {
+                SetImmediatePolicyStatus(
+                    L("settings.risk.autosave_invalid", "Not applied: enter valid values before leaving this setting."),
+                    true);
+                if (revertUiOnValidationFailure)
+                {
+                    _runtimePolicySettings = candidate;
+                    UpdateSettingsControlsFromRuntimePolicy();
+                }
+                return false;
+            }
+
+            candidate.EnforceAccountLevelCompliance = false;
+            candidate.EnforceAiDailyClose = _settingsAiDailyCloseCheckBox?.IsChecked == true;
+            candidate.EnforceAiDailyCaptureEntryLock = _settingsAiDailyCaptureCheckBox?.IsChecked == true;
+            candidate.AiDailyCaptureTargetRatio = capturePercent / 100d;
+            candidate.BufferFreezeScopes.Sim = _settingsBufferFreezeSimCheckBox?.IsChecked == true;
+            candidate.BufferFreezeScopes.Eval = _settingsBufferFreezeEvalCheckBox?.IsChecked == true;
+            candidate.BufferFreezeScopes.Ap = _settingsBufferFreezeApCheckBox?.IsChecked == true;
+            candidate.BufferOneContractScopes.Sim = _settingsOneContractSimCheckBox?.IsChecked == true;
+            candidate.BufferOneContractScopes.Eval = _settingsOneContractEvalCheckBox?.IsChecked == true;
+            candidate.BufferOneContractScopes.Ap = _settingsOneContractApCheckBox?.IsChecked == true;
+            candidate.UnrealizedFlattenScopes.Sim = _settingsUnrealizedFlattenSimCheckBox?.IsChecked == true;
+            candidate.UnrealizedFlattenScopes.Eval = _settingsUnrealizedFlattenEvalCheckBox?.IsChecked == true;
+            candidate.UnrealizedFlattenScopes.Ap = _settingsUnrealizedFlattenApCheckBox?.IsChecked == true;
+            candidate.EvalProfitTargetLockEnabled = _settingsEvalProfitTargetLockEvalCheckBox?.IsChecked == true;
+            candidate.MaxContractsFlattenScopes.Sim = _settingsMaxContractsFlattenSimCheckBox?.IsChecked == true;
+            candidate.MaxContractsFlattenScopes.Eval = _settingsMaxContractsFlattenEvalCheckBox?.IsChecked == true;
+            candidate.MaxContractsFlattenScopes.Ap = _settingsMaxContractsFlattenApCheckBox?.IsChecked == true;
+            candidate.NoProtectionFlattenScopes.Sim = _settingsNoProtectionFlattenSimCheckBox?.IsChecked == true;
+            candidate.NoProtectionFlattenScopes.Eval = _settingsNoProtectionFlattenEvalCheckBox?.IsChecked == true;
+            candidate.NoProtectionFlattenScopes.Ap = _settingsNoProtectionFlattenApCheckBox?.IsChecked == true;
+            candidate.NoProtectionTimeoutMs = noProtectionTimeoutMs;
+            candidate.BufferFreezeThresholdRatio = bufferFreezeThreshold;
+            candidate.BufferOneContractOnThresholdRatio = oneContractOn;
+            candidate.BufferOneContractOffThresholdRatio = oneContractOff;
+            candidate.UnrealizedFlattenThresholdRatio = unrealizedThreshold;
+            candidate.SyncLegacyComplianceFlags();
 
             try
             {
-                _runtimePolicySettings.EnforceAiDailyCaptureEntryLock = requestedEnabled;
-                _runtimePolicySettings.AiDailyCaptureTargetRatio = requestedTargetRatio;
-                GlitchRuntimePolicyStore.SaveSettings(_runtimePolicyFilePath, _runtimePolicySettings);
-                AppendJournal(
-                    "System",
-                    "Policy",
-                    "ai_daily_capture_entry_lock|origin=settings_toggle|result="
-                        + (requestedEnabled ? "enabled" : "disabled")
-                        + "|target_ratio="
-                        + requestedTargetRatio.ToString("0.####", CultureInfo.InvariantCulture));
+                GlitchRuntimePolicyStore.SaveSettings(_runtimePolicyFilePath, candidate);
+                _runtimePolicySettings = GlitchRuntimePolicyStore.LoadSettings(_runtimePolicyFilePath);
+                _settingsRuntimePolicyObservedWriteUtc = File.Exists(_runtimePolicyFilePath)
+                    ? File.GetLastWriteTimeUtc(_runtimePolicyFilePath)
+                    : DateTime.MinValue;
+                UpdateSettingsControlsFromRuntimePolicyPreservingPendingLicense();
+                SetImmediatePolicyStatus(L("settings.risk.autosave_applied", "Risk settings are active and saved."), false);
+                AppendJournal("System", "Policy", "runtime_policy_applied|origin=" + origin);
                 AppendJournal("System", "Runtime", BuildRuntimePolicySummaryLogLine());
+                if (!_runtimePolicySettings.AnyRiskComplianceFeatureEnabled())
+                    ClearComplianceEnforcementRuntimeState();
+                return true;
             }
             catch (Exception error)
             {
-                _runtimePolicySettings.EnforceAiDailyCaptureEntryLock = priorEnabled;
-                _runtimePolicySettings.AiDailyCaptureTargetRatio = priorTargetRatio;
-                if (_settingsAiDailyCaptureCheckBox != null)
-                    _settingsAiDailyCaptureCheckBox.IsChecked = priorEnabled;
-                if (_settingsAiDailyCaptureTargetTextBox != null)
-                    _settingsAiDailyCaptureTargetTextBox.Text = (priorTargetRatio * 100d).ToString("0.##", CultureInfo.InvariantCulture);
-                RecordSubsystemFault("ai_daily_capture_settings_persistence", error);
+                _runtimePolicySettings = GlitchRuntimePolicyStore.LoadSettings(_runtimePolicyFilePath);
+                UpdateSettingsControlsFromRuntimePolicyPreservingPendingLicense();
+                SetImmediatePolicyStatus(L("settings.risk.autosave_failed", "Could not apply this setting; the last saved state was restored."), true);
+                RecordSubsystemFault("runtime_policy_settings_persistence", error);
+                return false;
             }
+        }
+
+        private void SetImmediatePolicyStatus(string message, bool isError)
+        {
+            if (_settingsRiskPersistenceStatusText == null)
+                return;
+            _settingsRiskPersistenceStatusText.Text = message ?? string.Empty;
+            _settingsRiskPersistenceStatusText.Foreground = isError ? Brushes.OrangeRed : TealAccentBrush;
         }
 
         private Expander BuildComplianceFeatureExpander(
@@ -866,58 +1027,8 @@ namespace Glitch.UI
             if (_settingsSaveFeedbackActive)
                 return;
 
-            if (_runtimePolicySettings == null)
-                _runtimePolicySettings = new GlitchRuntimePolicySettings();
-
-            bool aiDailyCloseWasEnabled = _runtimePolicySettings.EnforceAiDailyClose;
-            bool aiDailyCaptureWasEnabled = _runtimePolicySettings.EnforceAiDailyCaptureEntryLock;
-            _runtimePolicySettings.EnforceAccountLevelCompliance = false;
-            _runtimePolicySettings.EnforceAiDailyClose = _settingsAiDailyCloseCheckBox?.IsChecked == true;
-            _runtimePolicySettings.EnforceAiDailyCaptureEntryLock = _settingsAiDailyCaptureCheckBox?.IsChecked == true;
-            if (TryReadComplianceThreshold(_settingsAiDailyCaptureTargetTextBox, _runtimePolicySettings.AiDailyCaptureTargetRatio * 100d, 0.01, 100d, out double capturePercent))
-                _runtimePolicySettings.AiDailyCaptureTargetRatio = capturePercent / 100d;
-            _runtimePolicySettings.BufferFreezeScopes.Sim = _settingsBufferFreezeSimCheckBox?.IsChecked == true;
-            _runtimePolicySettings.BufferFreezeScopes.Eval = _settingsBufferFreezeEvalCheckBox?.IsChecked == true;
-            _runtimePolicySettings.BufferFreezeScopes.Ap = _settingsBufferFreezeApCheckBox?.IsChecked == true;
-            _runtimePolicySettings.BufferOneContractScopes.Sim = _settingsOneContractSimCheckBox?.IsChecked == true;
-            _runtimePolicySettings.BufferOneContractScopes.Eval = _settingsOneContractEvalCheckBox?.IsChecked == true;
-            _runtimePolicySettings.BufferOneContractScopes.Ap = _settingsOneContractApCheckBox?.IsChecked == true;
-            _runtimePolicySettings.UnrealizedFlattenScopes.Sim = _settingsUnrealizedFlattenSimCheckBox?.IsChecked == true;
-            _runtimePolicySettings.UnrealizedFlattenScopes.Eval = _settingsUnrealizedFlattenEvalCheckBox?.IsChecked == true;
-            _runtimePolicySettings.UnrealizedFlattenScopes.Ap = _settingsUnrealizedFlattenApCheckBox?.IsChecked == true;
-            _runtimePolicySettings.EvalProfitTargetLockEnabled = _settingsEvalProfitTargetLockEvalCheckBox?.IsChecked == true;
-            _runtimePolicySettings.MaxContractsFlattenScopes.Sim = _settingsMaxContractsFlattenSimCheckBox?.IsChecked == true;
-            _runtimePolicySettings.MaxContractsFlattenScopes.Eval = _settingsMaxContractsFlattenEvalCheckBox?.IsChecked == true;
-            _runtimePolicySettings.MaxContractsFlattenScopes.Ap = _settingsMaxContractsFlattenApCheckBox?.IsChecked == true;
-            _runtimePolicySettings.NoProtectionFlattenScopes.Sim = _settingsNoProtectionFlattenSimCheckBox?.IsChecked == true;
-            _runtimePolicySettings.NoProtectionFlattenScopes.Eval = _settingsNoProtectionFlattenEvalCheckBox?.IsChecked == true;
-            _runtimePolicySettings.NoProtectionFlattenScopes.Ap = _settingsNoProtectionFlattenApCheckBox?.IsChecked == true;
-            if (int.TryParse(
-                    _settingsNoProtectionTimeoutMsTextBox?.Text,
-                    NumberStyles.Integer,
-                    CultureInfo.InvariantCulture,
-                    out int noProtectionTimeoutMs)
-                && noProtectionTimeoutMs >= 100
-                && noProtectionTimeoutMs <= 10000)
-                _runtimePolicySettings.NoProtectionTimeoutMs = noProtectionTimeoutMs;
-
-            if (!TryReadComplianceThreshold(_settingsBufferFreezeThresholdTextBox, _runtimePolicySettings.BufferFreezeThresholdRatio, 0.01, 0.99, out double bufferFreezeThreshold))
-                bufferFreezeThreshold = _runtimePolicySettings.BufferFreezeThresholdRatio;
-            _runtimePolicySettings.BufferFreezeThresholdRatio = bufferFreezeThreshold;
-
-            if (!TryReadComplianceThreshold(_settingsOneContractOnThresholdTextBox, _runtimePolicySettings.BufferOneContractOnThresholdRatio, 0.01, 0.99, out double oneContractOn))
-                oneContractOn = _runtimePolicySettings.BufferOneContractOnThresholdRatio;
-            _runtimePolicySettings.BufferOneContractOnThresholdRatio = oneContractOn;
-
-            if (!TryReadComplianceThreshold(_settingsOneContractOffThresholdTextBox, _runtimePolicySettings.BufferOneContractOffThresholdRatio, oneContractOn, 0.99, out double oneContractOff))
-                oneContractOff = Math.Max(oneContractOn, _runtimePolicySettings.BufferOneContractOffThresholdRatio);
-            _runtimePolicySettings.BufferOneContractOffThresholdRatio = oneContractOff;
-
-            if (!TryReadComplianceThreshold(_settingsUnrealizedFlattenThresholdTextBox, _runtimePolicySettings.UnrealizedFlattenThresholdRatio, 0.01, 0.99, out double unrealizedThreshold))
-                unrealizedThreshold = _runtimePolicySettings.UnrealizedFlattenThresholdRatio;
-            _runtimePolicySettings.UnrealizedFlattenThresholdRatio = unrealizedThreshold;
-
-            _runtimePolicySettings.SyncLegacyComplianceFlags();
+            _runtimePolicySettings = GlitchRuntimePolicyStore.LoadSettings(_runtimePolicyFilePath)
+                ?? new GlitchRuntimePolicySettings();
             _runtimePolicySettings.LicenseKey = GetNormalizedSettingsLicenseKeyText();
             _settingsLicenseKeyUnmaskedValue = (_runtimePolicySettings.LicenseKey ?? string.Empty).Trim();
             ApplySettingsLicenseMaskedDisplay();
@@ -925,29 +1036,20 @@ namespace Glitch.UI
                 _runtimePolicySettings.LicenseApiBaseUrl = "https://api.glitchtrader.com";
 
             GlitchRuntimePolicyStore.SaveSettings(_runtimePolicyFilePath, _runtimePolicySettings);
-            if (aiDailyCloseWasEnabled != _runtimePolicySettings.EnforceAiDailyClose)
-            {
-                AppendJournal(
-                    "System",
-                    "Risk",
-                    "ai_daily_close|origin=settings|result="
-                        + (_runtimePolicySettings.EnforceAiDailyClose ? "enabled" : "disabled")
-                        + "|scope=configured_ai_accounts");
-            }
-            if (aiDailyCaptureWasEnabled != _runtimePolicySettings.EnforceAiDailyCaptureEntryLock)
-                AppendJournal("System", "Policy", "ai_daily_capture_entry_lock|origin=settings|result=" + (_runtimePolicySettings.EnforceAiDailyCaptureEntryLock ? "enabled" : "disabled"));
-            AppendJournal("System", "Policy", "Runtime settings updated by user.");
-            AppendJournal("System", "Runtime", BuildRuntimePolicySummaryLogLine());
-
-            if (!_runtimePolicySettings.AnyRiskComplianceFeatureEnabled())
-                ClearComplianceEnforcementRuntimeState();
+            _runtimePolicySettings = GlitchRuntimePolicyStore.LoadSettings(_runtimePolicyFilePath);
+            _settingsRuntimePolicyObservedWriteUtc = File.Exists(_runtimePolicyFilePath)
+                ? File.GetLastWriteTimeUtc(_runtimePolicyFilePath)
+                : DateTime.MinValue;
+            if (_settingsLicensePendingNoticeText != null)
+                _settingsLicensePendingNoticeText.Visibility = Visibility.Collapsed;
+            AppendJournal("System", "License", "license_key_validation_requested|origin=settings");
 
             _nextLicenseHeartbeatUtc = DateTime.UtcNow;
             Task validateTask = RefreshLicenseStateAsync(useValidateEndpoint: true, force: true);
             _settingsSaveFeedbackActive = true;
             try
             {
-                await ShowTransientTealButtonFeedbackAsync(_settingsSaveButton, L("settings.feedback.saving", "Saving!"), 3000);
+                await ShowTransientTealButtonFeedbackAsync(_settingsSaveButton, L("settings.feedback.validating", "Validating!"), 3000);
                 try
                 {
                     await validateTask;
@@ -995,6 +1097,10 @@ namespace Glitch.UI
         {
             if (_runtimePolicySettings == null)
                 _runtimePolicySettings = new GlitchRuntimePolicySettings();
+
+            _settingsControlsRefreshing = true;
+            try
+            {
 
             if (_settingsBufferFreezeSimCheckBox != null)
                 _settingsBufferFreezeSimCheckBox.IsChecked = _runtimePolicySettings.BufferFreezeScopes.Sim;
@@ -1066,8 +1172,8 @@ namespace Glitch.UI
                 _settingsUnrealizedFlattenApCheckBox,
                 _settingsUnrealizedFlattenThresholdTextBox,
                 null);
-            if (_settingsLicenseKeyTextBox != null)
-            {
+                if (_settingsLicenseKeyTextBox != null)
+                {
                 string licenseKey = (_runtimePolicySettings.LicenseKey ?? string.Empty).Trim();
                 _settingsLicenseKeyUnmaskedValue = licenseKey;
                 if (string.IsNullOrWhiteSpace(licenseKey))
@@ -1078,6 +1184,56 @@ namespace Glitch.UI
                 {
                     ApplySettingsLicenseMaskedDisplay();
                 }
+                }
+            }
+            finally
+            {
+                _settingsControlsRefreshing = false;
+            }
+        }
+
+        private void UpdateSettingsControlsFromRuntimePolicyPreservingPendingLicense()
+        {
+            bool preservePendingLicense = _settingsLicensePendingNoticeText?.Visibility == Visibility.Visible;
+            string pendingLicenseKey = preservePendingLicense ? GetNormalizedSettingsLicenseKeyText() : string.Empty;
+
+            UpdateSettingsControlsFromRuntimePolicy();
+            if (!preservePendingLicense || _settingsLicenseKeyTextBox == null)
+                return;
+
+            _settingsControlsRefreshing = true;
+            try
+            {
+                _settingsLicensePlaceholderActive = false;
+                _settingsLicenseMaskedDisplayActive = false;
+                _settingsLicenseKeyUnmaskedValue = pendingLicenseKey;
+                _settingsLicenseKeyTextBox.Text = pendingLicenseKey;
+                _settingsLicensePendingNoticeText.Visibility = Visibility.Visible;
+            }
+            finally
+            {
+                _settingsControlsRefreshing = false;
+            }
+        }
+
+        private void RefreshRuntimePolicyFromDiskIfChanged()
+        {
+            if (string.IsNullOrWhiteSpace(_runtimePolicyFilePath) || !File.Exists(_runtimePolicyFilePath))
+                return;
+
+            DateTime writeUtc = File.GetLastWriteTimeUtc(_runtimePolicyFilePath);
+            if (writeUtc == _settingsRuntimePolicyObservedWriteUtc)
+                return;
+
+            try
+            {
+                _runtimePolicySettings = GlitchRuntimePolicyStore.LoadSettings(_runtimePolicyFilePath);
+                _settingsRuntimePolicyObservedWriteUtc = writeUtc;
+                UpdateSettingsControlsFromRuntimePolicyPreservingPendingLicense();
+            }
+            catch (Exception error)
+            {
+                RecordSubsystemFault("runtime_policy_settings_refresh", error);
             }
         }
 

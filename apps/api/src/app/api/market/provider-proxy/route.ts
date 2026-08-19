@@ -15,7 +15,6 @@ import {
   getWhopMembershipByLicenseKey,
   inspectWhopMembershipBinding,
   mapWhopApiErrorToHttpStatus,
-  syncWhopMembershipToLocalState,
   WhopLicenseApiError,
 } from "@/lib/whop-license";
 
@@ -27,8 +26,9 @@ const REQUEST_TIMEOUT_MS = 12000;
 const PROVIDER_CACHE_STALE_FALLBACK_SECONDS = 900;
 const PROVIDER_CACHE_RETENTION_SECONDS_DEFAULT = 86400;
 const PROVIDER_CACHE_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
-const PROVIDER_ACCESS_CACHE_SECONDS_DEFAULT = 30;
+const PROVIDER_ACCESS_CACHE_SECONDS_DEFAULT = 7 * 24 * 60 * 60;
 const globalAccessCacheKey = "__glitchProviderProxyAccessCacheV1";
+const globalResponseCacheKey = "__glitchProviderProxyResponseCacheV1";
 const globalPoolKey = "__glitchProviderProxyCachePoolV1";
 const globalSchemaReadyKey = "__glitchProviderProxyCacheSchemaReadyV1";
 const globalCleanupTsKey = "__glitchProviderProxyCacheLastCleanupAtV1";
@@ -59,6 +59,12 @@ interface ProviderCacheDbPool {
 interface ProviderAccessCacheEntry {
   expiresAtMs: number;
   plan: LicensePlan;
+}
+
+interface ProviderResponseCacheEntry {
+  payload: string;
+  updatedAtMs: number;
+  expiresAtMs: number;
 }
 
 const providerOperationParamAllowList: Record<ProviderName, Record<string, readonly string[]>> = {
@@ -154,11 +160,17 @@ function readProviderProxyCacheRetentionSeconds(): number {
   return PROVIDER_CACHE_RETENTION_SECONDS_DEFAULT;
 }
 
+function isPersistentProviderCacheEnabled(): boolean {
+  return (readOptionalEnv("PROVIDER_PROXY_PERSISTENT_CACHE_ENABLED") ?? "")
+    .trim()
+    .toLowerCase() === "true";
+}
+
 function readProviderProxyAccessCacheSeconds(): number {
   const envValue = readOptionalEnv("PROVIDER_PROXY_ACCESS_CACHE_SECONDS");
   const parsedEnv = envValue ? Number.parseInt(envValue, 10) : Number.NaN;
   if (Number.isFinite(parsedEnv) && parsedEnv > 0) {
-    return Math.max(5, Math.min(parsedEnv, 120));
+    return Math.max(300, Math.min(parsedEnv, 7 * 24 * 60 * 60));
   }
 
   return PROVIDER_ACCESS_CACHE_SECONDS_DEFAULT;
@@ -275,6 +287,37 @@ function writeCachedProviderAccess(cacheKey: string, plan: LicensePlan): void {
   getProviderAccessCacheStore().set(cacheKey, {
     expiresAtMs,
     plan,
+  });
+}
+
+function getProviderResponseCacheStore(): Map<string, ProviderResponseCacheEntry> {
+  const globalScope = globalThis as typeof globalThis & {
+    [globalResponseCacheKey]?: Map<string, ProviderResponseCacheEntry>;
+  };
+  if (!globalScope[globalResponseCacheKey]) {
+    globalScope[globalResponseCacheKey] = new Map<string, ProviderResponseCacheEntry>();
+  }
+  return globalScope[globalResponseCacheKey]!;
+}
+
+function readCachedProviderResponse(cacheKey: string): ProviderResponseCacheEntry | null {
+  const store = getProviderResponseCacheStore();
+  const entry = store.get(cacheKey);
+  if (!entry || entry.expiresAtMs <= Date.now()) {
+    if (entry) {
+      store.delete(cacheKey);
+    }
+    return null;
+  }
+  return entry;
+}
+
+function writeCachedProviderResponse(cacheKey: string, payload: string, ttlSeconds: number): void {
+  const now = Date.now();
+  getProviderResponseCacheStore().set(cacheKey, {
+    payload,
+    updatedAtMs: now,
+    expiresAtMs: now + (ttlSeconds * 1000),
   });
 }
 
@@ -659,7 +702,6 @@ export async function POST(request: NextRequest) {
         return errorResponse(requestId, 401, "unauthorized", "License validation failed.");
       }
 
-      await syncWhopMembershipToLocalState(membership);
       const liveSnapshot = buildWhopLicenseSnapshot(membership);
       if (!liveSnapshot.active) {
         return errorResponse(
@@ -683,11 +725,6 @@ export async function POST(request: NextRequest) {
           "License validation failed.",
         );
       }
-
-      await syncWhopMembershipToLocalState(membership, {
-        installationId: parsed.installationId,
-        deviceFingerprintHash: parsed.deviceFingerprintHash,
-      });
 
       plan = resolveEntitlementFromSource(
         membership.product?.id ?? null,
@@ -717,13 +754,30 @@ export async function POST(request: NextRequest) {
     const cacheKey = buildCacheKey(parsed.provider, parsed.operation, effectiveParams);
     const ttlSeconds = readProviderProxyCacheTtlSeconds(parsed.provider, parsed.operation);
 
-    const cachePool = await getProviderCachePool();
+    const memoryCached = readCachedProviderResponse(cacheKey);
+    if (memoryCached) {
+      return jsonResponse({
+        ok: true,
+        requestId,
+        provider: parsed.provider,
+        operation: parsed.operation,
+        data: memoryCached.payload,
+      });
+    }
+
+    // The AddOn already retains a durable local snapshot. Warm memory is enough
+    // for the shared proxy at beta scale and avoids waking Neon on every market
+    // data poll. Persistent proxy caching remains an explicit deployment opt-in.
+    const cachePool = isPersistentProviderCacheEnabled()
+      ? await getProviderCachePool()
+      : null;
     let cached: { payload: string; updatedAtMs: number; expiresAtMs: number } | null = null;
     if (cachePool) {
       await ensureProviderCacheSchema(cachePool);
       await maybeCleanupProviderCache(cachePool);
       cached = await readProviderCache(cachePool, cacheKey);
       if (cached && Number.isFinite(cached.expiresAtMs) && cached.expiresAtMs > Date.now()) {
+        writeCachedProviderResponse(cacheKey, cached.payload, ttlSeconds);
         return jsonResponse({
           ok: true,
           requestId,
@@ -736,6 +790,7 @@ export async function POST(request: NextRequest) {
 
     try {
       const providerPayload = await fetchProviderJson(providerUrl);
+      writeCachedProviderResponse(cacheKey, providerPayload, ttlSeconds);
       if (cachePool) {
         await writeProviderCache(cachePool, cacheKey, providerPayload, ttlSeconds);
       }

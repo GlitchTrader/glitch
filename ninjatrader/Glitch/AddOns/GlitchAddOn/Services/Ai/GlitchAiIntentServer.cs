@@ -193,6 +193,7 @@ namespace Glitch.Services
                 string acceptedJson = GlitchAiIntentResultContract.BuildAcceptedJson(
                     validation.IntentId,
                     GlitchAiJsonFields.ExtractString(body, "created_utc"),
+                    GlitchAiJsonFields.ExtractString(body, "prompt_version"),
                     execution);
                 WriteResponse(context, 202, acceptedJson);
             }

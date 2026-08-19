@@ -2317,7 +2317,7 @@ namespace Glitch.Services
 
         private static TimeSpan ResolveQuotePollInterval()
         {
-            return TimeSpan.FromMinutes(1);
+            return TimeSpan.FromMinutes(5);
         }
 
         private static TimeSpan ResolveCalendarPollInterval(DateTime nowUtc, List<EconomicEvent> events)

@@ -421,6 +421,13 @@ namespace Glitch.UI
                 AppendJournal("System", "Glitch AI", "scope_save_failed|" + error);
             else if (origin == "user_click")
                 AppendJournal("System", "Glitch AI", "scope_updated|masters=" + string.Join(",", orderedMasters));
+
+            GlitchAiRailPolicy persistedPolicy = GlitchAiRailPolicyStore.Load();
+            var persistedMasters = new HashSet<string>(
+                persistedPolicy?.ProfileAccountBindings?.Values ?? Enumerable.Empty<string>(),
+                StringComparer.OrdinalIgnoreCase);
+            _aiScopeRenderFingerprint = null;
+            RefreshAiScopeRows(persistedMasters);
             if (refresh)
                 RefreshAiTab();
         }
@@ -570,6 +577,7 @@ namespace Glitch.UI
                 L("ai.panel.decision", "AI Decision").ToUpperInvariant(),
                 L("ai.field.time", "Time"), FormatDecisionTimestamp(item.DecisionUtc),
                 L("ai.field.action", "Action"), GlitchAiJsonFields.ExtractString(decision, "action") ?? L("ai.value.waiting", "Waiting"),
+                L("ai.field.cognition", "Cognition"), GlitchAiJsonFields.ExtractString(decision, "prompt_version") ?? "-",
                 L("ai.field.confidence", "Confidence"), FormatJsonNumber(decision, "confidence"),
                 L("ai.field.reason", "Reason"), GlitchAiJsonFields.ExtractString(decision, "reason") ?? L("ai.value.no_reason", "No reason recorded."),
                 L("ai.field.bull_case", "Bull case"), GlitchAiJsonFields.ExtractString(decision, "bull_case") ?? "-",

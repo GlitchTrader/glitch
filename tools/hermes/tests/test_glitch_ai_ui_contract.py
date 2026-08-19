@@ -42,6 +42,7 @@ class GlitchAiUiContractTests(unittest.TestCase):
 
     def test_ai_feed_separates_current_collection_from_completed_decisions(self):
         source = (UI / "GlitchMainWindow.AiTab.partial.cs").read_text(encoding="utf-8")
+        localization = (ROOT / "ninjatrader" / "Glitch" / "AddOns" / "GlitchAddOn" / "Resources" / "Localization.tsv").read_text(encoding="utf-8")
         self.assertIn('"Current Window"', source)
         self.assertIn('"Latest AI Decision"', source)
         self.assertIn('"ai.feed.health_status_format"', source)
@@ -57,6 +58,12 @@ class GlitchAiUiContractTests(unittest.TestCase):
         self.assertNotIn("var header = new Grid", source)
         self.assertIn('L("ai.snapshots.supporting", "Supporting Snapshots")', source)
         self.assertIn('GetAiJsonString(value, "instrument"), "MNQ"', source)
+        self.assertIn('GlitchAiJsonFields.ExtractString(decision, "prompt_version")', source)
+        cognition_row = next(
+            row for row in localization.splitlines()
+            if row.startswith("ai.field.cognition\t")
+        )
+        self.assertEqual(len(cognition_row.split("\t")), 7)
 
     def test_ai_cadence_warning_follows_worker_health_not_decision_age(self):
         source = (UI / "GlitchMainWindow.AiTab.partial.cs").read_text(encoding="utf-8")

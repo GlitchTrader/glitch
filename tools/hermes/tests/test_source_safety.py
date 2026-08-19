@@ -36,6 +36,8 @@ class HermesIngressContractTests(unittest.TestCase):
     def test_ingress_validation_is_structural_and_v3_execution_is_exact(self):
         validator = source("Services/Ai/GlitchAiIntentValidator.cs")
         executor = source("Services/Ai/GlitchAiOrderExecutor.cs")
+        server = source("Services/Ai/GlitchAiIntentServer.cs")
+        result_contract = source("Services/Ai/GlitchAiIntentResultContract.cs")
 
         self.assertIn('"glitch.intent.v2"', validator)
         self.assertIn('"glitch.intent.v3"', validator)
@@ -45,6 +47,8 @@ class HermesIngressContractTests(unittest.TestCase):
         self.assertIn("ValidateProtectionUpdates(parsed, true", validator)
         self.assertIn("intent_schema_must_be_v3", executor)
         self.assertIn("ToPositiveInteger(quantityRaw, \"quantity\")", executor)
+        self.assertIn('GlitchAiJsonFields.ExtractString(body, "prompt_version")', server)
+        self.assertIn('"\\\"prompt_version\\\":"', result_contract)
 
     def test_operation_journal_is_the_only_intent_identity_authority(self):
         server = source("Services/Ai/GlitchAiIntentServer.cs")

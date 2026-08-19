@@ -484,27 +484,25 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("_settingsNoProtectionTimeoutMsTextBox", settings)
         self.assertIn("ReplicationQuantityLimitChanged", engine)
 
-    def test_ai_daily_capture_checkbox_persists_immediately_and_reverts_on_failure(self):
+    def test_all_compliance_controls_persist_immediately_and_read_back_backend_state(self):
         settings = read(
             "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.SettingsTab.partial.cs"
         )
         localization = read(
             "ninjatrader/Glitch/AddOns/GlitchAddOn/Resources/Localization.tsv"
         )
-        self.assertIn(
-            "_settingsAiDailyCaptureCheckBox.Click += OnAiDailyCaptureSettingChanged",
-            settings,
-        )
-        self.assertIn(
-            "GlitchRuntimePolicyStore.SaveSettings(_runtimePolicyFilePath, _runtimePolicySettings)",
-            settings,
-        )
-        self.assertIn('ai_daily_capture_entry_lock|origin=settings_toggle|result=', settings)
-        self.assertIn(
-            "_settingsAiDailyCaptureCheckBox.IsChecked = priorEnabled",
-            settings,
-        )
+        self.assertIn("EnumerateImmediatePolicyCheckBoxes", settings)
+        self.assertIn("EnumerateImmediatePolicyTextBoxes", settings)
+        self.assertIn("PersistImmediateRuntimePolicy", settings)
+        self.assertIn("GlitchRuntimePolicyStore.SaveSettings(_runtimePolicyFilePath, candidate)", settings)
+        self.assertIn("RefreshRuntimePolicyFromDiskIfChanged", settings)
+        self.assertIn("UpdateSettingsControlsFromRuntimePolicyPreservingPendingLicense", settings)
+        self.assertIn("GlitchRuntimePolicyStore.LoadSettings(_runtimePolicyFilePath)", settings)
+        self.assertIn('L("settings.button.validate", "Validate License Now")', settings)
+        self.assertIn("_settingsLicensePendingNoticeText.Visibility", settings)
         self.assertIn("settings.risk.ai_daily_capture_immediate", localization)
+        self.assertIn("settings.risk.autosave_applied", localization)
+        self.assertIn("settings.license.pending_validation", localization)
 
     def test_user_flatten_is_one_native_account_flatten_request(self):
         engine = read("ninjatrader/Glitch/AddOns/GlitchAddOn/Core/GlitchEngine.cs")
@@ -525,10 +523,11 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         gate = read(
             "ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/GlitchMutationGate.cs"
         )
-        self.assertIn('SetReplicationFromExternalSurface(false, "flatten_all")', main_window)
+        self.assertNotIn('SetReplicationFromExternalSurface(false, "flatten_all")', main_window)
         self.assertNotIn("restoreCopyEngine", main_window)
         self.assertIn("_mutationGate.Fence(accounts);", host)
         self.assertIn("RequestFlattenBatch", host)
+        self.assertNotIn("flatten_all_not_requested|reason=replication_stop_failed", host)
         self.assertIn("account_fenced_by_flatten", host)
         self.assertIn("allowDuringRuntimeFault: true", host)
         self.assertIn("!(command is FlattenAccountCommand)", host)
@@ -537,6 +536,26 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         self.assertIn("state != OrderState.Cancelled", observations)
         self.assertIn("state != OrderState.Filled", observations)
         self.assertIn("state != OrderState.Rejected", observations)
+
+    def test_beta_market_proxy_and_license_cadence_do_not_keep_neon_hot(self):
+        proxy = read("apps/api/src/app/api/market/provider-proxy/route.ts")
+        policy = read("apps/api/src/lib/license-policy.ts")
+        contract = read("apps/api/src/lib/license-contract.ts")
+        fundamentals = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/FundamentalAnalysis/GlitchFundamentalAnalysisService.cs"
+        )
+        licensing = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Licensing/GlitchLicenseService.cs"
+        )
+
+        self.assertIn("LICENSE_DEFAULT_CHECK_IN_SECONDS = 7 * 24 * 60 * 60", policy)
+        self.assertIn("LICENSE_DEFAULT_CHECK_IN_SECONDS,", contract)
+        self.assertIn("NextCheckInSeconds { get; set; } = 604800", licensing)
+        self.assertIn("return TimeSpan.FromMinutes(5);", fundamentals)
+        self.assertIn("isPersistentProviderCacheEnabled", proxy)
+        self.assertIn('readOptionalEnv("PROVIDER_PROXY_PERSISTENT_CACHE_ENABLED")', proxy)
+        self.assertIn("readCachedProviderResponse(cacheKey)", proxy)
+        self.assertNotIn("syncWhopMembershipToLocalState", proxy)
 
     def test_replication_delta_is_immutable_and_never_position_reconciled(self):
         engine = read("ninjatrader/Glitch/AddOns/GlitchAddOn/Core/GlitchEngine.cs")

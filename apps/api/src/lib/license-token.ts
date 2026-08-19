@@ -48,10 +48,10 @@ function readTokenTtlSeconds(): number {
   const raw = readOptionalEnv("LICENSE_TOKEN_TTL_SECONDS");
   const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
   if (!Number.isFinite(parsed)) {
-    return 120;
+    return 8 * 24 * 60 * 60;
   }
 
-  return Math.max(30, Math.min(parsed, 3600));
+  return Math.max(7 * 24 * 60 * 60, Math.min(parsed, 14 * 24 * 60 * 60));
 }
 
 export function isLicenseTokenSigningConfigured(): boolean {
