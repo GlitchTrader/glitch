@@ -213,6 +213,22 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
             ]
             self.assertIn("AttemptUtc = nowUtc", due, relative)
 
+    def test_decision_packet_retention_preserves_hermes_references(self):
+        writer = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Persistence/GlitchHermesExchangeWriter.cs"
+        )
+        self.assertIn("TimeSpan.FromHours(72)", writer)
+        self.assertIn("TimeSpan.FromHours(1)", writer)
+        self.assertIn('CollectPacketReferences(Path.Combine(GetExchangeRoot(), "hermes", "outbox")', writer)
+        self.assertIn('CollectPacketReferences(Path.Combine(GetExchangeRoot(), "hermes", "receipts")', writer)
+        prune = writer[
+            writer.index("private static void TryPruneDecisionPacketsIfDue"):
+            writer.index("private static void CollectPacketReferences")
+        ]
+        self.assertIn("packetUtc >= cutoffUtc", prune)
+        self.assertIn("referencedPacketIds.Contains(packetId)", prune)
+        self.assertIn("packet.Delete();", prune)
+
     def test_legacy_mutation_graveyard_is_absent(self):
         for relative in (
             "Services/Trading/GlitchCopyEngine.cs",

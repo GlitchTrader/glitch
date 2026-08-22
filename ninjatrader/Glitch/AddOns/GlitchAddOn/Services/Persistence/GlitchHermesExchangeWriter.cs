@@ -21,6 +21,8 @@ namespace Glitch.Services
 
         private const int FramesPerPacket = 5;
         private const int RetainedMinuteFrames = 180;
+        private static readonly TimeSpan UnreferencedPacketRetention = TimeSpan.FromHours(72);
+        private static readonly TimeSpan DecisionPacketPruneCadence = TimeSpan.FromHours(1);
         private static readonly object SyncRoot = new object();
         private static DateTime CachedMinuteUtc = DateTime.MinValue;
         private static bool CachedFrameComplete;
@@ -44,6 +46,7 @@ namespace Glitch.Services
         private static long NativePositionCollectionLockMaxMilliseconds;
         private static long NativeOrderCollectionLockMaxMilliseconds;
         private static long AnalyticsBusCollectionLockMaxMilliseconds;
+        private static DateTime LastDecisionPacketPruneAttemptUtc = DateTime.MinValue;
 
         // Called from the NinjaTrader dispatcher. It only owns minute/coalescing
         // state; all filesystem traversal, hashing, pruning and atomic writes run
@@ -308,6 +311,7 @@ namespace Glitch.Services
             WriteAtomic(GetGlitchExchangePath("latest-decision-packet.json"), packet);
             AppendPacketEvent(packetId, packetHash, frameIds);
             WriteStatus(packetId, packetHash, windowCloseUtc);
+            TryPruneDecisionPacketsIfDue(windowCloseUtc, packetDirectory);
             return true;
         }
 
@@ -574,6 +578,42 @@ namespace Glitch.Services
                 try { files[i].Delete(); }
                 catch { }
             }
+        }
+
+        private static void TryPruneDecisionPacketsIfDue(DateTime nowUtc, string packetDirectory)
+        {
+            if (nowUtc - LastDecisionPacketPruneAttemptUtc < DecisionPacketPruneCadence)
+                return;
+            LastDecisionPacketPruneAttemptUtc = nowUtc;
+
+            try
+            {
+                var referencedPacketIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                CollectPacketReferences(Path.Combine(GetExchangeRoot(), "hermes", "outbox"), referencedPacketIds);
+                CollectPacketReferences(Path.Combine(GetExchangeRoot(), "hermes", "receipts"), referencedPacketIds);
+
+                DateTime cutoffUtc = nowUtc.Subtract(UnreferencedPacketRetention);
+                foreach (FileInfo packet in new DirectoryInfo(packetDirectory).GetFiles("*.json"))
+                {
+                    string packetId = Path.GetFileNameWithoutExtension(packet.Name);
+                    DateTime packetUtc = ParseMinuteId(packetId);
+                    if (packetUtc == DateTime.MinValue
+                        || packetUtc >= cutoffUtc
+                        || referencedPacketIds.Contains(packetId))
+                        continue;
+                    try { packet.Delete(); }
+                    catch { }
+                }
+            }
+            catch { }
+        }
+
+        private static void CollectPacketReferences(string directory, HashSet<string> packetIds)
+        {
+            if (!Directory.Exists(directory))
+                return;
+            foreach (FileInfo reference in new DirectoryInfo(directory).GetFiles("*.json"))
+                packetIds.Add(Path.GetFileNameWithoutExtension(reference.Name));
         }
 
         private static void AppendPacketEvent(string packetId, string packetHash, IReadOnlyList<string> frameIds)
