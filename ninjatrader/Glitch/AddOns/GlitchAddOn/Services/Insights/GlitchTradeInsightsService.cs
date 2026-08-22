@@ -472,7 +472,7 @@ namespace Glitch.Services
             {
                 UtcTime = source.UtcTime,
                 AccountName = string.IsNullOrWhiteSpace(account) ? source.AccountName : account,
-                Action = signedQuantity > 0 ? "BUY" : "SELLSHORT",
+                Action = ResolveNativeExecutionAction(signedQuantity, signalName),
                 Quantity = Math.Abs(signedQuantity),
                 Instrument = instrument,
                 Price = price,
@@ -483,6 +483,26 @@ namespace Glitch.Services
                 SignalTag = ResolveSignalTag(signalName),
                 Commission = commission
             };
+        }
+
+        private static string ResolveNativeExecutionAction(double signedQuantity, string signalName)
+        {
+            bool isBuy = signedQuantity > 0;
+            if (GlitchNativeIdentity.TryGetRole(signalName, out string role))
+            {
+                if (string.Equals(role, "HME", StringComparison.OrdinalIgnoreCase))
+                    return isBuy ? "BUY" : "SELLSHORT";
+                if (string.Equals(role, "HMX", StringComparison.OrdinalIgnoreCase)
+                    || GlitchNativeIdentity.IsProtectionRole(role))
+                {
+                    return isBuy ? "BUYTOCOVER" : "SELL";
+                }
+            }
+
+            // Replication and external native identities may represent either
+            // side of a lifecycle. Preserve their signed fill direction and
+            // let current position state decide.
+            return isBuy ? "BUY" : "SELLSHORT";
         }
 
         private static void ParseExecutionExtras(

@@ -57,7 +57,7 @@ $workerNames = @(
     'reset-hermes-trading-epoch.ps1'
 )
 foreach ($name in $workerNames) {
-    Copy-Item -LiteralPath (Join-Path $repoRoot "tools\hermes\$name") -Destination (Join-Path $target "scripts\$name") -Force
+    Copy-Item -LiteralPath (Join-Path $sourceRoot "scripts\$name") -Destination (Join-Path $target "scripts\$name") -Force
 }
 
 foreach ($bytecodeDirectory in @(Get-ChildItem -LiteralPath $target -Recurse -Directory -Filter '__pycache__' -Force)) {
@@ -68,7 +68,10 @@ foreach ($bytecodeFile in @(Get-ChildItem -LiteralPath $target -Recurse -File -F
 }
 
 $skillCount = @(Get-ChildItem -LiteralPath (Join-Path $target 'skills') -Directory).Count
-if ($skillCount -ne 5) { throw "Expected five Glitch skills; found $skillCount." }
+$expectedSkillCount = @(Get-ChildItem -LiteralPath (Join-Path $sourceRoot 'skills') -Directory).Count
+if ($skillCount -ne $expectedSkillCount) {
+    throw "Expected $expectedSkillCount Glitch skills; found $skillCount."
+}
 $scriptCount = @(Get-ChildItem -LiteralPath (Join-Path $target 'scripts') -File).Count
 if ($scriptCount -ne 9) { throw "Expected nine runtime scripts; found $scriptCount." }
 

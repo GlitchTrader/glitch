@@ -44,17 +44,17 @@ foreach ($skillSource in $skillSources) {
 
 $scriptsDestination = Join-Path $destination 'scripts'
 New-Item -ItemType Directory -Force -Path $scriptsDestination | Out-Null
-Copy-Item -LiteralPath (Join-Path $repo 'tools\hermes\run-direct-glitch-cycle.py') `
+Copy-Item -LiteralPath (Join-Path $HermesProfileRoot 'scripts\run-direct-glitch-cycle.py') `
     -Destination (Join-Path $scriptsDestination 'run-direct-glitch-cycle.py') -Force
-Copy-Item -LiteralPath (Join-Path $repo 'tools\hermes\launch-direct-glitch-cycle.py') `
+Copy-Item -LiteralPath (Join-Path $HermesProfileRoot 'scripts\launch-direct-glitch-cycle.py') `
     -Destination (Join-Path $scriptsDestination 'launch-direct-glitch-cycle.py') -Force
-Copy-Item -LiteralPath (Join-Path $repo 'tools\hermes\reconcile-hermes-outcomes.py') `
+Copy-Item -LiteralPath (Join-Path $HermesProfileRoot 'scripts\reconcile-hermes-outcomes.py') `
     -Destination (Join-Path $scriptsDestination 'reconcile-hermes-outcomes.py') -Force
-Copy-Item -LiteralPath (Join-Path $repo 'tools\hermes\run-hermes-learning-cycle.py') `
+Copy-Item -LiteralPath (Join-Path $HermesProfileRoot 'scripts\run-hermes-learning-cycle.py') `
     -Destination (Join-Path $scriptsDestination 'run-hermes-learning-cycle.py') -Force
-Copy-Item -LiteralPath (Join-Path $repo 'tools\hermes\launch-hermes-learning-cycle.py') `
+Copy-Item -LiteralPath (Join-Path $HermesProfileRoot 'scripts\launch-hermes-learning-cycle.py') `
     -Destination (Join-Path $scriptsDestination 'launch-hermes-learning-cycle.py') -Force
-Copy-Item -LiteralPath (Join-Path $repo 'tools\hermes\ensure-named-sessions.py') `
+Copy-Item -LiteralPath (Join-Path $HermesProfileRoot 'scripts\ensure-named-sessions.py') `
     -Destination (Join-Path $scriptsDestination 'ensure-named-sessions.py') -Force
 
 $pluginDestination = Join-Path $destination 'plugins\glitch-control'

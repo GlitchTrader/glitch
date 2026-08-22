@@ -17,6 +17,7 @@ internal static class GlitchTradeLedgerPartialFillHarness
             IdenticalNoIdFragmentsAreNotCollapsed();
             ManualAndAiAttributionRemainDistinct();
             NativeExecutionCarriesHermesSignalAttribution();
+            ColdReplayProtectiveExitDoesNotOpenPhantomPosition();
             ManualThenAiAdditionUsesDistinctFifoLots();
             AiThenManualAdditionUsesDistinctFifoLots();
             DistinctAiIntentsRemainDistinct();
@@ -265,6 +266,32 @@ internal static class GlitchTradeLedgerPartialFillHarness
         Require(hermes.OpenReason == "Hermes Entry", "native Hermes open reason was lost");
         Require(hermes.EntryType == "ENTRY", "native Hermes entry type was lost");
         Require(hermes.EntrySignal == "GL1-G1D7A1CB4A410356FFF8-HME", "native Hermes entry signal was lost");
+    }
+
+    private static void ColdReplayProtectiveExitDoesNotOpenPhantomPosition()
+    {
+        DateTime start = new DateTime(2026, 8, 3, 13, 45, 0, DateTimeKind.Utc);
+        var events = new List<GlitchTradeInsightsService.TradeJournalEvent>
+        {
+            // Retained history can begin with a close from a position whose
+            // entry is no longer in the journal. It must remain an orphan exit.
+            NativeExecution(start, "GL1-G1D7A1CB4A410356FFF6-HS0-L1", 1, 105, "orphan-stop"),
+            NativeExecution(start.AddMinutes(1), "GL1-G1D7A1CB4A410356FFF7-HME", -1, 100, "short-entry"),
+            NativeExecution(start.AddMinutes(2), "GL1-G1D7A1CB4A410356FFF7-HS0-L1", 1, 105, "short-stop")
+        };
+
+        GlitchTradeInsightsService.TradeInsightsSnapshot snapshot =
+            new GlitchTradeInsightsService().BuildSnapshot(
+                events,
+                new List<GlitchTradeInsightsService.TradeWarningEvent>(),
+                start.AddMinutes(3));
+
+        Require(snapshot.ClosedTrades.Count == 1, "cold replay protective exit created a phantom trade");
+        GlitchTradeInsightsService.TradeRoundTrip trade = snapshot.ClosedTrades[0];
+        Require(!trade.IsLong, "cold replay changed the intended short side");
+        Near(trade.EntryPrice, 100, "cold replay short entry");
+        Near(trade.ExitPrice, 105, "cold replay short exit");
+        Near(trade.PnlPoints, -5, "cold replay short P&L");
     }
 
     private static void AiThenManualAdditionUsesDistinctFifoLots()
