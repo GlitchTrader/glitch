@@ -92,6 +92,8 @@ namespace Glitch.Core
             public string RouteId;
             public int RequestedSignedQuantity;
             public int RemainingSignedQuantity;
+            public int? TargetSignedPosition;
+            public int MaxOpeningStepQuantity;
             public bool CancelExternalProtection;
             public bool MirrorsManualMasterProtection;
             public bool ProtectionCleanupOnly;
@@ -542,6 +544,14 @@ namespace Glitch.Core
                 }
             }
 
+            PendingSynchronization synchronization;
+            if (_syncRefreshByCommand.TryGetValue(unknown.CommandId, out synchronization))
+            {
+                _pendingSynchronizations.Remove(
+                    synchronization.RouteId + "|" + synchronization.Instrument);
+                RemoveSynchronizationRefreshes(synchronization);
+            }
+
             ProtectionChangeOperation change;
             if (_changeByCommand.TryGetValue(unknown.CommandId, out change))
             {
@@ -628,10 +638,11 @@ namespace Glitch.Core
                     int appliedSignedQuantity = checked(
                         operation.RequestedSignedQuantity
                         - operation.RemainingSignedQuantity);
-                    if (Math.Sign(appliedSignedQuantity)
+                    if (!operation.TargetSignedPosition.HasValue
+                        && (Math.Sign(appliedSignedQuantity)
                             != Math.Sign(operation.RequestedSignedQuantity)
                         || Math.Abs(appliedSignedQuantity)
-                            > Math.Abs(operation.RequestedSignedQuantity))
+                            > Math.Abs(operation.RequestedSignedQuantity)))
                     {
                         operation.Phase = GlitchOperationPhase.Unknown;
                         operation.Failure = "native_execution_exceeded_immutable_trade_delta";
@@ -813,7 +824,8 @@ namespace Glitch.Core
             Book follower = GetBook(route.Follower, pending.Instrument);
             if (!master.PositionKnown)
             {
-                string commandId = CommandId(pending.Id + "|MASTER", 1, "POSITION");
+                string commandId = CommandId(
+                    pending.Id + "|" + pending.Instrument + "|MASTER", 1, "POSITION");
                 _syncRefreshByCommand[commandId] = pending;
                 commands.Add(new RefreshPositionCommand(
                     commandId,
@@ -822,7 +834,8 @@ namespace Glitch.Core
             }
             if (!follower.PositionKnown)
             {
-                string commandId = CommandId(pending.Id + "|FOLLOWER", 1, "POSITION");
+                string commandId = CommandId(
+                    pending.Id + "|" + pending.Instrument + "|FOLLOWER", 1, "POSITION");
                 _syncRefreshByCommand[commandId] = pending;
                 commands.Add(new RefreshPositionCommand(
                     commandId,
@@ -836,7 +849,9 @@ namespace Glitch.Core
             int delta = checked(desired - follower.SignedPosition);
             if (delta != 0)
             {
-                EnqueueSplitTrade(
+                int maxOpeningStepQuantity;
+                _replicationOrderLimits.TryGetValue(route.Follower, out maxOpeningStepQuantity);
+                EnqueueTrade(
                     pending.Id + "|" + pending.Instrument,
                     "route_sync",
                     GlitchCommandPurpose.GroupSynchronization,
@@ -845,7 +860,10 @@ namespace Glitch.Core
                     delta,
                     route.Id,
                     null,
-                    false);
+                    false,
+                    false,
+                    targetSignedPosition: desired,
+                    maxOpeningStepQuantity: maxOpeningStepQuantity);
             }
             _pendingSynchronizations.Remove(pending.RouteId + "|" + pending.Instrument);
             RemoveSynchronizationRefreshes(pending);
@@ -1218,11 +1236,13 @@ namespace Glitch.Core
             bool cancelExternalProtection,
             bool mirrorsManualMasterProtection,
             bool closeToFlat = false,
-            string hermesIntentId = null)
+            string hermesIntentId = null,
+            int? targetSignedPosition = null,
+            int maxOpeningStepQuantity = 0)
         {
             if (signedQuantity == 0 || _operations.ContainsKey(operationId))
                 return;
-            AllocationEpoch allocation = routeId == null
+            AllocationEpoch allocation = routeId == null || targetSignedPosition.HasValue
                 ? null
                 : GetAllocation(routeId, instrument);
             if (allocation != null)
@@ -1243,6 +1263,8 @@ namespace Glitch.Core
                 RouteId = routeId,
                 RequestedSignedQuantity = signedQuantity,
                 RemainingSignedQuantity = signedQuantity,
+                TargetSignedPosition = targetSignedPosition,
+                MaxOpeningStepQuantity = maxOpeningStepQuantity,
                 CancelExternalProtection = cancelExternalProtection,
                 MirrorsManualMasterProtection = mirrorsManualMasterProtection,
                 CloseToFlat = closeToFlat,
@@ -1338,7 +1360,10 @@ namespace Glitch.Core
                     operation.ActiveFilledSignedQuantity = 0;
                     operation.ActiveExpectedSignedPosition = 0;
                     operation.ActivePositionRevision = 0;
-                    if (operation.CloseToFlat)
+                    if (operation.TargetSignedPosition.HasValue)
+                        operation.RemainingSignedQuantity = checked(
+                            operation.TargetSignedPosition.Value - book.SignedPosition);
+                    else if (operation.CloseToFlat)
                         operation.RemainingSignedQuantity = -book.SignedPosition;
                     if (operation.RemainingSignedQuantity != 0)
                     {
@@ -1412,6 +1437,10 @@ namespace Glitch.Core
                     }
                     operation.RemainingSignedQuantity = -book.SignedPosition;
                 }
+
+                if (operation.TargetSignedPosition.HasValue && book.PositionKnown)
+                    operation.RemainingSignedQuantity = checked(
+                        operation.TargetSignedPosition.Value - book.SignedPosition);
 
                 if (operation.RemainingSignedQuantity == 0)
                 {
@@ -2231,6 +2260,7 @@ namespace Glitch.Core
             Book book = GetBook(account, instrument);
             foreach (TradeOperation operation in book.Operations.OfType<TradeOperation>().Where(value =>
                 string.Equals(value.RouteId, routeId, StringComparison.OrdinalIgnoreCase)
+                && !value.TargetSignedPosition.HasValue
                 && value.RemainingSignedQuantity != 0
                 && Math.Sign(value.RemainingSignedQuantity) == sign
                 && (value.Phase == GlitchOperationPhase.Accepted
@@ -2248,9 +2278,21 @@ namespace Glitch.Core
 
         private static int PlanTradeStep(TradeOperation operation, int signedPosition)
         {
-            int remainingSignedQuantity = operation.RemainingSignedQuantity;
-            if (operation.Purpose == GlitchCommandPurpose.Replication
-                || operation.Purpose == GlitchCommandPurpose.GroupSynchronization)
+            int remainingSignedQuantity = operation.TargetSignedPosition.HasValue
+                ? checked(operation.TargetSignedPosition.Value - signedPosition)
+                : operation.RemainingSignedQuantity;
+            if (operation.Purpose == GlitchCommandPurpose.GroupSynchronization)
+            {
+                if (operation.MaxOpeningStepQuantity > 0
+                    && IsOpeningIncrease(signedPosition, remainingSignedQuantity)
+                    && Math.Abs(remainingSignedQuantity) > operation.MaxOpeningStepQuantity)
+                {
+                    return Math.Sign(remainingSignedQuantity)
+                        * operation.MaxOpeningStepQuantity;
+                }
+                return remainingSignedQuantity;
+            }
+            if (operation.Purpose == GlitchCommandPurpose.Replication)
                 return remainingSignedQuantity;
             if (signedPosition == 0
                 || Math.Sign(signedPosition) == Math.Sign(remainingSignedQuantity))
@@ -2261,8 +2303,13 @@ namespace Glitch.Core
 
         private static bool IsOpeningIncrease(Book book, int signedQuantity)
         {
-            return !book.PositionKnown || book.SignedPosition == 0
-                || Math.Sign(book.SignedPosition) == Math.Sign(signedQuantity);
+            return !book.PositionKnown || IsOpeningIncrease(book.SignedPosition, signedQuantity);
+        }
+
+        private static bool IsOpeningIncrease(int signedPosition, int signedQuantity)
+        {
+            return signedPosition == 0
+                || Math.Sign(signedPosition) == Math.Sign(signedQuantity);
         }
 
         private static ProtectionTemplate AllocateProtection(

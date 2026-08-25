@@ -230,6 +230,25 @@ internal static class GlitchStateMachineHarness
             synchronize ? new[] { routeId } : null));
     }
 
+    private static void MarkPositionUnknown(
+        GlitchEngine engine,
+        string account,
+        string instrument,
+        string identity)
+    {
+        engine.Handle(new ExecutionObserved(
+            identity,
+            account,
+            instrument,
+            1,
+            1m,
+            GlitchExecutionOrigin.External,
+            null,
+            null,
+            "baseline-" + identity,
+            true));
+    }
+
     private static ProtectedBook CreateProtectedLong()
     {
         var engine = new GlitchEngine();
@@ -784,6 +803,143 @@ internal static class GlitchStateMachineHarness
             .OfType<SubmitMarketCommand>().Single();
         Assert(enableSync.SignedQuantity == 3,
             "enabling a route did not synchronize from current native facts");
+    }
+
+    private static void TestSynchronizationRefreshesAreInstrumentScoped()
+    {
+        var engine = new GlitchEngine();
+        foreach (string instrument in new[] { "M2K 09-26", "MNQ 09-26" })
+        {
+            engine.Handle(new PositionObserved("Master", instrument, 0));
+            engine.Handle(new PositionObserved("Follower", instrument, 0));
+            MarkPositionUnknown(engine, "Follower", instrument, "unknown-" + instrument);
+        }
+
+        RefreshPositionCommand[] refreshes = ConfigureRoute(engine, "scoped-sync", 1m, true)
+            .OfType<RefreshPositionCommand>()
+            .ToArray();
+        Assert(refreshes.Length == 2,
+            "multi-instrument synchronization did not request both follower positions");
+        Assert(refreshes.Select(value => value.CommandId)
+                .Distinct(System.StringComparer.OrdinalIgnoreCase).Count() == 2,
+            "multi-instrument synchronization reused one refresh command identity");
+    }
+
+    private static void TestUnknownSynchronizationRefreshIsTerminal()
+    {
+        var engine = new GlitchEngine();
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 1));
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 0));
+        ConfigureRoute(engine, "unknown-sync", 1m);
+        MarkPositionUnknown(engine, "Follower", "MNQ 09-26", "unknown-sync-follower");
+
+        RefreshPositionCommand refresh = engine.Handle(
+                new RouteSynchronizationRequested("unknown-sync"))
+            .OfType<RefreshPositionCommand>()
+            .Single();
+        Assert(engine.IsCommandPending(refresh.CommandId),
+            "synchronization refresh was not pending before terminal unknown evidence");
+        Assert(engine.Handle(new NativeRequestUnknownObserved(
+                refresh.CommandId, "command_identity_conflict")).Count == 0,
+            "unknown synchronization refresh emitted a native mutation");
+        Assert(!engine.IsCommandPending(refresh.CommandId),
+            "unknown synchronization refresh remained pending");
+        Assert(engine.Handle(new PositionObserved(
+                "Follower", "MNQ 09-26", 0))
+            .OfType<SubmitMarketCommand>().Count() == 0,
+            "retired synchronization resumed after a later position observation");
+    }
+
+    private static void TestSynchronizationConvergesToCapturedTargetAfterReplication()
+    {
+        var engine = new GlitchEngine();
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 0));
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 0));
+        ConfigureRoute(engine, "sync-race", 1m);
+        MarkPositionUnknown(engine, "Follower", "MNQ 09-26", "sync-race-follower");
+        engine.Handle(new RouteSynchronizationRequested("sync-race"));
+
+        engine.Handle(Execution(
+            "sync-race-master-fill", "Master", 1, 20000m, 1, 1,
+            "sync-race-master-order", null, null, GlitchExecutionOrigin.External));
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 1));
+        SubmitMarketCommand replication = engine.Handle(new PositionObserved(
+                "Follower", "MNQ 09-26", 0))
+            .OfType<SubmitMarketCommand>()
+            .Single();
+        Assert(replication.Purpose == GlitchCommandPurpose.Replication
+            && replication.SignedQuantity == 1,
+            "replication did not retain FIFO ownership ahead of synchronization");
+
+        int followerPosition = 0;
+        IReadOnlyList<GlitchCommand> afterReplication = CompleteTrade(
+            engine,
+            replication,
+            ref followerPosition,
+            "sync-race-replication",
+            GlitchExecutionOrigin.GlitchReplication);
+        Assert(followerPosition == 1,
+            "replication did not reach the captured synchronization target");
+        Assert(afterReplication.OfType<SubmitMarketCommand>().Count() == 0,
+            "synchronization applied a stale delta after replication reached its target");
+    }
+
+    private static void TestSynchronizationTargetReplansFromLatestFollowerPosition()
+    {
+        var engine = new GlitchEngine();
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 2));
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 0));
+        SubmitMarketCommand original = ConfigureRoute(engine, "target-replan", 1m, true)
+            .OfType<SubmitMarketCommand>()
+            .Single();
+        Assert(original.SignedQuantity == 2,
+            "synchronization setup did not capture the expected target");
+
+        SubmitMarketCommand replanned = engine.Handle(new NativePlanStaleObserved(
+                original.CommandId, "Follower", "MNQ 09-26", 1))
+            .OfType<SubmitMarketCommand>()
+            .Single();
+        Assert(replanned.SignedQuantity == 1
+            && replanned.ExpectedSignedPosition == 1,
+            "synchronization did not replan from latest follower position truth");
+    }
+
+    private static void TestSynchronizationTargetPreservesOpeningOrderLimit()
+    {
+        var engine = new GlitchEngine();
+        engine.Handle(new ReplicationQuantityLimitChanged("Follower", 1));
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 3));
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 0));
+        SubmitMarketCommand command = ConfigureRoute(engine, "target-limit", 1m, true)
+            .OfType<SubmitMarketCommand>()
+            .Single();
+        int followerPosition = 0;
+        for (int step = 1; step <= 3; step++)
+        {
+            Assert(command.SignedQuantity == 1,
+                "synchronization target exceeded the follower opening order limit");
+            SubmitMarketCommand[] next = CompleteTrade(
+                    engine,
+                    command,
+                    ref followerPosition,
+                    "target-limit-" + step,
+                    GlitchExecutionOrigin.GlitchSynchronization)
+                .OfType<SubmitMarketCommand>()
+                .ToArray();
+            if (step < 3)
+            {
+                Assert(next.Length == 1,
+                    "synchronization target did not continue after a limited opening step");
+                command = next[0];
+            }
+            else
+            {
+                Assert(next.Length == 0,
+                    "synchronization target emitted work after reaching its target");
+            }
+        }
+        Assert(followerPosition == 3,
+            "limited synchronization did not converge to the captured target");
     }
 
     private static void TestProtectionRejectionIsTerminalAndNeverRetried()
@@ -1405,6 +1561,11 @@ internal static class GlitchStateMachineHarness
         TestEveryFollowerManualActionRemainsIndependent();
         TestRouteChangeAndSynchronizationAreOneInput();
         TestRouteLifecycleHasOnlyRequestedEffects();
+        TestSynchronizationRefreshesAreInstrumentScoped();
+        TestUnknownSynchronizationRefreshIsTerminal();
+        TestSynchronizationConvergesToCapturedTargetAfterReplication();
+        TestSynchronizationTargetReplansFromLatestFollowerPosition();
+        TestSynchronizationTargetPreservesOpeningOrderLimit();
         TestRouteSnapshotRemovalStopsOnlyFutureReplication();
         TestProtectionChangeIsMasterFirstAndExact();
         TestFlattenSupersedesOnlyPriorGlitchWork();
