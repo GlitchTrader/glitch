@@ -569,11 +569,21 @@ class SharedSourceArchitectureContractTests(unittest.TestCase):
         settings = read(
             "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.SettingsTab.partial.cs"
         )
+        portfolio_capture = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/UI/MainWindow/GlitchMainWindow.PortfolioSnapshot.partial.cs"
+        )
+        portfolio_writer = read(
+            "ninjatrader/Glitch/AddOns/GlitchAddOn/Services/Persistence/GlitchPortfolioSnapshotWriter.cs"
+        )
         self.assertIn('"16:55:00"', temporal)
         self.assertIn("_aiDailyCloseNextRetryUtc", temporal)
         self.assertIn("ShouldBlockAiDailyCloseEntry", executor)
         self.assertIn('"ai_daily_close_window"', executor)
         self.assertIn("Action at 16:54 Eastern", settings)
+        self.assertIn("AiDailyCloseEnabled = aiDailyCloseEnabled", portfolio_capture)
+        self.assertIn("&& aiAccountScoped", portfolio_capture)
+        self.assertIn('account.AiDailyCloseEnabled ? "16:55:00"', portfolio_writer)
+        self.assertIn("ai_daily_close_enabled", portfolio_writer)
 
     def test_user_flatten_is_one_native_account_flatten_request(self):
         engine = read("ninjatrader/Glitch/AddOns/GlitchAddOn/Core/GlitchEngine.cs")

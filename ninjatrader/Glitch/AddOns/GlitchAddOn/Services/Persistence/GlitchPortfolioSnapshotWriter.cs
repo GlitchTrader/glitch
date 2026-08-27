@@ -63,6 +63,7 @@ namespace Glitch.Services
         public double AiDailyCaptureRemainingUsd { get; set; }
         public double AiDailyCaptureProgressRatio { get; set; }
         public bool AiDailyCaptureReached { get; set; }
+        public bool AiDailyCloseEnabled { get; set; }
         public string TradingStartTime { get; set; }
         public string TradingEndTime { get; set; }
         public List<GlitchPortfolioSnapshotPositionRecord> Positions { get; set; }
@@ -269,8 +270,8 @@ namespace Glitch.Services
 
             GlitchAiTradingWindowStatus tradingWindow = GlitchAiTradingWindow.Evaluate(
                 nowUtc,
-                account.TradingStartTime,
-                account.TradingEndTime);
+                account.AiDailyCloseEnabled ? "18:00:00" : account.TradingStartTime,
+                account.AiDailyCloseEnabled ? "16:55:00" : account.TradingEndTime);
 
             return "{"
                 + "\"account\":" + GlitchSnapshotJson.String(account.AccountName) + ","
@@ -302,6 +303,7 @@ namespace Glitch.Services
                 + "\"ai_daily_capture_remaining_usd\":" + GlitchSnapshotJson.Number(account.AiDailyCaptureRemainingUsd) + ","
                 + "\"ai_daily_capture_progress_ratio\":" + GlitchSnapshotJson.Number(account.AiDailyCaptureProgressRatio) + ","
                 + "\"ai_daily_capture_reached\":" + GlitchSnapshotJson.Bool(account.AiDailyCaptureReached) + ","
+                + "\"ai_daily_close_enabled\":" + GlitchSnapshotJson.Bool(account.AiDailyCloseEnabled) + ","
                 + "\"trading_start_time_et\":" + GlitchSnapshotJson.String(account.TradingStartTime) + ","
                 + "\"trading_end_time_et\":" + GlitchSnapshotJson.String(account.TradingEndTime) + ","
                 + "\"trading_window_valid\":" + GlitchSnapshotJson.Bool(tradingWindow.IsValid) + ","

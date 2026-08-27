@@ -98,10 +98,13 @@ namespace Glitch.UI
                 ? bufferMargin / maxDrawdown
                 : double.NaN;
             GlitchAiRailPolicy aiPolicy = GlitchAiRailPolicyStore.Load();
-            bool aiCaptureEnabled = _runtimePolicySettings != null
-                && _runtimePolicySettings.EnforceAiDailyCaptureEntryLock
-                && (aiPolicy?.AccountAllowlist ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase))
-                    .Any(name => string.Equals(name, row.DisplayName, StringComparison.OrdinalIgnoreCase));
+            bool aiAccountScoped = (aiPolicy?.AccountAllowlist
+                    ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase))
+                .Any(name => string.Equals(name, row.DisplayName, StringComparison.OrdinalIgnoreCase));
+            bool aiCaptureEnabled = _runtimePolicySettings?.EnforceAiDailyCaptureEntryLock == true
+                && aiAccountScoped;
+            bool aiDailyCloseEnabled = _runtimePolicySettings?.EnforceAiDailyClose == true
+                && aiAccountScoped;
             bool captureContextAvailable = aiCaptureEnabled
                 && row.AccountSizeRaw > 0
                 && !double.IsNaN(row.RealizedPnlRaw)
@@ -160,6 +163,7 @@ namespace Glitch.UI
                 AiDailyCaptureRemainingUsd = captureRemainingUsd,
                 AiDailyCaptureProgressRatio = captureProgressRatio,
                 AiDailyCaptureReached = captureReached,
+                AiDailyCloseEnabled = aiDailyCloseEnabled,
                 TradingStartTime = ruleFirm?.TradingStartTime,
                 TradingEndTime = ruleFirm?.TradingEndTime,
                 Positions = positions,
