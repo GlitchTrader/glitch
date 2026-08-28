@@ -73,7 +73,9 @@ internal static class GlitchJournalHarness
                 "RAW-CONTENT-FINGERPRINT",
                 "pending",
                 "intent_dispatched",
-                "ENTER_LONG");
+                "ENTER_LONG",
+                19999m,
+                20001m);
             var noAction = new HermesNoActionRequested(
                 "intent-2",
                 "Master",
@@ -153,7 +155,9 @@ internal static class GlitchJournalHarness
             Assert(loadedInput.Targets.Count == 2
                 && loadedInput.Targets[1].StopPrice == 19988m
                 && loadedInput.ContentFingerprint == "RAW-CONTENT-FINGERPRINT"
-                && loadedInput.ReceiptCode == "intent_dispatched",
+                && loadedInput.ReceiptCode == "intent_dispatched"
+                && loadedInput.EntryRangeLow == 19999m
+                && loadedInput.EntryRangeHigh == 20001m,
                 "Hermes input did not round-trip exactly");
             Assert(loadedNoAction.ContentFingerprint == "RAW-NO-ACTION-FINGERPRINT"
                 && loadedNoAction.ReceiptStatus == "executed"
@@ -183,6 +187,9 @@ internal static class GlitchJournalHarness
             Assert(GlitchOperationJournal.Fingerprint(loadedMarket)
                     == GlitchOperationJournal.Fingerprint(marketCommand),
                 "market command did not round-trip exactly");
+            Assert(loadedMarket.EntryRangeLow == 19999m
+                    && loadedMarket.EntryRangeHigh == 20001m,
+                "Hermes entry range did not reach the native command boundary");
             Assert(records.Last().Phase == "native_request_started",
                 "latest durable request boundary was not preserved");
 
@@ -195,6 +202,9 @@ internal static class GlitchJournalHarness
             Assert(GlitchOperationJournal.Fingerprint(replayed)
                     == GlitchOperationJournal.Fingerprint(marketCommand),
                 "accepted inputs did not replay to the same native command");
+            Assert(replayed.EntryRangeLow == 19999m
+                    && replayed.EntryRangeHigh == 20001m,
+                "Hermes entry range was not preserved by recovery replay");
 
             var changed = new SubmitProtectionCommand(
                 command.CommandId,

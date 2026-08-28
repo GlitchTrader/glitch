@@ -50,6 +50,29 @@ class HermesIngressContractTests(unittest.TestCase):
         self.assertIn('GlitchAiJsonFields.ExtractString(body, "prompt_version")', server)
         self.assertIn('"\\\"prompt_version\\\":"', result_contract)
 
+    def test_hermes_entry_range_reaches_only_the_final_master_entry_boundary(self):
+        validator = source("Services/Ai/GlitchAiIntentValidator.cs")
+        executor = source("Services/Ai/GlitchAiOrderExecutor.cs")
+        contracts = source("Core/GlitchContracts.cs")
+        engine = source("Core/GlitchEngine.cs")
+        gateway = source("Infrastructure/NinjaTraderGateway.cs")
+        evidence = source("Infrastructure/GlitchExecutionEvidenceWriter.cs")
+
+        self.assertIn('"entry_range_low", "entry_range_high"', validator)
+        self.assertIn("entry_range_requires_low_and_high", validator)
+        self.assertIn('rawJson, "entry_range_low"', executor)
+        self.assertIn("public decimal? EntryRangeLow", contracts)
+        self.assertIn("entryRangeLow: request.EntryRangeLow", engine)
+        self.assertIn("command.Purpose == GlitchCommandPurpose.HermesMasterEntry", gateway)
+        self.assertIn("instrument.MarketData?.Ask?.Price", gateway)
+        self.assertIn("instrument.MarketData?.Bid?.Price", gateway)
+        self.assertIn('"entry_range_superseded"', gateway)
+        self.assertLess(
+            gateway.index("command.Purpose == GlitchCommandPurpose.HermesMasterEntry"),
+            gateway.index("account.Submit(new[] { order })"),
+        )
+        self.assertIn("TryRequestEntryRangeReassessment", evidence)
+
     def test_operation_journal_is_the_only_intent_identity_authority(self):
         server = source("Services/Ai/GlitchAiIntentServer.cs")
         executor = source("Services/Ai/GlitchAiOrderExecutor.cs")

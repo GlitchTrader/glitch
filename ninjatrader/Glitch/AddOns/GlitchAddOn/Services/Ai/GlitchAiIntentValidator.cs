@@ -40,7 +40,8 @@ namespace Glitch.Services
             "operator_profile", "action", "quantity", "order_type",
             "stop_loss", "take_profit_1", "take_profit_2", "stop_loss_2", "quantity_tp1",
             "take_profit_3", "stop_loss_3", "quantity_tp2", "confidence", "snapshot_hash",
-            "model_version", "prompt_version", "reason", "decision_audit", "protection_updates"
+            "model_version", "prompt_version", "reason", "decision_audit", "protection_updates",
+            "entry_range_low", "entry_range_high"
         };
 
         private static readonly HashSet<string> AllowedActions = new HashSet<string>(StringComparer.Ordinal)
@@ -142,6 +143,17 @@ namespace Glitch.Services
                 if (!string.Equals(ExtractString(parsed, "order_type"), "MARKET", StringComparison.Ordinal)
                     || parsed.Contains("limit_price"))
                     errors.Add("entry_must_be_market_only");
+
+                bool hasEntryRangeLow = parsed.Contains("entry_range_low");
+                bool hasEntryRangeHigh = parsed.Contains("entry_range_high");
+                if (hasEntryRangeLow != hasEntryRangeHigh)
+                    errors.Add("entry_range_requires_low_and_high");
+                else if (hasEntryRangeLow
+                    && (!TryExtractNumber(parsed, "entry_range_low", out double entryRangeLow)
+                        || !TryExtractNumber(parsed, "entry_range_high", out double entryRangeHigh)
+                        || entryRangeLow <= 0
+                        || entryRangeHigh < entryRangeLow))
+                    errors.Add("entry_range_invalid");
             }
 
             if (string.Equals(action, "MOVE_STOP", StringComparison.Ordinal))
@@ -200,7 +212,8 @@ namespace Glitch.Services
                 {
                     "quantity", "order_type", "limit_price", "stop_loss", "take_profit_1",
                     "take_profit_2", "stop_loss_2", "quantity_tp1", "take_profit_3",
-                    "stop_loss_3", "quantity_tp2", "protection_updates"
+                    "stop_loss_3", "quantity_tp2", "protection_updates", "entry_range_low",
+                    "entry_range_high"
                 };
                 for (int i = 0; i < prohibited.Length; i++)
                 {
@@ -214,7 +227,8 @@ namespace Glitch.Services
                 string[] prohibited =
                 {
                     "quantity", "order_type", "limit_price", "take_profit_1", "take_profit_2",
-                    "stop_loss_2", "quantity_tp1", "take_profit_3", "stop_loss_3", "quantity_tp2"
+                    "stop_loss_2", "quantity_tp1", "take_profit_3", "stop_loss_3", "quantity_tp2",
+                    "entry_range_low", "entry_range_high"
                 };
                 for (int i = 0; i < prohibited.Length; i++)
                 {
@@ -232,7 +246,8 @@ namespace Glitch.Services
                 string[] prohibited =
                 {
                     "quantity", "order_type", "limit_price", "take_profit_2",
-                    "stop_loss_2", "quantity_tp1", "take_profit_3", "stop_loss_3", "quantity_tp2"
+                    "stop_loss_2", "quantity_tp1", "take_profit_3", "stop_loss_3", "quantity_tp2",
+                    "entry_range_low", "entry_range_high"
                 };
                 for (int i = 0; i < prohibited.Length; i++)
                 {

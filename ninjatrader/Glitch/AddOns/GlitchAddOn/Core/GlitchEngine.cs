@@ -94,6 +94,8 @@ namespace Glitch.Core
             public int RemainingSignedQuantity;
             public int? TargetSignedPosition;
             public int MaxOpeningStepQuantity;
+            public decimal? EntryRangeLow;
+            public decimal? EntryRangeHigh;
             public bool CancelExternalProtection;
             public bool MirrorsManualMasterProtection;
             public bool ProtectionCleanupOnly;
@@ -899,7 +901,9 @@ namespace Glitch.Core
                 protection,
                 false,
                 false,
-                hermesIntentId: request.IntentId);
+                hermesIntentId: request.IntentId,
+                entryRangeLow: request.EntryRangeLow,
+                entryRangeHigh: request.EntryRangeHigh);
         }
 
         private void RequestHermesExit(HermesExitRequested request)
@@ -1238,7 +1242,9 @@ namespace Glitch.Core
             bool closeToFlat = false,
             string hermesIntentId = null,
             int? targetSignedPosition = null,
-            int maxOpeningStepQuantity = 0)
+            int maxOpeningStepQuantity = 0,
+            decimal? entryRangeLow = null,
+            decimal? entryRangeHigh = null)
         {
             if (signedQuantity == 0 || _operations.ContainsKey(operationId))
                 return;
@@ -1265,6 +1271,8 @@ namespace Glitch.Core
                 RemainingSignedQuantity = signedQuantity,
                 TargetSignedPosition = targetSignedPosition,
                 MaxOpeningStepQuantity = maxOpeningStepQuantity,
+                EntryRangeLow = entryRangeLow,
+                EntryRangeHigh = entryRangeHigh,
                 CancelExternalProtection = cancelExternalProtection,
                 MirrorsManualMasterProtection = mirrorsManualMasterProtection,
                 CloseToFlat = closeToFlat,
@@ -1513,7 +1521,9 @@ namespace Glitch.Core
                     operation.CauseId,
                     null,
                     operation.RouteId,
-                    book.SignedPosition));
+                    book.SignedPosition,
+                    operation.EntryRangeLow,
+                    operation.EntryRangeHigh));
                 return;
             }
         }

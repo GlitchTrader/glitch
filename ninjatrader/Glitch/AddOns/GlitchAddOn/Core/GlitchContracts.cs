@@ -644,7 +644,9 @@ namespace Glitch.Core
             string contentFingerprint = null,
             string receiptStatus = "pending",
             string receiptCode = "intent_dispatched",
-            string receiptMessage = null)
+            string receiptMessage = null,
+            decimal? entryRangeLow = null,
+            decimal? entryRangeHigh = null)
         {
             if (string.IsNullOrWhiteSpace(intentId))
                 throw new ArgumentException("Intent identity is required.", nameof(intentId));
@@ -658,6 +660,11 @@ namespace Glitch.Core
                 throw new ArgumentOutOfRangeException(nameof(decisionReferencePrice));
             if (stopPrice <= 0)
                 throw new ArgumentOutOfRangeException(nameof(stopPrice));
+            if (entryRangeLow.HasValue != entryRangeHigh.HasValue)
+                throw new ArgumentException("Hermes entry range requires both bounds.");
+            if (entryRangeLow.HasValue
+                && (entryRangeLow.Value <= 0 || entryRangeHigh.Value < entryRangeLow.Value))
+                throw new ArgumentException("Hermes entry range is invalid.");
 
             HermesTarget[] targetArray = (targets ?? throw new ArgumentNullException(nameof(targets))).ToArray();
             if (targetArray.Length == 0 || targetArray.Length > 3)
@@ -672,18 +679,33 @@ namespace Glitch.Core
             DecisionReferencePrice = decisionReferencePrice;
             StopPrice = stopPrice;
             Targets = targetArray;
-            ContentFingerprint = GlitchHermesIntentContent.Resolve(
-                contentFingerprint,
-                IntentId,
-                AccountName,
-                InstrumentName,
-                SignedQuantity.ToString(CultureInfo.InvariantCulture),
-                DecisionReferencePrice.ToString(CultureInfo.InvariantCulture),
-                StopPrice.ToString(CultureInfo.InvariantCulture),
-                string.Join("|", Targets.Select(value =>
+            EntryRangeLow = entryRangeLow;
+            EntryRangeHigh = entryRangeHigh;
+            string targetFingerprint = string.Join("|", Targets.Select(value =>
                     value.Quantity.ToString(CultureInfo.InvariantCulture) + ":"
                     + value.StopPrice.ToString(CultureInfo.InvariantCulture) + ":"
-                    + value.Price.ToString(CultureInfo.InvariantCulture))));
+                    + value.Price.ToString(CultureInfo.InvariantCulture)));
+            ContentFingerprint = entryRangeLow.HasValue
+                ? GlitchHermesIntentContent.Resolve(
+                    contentFingerprint,
+                    IntentId,
+                    AccountName,
+                    InstrumentName,
+                    SignedQuantity.ToString(CultureInfo.InvariantCulture),
+                    DecisionReferencePrice.ToString(CultureInfo.InvariantCulture),
+                    StopPrice.ToString(CultureInfo.InvariantCulture),
+                    targetFingerprint,
+                    entryRangeLow.Value.ToString(CultureInfo.InvariantCulture),
+                    entryRangeHigh.Value.ToString(CultureInfo.InvariantCulture))
+                : GlitchHermesIntentContent.Resolve(
+                    contentFingerprint,
+                    IntentId,
+                    AccountName,
+                    InstrumentName,
+                    SignedQuantity.ToString(CultureInfo.InvariantCulture),
+                    DecisionReferencePrice.ToString(CultureInfo.InvariantCulture),
+                    StopPrice.ToString(CultureInfo.InvariantCulture),
+                    targetFingerprint);
             ReceiptStatus = string.IsNullOrWhiteSpace(receiptStatus) ? "pending" : receiptStatus.Trim();
             ReceiptCode = string.IsNullOrWhiteSpace(receiptCode) ? "intent_dispatched" : receiptCode.Trim();
             ReceiptMessage = string.IsNullOrWhiteSpace(receiptMessage)
@@ -698,6 +720,8 @@ namespace Glitch.Core
         public decimal DecisionReferencePrice { get; }
         public decimal StopPrice { get; }
         public IReadOnlyList<HermesTarget> Targets { get; }
+        public decimal? EntryRangeLow { get; }
+        public decimal? EntryRangeHigh { get; }
         public string ContentFingerprint { get; }
         public string ReceiptStatus { get; }
         public string ReceiptCode { get; }
@@ -979,7 +1003,9 @@ namespace Glitch.Core
             string parentCorrelationId,
             ProtectionTemplate protection,
             string routeId,
-            int expectedSignedPosition)
+            int expectedSignedPosition,
+            decimal? entryRangeLow = null,
+            decimal? entryRangeHigh = null)
             : base(commandId, purpose)
         {
             AccountName = accountName;
@@ -989,6 +1015,8 @@ namespace Glitch.Core
             Protection = protection;
             RouteId = routeId;
             ExpectedSignedPosition = expectedSignedPosition;
+            EntryRangeLow = entryRangeLow;
+            EntryRangeHigh = entryRangeHigh;
         }
 
         public string AccountName { get; }
@@ -998,6 +1026,8 @@ namespace Glitch.Core
         public ProtectionTemplate Protection { get; }
         public string RouteId { get; }
         public int ExpectedSignedPosition { get; }
+        public decimal? EntryRangeLow { get; }
+        public decimal? EntryRangeHigh { get; }
     }
 
     public sealed class ProtectionTarget

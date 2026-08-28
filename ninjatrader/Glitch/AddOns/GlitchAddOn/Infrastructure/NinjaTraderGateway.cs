@@ -807,6 +807,52 @@ namespace Glitch.Infrastructure
             OrderAction action = command.SignedQuantity > 0
                 ? (current < 0 ? OrderAction.BuyToCover : OrderAction.Buy)
                 : (current > 0 ? OrderAction.Sell : OrderAction.SellShort);
+            if (command.Purpose == GlitchCommandPurpose.HermesMasterEntry
+                && command.EntryRangeLow.HasValue
+                && command.EntryRangeHigh.HasValue)
+            {
+                double nativeQuote = command.SignedQuantity > 0
+                    ? instrument.MarketData?.Ask?.Price ?? 0
+                    : instrument.MarketData?.Bid?.Price ?? 0;
+                if (nativeQuote > 0 && !double.IsNaN(nativeQuote) && !double.IsInfinity(nativeQuote))
+                {
+                    decimal executablePrice = (decimal)nativeQuote;
+                    if (executablePrice < command.EntryRangeLow.Value
+                        || executablePrice > command.EntryRangeHigh.Value)
+                    {
+                        string intentAction = command.SignedQuantity > 0
+                            ? "ENTER_LONG"
+                            : "ENTER_SHORT";
+                        string message = "account=" + account.Name
+                            + "|contract=" + instrument.FullName
+                            + "|entry_range_low=" + command.EntryRangeLow.Value.ToString(CultureInfo.InvariantCulture)
+                            + "|entry_range_high=" + command.EntryRangeHigh.Value.ToString(CultureInfo.InvariantCulture)
+                            + "|executable_price=" + executablePrice.ToString(CultureInfo.InvariantCulture);
+                        GlitchExecutionEvidenceWriter.TryAppend(
+                            command.ParentCorrelationId,
+                            "skipped",
+                            "entry_range_superseded",
+                            message,
+                            DateTime.UtcNow);
+                        GlitchExecutionEvidenceWriter.TryRequestEntryRangeReassessment(
+                            command.ParentCorrelationId,
+                            intentAction,
+                            instrument.FullName,
+                            command.EntryRangeLow.Value,
+                            command.EntryRangeHigh.Value,
+                            executablePrice,
+                            DateTime.UtcNow);
+                        Notice(
+                            account.Name,
+                            "Order",
+                            "entry_range_superseded|command=" + command.CommandId
+                            + "|price=" + executablePrice.ToString(CultureInfo.InvariantCulture));
+                        throw new InvalidOperationException(
+                            "entry_range_superseded|command=" + command.CommandId
+                            + "|price=" + executablePrice.ToString(CultureInfo.InvariantCulture));
+                    }
+                }
+            }
             string signal = BuildMarketSignal(command.Purpose, command.CommandId);
             Order order = account.CreateOrder(
                 instrument,

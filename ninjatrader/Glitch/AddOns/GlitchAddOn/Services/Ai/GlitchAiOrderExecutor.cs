@@ -370,6 +370,16 @@ namespace Glitch.Services
                     out failure))
                 return false;
 
+            bool hasEntryRangeLow = GlitchAiJsonFields.TryExtractNumber(
+                rawJson, "entry_range_low", out double entryRangeLowRaw);
+            bool hasEntryRangeHigh = GlitchAiJsonFields.TryExtractNumber(
+                rawJson, "entry_range_high", out double entryRangeHighRaw);
+            if (hasEntryRangeLow != hasEntryRangeHigh)
+            {
+                failure = "entry_range_incomplete";
+                return false;
+            }
+
             int quantity = ToPositiveInteger(quantityRaw, "quantity");
             bool hasTarget2 = GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_2", out double target2);
             bool hasTarget3 = GlitchAiJsonFields.TryExtractNumber(rawJson, "take_profit_3", out double target3);
@@ -436,7 +446,9 @@ namespace Glitch.Services
                 contentFingerprint,
                 "pending",
                 "intent_dispatched",
-                action);
+                action,
+                hasEntryRangeLow ? (decimal?)entryRangeLowRaw : null,
+                hasEntryRangeHigh ? (decimal?)entryRangeHighRaw : null);
             return true;
         }
 

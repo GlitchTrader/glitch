@@ -306,6 +306,11 @@ namespace Glitch.Infrastructure
                 result["expected_position"] = market.ExpectedSignedPosition;
                 result["parent"] = market.ParentCorrelationId ?? string.Empty;
                 result["route"] = market.RouteId ?? string.Empty;
+                if (market.EntryRangeLow.HasValue)
+                {
+                    result["entry_range_low"] = market.EntryRangeLow.Value;
+                    result["entry_range_high"] = market.EntryRangeHigh.Value;
+                }
                 return result;
             }
             var protection = command as SubmitProtectionCommand;
@@ -526,6 +531,11 @@ namespace Glitch.Infrastructure
                 result["signed_quantity"] = entry.SignedQuantity;
                 result["reference_price"] = entry.DecisionReferencePrice;
                 result["stop"] = entry.StopPrice;
+                if (entry.EntryRangeLow.HasValue)
+                {
+                    result["entry_range_low"] = entry.EntryRangeLow.Value;
+                    result["entry_range_high"] = entry.EntryRangeHigh.Value;
+                }
                 result["targets"] = entry.Targets.Select(value =>
                     (object)new Dictionary<string, object>
                     {
@@ -615,7 +625,9 @@ namespace Glitch.Infrastructure
                     Text(value, "parent"),
                     null,
                     EmptyToNull(Text(value, "route")),
-                    Integer(value, "expected_position"));
+                    Integer(value, "expected_position"),
+                    NullableDecimal(value, "entry_range_low"),
+                    NullableDecimal(value, "entry_range_high"));
             if (type == nameof(SubmitProtectionCommand))
             {
                 var targets = List(value, "targets").Select(item => new ProtectionTarget(
@@ -767,7 +779,9 @@ namespace Glitch.Infrastructure
                     Text(value, "content_fingerprint"),
                     Text(value, "receipt_status"),
                     Text(value, "receipt_code"),
-                    Text(value, "receipt_message"));
+                    Text(value, "receipt_message"),
+                    NullableDecimal(value, "entry_range_low"),
+                    NullableDecimal(value, "entry_range_high"));
             if (type == nameof(HermesExitRequested))
                 return new HermesExitRequested(
                     Text(value, "intent_id"),
