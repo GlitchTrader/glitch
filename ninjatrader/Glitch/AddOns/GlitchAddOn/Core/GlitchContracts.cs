@@ -420,7 +420,8 @@ namespace Glitch.Core
             int signedPosition,
             decimal referencePrice,
             string revisionId,
-            IEnumerable<MasterProtectionLeg> legs)
+            IEnumerable<MasterProtectionLeg> legs,
+            decimal tickSize = 0)
         {
             if (string.IsNullOrWhiteSpace(accountName))
                 throw new ArgumentException("Account name is required.", nameof(accountName));
@@ -429,12 +430,15 @@ namespace Glitch.Core
             MasterProtectionLeg[] legArray = (legs ?? Enumerable.Empty<MasterProtectionLeg>()).ToArray();
             if (legArray.Length > 0 && (signedPosition == 0 || referencePrice <= 0))
                 throw new ArgumentException("A working bracket requires a native position reference.");
+            if (tickSize < 0)
+                throw new ArgumentOutOfRangeException(nameof(tickSize));
             AccountName = accountName.Trim();
             InstrumentName = instrumentName.Trim();
             SignedPosition = signedPosition;
             ReferencePrice = referencePrice;
             RevisionId = revisionId ?? string.Empty;
             Legs = legArray;
+            TickSize = tickSize;
         }
 
         public string AccountName { get; }
@@ -443,6 +447,7 @@ namespace Glitch.Core
         public decimal ReferencePrice { get; }
         public string RevisionId { get; }
         public IReadOnlyList<MasterProtectionLeg> Legs { get; }
+        public decimal TickSize { get; }
     }
 
     public sealed class ProtectionCancellationCompletedObserved : GlitchInput

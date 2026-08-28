@@ -112,10 +112,24 @@ internal static class GlitchJournalHarness
                 });
             Assert(journal.TryAppendInput(
                 routeConfiguration, "test", out string routeError), routeError);
+            var masterProtection = new MasterProtectionObserved(
+                "Master",
+                "MNQ 09-26",
+                1,
+                20000.125m,
+                "manual-protection-1",
+                new[] { new MasterProtectionLeg("UMANUAL00000001", 1, 19990m, 20020m) },
+                0.25m);
+            Assert(journal.TryAppendInput(
+                masterProtection, "test", out string masterProtectionError),
+                masterProtectionError);
 
             const string legacyProtectionRecord =
                 "{\"schema\":\"glitch.operation.v5\",\"created_utc\":\"2026-08-07T00:45:54.5591122Z\",\"phase\":\"accepted\",\"command_id\":\"G3795A7A3BB188E9D9E52\",\"type\":\"SubmitProtectionCommand\",\"fingerprint\":\"4acc26aa34d0136cf463831830948e43ceaebb25b015d4ba52b9ecb6de9cf10a\",\"detail\":\"native\",\"command\":{\"type\":\"SubmitProtectionCommand\",\"command_id\":\"G3795A7A3BB188E9D9E52\",\"purpose\":\"Protection\",\"account\":\"Sim101\",\"instrument\":\"MNQ 09-26\",\"signed_entry\":1,\"entry_price\":29537.25,\"parent\":\"G4CC8863E8A279F23FA50\",\"route\":\"\",\"exposure\":\"HERMES|bb6e7f66-ba55-5bb3-8b98-9fadca213a2c|FILL|061a553845a048e79aa512558004c7f1\",\"propagates\":true,\"targets\":[{\"leg_id\":\"LBB090CDCE7CA8AC\",\"quantity\":1,\"stop\":29485.25,\"target\":29593.00}]}}";
+            const string legacyMasterProtectionRecord =
+                "{\"schema\":\"glitch.operation.v5\",\"created_utc\":\"2026-08-07T00:45:55.0000000Z\",\"phase\":\"input_accepted\",\"command_id\":\"\",\"type\":\"MasterProtectionObserved\",\"source\":\"legacy\",\"input\":{\"type\":\"MasterProtectionObserved\",\"account\":\"LegacyMaster\",\"instrument\":\"MNQ 09-26\",\"signed_quantity\":1,\"reference_price\":20000,\"revision_id\":\"legacy-manual-protection\",\"legs\":[{\"leg_id\":\"ULEGACY0000001\",\"quantity\":1,\"stop\":19990,\"target\":20020}]}}";
             File.AppendAllText(journalPath, legacyProtectionRecord + Environment.NewLine);
+            File.AppendAllText(journalPath, legacyMasterProtectionRecord + Environment.NewLine);
 
             var originalEngine = new GlitchEngine();
             originalEngine.Handle(position);
@@ -152,6 +166,10 @@ internal static class GlitchJournalHarness
                 .OfType<RouteConfigurationChanged>().Single();
             ExecutionLifecycleObserved loadedLifecycle = records.Select(value => value.Input)
                 .OfType<ExecutionLifecycleObserved>().Single();
+            MasterProtectionObserved[] loadedMasterProtection = records
+                .Select(value => value.Input)
+                .OfType<MasterProtectionObserved>()
+                .ToArray();
             Assert(loadedInput.Targets.Count == 2
                 && loadedInput.Targets[1].StopPrice == 19988m
                 && loadedInput.ContentFingerprint == "RAW-CONTENT-FINGERPRINT"
@@ -172,6 +190,10 @@ internal static class GlitchJournalHarness
                 && loadedLifecycle.SignedQuantity == 2
                 && loadedLifecycle.Commission == 1.25m,
                 "execution lifecycle evidence did not round-trip exactly");
+            Assert(loadedMasterProtection.Single(value => value.AccountName == "Master").TickSize == 0.25m,
+                "native tick size did not round-trip with manual protection evidence");
+            Assert(loadedMasterProtection.Single(value => value.AccountName == "LegacyMaster").TickSize == 0,
+                "legacy manual protection evidence did not default missing tick size compatibly");
             SubmitMarketCommand loadedMarket = records.Select(value => value.Command)
                 .OfType<SubmitMarketCommand>().Last();
             SubmitProtectionCommand loadedLegacyProtection = records

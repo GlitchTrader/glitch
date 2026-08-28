@@ -58,6 +58,7 @@ namespace Glitch.Core
             public bool MirrorsManualMaster;
             public bool CancelRequested;
             public bool Superseded;
+            public bool SafetyFlattenPending;
             public long CreatedSequence;
             public string CurrentRequestId;
             public readonly List<ProtectionSlice> Slices = new List<ProtectionSlice>();
@@ -440,6 +441,9 @@ namespace Glitch.Core
             book.PositionRevision = observed.Revision > 0
                 ? observed.Revision
                 : ++_positionRevision;
+            if (observed.SignedQuantity == 0)
+                _masterProtectionSnapshots.Remove(
+                    observed.AccountName + "|" + observed.InstrumentName);
             foreach (TradeOperation operation in book.Operations
                 .OfType<TradeOperation>()
                 .Where(value => value.PositionRefreshRequested)
@@ -671,6 +675,9 @@ namespace Glitch.Core
             if (!string.IsNullOrWhiteSpace(execution.ProtectionCorrelationId))
                 ObserveProtectiveFill(execution);
 
+            if (execution.Origin == GlitchExecutionOrigin.GlitchFlatten)
+                ObserveSafetyFlattenFill(execution);
+
             if (execution.Origin == GlitchExecutionOrigin.External)
                 EnqueueManualMasterProtectionCleanup(execution, book);
 
@@ -851,6 +858,10 @@ namespace Glitch.Core
             int delta = checked(desired - follower.SignedPosition);
             if (delta != 0)
             {
+                MasterProtectionObserved masterProtection;
+                bool mirrorsManualMasterProtection = _masterProtectionSnapshots.TryGetValue(
+                        route.Master + "|" + pending.Instrument, out masterProtection)
+                    && masterProtection.TickSize > 0;
                 int maxOpeningStepQuantity;
                 _replicationOrderLimits.TryGetValue(route.Follower, out maxOpeningStepQuantity);
                 EnqueueTrade(
@@ -863,7 +874,7 @@ namespace Glitch.Core
                     route.Id,
                     null,
                     false,
-                    false,
+                    mirrorsManualMasterProtection,
                     targetSignedPosition: desired,
                     maxOpeningStepQuantity: maxOpeningStepQuantity);
             }
@@ -1074,6 +1085,15 @@ namespace Glitch.Core
                 && existing.Phase == GlitchOperationPhase.NativePending)
                 return;
 
+            bool protectionSafetyFlatten = request.Reason.StartsWith(
+                    "native_protection_failed|", StringComparison.OrdinalIgnoreCase)
+                || request.Reason.StartsWith(
+                    "native_protection_unknown|", StringComparison.OrdinalIgnoreCase);
+            RetireBundlesForFlatten(request.AccountName, protectionSafetyFlatten);
+            if (string.Equals(
+                    request.Reason, "user_flatten_all", StringComparison.OrdinalIgnoreCase))
+                ResetAllocationsForAccount(request.AccountName);
+
             foreach (Book book in _books.Values.Where(value => string.Equals(
                 value.Account, request.AccountName, StringComparison.OrdinalIgnoreCase)))
             {
@@ -1118,6 +1138,36 @@ namespace Glitch.Core
             if (_flattenByAccount.TryGetValue(flatten.Account, out current)
                 && ReferenceEquals(current, flatten))
                 _flattenByAccount.Remove(flatten.Account);
+            foreach (Book book in _books.Values.Where(value => string.Equals(
+                value.Account, flatten.Account, StringComparison.OrdinalIgnoreCase)))
+            {
+                foreach (ProtectionBundle bundle in book.Bundles.Where(value => value.Superseded))
+                    bundle.SafetyFlattenPending = false;
+            }
+        }
+
+        private void RetireBundlesForFlatten(string accountName, bool safetySettlement)
+        {
+            foreach (Book book in _books.Values.Where(value => string.Equals(
+                value.Account, accountName, StringComparison.OrdinalIgnoreCase)))
+            {
+                foreach (ProtectionBundle bundle in book.Bundles.Where(value =>
+                    !value.Superseded && value.RemainingQuantity > 0))
+                {
+                    bundle.Superseded = true;
+                    bundle.PendingSourceRevision = null;
+                    bundle.SafetyFlattenPending = safetySettlement
+                        && !string.IsNullOrWhiteSpace(bundle.RouteId);
+                }
+            }
+        }
+
+        private void ResetAllocationsForAccount(string accountName)
+        {
+            foreach (Route route in _routes.Values.Where(value =>
+                string.Equals(value.Master, accountName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value.Follower, accountName, StringComparison.OrdinalIgnoreCase)))
+                ResetAllocation(route.Id);
         }
 
         private void ReplicateMasterExecution(
@@ -1748,7 +1798,7 @@ namespace Glitch.Core
             int quantity)
         {
             List<ProtectionLegTemplate> scaled = ScaleManualProtection(
-                quantity, observed);
+                quantity, bundle.EntryPrice, observed);
             bundle.Slices.Clear();
             bundle.Slices.AddRange(scaled.Select(value => new ProtectionSlice
             {
@@ -1757,7 +1807,7 @@ namespace Glitch.Core
                 StopOffset = value.StopOffset,
                 TargetOffset = value.TargetOffset
             }));
-            bundle.SourceRevision = observed.RevisionId;
+            bundle.SourceRevision = ManualProtectionRevision(observed);
             bundle.PendingSourceRevision = null;
         }
 
@@ -1905,6 +1955,45 @@ namespace Glitch.Core
                     bundle.RouteId, bundle.Account, bundle.Instrument, execution.SignedQuantity);
                 if (remainingCredit != 0)
                     AddSettlementCredit(allocation, remainingCredit);
+            }
+        }
+
+        private void ObserveSafetyFlattenFill(ExecutionObserved execution)
+        {
+            int remaining = Math.Abs(execution.SignedQuantity);
+            int exposureDirection = -Math.Sign(execution.SignedQuantity);
+            Book book = GetBook(execution.AccountName, execution.InstrumentName);
+            foreach (ProtectionBundle bundle in book.Bundles
+                .Where(value => value.SafetyFlattenPending
+                    && value.Direction == exposureDirection
+                    && value.RemainingQuantity > 0)
+                .OrderBy(value => value.CreatedSequence))
+            {
+                int bundleBudget = Math.Min(bundle.RemainingQuantity, remaining);
+                int consumed = 0;
+                foreach (ProtectionSlice slice in bundle.Slices.Where(value =>
+                    value.RemainingQuantity > 0))
+                {
+                    int quantity = Math.Min(slice.RemainingQuantity, bundleBudget - consumed);
+                    slice.RemainingQuantity -= quantity;
+                    consumed += quantity;
+                    if (consumed == bundleBudget)
+                        break;
+                }
+                if (consumed > 0)
+                {
+                    int signedCredit = Math.Sign(execution.SignedQuantity) * consumed;
+                    AllocationEpoch allocation = GetAllocation(bundle.RouteId, bundle.Instrument);
+                    int remainingCredit = ApplyCreditToWaitingOperations(
+                        bundle.RouteId, bundle.Account, bundle.Instrument, signedCredit);
+                    if (remainingCredit != 0)
+                        AddSettlementCredit(allocation, remainingCredit);
+                    remaining -= consumed;
+                }
+                if (bundle.RemainingQuantity == 0)
+                    bundle.SafetyFlattenPending = false;
+                if (remaining == 0)
+                    return;
             }
         }
 
@@ -2142,9 +2231,7 @@ namespace Glitch.Core
                         && string.Equals(
                             value.SourceMaster, observed.AccountName, StringComparison.OrdinalIgnoreCase)))
                 {
-                    string revision = observed.Legs.Count == 0
-                        ? "NONE|" + observed.RevisionId
-                        : observed.RevisionId;
+                    string revision = ManualProtectionRevision(observed);
                     if (string.Equals(bundle.SourceRevision, revision, StringComparison.Ordinal)
                         || string.Equals(bundle.PendingSourceRevision, revision, StringComparison.Ordinal))
                         continue;
@@ -2157,7 +2244,7 @@ namespace Glitch.Core
                     if (!remove && currentLive)
                     {
                         List<ProtectionLegTemplate> desired = ScaleManualProtection(
-                            bundle.RemainingQuantity, observed);
+                            bundle.RemainingQuantity, bundle.EntryPrice, observed);
                         bool sameStructure = desired.Count == bundle.Slices.Count
                             && desired.All(value => bundle.Slices.Any(slice =>
                                 string.Equals(slice.LegId, value.LegId, StringComparison.OrdinalIgnoreCase)
@@ -2211,9 +2298,7 @@ namespace Glitch.Core
         {
             ProtectionBundle bundle = operation.ManualRevisionBundle;
             MasterProtectionObserved observed = operation.ManualRevision;
-            string revision = observed.Legs.Count == 0
-                ? "NONE|" + observed.RevisionId
-                : observed.RevisionId;
+            string revision = ManualProtectionRevision(observed);
             if (operation.RemoveManualProtection || bundle.RemainingQuantity == 0)
             {
                 bundle.Superseded = true;
@@ -2234,6 +2319,7 @@ namespace Glitch.Core
 
         private static List<ProtectionLegTemplate> ScaleManualProtection(
             int followerQuantity,
+            decimal followerEntryPrice,
             MasterProtectionObserved observed)
         {
             int sourceTotal = observed.Legs.Sum(value => value.Quantity);
@@ -2252,11 +2338,39 @@ namespace Glitch.Core
                     source.LegId,
                     quantity,
                     source.StopPrice.HasValue
-                        ? source.StopPrice.Value - observed.ReferencePrice : (decimal?)null,
+                        ? RoundToTick(
+                            followerEntryPrice
+                                + source.StopPrice.Value - observed.ReferencePrice,
+                            observed.TickSize) - followerEntryPrice
+                        : (decimal?)null,
                     source.TargetPrice.HasValue
-                        ? source.TargetPrice.Value - observed.ReferencePrice : (decimal?)null));
+                        ? RoundToTick(
+                            followerEntryPrice
+                                + source.TargetPrice.Value - observed.ReferencePrice,
+                            observed.TickSize) - followerEntryPrice
+                        : (decimal?)null));
             }
             return result;
+        }
+
+        private static string ManualProtectionRevision(MasterProtectionObserved observed)
+        {
+            string revision = observed.Legs.Count == 0
+                ? "NONE|" + observed.RevisionId
+                : observed.RevisionId;
+            if (observed.TickSize <= 0)
+                return revision;
+            return revision
+                + "|REF=" + observed.ReferencePrice.ToString(CultureInfo.InvariantCulture)
+                + "|TICK=" + observed.TickSize.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private static decimal RoundToTick(decimal price, decimal tickSize)
+        {
+            if (tickSize <= 0)
+                return price;
+            return decimal.Round(
+                price / tickSize, 0, MidpointRounding.AwayFromZero) * tickSize;
         }
 
         private int ApplyCreditToWaitingOperations(

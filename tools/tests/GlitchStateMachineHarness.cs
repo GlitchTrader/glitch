@@ -1469,6 +1469,168 @@ internal static class GlitchStateMachineHarness
             "manual protection removal did not cancel the exact mirrored request");
     }
 
+    private static void TestManualProtectionTranslationIsTickAlignedAndReferenceAware()
+    {
+        var engine = new GlitchEngine();
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 0));
+        ConfigureRoute(engine, "tick-safe", 1m);
+        SubmitMarketCommand followerEntry = engine.Handle(Execution(
+            "tick-safe-master-fill", "Master", 3, 29508.75m, 3, 3,
+            "tick-safe-master-order", null, null, GlitchExecutionOrigin.External))
+            .OfType<SubmitMarketCommand>().Single();
+        const string legId = "UTICKSAFE000001";
+        engine.Handle(new MasterProtectionObserved(
+            "Master", "MNQ 09-26", 3, 29508.875m, "same-native-orders",
+            new[] { new MasterProtectionLeg(legId, 3, 29488.75m, 29548.75m) },
+            0.25m));
+
+        engine.Handle(Order("Follower", "tick-safe-follower-entry", "Working", 3, 0,
+            followerEntry.CommandId, "M"));
+        SubmitProtectionCommand protection = ObserveExecution(engine, Execution(
+            "tick-safe-follower-fill", "Follower", 3, 29508.75m, 3, 3,
+            "tick-safe-follower-entry", followerEntry.CommandId, null,
+            GlitchExecutionOrigin.GlitchReplication))
+            .OfType<SubmitProtectionCommand>().Single();
+        ProtectionTarget target = protection.Targets.Single();
+        Assert(target.StopPrice == 29488.75m && target.Price == 29548.75m,
+            "fractional master average produced non-native follower protection prices");
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 3));
+        engine.Handle(Order("Follower", "tick-safe-follower-entry", "Filled", 3, 3,
+            followerEntry.CommandId, "M"));
+        engine.Handle(Order("Follower", "tick-safe-stop", "Working", 3, 0,
+            protection.CommandId, "S0", legId, target.StopPrice));
+        engine.Handle(Order("Follower", "tick-safe-target", "Working", 3, 0,
+            protection.CommandId, "T0", legId, null, target.Price));
+
+        ChangeProtectionCommand change = engine.Handle(new MasterProtectionObserved(
+            "Master", "MNQ 09-26", 3, 29509.125m, "same-native-orders",
+            new[] { new MasterProtectionLeg(legId, 3, 29488.75m, 29548.75m) },
+            0.25m))
+            .OfType<ChangeProtectionCommand>().Single();
+        HermesProtectionUpdate update = change.Updates.Single();
+        Assert(update.StopPrice == 29488.5m && update.TargetPrice == 29548.5m,
+            "a changed native average with unchanged order ids did not revise follower geometry");
+    }
+
+    private static void TestProtectionFailureRetiresStaleBundleAndSettlesSafetyFlatten()
+    {
+        var engine = new GlitchEngine();
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 0));
+        ConfigureRoute(engine, "safety-settlement", 1m);
+        SubmitMarketCommand followerEntry = engine.Handle(Execution(
+            "safety-master-open", "Master", 1, 20001m, 1, 1,
+            "safety-master-open-order", null, null, GlitchExecutionOrigin.External))
+            .OfType<SubmitMarketCommand>().Single();
+        const string legId = "USAFETY0000001";
+        engine.Handle(new MasterProtectionObserved(
+            "Master", "MNQ 09-26", 1, 20001m, "safety-revision-1",
+            new[] { new MasterProtectionLeg(legId, 1, 19991m, 20021m) },
+            0.25m));
+        engine.Handle(Order("Follower", "safety-follower-entry", "Working", 1, 0,
+            followerEntry.CommandId, "M"));
+        SubmitProtectionCommand protection = ObserveExecution(engine, Execution(
+            "safety-follower-fill", "Follower", 1, 20003m, 1, 1,
+            "safety-follower-entry", followerEntry.CommandId, null,
+            GlitchExecutionOrigin.GlitchReplication))
+            .OfType<SubmitProtectionCommand>().Single();
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 1));
+        engine.Handle(Order("Follower", "safety-follower-entry", "Filled", 1, 1,
+            followerEntry.CommandId, "M"));
+
+        FlattenAccountCommand flatten = engine.Handle(new NativeRequestFailedObserved(
+            protection.CommandId, "native_protection_not_started"))
+            .OfType<FlattenAccountCommand>().Single();
+        Assert(ObserveExecution(engine, Execution(
+                "safety-flatten-fill", "Follower", -1, 19999m, 0, 0,
+                "safety-flatten-order", null, null, GlitchExecutionOrigin.GlitchFlatten))
+                .OfType<SubmitMarketCommand>().Count() == 0,
+            "a safety flatten execution was treated as a new trade");
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 0));
+        engine.Handle(new FlattenCompletedObserved(flatten.CommandId, "Follower"));
+
+        Assert(engine.Handle(new MasterProtectionObserved(
+                "Master", "MNQ 09-26", 1, 20001m, "safety-revision-2",
+                new[] { new MasterProtectionLeg(legId, 1, 19995m, 20030m) },
+                0.25m)).Count == 0,
+            "a later master revision revived the failed follower bundle");
+        Assert(engine.Handle(Execution(
+                "safety-master-close", "Master", -1, 19998m, 0, 0,
+                "safety-master-close-order", null, null, GlitchExecutionOrigin.External))
+                .OfType<SubmitMarketCommand>().Count() == 0,
+            "a master close reversed exposure already removed by Glitch safety flatten");
+    }
+
+    private static void TestSynchronizationCreatesAndRevisesMirroredProtection()
+    {
+        var engine = new GlitchEngine();
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 2));
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 0));
+        ConfigureRoute(engine, "protected-sync", 1m);
+        const string legId = "USYNC0000000001";
+        engine.Handle(new MasterProtectionObserved(
+            "Master", "MNQ 09-26", 2, 20000m, "sync-revision-1",
+            new[] { new MasterProtectionLeg(legId, 2, 19990m, 20020m) },
+            0.25m));
+        SubmitMarketCommand sync = engine.Handle(
+                new RouteSynchronizationRequested("protected-sync"))
+            .OfType<SubmitMarketCommand>().Single();
+        int followerPosition = 0;
+        SubmitProtectionCommand protection = CompleteTrade(
+                engine, sync, ref followerPosition, "protected-sync",
+                GlitchExecutionOrigin.GlitchSynchronization)
+            .OfType<SubmitProtectionCommand>().Single();
+        Assert(protection.SignedEntryQuantity == 2,
+            "synchronization reopened follower exposure without mirrored protection");
+        engine.Handle(Order("Follower", "protected-sync-stop", "Working", 2, 0,
+            protection.CommandId, "S0", legId, 19990m));
+        engine.Handle(Order("Follower", "protected-sync-target", "Working", 2, 0,
+            protection.CommandId, "T0", legId, null, 20020m));
+
+        ChangeProtectionCommand change = engine.Handle(new MasterProtectionObserved(
+            "Master", "MNQ 09-26", 2, 20000m, "sync-revision-2",
+            new[] { new MasterProtectionLeg(legId, 2, 19995m, 20030m) },
+            0.25m))
+            .OfType<ChangeProtectionCommand>().Single();
+        Assert(change.TargetCommandIds.SequenceEqual(new[] { protection.CommandId })
+                && change.Updates.Single().StopPrice == 19995m
+                && change.Updates.Single().TargetPrice == 20030m,
+            "manual master stop/target revision did not reach synchronized followers");
+    }
+
+    private static void TestUserFlattenResetsFractionalAllocationWithoutDisablingReplication()
+    {
+        var engine = new GlitchEngine();
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 0));
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 0));
+        ConfigureRoute(engine, "flatten-continuity", 0.5m);
+        SubmitMarketCommand first = engine.Handle(Execution(
+            "flatten-master-first", "Master", 1, 20000m, 1, 1,
+            "flatten-master-first-order", null, null, GlitchExecutionOrigin.External))
+            .OfType<SubmitMarketCommand>().Single();
+        int followerPosition = 0;
+        CompleteTrade(engine, first, ref followerPosition, "flatten-first-copy",
+            GlitchExecutionOrigin.GlitchReplication);
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 1));
+
+        FlattenAccountCommand masterFlatten = engine.Handle(new FlattenAccountRequested(
+            "flatten-continuity-master", "Master", "user_flatten_all"))
+            .OfType<FlattenAccountCommand>().Single();
+        FlattenAccountCommand followerFlatten = engine.Handle(new FlattenAccountRequested(
+            "flatten-continuity-follower", "Follower", "user_flatten_all"))
+            .OfType<FlattenAccountCommand>().Single();
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 0));
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 0));
+        engine.Handle(new FlattenCompletedObserved(masterFlatten.CommandId, "Master"));
+        engine.Handle(new FlattenCompletedObserved(followerFlatten.CommandId, "Follower"));
+
+        SubmitMarketCommand afterFlatten = engine.Handle(Execution(
+            "flatten-master-second", "Master", 1, 20010m, 1, 1,
+            "flatten-master-second-order", null, null, GlitchExecutionOrigin.External))
+            .OfType<SubmitMarketCommand>().Single();
+        Assert(afterFlatten.SignedQuantity == 1,
+            "Flatten All left fractional allocation state that suppressed the next master fill");
+    }
+
     private static void TestFailedEntryProtectionFlattensExposedInstrument()
     {
         var engine = new GlitchEngine();
@@ -1570,6 +1732,10 @@ internal static class GlitchStateMachineHarness
         TestProtectionChangeIsMasterFirstAndExact();
         TestFlattenSupersedesOnlyPriorGlitchWork();
         TestManualMasterProtectionFollowsNativeRevisions();
+        TestManualProtectionTranslationIsTickAlignedAndReferenceAware();
+        TestProtectionFailureRetiresStaleBundleAndSettlesSafetyFlatten();
+        TestSynchronizationCreatesAndRevisesMirroredProtection();
+        TestUserFlattenResetsFractionalAllocationWithoutDisablingReplication();
         TestFailedEntryProtectionFlattensExposedInstrument();
         TestUnknownEntryProtectionFlattensExposedInstrument();
         TestUnknownNativeRequestIsABarrierUntilExplicitFlatten();

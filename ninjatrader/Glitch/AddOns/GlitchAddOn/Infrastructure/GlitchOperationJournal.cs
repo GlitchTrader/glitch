@@ -584,6 +584,7 @@ namespace Glitch.Infrastructure
                 result["instrument"] = masterProtection.InstrumentName;
                 result["signed_quantity"] = masterProtection.SignedPosition;
                 result["reference_price"] = masterProtection.ReferencePrice;
+                result["tick_size"] = masterProtection.TickSize;
                 result["revision_id"] = masterProtection.RevisionId;
                 result["legs"] = masterProtection.Legs.Select(value =>
                     (object)new Dictionary<string, object>
@@ -825,7 +826,8 @@ namespace Glitch.Infrastructure
                         Text(item, "leg_id"),
                         Integer(item, "quantity"),
                         NullableDecimal(item, "stop"),
-                        NullableDecimal(item, "target"))));
+                        NullableDecimal(item, "target"))),
+                    DecimalValue(value, "tick_size"));
             return null;
         }
 

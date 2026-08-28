@@ -745,7 +745,8 @@ namespace Glitch.Infrastructure
                 signedPosition,
                 referencePrice,
                 revision,
-                legs));
+                legs,
+                (decimal)instrument.MasterInstrument.TickSize));
         }
 
         private static string ExternalProtectionGroupKey(Order order)
