@@ -422,7 +422,10 @@ namespace Glitch.Core
                 return true;
             ProtectionRequest protection;
             if (_protectionRequests.TryGetValue(commandId ?? string.Empty, out protection))
-                return !protection.RequestFailed
+                return protection.Bundle != null
+                    && !protection.Bundle.Superseded
+                    && protection.Bundle.RemainingQuantity > 0
+                    && !protection.RequestFailed
                     && !protection.RequestUnknown
                     && !ProtectionEstablished(commandId);
             ProtectionChangeOperation change;

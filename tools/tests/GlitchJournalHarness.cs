@@ -422,10 +422,19 @@ internal static class GlitchJournalHarness
                     + "|record=" + index);
             journalCommands[record.Command.CommandId] = commandFingerprint;
         }
+        GlitchCommand[] unjournaledPending = emitted.Values
+            .Where(command => !journalCommands.ContainsKey(command.CommandId)
+                && engine.IsCommandPending(command.CommandId))
+            .ToArray();
+        Assert(unjournaledPending.Length == 0,
+            "recovery_would_resume_unjournaled_commands:"
+            + string.Join(",", unjournaledPending.Select(command =>
+                command.GetType().Name + "|" + command.CommandId)));
         Console.WriteLine(
             "Existing Glitch host replay passed: records=" + records.Count
             + " emissions=" + emitted.Count
-            + " identities=" + commandIdentities.Count + ".");
+            + " identities=" + commandIdentities.Count
+            + " unjournaled_pending=" + unjournaledPending.Length + ".");
         return 0;
     }
 

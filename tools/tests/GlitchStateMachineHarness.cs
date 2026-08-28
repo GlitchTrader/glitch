@@ -1413,6 +1413,42 @@ internal static class GlitchStateMachineHarness
             "Flatten disabled replication for a later independent User execution");
     }
 
+    private static void TestFlattenRetiresPendingFollowerProtectionRecovery()
+    {
+        var engine = new GlitchEngine();
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 0));
+        ConfigureRoute(engine, "flatten-protection", 1m);
+        SubmitMarketCommand followerEntry = engine.Handle(Execution(
+            "flatten-protection-master-fill", "Master", 1, 20001m, 1, 1,
+            "flatten-protection-master-order", null, null,
+            GlitchExecutionOrigin.External))
+            .OfType<SubmitMarketCommand>().Single();
+        const string legId = "UFLATTEN0000001";
+        engine.Handle(new MasterProtectionObserved(
+            "Master", "MNQ 09-26", 1, 20001m, "flatten-protection-revision",
+            new[] { new MasterProtectionLeg(legId, 1, 19991m, 20021m) },
+            0.25m));
+        engine.Handle(Order("Follower", "flatten-protection-entry", "Working", 1, 0,
+            followerEntry.CommandId, "M"));
+        SubmitProtectionCommand protection = ObserveExecution(engine, Execution(
+            "flatten-protection-follower-fill", "Follower", 1, 20003m, 1, 1,
+            "flatten-protection-entry", followerEntry.CommandId, null,
+            GlitchExecutionOrigin.GlitchReplication))
+            .OfType<SubmitProtectionCommand>().Single();
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 1));
+        Assert(engine.IsCommandPending(protection.CommandId),
+            "new follower protection was not pending before Flatten");
+
+        FlattenAccountCommand flatten = engine.Handle(new FlattenAccountRequested(
+            "flatten-protection-follower", "Follower", "user_flatten_all"))
+            .OfType<FlattenAccountCommand>().Single();
+        Assert(!engine.IsCommandPending(protection.CommandId),
+            "Flatten left stale follower protection eligible for recovery replay");
+        engine.Handle(new FlattenCompletedObserved(flatten.CommandId, "Follower"));
+        Assert(!engine.IsCommandPending(protection.CommandId),
+            "completed Flatten revived stale follower protection recovery");
+    }
+
     private static void TestManualMasterProtectionFollowsNativeRevisions()
     {
         var engine = new GlitchEngine();
@@ -1731,6 +1767,7 @@ internal static class GlitchStateMachineHarness
         TestRouteSnapshotRemovalStopsOnlyFutureReplication();
         TestProtectionChangeIsMasterFirstAndExact();
         TestFlattenSupersedesOnlyPriorGlitchWork();
+        TestFlattenRetiresPendingFollowerProtectionRecovery();
         TestManualMasterProtectionFollowsNativeRevisions();
         TestManualProtectionTranslationIsTickAlignedAndReferenceAware();
         TestProtectionFailureRetiresStaleBundleAndSettlesSafetyFlatten();
