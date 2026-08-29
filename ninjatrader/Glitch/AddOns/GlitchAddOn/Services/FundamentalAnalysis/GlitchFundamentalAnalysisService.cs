@@ -1149,11 +1149,11 @@ namespace Glitch.Services
         {
             var relevantCurrencies = ResolveRelevantCurrencies(instrumentRoot);
             EconomicEvent activeEvent = events
-                .Where(x => x != null && x.ImpactLevel >= 2)
                 // FRED publishes dataset-release schedules, not an authoritative
-                // live economic-event calendar. Keep those rows as analytics
-                // context, but never present them as an active compliance alert.
-                .Where(x => !string.Equals(x.Source, "FRED", StringComparison.OrdinalIgnoreCase))
+                // live economic-event calendar. Keep those rows in the cache,
+                // but never present them as verified events or compliance alerts.
+                .Where(IsVerifiedLiveEconomicEvent)
+                .Where(x => x.ImpactLevel >= 2)
                 .Where(x => IsEventRelevantToCurrencies(x, relevantCurrencies))
                 .Where(x =>
                 {
@@ -1202,9 +1202,15 @@ namespace Glitch.Services
             if (!hasFred && sourceEvents.Count == 0)
                 return new List<string> { "Official News feed unavailable: license context missing." };
 
+            List<EconomicEvent> verifiedEvents = sourceEvents
+                .Where(IsVerifiedLiveEconomicEvent)
+                .ToList();
+            if (verifiedEvents.Count == 0)
+                return new List<string>();
+
             var relevantCurrencies = ResolveRelevantCurrencies(instrumentRoot);
-            List<EconomicEvent> relevantUpcoming = sourceEvents
-                .Where(x => x != null && x.UtcTime >= nowUtc.AddHours(-1))
+            List<EconomicEvent> relevantUpcoming = verifiedEvents
+                .Where(x => x.UtcTime >= nowUtc.AddHours(-1))
                 .Where(x => x.ImpactLevel >= 2)
                 .Where(x => IsEventRelevantToCurrencies(x, relevantCurrencies))
                 .OrderBy(x => x.UtcTime)
@@ -1214,8 +1220,8 @@ namespace Glitch.Services
 
             if (relevantUpcoming.Count == 0)
             {
-                relevantUpcoming = sourceEvents
-                    .Where(x => x != null && x.UtcTime >= nowUtc.AddHours(-1))
+                relevantUpcoming = verifiedEvents
+                    .Where(x => x.UtcTime >= nowUtc.AddHours(-1))
                     .OrderBy(x => x.UtcTime)
                     .ThenByDescending(x => x.ImpactLevel)
                     .Take(3)
@@ -1256,7 +1262,7 @@ namespace Glitch.Services
         private static string BuildOfficialNewsText(IReadOnlyList<string> lines)
         {
             if (lines == null || lines.Count == 0)
-                return "Official calendar warming up...";
+                return "No verified live economic calendar available.";
 
             return string.Join(Environment.NewLine, lines);
         }
@@ -2323,7 +2329,8 @@ namespace Glitch.Services
         private static TimeSpan ResolveCalendarPollInterval(DateTime nowUtc, List<EconomicEvent> events)
         {
             EconomicEvent nextHighImpact = events
-                .Where(x => x != null && x.ImpactLevel >= 2 && x.UtcTime >= nowUtc)
+                .Where(IsVerifiedLiveEconomicEvent)
+                .Where(x => x.ImpactLevel >= 2 && x.UtcTime >= nowUtc)
                 .OrderBy(x => x.UtcTime)
                 .FirstOrDefault();
 
@@ -2336,6 +2343,12 @@ namespace Glitch.Services
             if (minutesToEvent <= 90)
                 return TimeSpan.FromMinutes(5);
             return TimeSpan.FromMinutes(15);
+        }
+
+        private static bool IsVerifiedLiveEconomicEvent(EconomicEvent item)
+        {
+            return item != null &&
+                   !string.Equals(item.Source, "FRED", StringComparison.OrdinalIgnoreCase);
         }
 
         private static DateTime ResolveEventEndUtc(EconomicEvent evt)

@@ -259,7 +259,6 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
             else if (State == State.Realtime)
             {
-                GlitchBridgeBusCompat.RegisterBridge(_instrumentRoot, PublishToGlitchUi);
                 GlitchBridgeBusCompat.RegisterTradeInstrumentInstance(Instrument);
                 GlitchBridgeBusCompat.TouchBridge(
                     _instrumentRoot,

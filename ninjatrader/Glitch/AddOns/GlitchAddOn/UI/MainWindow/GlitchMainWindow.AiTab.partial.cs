@@ -399,7 +399,10 @@ namespace Glitch.UI
         {
             GlitchAiRailPolicy policy = GlitchAiRailPolicyStore.Load();
             var currentMasters = new HashSet<string>(_accountGroups.Where(group => group != null).Select(group => group.MasterAccount), StringComparer.OrdinalIgnoreCase);
-            var enabled = new HashSet<string>(policy.ProfileAccountBindings.Values.Where(currentMasters.Contains), StringComparer.OrdinalIgnoreCase);
+            var enabled = new HashSet<string>(
+                policy?.ProfileAccountBindings?.Values?.Where(currentMasters.Contains)
+                    ?? Enumerable.Empty<string>(),
+                StringComparer.OrdinalIgnoreCase);
             SaveAiTradingScope(enabled, "group_reconcile", false);
         }
 
@@ -427,8 +430,9 @@ namespace Glitch.UI
                 persistedPolicy?.ProfileAccountBindings?.Values ?? Enumerable.Empty<string>(),
                 StringComparer.OrdinalIgnoreCase);
             _aiScopeRenderFingerprint = null;
-            RefreshAiScopeRows(persistedMasters);
-            if (refresh)
+            if (_aiScopeRowsHost != null)
+                RefreshAiScopeRows(persistedMasters);
+            if (refresh && _aiFeedHost != null)
                 RefreshAiTab();
         }
 

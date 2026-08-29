@@ -283,7 +283,7 @@ namespace Glitch.UI
                 && _pendingJournalEntries.Count < 8)
             {
                 _journalFlushScheduled = true;
-                Dispatcher.BeginInvoke(new Action(FlushPendingJournalEntries), System.Windows.Threading.DispatcherPriority.Background);
+                ScheduleJournalFlushAfterDelay(JournalBatchFlushInterval - (nowUtc - _lastJournalFlushUtc));
                 return;
             }
 
@@ -314,6 +314,16 @@ namespace Glitch.UI
             const int maxJournalEntries = 800;
             while (_journalEntries.Count > maxJournalEntries)
                 _journalEntries.RemoveAt(_journalEntries.Count - 1);
+        }
+
+        private async void ScheduleJournalFlushAfterDelay(TimeSpan delay)
+        {
+            if (delay > TimeSpan.Zero)
+                await Task.Delay(delay);
+            if (_isWindowClosed)
+                return;
+
+            FlushPendingJournalEntries();
         }
 
         internal void RequestAnalyticsRefresh()

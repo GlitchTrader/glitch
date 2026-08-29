@@ -45,6 +45,7 @@ namespace Glitch.Services
 
         public static bool TryWriteReplayBundle(DateTime sinceUtc, DateTime nowUtc, int maxPairs = 1440)
         {
+            string tempPath = null;
             try
             {
                 string indexPath = Path.Combine(GetHistoricalRootPath(), IndexFileName);
@@ -69,18 +70,18 @@ namespace Glitch.Services
 
                     if (!File.Exists(entry.MarketPath) || !File.Exists(entry.PortfolioPath))
                         continue;
-
-                    string marketJson = RewriteSourceMode(File.ReadAllText(entry.MarketPath), "historical_replay");
-                    string portfolioJson = RewriteSourceMode(File.ReadAllText(entry.PortfolioPath), "historical_replay");
-                    if (string.IsNullOrWhiteSpace(marketJson) || string.IsNullOrWhiteSpace(portfolioJson))
+                    if (!HasNonWhitespaceContent(entry.MarketPath)
+                        || !HasNonWhitespaceContent(entry.PortfolioPath))
+                    {
                         continue;
+                    }
 
                     pairs.Add(new ReplayPair
                     {
                         SnapshotId = entry.SnapshotId,
                         CreatedUtc = entry.CreatedUtc,
-                        MarketJson = marketJson,
-                        PortfolioJson = portfolioJson
+                        MarketPath = entry.MarketPath,
+                        PortfolioPath = entry.PortfolioPath
                     });
                 }
 
@@ -91,17 +92,14 @@ namespace Glitch.Services
                 if (pairs.Count > maxPairs)
                     pairs = pairs.GetRange(pairs.Count - maxPairs, maxPairs);
 
-                string replayJson = BuildReplayJson(nowUtc, sinceUtc, pairs);
-                if (string.IsNullOrWhiteSpace(replayJson))
-                    return false;
-
                 string replayPath = GetReplayLatestPath();
                 string directory = Path.GetDirectoryName(replayPath);
                 if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
                     Directory.CreateDirectory(directory);
 
-                string tempPath = replayPath + ".tmp";
-                File.WriteAllText(tempPath, replayJson, new UTF8Encoding(false));
+                tempPath = replayPath + ".tmp";
+                using (var writer = new StreamWriter(tempPath, false, new UTF8Encoding(false)))
+                    WriteReplayJson(writer, nowUtc, sinceUtc, pairs);
                 if (File.Exists(replayPath))
                     File.Delete(replayPath);
                 File.Move(tempPath, replayPath);
@@ -109,6 +107,14 @@ namespace Glitch.Services
             }
             catch
             {
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(tempPath) && File.Exists(tempPath))
+                        File.Delete(tempPath);
+                }
+                catch
+                {
+                }
                 return false;
             }
         }
@@ -226,38 +232,79 @@ namespace Glitch.Services
                 RegexOptions.CultureInvariant);
         }
 
-        private static string BuildReplayJson(DateTime nowUtc, DateTime sinceUtc, List<ReplayPair> pairs)
+        private static bool HasNonWhitespaceContent(string path)
         {
-            var marketSnapshots = new List<string>(pairs.Count);
-            var portfolioSnapshots = new List<string>(pairs.Count);
-            var pairMeta = new List<string>(pairs.Count);
-
-            for (int i = 0; i < pairs.Count; i++)
+            using (var reader = new StreamReader(path, Encoding.UTF8, true))
             {
-                ReplayPair pair = pairs[i];
-                marketSnapshots.Add(pair.MarketJson);
-                portfolioSnapshots.Add(pair.PortfolioJson);
-                pairMeta.Add("{"
-                    + "\"snapshot_id\":" + GlitchSnapshotJson.String(pair.SnapshotId) + ","
-                    + "\"created_utc\":" + GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(pair.CreatedUtc))
-                    + "}");
+                int value;
+                while ((value = reader.Read()) >= 0)
+                {
+                    if (!char.IsWhiteSpace((char)value))
+                        return true;
+                }
             }
 
+            return false;
+        }
+
+        private static void WriteReplayJson(
+            TextWriter writer,
+            DateTime nowUtc,
+            DateTime sinceUtc,
+            List<ReplayPair> pairs)
+        {
             string snapshotId = nowUtc.ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
-            var sb = new StringBuilder(Math.Max(8192, pairs.Count * 512));
-            sb.Append('{');
-            sb.Append("\"schema_version\":").Append(GlitchSnapshotJson.String(ReplaySchemaVersion)).Append(',');
-            sb.Append("\"created_utc\":").Append(GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(nowUtc))).Append(',');
-            sb.Append("\"snapshot_id\":").Append(GlitchSnapshotJson.String(snapshotId)).Append(',');
-            sb.Append("\"source_mode\":\"historical_replay\",");
-            sb.Append("\"range_start_utc\":").Append(GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(sinceUtc))).Append(',');
-            sb.Append("\"range_end_utc\":").Append(GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(nowUtc))).Append(',');
-            sb.Append("\"pair_count\":").Append(pairs.Count.ToString(CultureInfo.InvariantCulture)).Append(',');
-            sb.Append("\"pairs\":[").Append(string.Join(",", pairMeta)).Append("],");
-            sb.Append("\"market_snapshots\":[").Append(string.Join(",", marketSnapshots)).Append("],");
-            sb.Append("\"portfolio_snapshots\":[").Append(string.Join(",", portfolioSnapshots)).Append(']');
-            sb.Append('}');
-            return sb.ToString();
+            writer.Write('{');
+            writer.Write("\"schema_version\":");
+            writer.Write(GlitchSnapshotJson.String(ReplaySchemaVersion));
+            writer.Write(",\"created_utc\":");
+            writer.Write(GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(nowUtc)));
+            writer.Write(",\"snapshot_id\":");
+            writer.Write(GlitchSnapshotJson.String(snapshotId));
+            writer.Write(",\"source_mode\":\"historical_replay\",");
+            writer.Write("\"range_start_utc\":");
+            writer.Write(GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(sinceUtc)));
+            writer.Write(",\"range_end_utc\":");
+            writer.Write(GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(nowUtc)));
+            writer.Write(",\"pair_count\":");
+            writer.Write(pairs.Count.ToString(CultureInfo.InvariantCulture));
+            writer.Write(",\"pairs\":[");
+            for (int i = 0; i < pairs.Count; i++)
+            {
+                if (i > 0)
+                    writer.Write(',');
+                ReplayPair pair = pairs[i];
+                writer.Write('{');
+                writer.Write("\"snapshot_id\":");
+                writer.Write(GlitchSnapshotJson.String(pair.SnapshotId));
+                writer.Write(",\"created_utc\":");
+                writer.Write(GlitchSnapshotJson.String(GlitchSnapshotJson.FormatUtc(pair.CreatedUtc)));
+                writer.Write('}');
+            }
+            writer.Write("],\"market_snapshots\":");
+            WriteReplaySnapshotArray(writer, pairs, useMarketPath: true);
+            writer.Write(",\"portfolio_snapshots\":");
+            WriteReplaySnapshotArray(writer, pairs, useMarketPath: false);
+            writer.Write('}');
+        }
+
+        private static void WriteReplaySnapshotArray(
+            TextWriter writer,
+            List<ReplayPair> pairs,
+            bool useMarketPath)
+        {
+            writer.Write('[');
+            for (int i = 0; i < pairs.Count; i++)
+            {
+                string path = useMarketPath ? pairs[i].MarketPath : pairs[i].PortfolioPath;
+                string json = RewriteSourceMode(File.ReadAllText(path), "historical_replay");
+                if (string.IsNullOrWhiteSpace(json))
+                    throw new InvalidDataException("Historical replay snapshot is empty: " + path);
+                if (i > 0)
+                    writer.Write(',');
+                writer.Write(json);
+            }
+            writer.Write(']');
         }
 
         private static ReplayIndexEntry ParseIndexEntry(string line)
@@ -313,8 +360,8 @@ namespace Glitch.Services
         {
             public string SnapshotId { get; set; }
             public DateTime CreatedUtc { get; set; }
-            public string MarketJson { get; set; }
-            public string PortfolioJson { get; set; }
+            public string MarketPath { get; set; }
+            public string PortfolioPath { get; set; }
         }
     }
 }

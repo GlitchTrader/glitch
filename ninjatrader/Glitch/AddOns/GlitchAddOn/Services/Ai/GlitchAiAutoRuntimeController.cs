@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -69,7 +70,6 @@ namespace Glitch.Services
 
             var startInfo = new ProcessStartInfo
             {
-                FileName = pythonPath,
                 Arguments = QuoteArgument(controlPluginPath) + " ai-auto " + (enabled ? "on" : "off"),
                 WorkingDirectory = profileRoot,
                 UseShellExecute = false,
@@ -78,6 +78,7 @@ namespace Glitch.Services
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
             };
+            startInfo.FileName = ResolveOwnedPythonExecutable(pythonPath, startInfo);
             startInfo.EnvironmentVariables["HERMES_HOME"] = profileRoot;
 
             try
@@ -119,6 +120,71 @@ namespace Glitch.Services
             catch (Exception ex)
             {
                 return Failure(ex.Message);
+            }
+        }
+
+        private static string ResolveOwnedPythonExecutable(
+            string requestedPythonPath,
+            ProcessStartInfo startInfo)
+        {
+            if (string.IsNullOrWhiteSpace(requestedPythonPath) || startInfo == null)
+                return requestedPythonPath;
+
+            try
+            {
+                string scriptsDirectory = Path.GetDirectoryName(requestedPythonPath);
+                string venvDirectory = Path.GetDirectoryName(scriptsDirectory);
+                if (string.IsNullOrWhiteSpace(venvDirectory))
+                    return requestedPythonPath;
+
+                string configPath = Path.Combine(venvDirectory, "pyvenv.cfg");
+                if (!File.Exists(configPath))
+                    return requestedPythonPath;
+
+                string baseHome = string.Empty;
+                bool isUvEnvironment = false;
+                foreach (string rawLine in File.ReadLines(configPath))
+                {
+                    int separator = rawLine == null ? -1 : rawLine.IndexOf('=');
+                    if (separator <= 0)
+                        continue;
+
+                    string key = rawLine.Substring(0, separator).Trim();
+                    string value = rawLine.Substring(separator + 1).Trim().Trim('"');
+                    if (key.Equals("home", StringComparison.OrdinalIgnoreCase))
+                        baseHome = value;
+                    else if (key.Equals("uv", StringComparison.OrdinalIgnoreCase) && value.Length > 0)
+                        isUvEnvironment = true;
+                }
+
+                string basePythonPath = Path.Combine(baseHome, "python.exe");
+                string sitePackagesPath = Path.Combine(venvDirectory, "Lib", "site-packages");
+                if (!isUvEnvironment || string.IsNullOrWhiteSpace(baseHome)
+                    || !File.Exists(basePythonPath) || !Directory.Exists(sitePackagesPath))
+                {
+                    return requestedPythonPath;
+                }
+
+                var pythonPathEntries = new List<string>();
+                string agentRoot = Path.GetDirectoryName(venvDirectory);
+                if (!string.IsNullOrWhiteSpace(agentRoot)
+                    && Directory.Exists(Path.Combine(agentRoot, "hermes_cli")))
+                {
+                    pythonPathEntries.Add(agentRoot);
+                }
+                pythonPathEntries.Add(sitePackagesPath);
+                string existingPythonPath = Environment.GetEnvironmentVariable("PYTHONPATH");
+                if (!string.IsNullOrWhiteSpace(existingPythonPath))
+                    pythonPathEntries.Add(existingPythonPath);
+
+                startInfo.EnvironmentVariables["VIRTUAL_ENV"] = venvDirectory;
+                startInfo.EnvironmentVariables["PYTHONPATH"] =
+                    string.Join(Path.PathSeparator.ToString(), pythonPathEntries);
+                return basePythonPath;
+            }
+            catch
+            {
+                return requestedPythonPath;
             }
         }
 
