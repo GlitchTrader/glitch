@@ -56,7 +56,7 @@ $boundSnapshot = Get-Content -LiteralPath $boundPath -Raw | ConvertFrom-Json
 if ([string]$boundSnapshot.snapshot_hash -ne [string]$intent.snapshot_hash) {
     throw 'Validated entry snapshot is not retained by Glitch; executor remains unarmed.'
 }
-$boundAge = ([datetime]::UtcNow - [datetime]::Parse($boundSnapshot.created_utc).ToUniversalTime()).TotalSeconds
+$boundAge = ([datetime]::UtcNow - ([datetime]$boundSnapshot.created_utc).ToUniversalTime()).TotalSeconds
 $policyBefore = Get-Content -LiteralPath $policyPath -Raw | ConvertFrom-Json
 if ($boundAge -lt -5 -or $boundAge -gt [double]$policyBefore.snapshot_max_age_seconds) {
     throw 'Validated entry snapshot is outside the policy freshness window; executor remains unarmed.'
@@ -81,7 +81,7 @@ try {
     throw 'Another profile is already inside the one-shot Sim submission gate.'
 }
 try {
-    $boundAgePrePost = ([datetime]::UtcNow - [datetime]::Parse($boundSnapshot.created_utc).ToUniversalTime()).TotalSeconds
+    $boundAgePrePost = ([datetime]::UtcNow - ([datetime]$boundSnapshot.created_utc).ToUniversalTime()).TotalSeconds
     if ($boundAgePrePost -lt -5 -or $boundAgePrePost -gt [double]$policy.snapshot_max_age_seconds) {
         throw 'Validated entry snapshot expired before POST.'
     }

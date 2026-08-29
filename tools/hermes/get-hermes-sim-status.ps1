@@ -34,7 +34,7 @@ function Count-FilledEntriesToday {
         if ([string]::IsNullOrWhiteSpace($line)) { continue }
         try { $row = $line | ConvertFrom-Json } catch { continue }
         if ([string]$row.code -ne 'group_entry_filled') { continue }
-        $recorded = [datetime]::Parse([string]$row.recorded_utc).ToUniversalTime()
+        $recorded = ([datetime]$row.recorded_utc).ToUniversalTime()
         if ($recorded -lt $dayStart -or $recorded -gt $NowUtc) { continue }
         $intentId = [string]$row.intent_id
         if ([string]::IsNullOrWhiteSpace($intentId) -or $seen.ContainsKey($intentId)) { continue }
@@ -377,8 +377,8 @@ try {
         $market = Get-Content -LiteralPath $marketPath -Raw | ConvertFrom-Json
         $mnq = @($market.instruments | Where-Object { [string]$_.instrument -eq 'MNQ' } | Select-Object -First 1)
         if ($mnq.Count -gt 0) {
-            $marketCreatedUtc = if ($market.created_utc) { [datetime]::Parse([string]$market.created_utc).ToUniversalTime() } else { $null }
-            $observedUtc = if ($mnq[0].timestamp_utc) { [datetime]::Parse([string]$mnq[0].timestamp_utc).ToUniversalTime() } else { $null }
+            $marketCreatedUtc = if ($market.created_utc) { ([datetime]$market.created_utc).ToUniversalTime() } else { $null }
+            $observedUtc = if ($mnq[0].timestamp_utc) { ([datetime]$mnq[0].timestamp_utc).ToUniversalTime() } else { $null }
             $rawAgeSeconds = if ($observedUtc) { [math]::Round(($nowUtc - $observedUtc).TotalSeconds, 1) } else { $null }
             $effectiveObservedUtc = $observedUtc
             if ($null -ne $rawAgeSeconds -and $rawAgeSeconds -lt -5 -and $marketCreatedUtc) {

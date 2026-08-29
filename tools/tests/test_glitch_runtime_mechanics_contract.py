@@ -12,6 +12,18 @@ FUNDAMENTALS = (
     ADDON
     / "Services/FundamentalAnalysis/GlitchFundamentalAnalysisService.cs"
 )
+UTC_OPERATIONAL_SCRIPTS = tuple(
+    ROOT / path
+    for path in (
+        "tools/hermes/get-hermes-sim-status.ps1",
+        "tools/hermes/invoke-hermes-cycle.ps1",
+        "tools/hermes/invoke-hermes-portfolio-cycle.ps1",
+        "tools/hermes/operator-approved-sim-smoke.ps1",
+        "tools/hermes/preflight-open.ps1",
+        "tools/hermes/submit-validated-sim-exit.ps1",
+        "tools/hermes/submit-validated-sim-intent.ps1",
+    )
+)
 
 
 def source(path: Path) -> str:
@@ -105,3 +117,11 @@ def test_fred_dataset_release_dates_never_masquerade_as_verified_live_events():
     assert "relevantUpcoming = verifiedEvents" in official_news
     assert ".Where(IsVerifiedLiveEconomicEvent)" in poll_interval
     assert '!string.Equals(item.Source, "FRED"' in poll_interval
+
+
+def test_powershell_operational_tools_preserve_deserialized_utc_datetime_kind():
+    for script in UTC_OPERATIONAL_SCRIPTS:
+        text = source(script)
+        assert "[datetime]::Parse(" not in "\n".join(
+            line for line in text.splitlines() if ".ToUniversalTime()" in line
+        )

@@ -13,7 +13,7 @@ $market = Get-Content -LiteralPath $latestPath -Raw | ConvertFrom-Json
 $mnq = @($market.instruments | Where-Object instrument -eq 'MNQ') | Select-Object -First 1
 if (-not $mnq) { throw 'MNQ is absent from the latest market snapshot.' }
 
-$snapshotAge = ([datetime]::UtcNow - [datetime]::Parse($market.created_utc).ToUniversalTime()).TotalSeconds
+$snapshotAge = ([datetime]::UtcNow - ([datetime]$market.created_utc).ToUniversalTime()).TotalSeconds
 $policy = Get-Content -LiteralPath (Join-Path $gd 'ai\policy.json') -Raw | ConvertFrom-Json
 if ($snapshotAge -lt -5 -or $snapshotAge -gt [double]$policy.snapshot_max_age_seconds) {
     throw "Latest MNQ snapshot is stale ($([math]::Round($snapshotAge,1)) seconds)."

@@ -331,7 +331,7 @@ function Get-FilledAiEntriesToday {
         if ([string]::IsNullOrWhiteSpace($line)) { continue }
         try { $row = $line | ConvertFrom-Json } catch { continue }
         if ([string]$row.code -ne 'group_entry_filled') { continue }
-        $recorded = [datetime]::Parse([string]$row.recorded_utc).ToUniversalTime()
+        $recorded = ([datetime]$row.recorded_utc).ToUniversalTime()
         if ($recorded -lt $dayStart -or $recorded -gt $NowUtc) { continue }
         $intentId = [string]$row.intent_id
         if ([string]::IsNullOrWhiteSpace($intentId) -or $seenIntentIds.ContainsKey($intentId)) { continue }
@@ -399,8 +399,8 @@ try {
     $expectedFallbackContract = 'MNQ ' + (Get-EquityIndexFrontContractSuffix ([datetime]::UtcNow))
     $compiledContractFallbackAvailable = Test-CompiledKnownMicroContractFallback 'MNQ'
     $instrumentContractGateActive = ([string]::IsNullOrWhiteSpace($instrumentFullName) -or $instrumentFullName.Trim().Equals('MNQ', [System.StringComparison]::OrdinalIgnoreCase)) -and -not $compiledContractFallbackAvailable
-    $marketCreatedUtc = if ($market.created_utc) { [datetime]::Parse([string]$market.created_utc).ToUniversalTime() } else { $null }
-    $observedUtc = if ($mnq.timestamp_utc) { [datetime]::Parse([string]$mnq.timestamp_utc).ToUniversalTime() } else { $null }
+    $marketCreatedUtc = if ($market.created_utc) { ([datetime]$market.created_utc).ToUniversalTime() } else { $null }
+    $observedUtc = if ($mnq.timestamp_utc) { ([datetime]$mnq.timestamp_utc).ToUniversalTime() } else { $null }
     $rawObservedAge = if ($observedUtc) { ([datetime]::UtcNow - $observedUtc).TotalSeconds } else { [double]::PositiveInfinity }
     if ($rawObservedAge -lt -5 -and $marketCreatedUtc) {
         $observedUtc = $marketCreatedUtc
@@ -420,7 +420,7 @@ try {
     foreach ($minutes in @(1,5,15,60)) {
         $bar = @($mnq.timeframe_bars | Where-Object { [int]$_.minutes -eq $minutes }) | Select-Object -First 1
         if (-not $bar) { throw "MNQ ${minutes}m bar missing from market snapshot." }
-        $barUtc = if ($bar.utc_time) { [datetime]::Parse([string]$bar.utc_time).ToUniversalTime() } else { $null }
+        $barUtc = if ($bar.utc_time) { ([datetime]$bar.utc_time).ToUniversalTime() } else { $null }
         $barAge = if ($barUtc) { ([datetime]::UtcNow - $barUtc).TotalSeconds } else { [double]::PositiveInfinity }
         if ($barAge -lt -5 -or $barAge -gt [double]$policy.snapshot_max_age_seconds) {
             throw "MNQ ${minutes}m observation is stale ($([math]::Round($barAge,1)) seconds); no external inference."

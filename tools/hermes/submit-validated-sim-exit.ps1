@@ -89,7 +89,7 @@ if ([string]$boundSnapshot.snapshot_hash -ne [string]$intent.snapshot_hash) {
     throw 'Validated exit snapshot is not retained by Glitch; executor remains unarmed.'
 }
 $policyBefore = Get-Content -LiteralPath $policyPath -Raw | ConvertFrom-Json
-$boundAge = ([datetime]::UtcNow - [datetime]::Parse($boundSnapshot.created_utc).ToUniversalTime()).TotalSeconds
+$boundAge = ([datetime]::UtcNow - ([datetime]$boundSnapshot.created_utc).ToUniversalTime()).TotalSeconds
 if ($boundAge -lt -5 -or $boundAge -gt [double]$policyBefore.snapshot_max_age_seconds) {
     throw 'Validated exit snapshot is outside the policy freshness window; executor remains unarmed.'
 }
@@ -116,7 +116,7 @@ try {
 }
 
 try {
-    $boundAgePrePost = ([datetime]::UtcNow - [datetime]::Parse($boundSnapshot.created_utc).ToUniversalTime()).TotalSeconds
+    $boundAgePrePost = ([datetime]::UtcNow - ([datetime]$boundSnapshot.created_utc).ToUniversalTime()).TotalSeconds
     if ($boundAgePrePost -lt -5 -or $boundAgePrePost -gt [double]$policyBefore.snapshot_max_age_seconds) {
         throw 'Validated exit snapshot expired before POST.'
     }

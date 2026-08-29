@@ -192,7 +192,7 @@ if ($policy.mode -ne 'paper' -or [bool]$policy.executor_enabled) {
     throw 'Privacy-bounded external inference requires paper mode with executor disabled.'
 }
 
-$marketCreatedUtc = if ($market.created_utc) { [datetime]::Parse($market.created_utc).ToUniversalTime() } else { $null }
+$marketCreatedUtc = if ($market.created_utc) { ([datetime]$market.created_utc).ToUniversalTime() } else { $null }
 if (-not $marketCreatedUtc) { throw 'Market envelope creation time is unavailable; no external inference.' }
 $age = ([datetime]::UtcNow - $marketCreatedUtc).TotalSeconds
 if ($age -lt -5 -or $age -gt [double]$policy.snapshot_max_age_seconds) {

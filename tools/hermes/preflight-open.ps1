@@ -29,8 +29,8 @@ $boundAccount = if ($profileBindings.ContainsKey($Profile)) { [string]$profileBi
 $requestedAccount = if ($MasterAccount) { $MasterAccount.Trim() } else { $boundAccount }
 $masterPortfolio = @($portfolio.accounts | Where-Object account -eq $requestedAccount) | Select-Object -First 1
 $now = [datetime]::UtcNow
-$marketCreatedUtc = if ($market.created_utc) { [datetime]::Parse($market.created_utc).ToUniversalTime() } else { $null }
-$mnqObservedUtc = if ($mnq -and $mnq.timestamp_utc) { [datetime]::Parse($mnq.timestamp_utc).ToUniversalTime() } else { $null }
+$marketCreatedUtc = if ($market.created_utc) { ([datetime]$market.created_utc).ToUniversalTime() } else { $null }
+$mnqObservedUtc = if ($mnq -and $mnq.timestamp_utc) { ([datetime]$mnq.timestamp_utc).ToUniversalTime() } else { $null }
 $mnqRawAge = if ($mnqObservedUtc) { ($now - $mnqObservedUtc).TotalSeconds } else { [double]::PositiveInfinity }
 if ($mnqRawAge -lt -5 -and $marketCreatedUtc) {
     $mnqObservedUtc = $marketCreatedUtc
@@ -39,12 +39,12 @@ $mnqAge = if ($mnqObservedUtc) { ($now - $mnqObservedUtc).TotalSeconds } else { 
 $timeframeAges = @()
 if ($mnq) {
     foreach ($bar in @($mnq.timeframe_bars)) {
-        $barUtc = if ($bar.utc_time) { [datetime]::Parse($bar.utc_time).ToUniversalTime() } else { $null }
+        $barUtc = if ($bar.utc_time) { ([datetime]$bar.utc_time).ToUniversalTime() } else { $null }
         $timeframeAges += if ($barUtc) { ($now - $barUtc).TotalSeconds } else { [double]::PositiveInfinity }
     }
 }
 $allTimeframesFresh = $timeframeAges.Count -eq 4 -and @($timeframeAges | Where-Object { $_ -lt -5 -or $_ -gt [double]$policy.snapshot_max_age_seconds }).Count -eq 0
-$portfolioCreatedUtc = if ($portfolio.created_utc) { [datetime]::Parse($portfolio.created_utc).ToUniversalTime() } else { $null }
+$portfolioCreatedUtc = if ($portfolio.created_utc) { ([datetime]$portfolio.created_utc).ToUniversalTime() } else { $null }
 $portfolioAge = if ($portfolioCreatedUtc) { ($now - $portfolioCreatedUtc).TotalSeconds } else { [double]::PositiveInfinity }
 
 $groupRows = if (Test-Path -LiteralPath $groupPath) {
