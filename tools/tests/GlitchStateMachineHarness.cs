@@ -1596,6 +1596,93 @@ internal static class GlitchStateMachineHarness
             "a master close reversed exposure already removed by Glitch safety flatten");
     }
 
+    private static void TestCompletedMasterSafetyFlattenStartsFreshReplicationEpoch()
+    {
+        var engine = new GlitchEngine();
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 0));
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 0));
+        ConfigureRoute(engine, "safety-epoch", 2m);
+
+        SubmitMarketCommand masterEntry = engine.Handle(new HermesEntryRequested(
+            "safety-epoch-entry", "Master", "MNQ 09-26", 1, 20000m, 19990m,
+            new[] { new HermesTarget(1, 20020m) }))
+            .OfType<SubmitMarketCommand>().Single();
+        engine.Handle(Order("Master", "safety-epoch-master-entry", "Working", 1, 0,
+            masterEntry.CommandId, "M"));
+        GlitchCommand[] masterFillCommands = ObserveExecution(engine, Execution(
+            "safety-epoch-master-entry-fill", "Master", 1, 20001m, 1, 1,
+            "safety-epoch-master-entry", masterEntry.CommandId, null,
+            GlitchExecutionOrigin.HermesMaster)).ToArray();
+        SubmitProtectionCommand masterProtection = masterFillCommands
+            .OfType<SubmitProtectionCommand>().Single();
+        SubmitMarketCommand followerEntry = masterFillCommands
+            .OfType<SubmitMarketCommand>().Single();
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 1));
+        engine.Handle(Order("Master", "safety-epoch-master-entry", "Filled", 1, 1,
+            masterEntry.CommandId, "M"));
+
+        int followerPosition = 0;
+        SubmitProtectionCommand followerProtection = CompleteTrade(
+            engine,
+            followerEntry,
+            ref followerPosition,
+            "safety-epoch-follower-entry",
+            GlitchExecutionOrigin.GlitchReplication)
+            .OfType<SubmitProtectionCommand>().Single();
+        Assert(followerPosition == 2,
+            "safety epoch fixture did not create the scaled follower position");
+
+        FlattenAccountCommand masterFlatten = engine.Handle(new NativeRequestFailedObserved(
+            masterProtection.CommandId, "native_protection_not_started"))
+            .OfType<FlattenAccountCommand>().Single();
+        FlattenAccountCommand followerFlatten = engine.Handle(new NativeRequestFailedObserved(
+            followerProtection.CommandId, "native_protection_not_started"))
+            .OfType<FlattenAccountCommand>().Single();
+
+        Assert(ObserveExecution(engine, Execution(
+                "safety-epoch-master-flatten-fill", "Master", -1, 19999m, 0, 0,
+                "safety-epoch-master-flatten", null, null,
+                GlitchExecutionOrigin.GlitchFlatten))
+                .OfType<SubmitMarketCommand>().Count() == 0,
+            "a master safety flatten execution was treated as a new trade");
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", 0));
+        engine.Handle(new FlattenCompletedObserved(masterFlatten.CommandId, "Master"));
+
+        Assert(ObserveExecution(engine, Execution(
+                "safety-epoch-follower-flatten-fill", "Follower", -2, 19999m, 0, 0,
+                "safety-epoch-follower-flatten", null, null,
+                GlitchExecutionOrigin.GlitchFlatten))
+                .OfType<SubmitMarketCommand>().Count() == 0,
+            "a late follower safety flatten execution was treated as a new trade");
+        followerPosition = 0;
+        engine.Handle(new PositionObserved("Follower", "MNQ 09-26", 0));
+        engine.Handle(new FlattenCompletedObserved(followerFlatten.CommandId, "Follower"));
+
+        SubmitMarketCommand copiedOpen = ObserveExecution(engine, Execution(
+            "safety-epoch-new-master-open", "Master", -1, 19990m, 1, -1,
+            "safety-epoch-new-master-open-order", null, null,
+            GlitchExecutionOrigin.External))
+            .OfType<SubmitMarketCommand>().Single();
+        Assert(copiedOpen.SignedQuantity == -2,
+            "the completed safety flatten suppressed the next independent master entry");
+        CompleteTrade(engine, copiedOpen, ref followerPosition,
+            "safety-epoch-new-follower-open", GlitchExecutionOrigin.GlitchReplication);
+        engine.Handle(new PositionObserved("Master", "MNQ 09-26", -1));
+
+        SubmitMarketCommand copiedClose = ObserveExecution(engine, Execution(
+            "safety-epoch-new-master-close", "Master", 1, 19995m, 0, 0,
+            "safety-epoch-new-master-close-order", null, null,
+            GlitchExecutionOrigin.External))
+            .OfType<SubmitMarketCommand>().Single();
+        Assert(copiedClose.SignedQuantity == 2
+                && copiedClose.ExpectedSignedPosition == -2,
+            "the next master exit did not close the newly copied follower position exactly");
+        CompleteTrade(engine, copiedClose, ref followerPosition,
+            "safety-epoch-new-follower-close", GlitchExecutionOrigin.GlitchReplication);
+        Assert(followerPosition == 0,
+            "the copied follower lifecycle ended with orphan or reversed exposure");
+    }
+
     private static void TestSynchronizationCreatesAndRevisesMirroredProtection()
     {
         var engine = new GlitchEngine();
@@ -1771,6 +1858,7 @@ internal static class GlitchStateMachineHarness
         TestManualMasterProtectionFollowsNativeRevisions();
         TestManualProtectionTranslationIsTickAlignedAndReferenceAware();
         TestProtectionFailureRetiresStaleBundleAndSettlesSafetyFlatten();
+        TestCompletedMasterSafetyFlattenStartsFreshReplicationEpoch();
         TestSynchronizationCreatesAndRevisesMirroredProtection();
         TestUserFlattenResetsFractionalAllocationWithoutDisablingReplication();
         TestFailedEntryProtectionFlattensExposedInstrument();

@@ -216,6 +216,10 @@ operations. They enqueue `round(master_position * ratio) - follower_position`
 from current native facts, then start a new allocation epoch. Disable and
 remove stop future allocations without a close.
 
+A completed Glitch-managed master flatten ends the prior allocation epoch.
+Settlement from an older follower protection or safety-flatten may consume an
+already-waiting copied close, but it cannot create credit in a later epoch.
+
 The visible group topology is one level: an enabled follower cannot also be an
 enabled master, and one follower cannot have multiple enabled masters. Invalid
 topology is rejected as an unrepresentable net-position configuration instead

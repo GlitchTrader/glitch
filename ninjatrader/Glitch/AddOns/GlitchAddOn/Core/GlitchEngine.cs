@@ -1141,6 +1141,7 @@ namespace Glitch.Core
             if (_flattenByAccount.TryGetValue(flatten.Account, out current)
                 && ReferenceEquals(current, flatten))
                 _flattenByAccount.Remove(flatten.Account);
+            ResetAllocationsForMasterAccount(flatten.Account);
             foreach (Book book in _books.Values.Where(value => string.Equals(
                 value.Account, flatten.Account, StringComparison.OrdinalIgnoreCase)))
             {
@@ -1170,6 +1171,13 @@ namespace Glitch.Core
             foreach (Route route in _routes.Values.Where(value =>
                 string.Equals(value.Master, accountName, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(value.Follower, accountName, StringComparison.OrdinalIgnoreCase)))
+                ResetAllocation(route.Id);
+        }
+
+        private void ResetAllocationsForMasterAccount(string accountName)
+        {
+            foreach (Route route in _routes.Values.Where(value => string.Equals(
+                value.Master, accountName, StringComparison.OrdinalIgnoreCase)))
                 ResetAllocation(route.Id);
         }
 
@@ -1953,10 +1961,11 @@ namespace Glitch.Core
             }
             if (!string.IsNullOrWhiteSpace(bundle.RouteId))
             {
-                AllocationEpoch allocation = GetAllocation(bundle.RouteId, bundle.Instrument);
                 int remainingCredit = ApplyCreditToWaitingOperations(
                     bundle.RouteId, bundle.Account, bundle.Instrument, execution.SignedQuantity);
-                if (remainingCredit != 0)
+                AllocationEpoch allocation;
+                if (remainingCredit != 0
+                    && TryGetAllocation(bundle.RouteId, bundle.Instrument, out allocation))
                     AddSettlementCredit(allocation, remainingCredit);
             }
         }
@@ -1986,10 +1995,11 @@ namespace Glitch.Core
                 if (consumed > 0)
                 {
                     int signedCredit = Math.Sign(execution.SignedQuantity) * consumed;
-                    AllocationEpoch allocation = GetAllocation(bundle.RouteId, bundle.Instrument);
                     int remainingCredit = ApplyCreditToWaitingOperations(
                         bundle.RouteId, bundle.Account, bundle.Instrument, signedCredit);
-                    if (remainingCredit != 0)
+                    AllocationEpoch allocation;
+                    if (remainingCredit != 0
+                        && TryGetAllocation(bundle.RouteId, bundle.Instrument, out allocation))
                         AddSettlementCredit(allocation, remainingCredit);
                     remaining -= consumed;
                 }
@@ -2545,14 +2555,21 @@ namespace Glitch.Core
 
         private AllocationEpoch GetAllocation(string routeId, string instrument)
         {
-            string key = routeId + "|" + instrument;
             AllocationEpoch allocation;
-            if (!_allocations.TryGetValue(key, out allocation))
+            if (!TryGetAllocation(routeId, instrument, out allocation))
             {
                 allocation = new AllocationEpoch();
-                _allocations[key] = allocation;
+                _allocations[routeId + "|" + instrument] = allocation;
             }
             return allocation;
+        }
+
+        private bool TryGetAllocation(
+            string routeId,
+            string instrument,
+            out AllocationEpoch allocation)
+        {
+            return _allocations.TryGetValue(routeId + "|" + instrument, out allocation);
         }
 
         private void ResetAllocation(string routeId)
