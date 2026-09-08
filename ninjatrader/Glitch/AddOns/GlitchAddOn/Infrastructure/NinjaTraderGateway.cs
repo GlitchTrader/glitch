@@ -43,6 +43,8 @@ namespace Glitch.Infrastructure
         private sealed class FlattenRequest
         {
             public string AccountName;
+            public Instrument[] Instruments;
+            public Timer Deadline;
             public readonly HashSet<string> PendingScopes =
                 new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         }
@@ -75,6 +77,7 @@ namespace Glitch.Infrastructure
         private readonly Dictionary<string, FlattenRequest> _flattenRequests =
             new Dictionary<string, FlattenRequest>(StringComparer.OrdinalIgnoreCase);
         private readonly Action<string, string, string> _notice;
+        private readonly TimeSpan _flattenTimeout;
         private readonly string _epochToken = Guid.NewGuid().ToString("N").Substring(0, 8);
         private Action<GlitchInput> _publish;
         private bool _started;
@@ -82,8 +85,16 @@ namespace Glitch.Infrastructure
         private long _externalOrderNonce;
 
         public NinjaTraderGateway(Action<string, string, string> notice)
+            : this(notice, TimeSpan.FromSeconds(10))
+        {
+        }
+
+        internal NinjaTraderGateway(Action<string, string, string> notice, TimeSpan flattenTimeout)
         {
             _notice = notice ?? throw new ArgumentNullException(nameof(notice));
+            if (flattenTimeout <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(flattenTimeout));
+            _flattenTimeout = flattenTimeout;
         }
 
         public void Start(Action<GlitchInput> publish)
@@ -357,6 +368,8 @@ namespace Glitch.Infrastructure
                 _nativeMetadataOrder.Clear();
                 _externalOrderKeys.Clear();
                 _flattenScopes.Clear();
+                foreach (FlattenRequest request in _flattenRequests.Values)
+                    request.Deadline?.Dispose();
                 _flattenRequests.Clear();
             }
 
@@ -805,6 +818,18 @@ namespace Glitch.Infrastructure
                     + "|actual=" + current);
                 return;
             }
+            try
+            {
+                ValidateEntryProtection(command, instrument, current);
+            }
+            catch (InvalidOperationException error)
+            {
+                if (command.Purpose == GlitchCommandPurpose.HermesMasterEntry)
+                    GlitchExecutionEvidenceWriter.TryAppend(command.ParentCorrelationId,
+                        "failed", "entry_protection_not_representable",
+                        "account=" + Clean(account.Name) + "|error=" + Clean(error.Message), DateTime.UtcNow);
+                throw;
+            }
             OrderAction action = command.SignedQuantity > 0
                 ? (current < 0 ? OrderAction.BuyToCover : OrderAction.Buy)
                 : (current > 0 ? OrderAction.Sell : OrderAction.SellShort);
@@ -932,6 +957,17 @@ namespace Glitch.Infrastructure
                 command.Targets.Where(value => value.StopPrice.HasValue)
                     .Select(value => value.StopPrice.Value),
                 command.CommandId);
+
+            // CreateOrder already exposes Initialized orders to NinjaTrader.
+            // Validate ALL prices before creating even the first child: otherwise a
+            // later invalid leg strands an unsubmitted order which Flatten cannot cancel.
+            foreach (ProtectionTarget target in command.Targets)
+            {
+                if (target.StopPrice.HasValue)
+                    ExactNativePrice(instrument, target.StopPrice.Value, command.CommandId);
+                if (target.Price.HasValue)
+                    ExactNativePrice(instrument, target.Price.Value, command.CommandId);
+            }
 
             OrderAction exitAction = command.SignedEntryQuantity > 0
                 ? OrderAction.Sell
@@ -1074,6 +1110,34 @@ namespace Glitch.Infrastructure
                         "protection_geometry_invalid|command=" + command.CommandId
                         + "|kind=target|entry=" + command.EntryPrice.ToString(CultureInfo.InvariantCulture)
                         + "|price=" + target.Price.Value.ToString(CultureInfo.InvariantCulture));
+            }
+        }
+
+        private static void ValidateEntryProtection(
+            SubmitMarketCommand command, Instrument instrument, int currentPosition)
+        {
+            bool opensExposure = currentPosition == 0
+                || Math.Sign(currentPosition) == Math.Sign(command.SignedQuantity)
+                || Math.Abs(command.SignedQuantity) > Math.Abs(currentPosition);
+            if (command.Protection == null)
+            {
+                if (command.Purpose == GlitchCommandPurpose.HermesMasterEntry && opensExposure)
+                    throw new InvalidOperationException("entry_protection_missing|command=" + command.CommandId);
+                return; // Manual replication and pure closes may have no bracket.
+            }
+            decimal tick = (decimal)instrument.MasterInstrument.TickSize;
+            if (tick <= 0)
+                throw new InvalidOperationException("entry_tick_size_unavailable|command=" + command.CommandId);
+            foreach (ProtectionLegTemplate leg in command.Protection.Targets)
+            {
+                if (leg.StopOffset.HasValue
+                    && (leg.StopOffset.Value % tick != 0
+                        || Math.Sign(leg.StopOffset.Value) != -Math.Sign(command.SignedQuantity)))
+                    throw new InvalidOperationException("entry_stop_not_representable|command=" + command.CommandId);
+                if (leg.TargetOffset.HasValue
+                    && (leg.TargetOffset.Value % tick != 0
+                        || Math.Sign(leg.TargetOffset.Value) != Math.Sign(command.SignedQuantity)))
+                    throw new InvalidOperationException("entry_target_not_representable|command=" + command.CommandId);
             }
         }
 
@@ -1314,7 +1378,22 @@ namespace Glitch.Infrastructure
             beforeMutation?.Invoke(command);
             lock (_gate)
             {
-                var request = new FlattenRequest { AccountName = account.Name };
+                // A deliberate retry replaces tracking, never reuses an old quantity.
+                foreach (string previous in _flattenRequests.Where(value => string.Equals(
+                        value.Value.AccountName, account.Name, StringComparison.OrdinalIgnoreCase))
+                    .Select(value => value.Key).ToArray())
+                {
+                    _flattenRequests[previous].Deadline?.Dispose();
+                    _flattenRequests.Remove(previous);
+                    foreach (string key in _flattenScopes.Where(value => value.Value.CommandId == previous)
+                        .Select(value => value.Key).ToArray())
+                        _flattenScopes.Remove(key);
+                }
+                var request = new FlattenRequest
+                {
+                    AccountName = account.Name,
+                    Instruments = instruments.Values.ToArray()
+                };
                 foreach (var scope in flattenScopes)
                 {
                     string key = PositionKey(account.Name, scope.Instrument.FullName);
@@ -1331,6 +1410,13 @@ namespace Glitch.Infrastructure
             account.Flatten(instruments.Values.ToArray());
             foreach (Instrument instrument in instruments.Values)
                 TryCompleteFlattenScope(account, instrument);
+            lock (_gate)
+            {
+                FlattenRequest request;
+                if (_started && _flattenRequests.TryGetValue(command.CommandId, out request))
+                    request.Deadline = new Timer(CheckFlattenDeadline, command.CommandId,
+                        _flattenTimeout, Timeout.InfiniteTimeSpan);
+            }
             Notice(
                 account.Name,
                 "Order",
@@ -1684,22 +1770,20 @@ namespace Glitch.Infrastructure
                     || !IsWorking(order));
             if (!flat || !clear || (scope.StartPosition != 0 && !scope.SawExecution))
                 return;
-            lock (_gate)
-            {
-                FlattenScope current;
-                if (_flattenScopes.TryGetValue(key, out current)
-                    && ReferenceEquals(current, scope))
-                    _flattenScopes.Remove(key);
-            }
             bool requestComplete = false;
             lock (_gate)
             {
+                FlattenScope current;
+                if (!_flattenScopes.TryGetValue(key, out current) || !ReferenceEquals(current, scope))
+                    return;
+                _flattenScopes.Remove(key);
                 FlattenRequest request;
                 if (_flattenRequests.TryGetValue(scope.CommandId, out request))
                 {
                     request.PendingScopes.Remove(key);
                     if (request.PendingScopes.Count == 0)
                     {
+                        request.Deadline?.Dispose();
                         _flattenRequests.Remove(scope.CommandId);
                         requestComplete = true;
                     }
@@ -1707,6 +1791,50 @@ namespace Glitch.Infrastructure
             }
             if (requestComplete)
                 Publish(new FlattenCompletedObserved(scope.CommandId, account.Name));
+        }
+
+        private void CheckFlattenDeadline(object state)
+        {
+            string commandId = (string)state;
+            FlattenRequest request;
+            lock (_gate)
+            {
+                if (!_started || !_flattenRequests.TryGetValue(commandId, out request))
+                    return;
+            }
+            string evidenceGap = "native_flatten_timeout|positions_or_orders_not_terminal";
+            try
+            {
+                Account account = FindAccount(request.AccountName);
+                foreach (Instrument instrument in request.Instruments)
+                    TryCompleteFlattenScope(account, instrument);
+            }
+            catch (Exception error)
+            {
+                evidenceGap += "|verification_error=" + Clean(error.Message);
+            }
+            lock (_gate)
+            {
+                FlattenRequest current;
+                if (!_started || !_flattenRequests.TryGetValue(commandId, out current)
+                    || !ReferenceEquals(current, request))
+                    return;
+                request.Deadline?.Dispose();
+                request.Deadline = null;
+                // Unknown is not flat. Keep native scope tracking for late fills
+                // and retain the host's mutation fence; permit an explicit retry.
+                Publish(new NativeRequestUnknownObserved(commandId, evidenceGap));
+            }
+            try
+            {
+                Notice(request.AccountName, "Order", evidenceGap + "|command=" + commandId
+                    + "|action=verify_native_state_and_retry_flatten");
+            }
+            catch (Exception)
+            {
+                // A retiring UI subscriber must not crash a ThreadPool callback.
+                // The authoritative Unknown fact was already published above.
+            }
         }
 
         private static int OrderSign(OrderAction action)

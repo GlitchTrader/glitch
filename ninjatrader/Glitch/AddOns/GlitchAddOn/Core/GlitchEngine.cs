@@ -521,7 +521,10 @@ namespace Glitch.Core
             {
                 flatten.Phase = GlitchOperationPhase.Failed;
                 flatten.Failure = failed.Error;
-                _flattenByAccount.Remove(flatten.Account);
+                FlattenOperation current;
+                if (_flattenByAccount.TryGetValue(flatten.Account, out current)
+                    && ReferenceEquals(current, flatten))
+                    _flattenByAccount.Remove(flatten.Account);
             }
         }
 
@@ -573,7 +576,10 @@ namespace Glitch.Core
             {
                 flatten.Phase = GlitchOperationPhase.Unknown;
                 flatten.Failure = unknown.EvidenceGap;
-                _flattenByAccount.Remove(flatten.Account);
+                FlattenOperation current;
+                if (_flattenByAccount.TryGetValue(flatten.Account, out current)
+                    && ReferenceEquals(current, flatten))
+                    _flattenByAccount.Remove(flatten.Account);
             }
         }
 
@@ -1580,7 +1586,10 @@ namespace Glitch.Core
                     operation.Instrument,
                     step,
                     operation.CauseId,
-                    null,
+                    // Reconstructed from the durable intent on recovery. These
+                    // offsets must be executable before the entry, not after its fill.
+                    operation.RemainingProtection.Count == 0 ? null
+                        : new ProtectionTemplate(null, operation.RemainingProtection),
                     operation.RouteId,
                     book.SignedPosition,
                     operation.EntryRangeLow,

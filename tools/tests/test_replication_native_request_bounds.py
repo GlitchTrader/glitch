@@ -38,6 +38,7 @@ class ReplicationNativeRequestBoundTests(unittest.TestCase):
             "run_glitch_runtime_lifecycle_harness.ps1": "runtime lifecycle harness passed",
             "run_glitch_state_machine_harness.ps1": "state machine harness passed",
             "run_glitch_journal_harness.ps1": "journal harness passed",
+            "run_glitch_native_safety_harness.ps1": "native safety harness passed",
         }
         for script, marker in expected.items():
             with self.subTest(script=script):

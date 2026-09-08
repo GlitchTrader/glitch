@@ -688,6 +688,10 @@ namespace Glitch.Infrastructure
                 }
                 if (record.Command == null)
                     continue;
+                var recoveredFlatten = record.Command as FlattenAccountCommand;
+                if (recoveredFlatten != null
+                    && !_recoveryJournalCommands.ContainsKey(recoveredFlatten.CommandId))
+                    _mutationGate.Fence(recoveredFlatten.AccountName);
                 string fingerprint = GlitchOperationJournal.Fingerprint(record.Command);
                 string prior;
                 if (_commandFingerprints.TryGetValue(record.Command.CommandId, out prior)
@@ -1103,6 +1107,10 @@ namespace Glitch.Infrastructure
             try
             {
                 string accountName = CommandAccount(command);
+                // Safety-generated flattens need the same fence as user flattens.
+                // A timeout must not allow new exposure before native flat/clear proof.
+                if (command is FlattenAccountCommand)
+                    _mutationGate.Fence(accountName);
                 bool admitted = _mutationGate.TryExecute(
                     accountName,
                     command is FlattenAccountCommand || command is RefreshPositionCommand,
