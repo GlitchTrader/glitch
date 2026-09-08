@@ -130,3 +130,31 @@ restored ON at 19:15:31 UTC after preservation checks; the fresh scheduled cycle
 `20260908T1916Z` delivered successfully in 61.08 seconds with chart attached and
 zero format repairs or transport retries. Details and the preserved failure are
 in the canonical profile's `docs/ledger/2026-09-08-evidence-and-serialization-repair.md`.
+
+## Follow-up: a recovered timeout stranded the account fence
+
+After a flatten times out and native state is subsequently cleared, runtime
+reload restores the account fence from the journal. `FinishRecovery` skipped
+the Unknown command because `IsCommandPending` correctly returns false for it.
+Its existing native-flat reconciliation was therefore unreachable. The earlier
+repair retained this fence without covering that recovery sequence. A successful
+no-action receipt does not prove native entry admission.
+
+The bounded correction changes only `GlitchRuntimeHost.FinishRecovery`: also
+reconcile the latest nonpending flatten for a still-fenced account, using the
+existing whole-native-account flat-and-order-clear check. Append the ordinary
+durable completion; never blindly release a latch or resubmit an old command.
+Older timeouts cannot settle a newer recovered flatten. Missing accounts, native
+positions, and nonterminal orders retain the fence. Pending-command recovery,
+explicit retries, entry ranges, geometry, cognition, protection, replication
+settings, journal schema, and learning artifacts are unchanged.
+
+The new integration harness runs the production host, journal, serialized queue,
+reducer, and gateway against isolated native/configuration/server doubles. It
+first fails on `855d8b6` with "native flat/clear account remained fenced after
+unknown recovery". With the 20-line production patch it passes 176 checks,
+including durable/idempotent reload, fresh entry admission, no historical order
+replay, missing accounts, omitted-instrument positions/orders, and newer flatten
+ownership. The existing gateway suite still passes 53 checks; the broader native
+suite passes 49 tests, including full AddOn compilation. No test touches live
+orders or connections. Installation and live resolution are recorded separately.

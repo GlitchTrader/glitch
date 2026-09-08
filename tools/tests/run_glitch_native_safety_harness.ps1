@@ -15,12 +15,19 @@ foreach ($dependency in @(
     'Microsoft.CodeAnalysis.dll', 'Microsoft.CodeAnalysis.CSharp.dll')) {
     [void][Reflection.Assembly]::LoadFrom((Join-Path $ninjaRoot $dependency))
 }
+Add-Type -AssemblyName System.Web.Extensions
 $sourcePaths = @(
     'ninjatrader/Glitch/AddOns/GlitchAddOn/Core/GlitchContracts.cs',
     'ninjatrader/Glitch/AddOns/GlitchAddOn/Core/GlitchEngine.cs',
     'ninjatrader/Glitch/AddOns/GlitchAddOn/Core/GlitchNativeIdentity.cs',
+    'ninjatrader/Glitch/AddOns/GlitchAddOn/Core/GlitchRuntime.cs',
     'ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/NinjaTraderGateway.cs',
+    'ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/GlitchMutationGate.cs',
+    'ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/GlitchOperationJournal.cs',
+    'ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/GlitchRuntimeHost.cs',
     'tools/tests/GlitchNativeSafetyDoubles.cs',
+    'tools/tests/GlitchHostRecoveryDoubles.cs',
+    'tools/tests/GlitchHostRecoveryHarness.cs',
     'tools/tests/GlitchNativeSafetyHarness.cs'
 )
 $syntaxTrees = [Collections.Generic.List[Microsoft.CodeAnalysis.SyntaxTree]]::new()
@@ -37,7 +44,8 @@ foreach ($relativePath in $sourcePaths) {
 }
 $references = [Collections.Generic.List[Microsoft.CodeAnalysis.MetadataReference]]::new()
 foreach ($path in @([object].Assembly.Location, [Console].Assembly.Location,
-    [Uri].Assembly.Location, [Linq.Enumerable].Assembly.Location) | Select-Object -Unique) {
+    [Uri].Assembly.Location, [Linq.Enumerable].Assembly.Location,
+    [System.Web.Script.Serialization.JavaScriptSerializer].Assembly.Location) | Select-Object -Unique) {
     $references.Add([Microsoft.CodeAnalysis.MetadataReference]::CreateFromFile($path))
 }
 $compilation = [Microsoft.CodeAnalysis.CSharp.CSharpCompilation]::Create(

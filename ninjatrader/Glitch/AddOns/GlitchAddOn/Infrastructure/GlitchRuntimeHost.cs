@@ -990,11 +990,31 @@ namespace Glitch.Infrastructure
             int resumed = 0;
             int waiting = 0;
             int unknown = 0;
+            var latestFlattens = _recoveryEmissionOrder
+                .Select(id => _recoveryEmittedCommands[id])
+                .OfType<FlattenAccountCommand>()
+                .GroupBy(value => value.AccountName, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
             foreach (string commandId in _recoveryEmissionOrder.ToArray())
             {
                 GlitchCommand command = _recoveryEmittedCommands[commandId];
                 if (!_engine.IsCommandPending(commandId))
+                {
+                    // Unknown/failed is not pending, but its account fence survives.
+                    // Reconcile the latest request against native flat/clear proof;
+                    // never reissue it or let an older timeout settle a newer flatten.
+                    var unresolvedFlatten = command as FlattenAccountCommand;
+                    if (unresolvedFlatten != null
+                        && ReferenceEquals(latestFlattens[unresolvedFlatten.AccountName], unresolvedFlatten)
+                        && _mutationGate.IsFenced(unresolvedFlatten.AccountName)
+                        && _gateway.IsFlattenSatisfied(unresolvedFlatten))
+                    {
+                        Post(new FlattenCompletedObserved(commandId, unresolvedFlatten.AccountName),
+                            "recovery_resolution");
+                        waiting++;
+                    }
                     continue;
+                }
                 RecoveryCommandState state;
                 if (!_recoveryJournalCommands.TryGetValue(commandId, out state))
                 {

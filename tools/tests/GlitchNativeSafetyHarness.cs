@@ -289,6 +289,7 @@ internal static class GlitchNativeSafetyHarness
     {
         try
         {
+            GlitchHostRecoveryHarness.Run();
             TestFlattenDiscoversNativeExposure();
             TestOmittedNonterminalOrders();
             TestLateInstrumentBlocksFalseCompletion();
