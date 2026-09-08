@@ -103,3 +103,22 @@ generation verification remain separate from these source-test results.
 Native API references: [CreateOrder](https://ninjatrader.com/support/helpGuides/nt8/createorder.htm),
 [Flatten](https://ninjatrader.com/support/helpguides/nt8/flatten.htm), and
 [order states](https://ninjatrader.com/support/helpguides/nt8/order.htm).
+
+## Installation evidence
+
+Native runtime source `91ea467adf32c0bbd03a1293d0d2d8e97c17d653` is published
+on configured `main`. The full 95-file AddOn was installed as one folder copy;
+all installed source hashes match. The prior native folder is preserved at
+`D:/ab/checkpoints/glitch-before-91ea467-bf0ff015`. `NinjaTrader.Custom.dll`
+compiled at `2026-09-08T18:09:14.7243344Z`; fresh native snapshots and receipts
+continued afterward without a NinjaTrader restart.
+
+The coupled profile v0.0.2.71 update completed through its supported updater/setup.
+AI alone was temporarily paused with explicit approval, then restored ON at
+18:58:31 UTC after parity and preservation checks. Replication stayed ON. All
+seven accounts were native-flat and order-clear before resumption. No additional
+SIM reset, history deletion, test trade, or test flatten was performed.
+
+The fresh profile cycle `20260908T1858Z` completed with the new bundle and chart,
+without format repair or transport retry. This proves resumed processing; it does
+not substitute for live native acceptance of every protection/flatten race.
