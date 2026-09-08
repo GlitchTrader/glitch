@@ -308,26 +308,23 @@ namespace Glitch.Infrastructure
 
         internal bool IsFlattenSatisfied(FlattenAccountCommand command)
         {
-            Account account = FindAccount(command.AccountName);
+            return IsAccountFlatAndClear(FindAccount(command.AccountName));
+        }
+
+        private static bool IsAccountFlatAndClear(Account account)
+        {
             if (account == null)
                 return false;
-            var scope = new HashSet<string>(
-                command.InstrumentNames ?? Array.Empty<string>(),
-                StringComparer.OrdinalIgnoreCase);
             lock (account.Positions)
             {
-                if (account.Positions.Any(value => value?.Instrument != null
-                    && (scope.Count == 0 || scope.Contains(value.Instrument.FullName))
+                if (account.Positions.Any(value => value != null
                     && value.MarketPosition != MarketPosition.Flat
                     && value.Quantity != 0))
                     return false;
             }
             lock (account.Orders)
             {
-                return account.Orders.All(value => value == null
-                    || !IsWorking(value)
-                    || (scope.Count > 0 && (value.Instrument == null
-                        || !scope.Contains(value.Instrument.FullName))));
+                return account.Orders.All(value => !IsWorking(value));
             }
         }
 
@@ -1349,21 +1346,22 @@ namespace Glitch.Infrastructure
                         "Native instrument " + instrumentName + " is unavailable for " + command.CommandId + ".");
                 instruments[instrument.FullName] = instrument;
             }
-            if (instruments.Count == 0)
+            // The reducer's list is a hint, not the boundary of an account flatten.
+            // Native/manual orders can exist on instruments absent from its books.
+            lock (account.Positions)
             {
-                lock (account.Positions)
-                {
-                    foreach (Position position in account.Positions.Where(value => value?.Instrument != null))
-                        instruments[position.Instrument.FullName] = position.Instrument;
-                }
-                lock (account.Orders)
-                {
-                    foreach (Order order in account.Orders.Where(value => IsWorking(value) && value.Instrument != null))
-                        instruments[order.Instrument.FullName] = order.Instrument;
-                }
+                foreach (Position position in account.Positions.Where(value => value?.Instrument != null))
+                    instruments[position.Instrument.FullName] = position.Instrument;
+            }
+            lock (account.Orders)
+            {
+                foreach (Order order in account.Orders.Where(value => IsWorking(value) && value.Instrument != null))
+                    instruments[order.Instrument.FullName] = order.Instrument;
             }
             if (instruments.Count == 0)
             {
+                if (!IsAccountFlatAndClear(account))
+                    throw new InvalidOperationException("native_flatten_instrument_unresolved|command=" + command.CommandId);
                 Notice(account.Name, "Order", "native_flatten_not_requested|command=" + command.CommandId
                     + "|reason=no_native_instruments");
                 Publish(new FlattenCompletedObserved(command.CommandId, account.Name));
@@ -1759,8 +1757,12 @@ namespace Glitch.Infrastructure
             FlattenScope scope;
             lock (_gate)
             {
-                if (!_flattenScopes.TryGetValue(key, out scope))
-                    return;
+                _flattenScopes.TryGetValue(key, out scope);
+            }
+            if (scope == null)
+            {
+                TryCompleteFlattenRequest(account);
+                return;
             }
             bool flat = CurrentPosition(account, instrument.FullName) == 0;
             bool clear;
@@ -1770,7 +1772,6 @@ namespace Glitch.Infrastructure
                     || !IsWorking(order));
             if (!flat || !clear || (scope.StartPosition != 0 && !scope.SawExecution))
                 return;
-            bool requestComplete = false;
             lock (_gate)
             {
                 FlattenScope current;
@@ -1779,18 +1780,33 @@ namespace Glitch.Infrastructure
                 _flattenScopes.Remove(key);
                 FlattenRequest request;
                 if (_flattenRequests.TryGetValue(scope.CommandId, out request))
-                {
                     request.PendingScopes.Remove(key);
-                    if (request.PendingScopes.Count == 0)
-                    {
-                        request.Deadline?.Dispose();
-                        _flattenRequests.Remove(scope.CommandId);
-                        requestComplete = true;
-                    }
-                }
             }
-            if (requestComplete)
-                Publish(new FlattenCompletedObserved(scope.CommandId, account.Name));
+            TryCompleteFlattenRequest(account);
+        }
+
+        private void TryCompleteFlattenRequest(Account account)
+        {
+            KeyValuePair<string, FlattenRequest>[] candidates;
+            lock (_gate)
+                candidates = _flattenRequests.Where(value => value.Value.PendingScopes.Count == 0
+                    && string.Equals(value.Value.AccountName, account.Name, StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+            if (candidates.Length == 0 || !IsAccountFlatAndClear(account))
+                return;
+            foreach (var candidate in candidates)
+            {
+                lock (_gate)
+                {
+                    FlattenRequest current;
+                    if (!_flattenRequests.TryGetValue(candidate.Key, out current)
+                        || !ReferenceEquals(current, candidate.Value))
+                        continue;
+                    current.Deadline?.Dispose();
+                    _flattenRequests.Remove(candidate.Key);
+                }
+                Publish(new FlattenCompletedObserved(candidate.Key, account.Name));
+            }
         }
 
         private void CheckFlattenDeadline(object state)

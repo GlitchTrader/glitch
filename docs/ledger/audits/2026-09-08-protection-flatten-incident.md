@@ -74,6 +74,32 @@ and explicit authorization to resume; never call a source copy live verification
 Rollback is the checkpoint/source baseline, not deletion of trading history. The
 baseline contains the incident defect: do not restore it and re-enable trading.
 
+## Follow-up: account-wide completion, not book-list completion
+
+After the user cleared the stuck SIM orders, review found another false-completion
+path in both execution and recovery. The reducer supplies known instrument names,
+but the gateway consulted the native account only when that list was empty. An
+orphan position/order on an omitted instrument could therefore survive a reported
+FlattenCompleted. Friday's `0b917a1` and incident repair `a098b40` both contain it.
+
+The bounded follow-up changes only `NinjaTraderGateway`: union the known names
+with native positions/nonterminal orders, and require the entire selected account
+to be flat and order-clear before completion or recovery acknowledgement. Late
+orders also prevent false completion; their terminal event can settle the request.
+No account-selection, replication-toggle, polling, retry, cognition, or risk change.
+
+The new regression first failed against unchanged `a098b40`. The actual gateway
+and reducer now pass 53 native-boundary assertions, including omitted positions,
+five nonterminal order states, late order arrival/cancellation, and isolation of
+unrelated accounts. The broader native suite passes 47 tests, including all five
+C# harnesses and full AddOn compilation against installed NinjaTrader assemblies.
+The unchanged Friday v70 profile passes all 328 tests. Tests use isolated files and
+native doubles; no test trade or native flatten is submitted.
+
+At 18:06 UTC all seven native accounts were flat and order-clear. AI and effective
+replication were ON. This follow-up preserves that state. Installation and runtime
+generation verification remain separate from these source-test results.
+
 Native API references: [CreateOrder](https://ninjatrader.com/support/helpGuides/nt8/createorder.htm),
 [Flatten](https://ninjatrader.com/support/helpguides/nt8/flatten.htm), and
 [order states](https://ninjatrader.com/support/helpguides/nt8/order.htm).

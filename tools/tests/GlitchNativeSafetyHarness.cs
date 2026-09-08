@@ -197,10 +197,101 @@ internal static class GlitchNativeSafetyHarness
         }
     }
 
+    private static Instrument RegisterInstrument(string name)
+    {
+        var instrument = new Instrument { FullName = name };
+        Instrument.Registry[name] = instrument;
+        return instrument;
+    }
+
+    private static void TestFlattenDiscoversNativeExposure()
+    {
+        using (var f = new Fixture())
+        {
+            Instrument known = RegisterInstrument("MES 09-26");
+            Instrument orderOnly = RegisterInstrument("MNQ 09-26");
+            f.Account.SetPosition(f.Instrument, -2);
+            Order pending = f.Account.CreateOrder(orderOnly, OrderAction.Buy, OrderType.Limit,
+                OrderEntry.Automated, TimeInForce.Gtc, 1, 29000, 0, "", "manual", DateTime.MaxValue, null);
+            f.Account.Submit(new[] { pending });
+            var unrelated = new Account { Name = "Unrelated" };
+            Account.All.Add(unrelated);
+            unrelated.SetPosition(f.Instrument, 3);
+            var command = new FlattenAccountCommand("nativeunion", "Master",
+                new[] { known.FullName, known.FullName }, "user_flatten_all");
+            Assert(!f.Gateway.IsFlattenSatisfied(command),
+                "recovery declared a partial instrument list account-flat");
+            f.Account.OnFlatten = (account, instruments) => {
+                foreach (Instrument instrument in instruments) account.CompleteFlat(instrument);
+            };
+            f.Gateway.Execute(command);
+            Assert(f.Account.LastFlatten.Length == 3 && f.Account.LastFlatten.Contains(known)
+                && f.Account.LastFlatten.Contains(f.Instrument) && f.Account.LastFlatten.Contains(orderOnly),
+                "account flatten omitted native position/order instruments or duplicated a scope");
+            Assert(f.Gateway.IsFlattenSatisfied(command)
+                && f.Facts<FlattenCompletedObserved>().Single().CommandId == command.CommandId,
+                "complete native account cleanup was not acknowledged");
+            Assert(unrelated.Flattens == 0 && unrelated.Positions.Single().Quantity == 3,
+                "account flatten affected another account");
+        }
+    }
+
+    private static void TestOmittedNonterminalOrders()
+    {
+        foreach (OrderState state in new[] { OrderState.Initialized, OrderState.CancelPending,
+            OrderState.ChangePending, OrderState.Submitted, OrderState.PartFilled })
+        using (var f = new Fixture())
+        {
+            Instrument known = RegisterInstrument("MES 09-26");
+            Order orphan = f.Account.CreateOrder(f.Instrument, OrderAction.BuyToCover, OrderType.StopMarket,
+                OrderEntry.Automated, TimeInForce.Gtc, 1, 0, 2973.6, "", "orphan", DateTime.MaxValue, null);
+            orphan.OrderState = state;
+            var command = new FlattenAccountCommand("omitted-" + state, "Master",
+                new[] { known.FullName }, "user_flatten_all");
+            Assert(!f.Gateway.IsFlattenSatisfied(command), "recovery ignored omitted " + state + " order");
+            f.Gateway.Execute(command);
+            Assert(f.Account.LastFlatten.Contains(f.Instrument), "native flatten omitted " + state + " order");
+            Assert(f.TimeoutObserved.WaitOne(2000) && f.Facts<FlattenCompletedObserved>().Length == 0,
+                "nonterminal omitted order was reported cleared: " + state);
+            orphan.OrderState = OrderState.Cancelled;
+            f.Account.EmitOrder(orphan);
+            Assert(f.Facts<FlattenCompletedObserved>().Single().CommandId == command.CommandId
+                && f.Gateway.IsFlattenSatisfied(command), "late cancellation did not settle " + state);
+        }
+    }
+
+    private static void TestLateInstrumentBlocksFalseCompletion()
+    {
+        using (var f = new Fixture())
+        {
+            Instrument lateInstrument = RegisterInstrument("MES 09-26");
+            Order late = null;
+            f.Account.SetPosition(f.Instrument, -1);
+            f.Account.OnFlatten = (account, instruments) => {
+                late = account.CreateOrder(lateInstrument, OrderAction.Buy, OrderType.Limit,
+                    OrderEntry.Automated, TimeInForce.Gtc, 1, 7700, 0, "", "late", DateTime.MaxValue, null);
+                account.Submit(new[] { late });
+                account.CompleteFlat(f.Instrument);
+            };
+            var command = new FlattenAccountCommand("lateinstrument", "Master",
+                new[] { f.Instrument.FullName }, "user_flatten_all");
+            f.Gateway.Execute(command);
+            Assert(f.TimeoutObserved.WaitOne(2000) && f.Facts<FlattenCompletedObserved>().Length == 0,
+                "flatten completed while another native instrument still had an order");
+            Assert(!f.Gateway.IsFlattenSatisfied(command), "recovery ignored an order arriving during flatten");
+            f.Account.Cancel(new[] { late });
+            Assert(f.Facts<FlattenCompletedObserved>().Single().CommandId == command.CommandId,
+                "late order cancellation did not complete the account request");
+        }
+    }
+
     public static int Main()
     {
         try
         {
+            TestFlattenDiscoversNativeExposure();
+            TestOmittedNonterminalOrders();
+            TestLateInstrumentBlocksFalseCompletion();
             TestIncidentEntry();
             TestAllLegsBeforeCreate();
             TestValidGeometryAndManualCloses();
