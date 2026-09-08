@@ -122,3 +122,11 @@ SIM reset, history deletion, test trade, or test flatten was performed.
 The fresh profile cycle `20260908T1858Z` completed with the new bundle and chart,
 without format repair or transport retry. This proves resumed processing; it does
 not substitute for live native acceptance of every protection/flatten race.
+
+The final profile follow-up is v0.0.2.72 (`5786435` runtime source): it repairs a
+raw-versus-canonical comparison defect exposed during live verification. Native
+code is unchanged from `91ea467`, with 95/95 installed hashes retained. AI was
+restored ON at 19:15:31 UTC after preservation checks; the fresh scheduled cycle
+`20260908T1916Z` delivered successfully in 61.08 seconds with chart attached and
+zero format repairs or transport retries. Details and the preserved failure are
+in the canonical profile's `docs/ledger/2026-09-08-evidence-and-serialization-repair.md`.
