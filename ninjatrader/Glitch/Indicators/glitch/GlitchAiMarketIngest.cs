@@ -413,6 +413,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                 InstrumentFullName = instrument == null ? null : instrument.FullName,
                 Minutes = minutes,
                 UtcTime = readingUtc,
+                Open = Opens[bip][0],
+                High = Highs[bip][0],
+                Low = Lows[bip][0],
+                Volume = Volumes[bip][0],
                 CurrentPrice = close,
                 AveragePrice = averagePrice,
                 Atr = atr,
@@ -476,6 +480,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 + "\"low\":" + Number(low) + ","
                 + "\"close\":" + Number(close) + ","
                 + "\"volume\":" + Number(Volumes[bip][0]) + "},"
+                + "\"last_completed_bar\":" + BuildLastCompletedBarJson(bip) + ","
                 + "\"instrument_economics\":{"
                 + "\"point_value_usd\":" + Number(pointValue) + ","
                 + "\"tick_size\":" + Number(tickSize) + ","
@@ -489,6 +494,25 @@ namespace NinjaTrader.NinjaScript.Indicators
                 + "\"heuristic_projections\":{"
                 + "\"source\":\"glitch_ai_market_ingest\",\"strategy_semantics\":\"none\"}"
                 + "}";
+        }
+
+        private string BuildLastCompletedBarJson(int bip)
+        {
+            // Bootstrap can run inside a live bar. Use the same explicit prior-bar
+            // contract as AnalyticsBridge; never promote the current bar to closed.
+            if (CurrentBars == null || bip < 0 || bip >= CurrentBars.Length || CurrentBars[bip] < 1)
+                return "null";
+
+            return "{"
+                + "\"utc_time\":" + GlitchMarketSnapshotJsonInject.String(Times[bip][1].ToUniversalTime().ToString("o", CultureInfo.InvariantCulture)) + ","
+                + "\"closed_utc\":" + GlitchMarketSnapshotJsonInject.String(Times[bip][0].ToUniversalTime().ToString("o", CultureInfo.InvariantCulture)) + ","
+                + "\"open\":" + Number(Opens[bip][1]) + ","
+                + "\"high\":" + Number(Highs[bip][1]) + ","
+                + "\"low\":" + Number(Lows[bip][1]) + ","
+                + "\"close\":" + Number(Closes[bip][1]) + ","
+                + "\"volume\":" + Number(Volumes[bip][1]) + ","
+                + "\"completeness\":\"complete\","
+                + "\"source\":\"ninjatrader_bars_ago_1\"}";
         }
 
         private static string Number(double? value)
