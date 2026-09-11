@@ -453,6 +453,20 @@ namespace Glitch.Services
             if (fields.TryGetValue("commission", out string commissionRaw))
                 TryParseFlexibleDouble(commissionRaw, out commission);
             string signalName = CleanToken(orderIdentity);
+            string action;
+            if (fields.TryGetValue("order_action", out string nativeAction))
+            {
+                action = NormalizeActionToken(nativeAction);
+                if ((action != "BUY" && action != "SELL" && action != "SELLSHORT" && action != "BUYTOCOVER")
+                    || Math.Sign(ResolveSignedQuantity(action, 1)) != Math.Sign(signedQuantity))
+                    return null;
+            }
+            else
+            {
+                action = ResolveNativeExecutionAction(signedQuantity, signalName);
+                if (string.IsNullOrEmpty(action))
+                    return null;
+            }
             string executionSource = "Manual";
             if (GlitchNativeIdentity.TryGetRole(signalName, out string role))
             {
@@ -472,7 +486,7 @@ namespace Glitch.Services
             {
                 UtcTime = source.UtcTime,
                 AccountName = string.IsNullOrWhiteSpace(account) ? source.AccountName : account,
-                Action = ResolveNativeExecutionAction(signedQuantity, signalName),
+                Action = action,
                 Quantity = Math.Abs(signedQuantity),
                 Instrument = instrument,
                 Price = price,
@@ -499,10 +513,10 @@ namespace Glitch.Services
                 }
             }
 
-            // Replication and external native identities may represent either
-            // side of a lifecycle. Preserve their signed fill direction and
-            // let current position state decide.
-            return isBuy ? "BUY" : "SELLSHORT";
+            // R/external identities can open OR close. Direction alone cannot
+            // establish an entry when retained history starts mid-position.
+            // Keep legacy evidence intact but do not fabricate a round trip.
+            return string.Empty;
         }
 
         private static void ParseExecutionExtras(

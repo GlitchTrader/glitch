@@ -523,7 +523,8 @@ namespace Glitch.Infrastructure
                 : execution?.ExecutionId;
             int quantity = eventQuantity ?? execution?.Quantity ?? 0;
             double price = eventPrice ?? execution?.Price ?? 0;
-            int sign = order == null ? 0 : OrderSign(order.OrderAction);
+            OrderAction? orderAction = order?.OrderAction;
+            int sign = orderAction.HasValue ? OrderSign(orderAction.Value) : 0;
             string accountName = account?.Name ?? execution?.Account?.Name ?? string.Empty;
             string instrumentName = instrument?.FullName ?? string.Empty;
             bool representable = account != null
@@ -551,7 +552,8 @@ namespace Glitch.Infrastructure
                 representable,
                 evidenceGap,
                 metadata?.NativeCommandId,
-                (decimal)(execution?.Commission ?? 0)));
+                (decimal)(execution?.Commission ?? 0),
+                orderAction?.ToString()));
             if (nativeOperation != GlitchNativeOperation.Add || !representable)
                 return;
 

@@ -12,12 +12,17 @@ internal static class GlitchTradeLedgerPartialFillHarness
     {
         try
         {
+            string nativeEvidence = Environment.GetEnvironmentVariable("GLITCH_LEDGER_NATIVE_EVIDENCE");
+            if (!string.IsNullOrWhiteSpace(nativeEvidence))
+                return VerifyNativeEvidence(nativeEvidence);
             PartialFillsAggregateExactlyOnce();
             ScaleOutThenScaleInUsesAllFragments();
             IdenticalNoIdFragmentsAreNotCollapsed();
             ManualAndAiAttributionRemainDistinct();
             NativeExecutionCarriesHermesSignalAttribution();
             ColdReplayProtectiveExitDoesNotOpenPhantomPosition();
+            NativeOrderActionPreventsOrphanFollowerTrades();
+            AmbiguousLegacyNativeFillsDoNotInventPositions();
             ManualThenAiAdditionUsesDistinctFifoLots();
             AiThenManualAdditionUsesDistinctFifoLots();
             DistinctAiIntentsRemainDistinct();
@@ -245,14 +250,42 @@ internal static class GlitchTradeLedgerPartialFillHarness
         Require(manual.TradeSource == "Manual" && ai.TradeSource == "Strategy", "manual->AI provenance crossed lots");
     }
 
+    // Offline proof only: TSV rows are ticks, account and native_execution
+    // evidence. Never write a runtime ledger from this test harness.
+    private static int VerifyNativeEvidence(string path)
+    {
+        var events = File.ReadLines(path).Where(line => !string.IsNullOrWhiteSpace(line))
+            .Select(line => line.Split(new[] { '\t' }, 3))
+            .Select(parts => new GlitchTradeInsightsService.TradeJournalEvent
+            {
+                UtcTime = new DateTime(long.Parse(parts[0], CultureInfo.InvariantCulture), DateTimeKind.Utc),
+                AccountName = parts[1], Category = "Execution", Message = parts[2]
+            }).ToList();
+        var trades = new GlitchTradeInsightsService.ExecutionAccumulator().Process(events, events);
+        foreach (var trade in trades.OrderBy(item => item.EntryUtc))
+            Console.WriteLine(string.Join("\t", new[]
+            {
+                trade.TradeId, trade.EntryUtc.Ticks.ToString(CultureInfo.InvariantCulture),
+                trade.ExitUtc.Ticks.ToString(CultureInfo.InvariantCulture), trade.AccountName,
+                trade.Instrument, trade.IsLong ? "Long" : "Short",
+                trade.Contracts.ToString("R", CultureInfo.InvariantCulture),
+                trade.EntryPrice.ToString("R", CultureInfo.InvariantCulture),
+                trade.ExitPrice.ToString("R", CultureInfo.InvariantCulture),
+                trade.PnlPoints.ToString("R", CultureInfo.InvariantCulture),
+                trade.CommissionTotal.ToString("R", CultureInfo.InvariantCulture),
+                trade.EntryOrderIdentity, trade.ExitSignal
+            }));
+        return 0;
+    }
+
     private static void NativeExecutionCarriesHermesSignalAttribution()
     {
         DateTime start = new DateTime(2026, 8, 3, 13, 30, 0, DateTimeKind.Utc);
         var accumulator = new GlitchTradeInsightsService.ExecutionAccumulator();
         var events = new List<GlitchTradeInsightsService.TradeJournalEvent>
         {
-            NativeExecution(start, "GL1-G1D7A1CB4A410356FFF7-R", 1, 100, "native-repl-entry"),
-            NativeExecution(start.AddMinutes(1), "GL1-G1D7A1CB4A410356FFF7-R", -1, 105, "native-repl-exit"),
+            NativeExecution(start, "GL1-G1D7A1CB4A410356FFF7-R", 1, 100, "native-repl-entry", "Buy"),
+            NativeExecution(start.AddMinutes(1), "GL1-G1D7A1CB4A410356FFF7-R", -1, 105, "native-repl-exit", "Sell"),
             NativeExecution(start.AddMinutes(2), "GL1-G1D7A1CB4A410356FFF8-HME", 1, 100, "native-entry"),
             NativeExecution(start.AddMinutes(3), "GL1-G1D7A1CB4A410356FFF8-HT0-LB853106C57B5D7A", -1, 105, "native-exit")
         };
@@ -292,6 +325,44 @@ internal static class GlitchTradeLedgerPartialFillHarness
         Near(trade.EntryPrice, 100, "cold replay short entry");
         Near(trade.ExitPrice, 105, "cold replay short exit");
         Near(trade.PnlPoints, -5, "cold replay short P&L");
+    }
+
+    private static void NativeOrderActionPreventsOrphanFollowerTrades()
+    {
+        DateTime start = new DateTime(2026, 9, 11, 12, 0, 0, DateTimeKind.Utc);
+        foreach (int side in new[] { -1, 1 })
+        {
+            string opening = side > 0 ? "Buy" : "SellShort";
+            string closing = side > 0 ? "Sell" : "BuyToCover";
+            var snapshot = Snapshot(start,
+                NativeExecution(start, "GL1-G00000000000000000000-R", -2 * side, 110, "orphan", closing),
+                NativeExecution(start.AddMinutes(1), "GL1-G00000000000000000001-R", 2 * side, 100, "entry", opening),
+                NativeExecution(start.AddMinutes(2), "GL1-G00000000000000000002-R", -2 * side, 100 + side * 10, "exit", closing));
+            Require(snapshot.ClosedTrades.Count == 1, "orphan follower fill corrupted the next trade");
+            var trade = snapshot.ClosedTrades.Single();
+            Require(trade.IsLong == (side > 0), "follower side changed");
+            Near(trade.EntryPrice, 100, "follower native entry");
+            Near(trade.PnlPoints, 20, "follower native P&L");
+        }
+        Require(Snapshot(start,
+            NativeExecution(start, "external", 1, 100, "bad-direction", "Sell"),
+            NativeExecution(start.AddMinutes(1), "external", -1, 110, "bad-exit", "Sell")).ClosedTrades.Count == 0,
+            "contradictory native side created a trade");
+    }
+
+    private static void AmbiguousLegacyNativeFillsDoNotInventPositions()
+    {
+        DateTime start = new DateTime(2026, 9, 11, 13, 0, 0, DateTimeKind.Utc);
+        var accumulator = new GlitchTradeInsightsService.ExecutionAccumulator();
+        var ambiguous = new[] { NativeExecution(start, "GL1-G00000000000000000000-R", 1, 100, "same-id") };
+        Require(accumulator.Process(ambiguous, ambiguous).Count == 0, "ambiguous event emitted a trade");
+        var explicitEvents = new[] {
+            NativeExecution(start, "GL1-G00000000000000000000-R", 1, 100, "same-id", "BuyToCover"),
+            NativeExecution(start.AddMinutes(1), "GL1-G00000000000000000001-R", -1, 90, "real-entry", "SellShort"),
+            NativeExecution(start.AddMinutes(2), "GL1-G00000000000000000002-R", 1, 80, "real-exit", "BuyToCover") };
+        var closed = accumulator.Process(explicitEvents, explicitEvents);
+        Require(closed.Count == 1 && !closed[0].IsLong, "legacy direction-only event invented a position");
+        Near(closed[0].PnlPoints, 10, "legacy-safe native P&L");
     }
 
     private static void AiThenManualAdditionUsesDistinctFifoLots()
@@ -466,7 +537,8 @@ internal static class GlitchTradeLedgerPartialFillHarness
         string nativeOrder,
         int signedQuantity,
         double price,
-        string executionId)
+        string executionId,
+        string orderAction = "")
     {
         return new GlitchTradeInsightsService.TradeJournalEvent
         {
@@ -477,6 +549,7 @@ internal static class GlitchTradeLedgerPartialFillHarness
                 + "|account=Sim101|instrument=MNQ 09-26|native_order=" + nativeOrder
                 + "|signed_quantity=" + signedQuantity.ToString(CultureInfo.InvariantCulture)
                 + "|price=" + price.ToString("0.########", CultureInfo.InvariantCulture)
+                + (string.IsNullOrEmpty(orderAction) ? "" : "|order_action=" + orderAction)
                 + "|representable=True"
         };
     }

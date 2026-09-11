@@ -20,6 +20,7 @@ namespace Glitch.Services
         public bool PacketContiguous { get; set; }
         public int PacketObservedSpanMinutes { get; set; }
         public string DecisionWorkerStatus { get; set; }
+        public string DecisionWorkerDeferralReason { get; set; }
         public double DecisionAttemptAgeSeconds { get; set; } = -1;
         public string LearningWorkerStatus { get; set; }
         public double LearningWorkerAgeSeconds { get; set; } = -1;
@@ -64,6 +65,7 @@ namespace Glitch.Services
             sb.Append("},");
             sb.Append("\"decision_worker\":{");
             sb.Append("\"status\":").Append(GlitchSnapshotJson.String(DecisionWorkerStatus)).Append(',');
+            sb.Append("\"deferral_reason\":").Append(GlitchSnapshotJson.String(DecisionWorkerDeferralReason ?? string.Empty)).Append(',');
             sb.Append("\"attempt_age_seconds\":").Append(FormatNumber(DecisionAttemptAgeSeconds));
             sb.Append("},");
             sb.Append("\"learning_worker\":{");
@@ -177,22 +179,28 @@ namespace Glitch.Services
             bool masterPositioned = false;
             if (result.PolicyValid && !string.IsNullOrWhiteSpace(result.SelectedMaster))
             {
-                result.SelectedMasterNativeState = GlitchAiPortfolioSnapshotReader.TryGetFreshRiskState(
-                    result.SelectedMaster,
-                    nowUtc,
-                    policy.SnapshotMaxAgeSeconds,
-                    out _,
-                    out _,
-                    out _,
-                    out string accountJson,
-                    out _);
-                if (result.SelectedMasterNativeState
-                    && GlitchAiPortfolioSnapshotReader.TryGetOpenPositionQuantityFromAccountBlock(
-                        accountJson,
-                        "MNQ",
-                        out int openQuantity))
-                    masterPositioned = openQuantity != 0;
+                var masters = (policy.ProfileAccountBindings?.Values ?? Enumerable.Empty<string>())
+                    .Concat(new[] { result.SelectedMaster })
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Distinct(StringComparer.OrdinalIgnoreCase);
+                foreach (string master in masters)
+                {
+                    bool nativeAvailable = GlitchAiPortfolioSnapshotReader.TryGetFreshRiskState(
+                        master, nowUtc, policy.SnapshotMaxAgeSeconds,
+                        out _, out _, out _, out string accountJson, out _);
+                    if (string.Equals(master, result.SelectedMaster, StringComparison.OrdinalIgnoreCase))
+                        result.SelectedMasterNativeState = nativeAvailable;
+                    else if (!nativeAvailable)
+                        result.ReasonCodes.Add("scoped_master_native_state_unavailable");
+                    if (nativeAvailable
+                        && GlitchAiPortfolioSnapshotReader.TryGetTotalOpenContractsFromAccountBlock(accountJson, out int openQuantity))
+                        masterPositioned |= openQuantity != 0;
+                }
             }
+
+            string deferredReason = RecentHealthyDeferral(
+                Path.Combine(exchange, "hermes", "events", "cycles.jsonl"),
+                packetWindowUtc, nowUtc, masterPositioned);
 
             if (!result.AiAutoEnabled)
                 result.ReasonCodes.Add("ai_auto_off");
@@ -215,6 +223,11 @@ namespace Glitch.Services
             else if (string.Equals(result.DecisionWorkerStatus, "started", StringComparison.Ordinal)
                 && result.DecisionAttemptAgeSeconds > 360)
                 result.ReasonCodes.Add("decision_worker_stalled");
+            else if (result.Operating && deferredReason != null)
+            {
+                result.DecisionWorkerStatus = "deferred";
+                result.DecisionWorkerDeferralReason = deferredReason;
+            }
             else if (result.Operating && result.FeedAgeSeconds >= 0 && result.FeedAgeSeconds <= 180
                 && latestAttempt != null && packetWindowUtc != DateTime.MinValue
                 && TryParseMinuteId(Path.GetFileNameWithoutExtension(latestAttempt.Name), out DateTime attemptWindowUtc))
@@ -242,6 +255,50 @@ namespace Glitch.Services
                 ? "off"
                 : result.ReasonCodes.Count == 0 ? "on" : "degraded";
             return result;
+        }
+
+        internal static string RecentHealthyDeferral(
+            string path, DateTime packetWindowUtc, DateTime nowUtc, bool positioned)
+        {
+            // Read only the final bounded record, not the growing session log.
+            // A current successful admission skip is heartbeat evidence; it is
+            // not permission to suppress a failed/stalled model attempt above.
+            try
+            {
+                string line;
+                using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                {
+                    int count = (int)Math.Min(stream.Length, 16384);
+                    long start = stream.Length - count;
+                    stream.Seek(start, SeekOrigin.Begin);
+                    var bytes = new byte[count];
+                    int read = 0;
+                    while (read < count)
+                    {
+                        int next = stream.Read(bytes, read, count - read);
+                        if (next == 0) return null;
+                        read += next;
+                    }
+                    string tail = Encoding.UTF8.GetString(bytes);
+                    if (!tail.EndsWith("\n", StringComparison.Ordinal)) return null;
+                    tail = tail.TrimEnd('\r', '\n');
+                    int lastNewline = tail.LastIndexOf('\n');
+                    if (start > 0 && lastNewline < 0) return null;
+                    line = tail.Substring(lastNewline + 1);
+                }
+                if (!GlitchAiJsonFields.TryParseObject(line, out var record)
+                    || record["schema_version"] as string != "glitch.hermes.cycle_event.v1"
+                    || record["event"] as string != "llm_skipped") return null;
+                DateTime? recorded = GlitchAiJsonFields.TryExtractUtc(line, "recorded_utc");
+                if (!recorded.HasValue || (nowUtc - recorded.Value).TotalSeconds < -5
+                    || (nowUtc - recorded.Value).TotalSeconds > 120
+                    || !TryParseMinuteId(record["cycle_id"] as string, out DateTime cycleUtc)
+                    || cycleUtc > packetWindowUtc || cycleUtc < packetWindowUtc.AddMinutes(-1)) return null;
+                string reason = record["reason"] as string;
+                return reason == "weekend" || reason == "maintenance_window" || reason == "market_session_closed"
+                    || (!positioned && reason == "native_daily_capture_locked_and_group_flat") ? reason : null;
+            }
+            catch { return null; }
         }
 
         private static FileInfo LatestAttemptFile(

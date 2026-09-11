@@ -117,7 +117,8 @@ namespace Glitch.Core
             bool representable,
             string evidenceGap,
             string correlationId = null,
-            decimal commission = 0)
+            decimal commission = 0,
+            string orderAction = null)
         {
             Operation = operation;
             ExecutionId = executionId ?? string.Empty;
@@ -130,6 +131,7 @@ namespace Glitch.Core
             EvidenceGap = evidenceGap ?? string.Empty;
             CorrelationId = correlationId ?? string.Empty;
             Commission = commission;
+            OrderAction = orderAction ?? string.Empty;
         }
 
         public GlitchNativeOperation Operation { get; }
@@ -143,6 +145,7 @@ namespace Glitch.Core
         public string EvidenceGap { get; }
         public string CorrelationId { get; }
         public decimal Commission { get; }
+        public string OrderAction { get; }
     }
 
     /// <summary>

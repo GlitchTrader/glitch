@@ -100,7 +100,8 @@ internal static class GlitchJournalHarness
                 true,
                 string.Empty,
                 "command-1",
-                1.25m);
+                1.25m,
+                "BuyToCover");
             Assert(journal.TryAppendInput(
                 lifecycle, "test", out string lifecycleError), lifecycleError);
             var routeConfiguration = new RouteConfigurationChanged(
@@ -188,8 +189,25 @@ internal static class GlitchJournalHarness
             Assert(loadedLifecycle.Operation == GlitchNativeOperation.Update
                 && loadedLifecycle.NativeOrderKey == "native-order-1"
                 && loadedLifecycle.SignedQuantity == 2
-                && loadedLifecycle.Commission == 1.25m,
+                && loadedLifecycle.Commission == 1.25m
+                && loadedLifecycle.OrderAction == "BuyToCover"
+                && GlitchOperationJournal.DescribeFact(loadedLifecycle).Contains("|order_action=BuyToCover"),
                 "execution lifecycle evidence did not round-trip exactly");
+            // Old journals have no action field. Loading them must not invent
+            // an entry/exit classification or change engine replay behavior.
+            const string legacyExecutionRecord =
+                "{\"schema\":\"glitch.operation.v5\",\"created_utc\":\"2026-08-07T00:45:56Z\",\"phase\":\"input_accepted\",\"type\":\"ExecutionLifecycleObserved\",\"input\":{\"type\":\"ExecutionLifecycleObserved\",\"operation\":\"Add\",\"execution_id\":\"legacy-execution\",\"account\":\"Master\",\"instrument\":\"MNQ 09-26\",\"native_order_key\":\"legacy-order\",\"signed_quantity\":1,\"price\":20001,\"is_glitch\":false,\"commission\":0}}";
+            File.AppendAllText(journalPath, legacyExecutionRecord + Environment.NewLine);
+            Assert(journal.TryLoad(out var legacyRecords, out string legacyError), legacyError);
+            var legacyExecution = legacyRecords.Select(value => value.Input)
+                .OfType<ExecutionLifecycleObserved>()
+                .Single(value => value.ExecutionId == "legacy-execution");
+            Assert(legacyExecution.OrderAction == string.Empty
+                && !GlitchOperationJournal.DescribeFact(legacyExecution).Contains("order_action="),
+                "legacy execution acquired an invented native action");
+            Assert(new GlitchEngine().Handle(legacyExecution).Count == 0
+                && new GlitchEngine().Handle(lifecycle).Count == 0,
+                "observational action metadata acquired an execution effect");
             Assert(loadedMasterProtection.Single(value => value.AccountName == "Master").TickSize == 0.25m,
                 "native tick size did not round-trip with manual protection evidence");
             Assert(loadedMasterProtection.Single(value => value.AccountName == "LegacyMaster").TickSize == 0,

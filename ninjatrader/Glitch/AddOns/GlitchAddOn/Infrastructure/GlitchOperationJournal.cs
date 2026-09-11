@@ -183,6 +183,7 @@ namespace Glitch.Infrastructure
                     + "|signed_quantity=" + execution.SignedQuantity
                     + "|price=" + execution.Price.ToString(CultureInfo.InvariantCulture)
                     + "|commission=" + execution.Commission.ToString(CultureInfo.InvariantCulture)
+                    + (string.IsNullOrEmpty(execution.OrderAction) ? string.Empty : "|order_action=" + execution.OrderAction)
                     + "|representable=" + execution.Representable
                     + "|evidence_gap=" + execution.EvidenceGap
                     + "|correlation=" + execution.CorrelationId;
@@ -405,6 +406,9 @@ namespace Glitch.Infrastructure
                 result["signed_quantity"] = lifecycle.SignedQuantity;
                 result["price"] = lifecycle.Price;
                 result["commission"] = lifecycle.Commission;
+                // Preserve the serialized shape of legacy records with no action metadata.
+                if (!string.IsNullOrEmpty(lifecycle.OrderAction))
+                    result["order_action"] = lifecycle.OrderAction;
                 result["representable"] = lifecycle.Representable;
                 result["evidence_gap"] = lifecycle.EvidenceGap;
                 result["correlation"] = lifecycle.CorrelationId;
@@ -702,7 +706,8 @@ namespace Glitch.Infrastructure
                     Boolean(value, "representable"),
                     Text(value, "evidence_gap"),
                     Text(value, "correlation"),
-                    DecimalValue(value, "commission"));
+                    DecimalValue(value, "commission"),
+                    Text(value, "order_action"));
             if (type == nameof(NativeOrderObserved))
                 return new NativeOrderObserved(
                     Text(value, "account"),
