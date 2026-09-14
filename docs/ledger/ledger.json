@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "project": "glitch",
-  "updated": "2026-09-13",
+  "updated": "2026-09-14",
   "roadmap_ref": "docs/ai-program/roadmap.md",
   "items": [
     {
@@ -258,16 +258,11 @@
   ],
   "extensions": {
     "maintenance_review": {
-      "reviewed_from_utc": "2026-09-11T22:58:06Z",
-      "reviewed_through_utc": "2026-09-13T21:07:43Z",
-      "evidence": "docs/maintenance/2026-09-13-preopen-review.md",
-      "native_runtime_source": "02ad0a88a7b54473cc5f364824b51fbf50998a35",
-      "hermes_profile_source": "532eb5fcd00236f4027e5e25844929bb5ae0dd3c",
-      "hermes_profile_version": "0.0.2.85",
-      "status": "review_recorded",
-      "private_checkpoint": "glitch-20260913-maintenance-review.md",
-      "change": "Documentation only; no runtime implementation or cognition change.",
-      "pending": "Operational findings and follow-up are retained privately. Source and installation checks do not replace natural eligible-cycle proof."
+      "evidence": "docs/maintenance/2026-09-14-profile-format-review.md",
+      "hermes_profile_source": "1677f1c894edc113ccc16b63936a18c3ad6c1b0a",
+      "hermes_profile_version": "0.0.2.86",
+      "change": "Hermes-only lossless trigger-review field relocation; no trading prompt or native implementation change.",
+      "validation": "Public profile CI passes at the referenced source commit. No operational readiness or profitability claim."
     },
     "source_authority": {
       "glitch_main": {
