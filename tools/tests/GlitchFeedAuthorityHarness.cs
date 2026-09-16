@@ -71,6 +71,13 @@ internal static class GlitchFeedAuthorityHarness
     }
     private static void ImportsCannotBypassAuthority()
     {
+        Reset();
+        var legacyRich = Reading("M2K 09-26", "glitch_analytics_bridge");
+        Legacy.StateByInstrument["M2K"] = new LegacyState { LastUpdatedUtc = DateTime.UtcNow,
+            TimeframeReadings = new Dictionary<int, GlitchIndicatorReading> { { 1, legacyRich } } };
+        Bus.GetMethod("ImportLegacyInstrumentState", BindingFlags.Static | BindingFlags.NonPublic)
+            .Invoke(null, new object[] { typeof(Legacy) });
+        Assert(Snapshot().InstrumentFullName == "M2K 09-26", "sole legacy chart import lost native expiry");
         foreach (bool richFirst in new[] { true, false })
         {
             Reset();
@@ -97,7 +104,7 @@ internal static class GlitchFeedAuthorityHarness
         public Dictionary<int, GlitchIndicatorReading> TimeframeReadings;
     }
     private static class Legacy
-    { public static readonly Dictionary<string, LegacyState> StateByInstrument = new Dictionary<string, LegacyState>(); }
+    { internal static readonly Dictionary<string, LegacyState> StateByInstrument = new Dictionary<string, LegacyState>(); }
     public static void Run()
     {
         FeedCompetition(); FallbackAndRecovery(); ImportsCannotBypassAuthority();

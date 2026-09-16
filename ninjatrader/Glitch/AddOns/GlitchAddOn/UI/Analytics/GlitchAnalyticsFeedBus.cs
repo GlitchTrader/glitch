@@ -1150,6 +1150,7 @@ namespace Glitch.UI
 
             var reading = new GlitchIndicatorReading();
             reading.InstrumentRoot = normalizedRoot;
+            reading.InstrumentFullName = ReadLegacyString(legacyReading, "InstrumentFullName");
             reading.Minutes = ConvertToInt(ReadLegacyMemberValue(legacyReading, "Minutes"), 0);
             if (reading.Minutes <= 0)
                 return null;
