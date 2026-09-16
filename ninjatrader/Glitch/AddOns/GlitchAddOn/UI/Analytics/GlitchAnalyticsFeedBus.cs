@@ -98,6 +98,17 @@ namespace Glitch.UI
             string root = reading.InstrumentRoot;
             InstrumentFeedState state;
             StateByInstrument.TryGetValue(root, out state);
+            // A root-only legacy identity is unresolved, not a competing expiry.
+            // It cannot pin or overwrite an explicitly identified native contract.
+            bool contractResolved = !string.Equals(reading.InstrumentFullName, root, StringComparison.OrdinalIgnoreCase);
+            if (state != null)
+            {
+                bool ownerResolved = !string.Equals(state.InstrumentFullName, root, StringComparison.OrdinalIgnoreCase);
+                if (ownerResolved && !contractResolved)
+                    return false;
+                if (!ownerResolved && contractResolved)
+                    state = null;
+            }
             // Pre-Publisher chart assemblies emitted descriptive provenance only
             // on 1m; ingest emits its provenance on every timeframe.
             if (state != null && reading.Minutes > 1 && string.IsNullOrEmpty(reading.Publisher)

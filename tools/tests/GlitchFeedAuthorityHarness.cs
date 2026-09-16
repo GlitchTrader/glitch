@@ -58,6 +58,12 @@ internal static class GlitchFeedAuthorityHarness
     private static void FallbackAndRecovery()
     {
         Reset();
+        GlitchAnalyticsFeedBus.Publish(Reading("M2K", "glitch_analytics_bridge"));
+        GlitchAnalyticsFeedBus.Publish(Reading("M2K 09-26", "glitch_analytics_bridge"));
+        Assert(Snapshot().InstrumentFullName == "M2K 09-26", "unresolved legacy root pinned actual contract");
+        GlitchAnalyticsFeedBus.Publish(Reading("M2K", "glitch_analytics_bridge"));
+        Assert(Snapshot().InstrumentFullName == "M2K 09-26", "unresolved legacy import erased actual contract");
+        Reset();
         var stale = Reading("M2K 09-26", "glitch_analytics_bridge");
         stale.UtcTime = DateTime.UtcNow.AddMinutes(-3);
         Bus.GetMethod("StoreReadingUnsafe", BindingFlags.Static | BindingFlags.NonPublic)
