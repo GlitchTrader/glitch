@@ -47,6 +47,9 @@ namespace Glitch.UI
             new Dictionary<string, List<Action>>(StringComparer.OrdinalIgnoreCase);
         private static DateTime _lastLegacyImportUtc = DateTime.MinValue;
         private static readonly TimeSpan LegacyImportThrottle = TimeSpan.FromMilliseconds(500);
+        // A fresh chart bridge owns its root. The lightweight ingest is a fallback,
+        // not a last-writer-wins replacement for chart analytics or another expiry.
+        private static readonly TimeSpan PublisherFreshness = TimeSpan.FromSeconds(90);
 
         public static void Publish(GlitchIndicatorReading reading)
         {
@@ -76,45 +79,76 @@ namespace Glitch.UI
                 if ((_publishCounter % 128) == 0 || StateByInstrument.Count > 32)
                     RunMaintenancePrune(heartbeatUtc);
 
-                InstrumentFeedState state;
-                if (!StateByInstrument.TryGetValue(normalizedRoot, out state) || state == null)
-                {
-                    state = new InstrumentFeedState(normalizedRoot);
-                    StateByInstrument[normalizedRoot] = state;
-                }
-
-                state.LastUpdatedUtc = heartbeatUtc;
-                if (!string.IsNullOrWhiteSpace(normalizedReading.InstrumentFullName))
-                    state.InstrumentFullName = normalizedReading.InstrumentFullName;
-                if (normalizedReading.CurrentPrice.HasValue && normalizedReading.CurrentPrice.Value > 0)
-                    state.CurrentPrice = normalizedReading.CurrentPrice;
-                if (normalizedReading.InstrumentPointValueUsd.HasValue)
-                    state.InstrumentPointValueUsd = normalizedReading.InstrumentPointValueUsd;
-                if (normalizedReading.InstrumentTickSize.HasValue)
-                    state.InstrumentTickSize = normalizedReading.InstrumentTickSize;
-                if (!string.IsNullOrWhiteSpace(normalizedReading.InstrumentEconomicsSource))
-                    state.InstrumentEconomicsSource = normalizedReading.InstrumentEconomicsSource;
-                if (!string.IsNullOrWhiteSpace(normalizedReading.DescriptiveStateJson) && normalizedReading.Minutes == 1)
-                    state.DescriptiveStateJson = normalizedReading.DescriptiveStateJson;
-
-                if (!string.IsNullOrWhiteSpace(normalizedReading.SessionName))
-                    state.SessionName = normalizedReading.SessionName;
-                if (normalizedReading.SessionHigh.HasValue)
-                    state.SessionHigh = normalizedReading.SessionHigh;
-                if (normalizedReading.SessionLow.HasValue)
-                    state.SessionLow = normalizedReading.SessionLow;
-                if (normalizedReading.PreviousSessionHigh.HasValue)
-                    state.PreviousSessionHigh = normalizedReading.PreviousSessionHigh;
-                if (normalizedReading.PreviousSessionLow.HasValue)
-                    state.PreviousSessionLow = normalizedReading.PreviousSessionLow;
-
-                GlitchIndicatorReading snapshotReading = normalizedReading.Clone();
-                snapshotReading.InstrumentRoot = normalizedRoot;
-                snapshotReading.UtcTime = heartbeatUtc;
-                state.TimeframeReadings[normalizedReading.Minutes] = snapshotReading;
+                normalizedReading.UtcTime = heartbeatUtc;
+                if (!StoreReadingUnsafe(normalizedReading, heartbeatUtc))
+                    return;
             }
 
             MaybePersistToDisk();
+        }
+
+        private static int PublisherPriority(string publisher)
+        {
+            return publisher == "glitch_analytics_bridge" ? 2
+                : publisher == "glitch_ai_market_ingest" ? 1 : 0;
+        }
+
+        private static bool StoreReadingUnsafe(GlitchIndicatorReading reading, DateTime nowUtc)
+        {
+            string root = reading.InstrumentRoot;
+            InstrumentFeedState state;
+            StateByInstrument.TryGetValue(root, out state);
+            // Pre-Publisher chart assemblies emitted descriptive provenance only
+            // on 1m; ingest emits its provenance on every timeframe.
+            if (state != null && reading.Minutes > 1 && string.IsNullOrEmpty(reading.Publisher)
+                && state.Publisher == "glitch_analytics_bridge"
+                && string.Equals(state.InstrumentFullName, reading.InstrumentFullName, StringComparison.OrdinalIgnoreCase))
+                reading.Publisher = state.Publisher;
+            if (state != null && (!string.Equals(state.InstrumentFullName, reading.InstrumentFullName,
+                    StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(state.Publisher, reading.Publisher, StringComparison.Ordinal)))
+            {
+                bool ownerFresh = nowUtc - state.LastUpdatedUtc <= PublisherFreshness;
+                bool candidateFresh = nowUtc - reading.UtcTime <= PublisherFreshness;
+                if (reading.UtcTime < state.LastUpdatedUtc && !candidateFresh)
+                    return false;
+                if (ownerFresh && (!candidateFresh
+                    || PublisherPriority(reading.Publisher) <= PublisherPriority(state.Publisher)))
+                    return false;
+                // Never carry timeframes, session levels or descriptive candles
+                // across a source/contract switch, including cache/legacy imports.
+                state = null;
+            }
+            if (state == null)
+            {
+                state = new InstrumentFeedState(root)
+                {
+                    InstrumentFullName = reading.InstrumentFullName,
+                    Publisher = reading.Publisher
+                };
+                StateByInstrument[root] = state;
+            }
+            GlitchIndicatorReading existing;
+            if (state.TimeframeReadings.TryGetValue(reading.Minutes, out existing)
+                && existing != null && existing.UtcTime > reading.UtcTime)
+                return false;
+            state.TimeframeReadings[reading.Minutes] = reading.Clone();
+            if (reading.Minutes == 1)
+                state.DescriptiveStateJson = reading.DescriptiveStateJson;
+            if (reading.UtcTime >= state.LastUpdatedUtc)
+            {
+                state.LastUpdatedUtc = reading.UtcTime;
+                state.CurrentPrice = reading.CurrentPrice;
+                state.InstrumentPointValueUsd = reading.InstrumentPointValueUsd;
+                state.InstrumentTickSize = reading.InstrumentTickSize;
+                state.InstrumentEconomicsSource = reading.InstrumentEconomicsSource;
+                state.SessionName = reading.SessionName;
+                state.SessionHigh = reading.SessionHigh;
+                state.SessionLow = reading.SessionLow;
+                state.PreviousSessionHigh = reading.PreviousSessionHigh;
+                state.PreviousSessionLow = reading.PreviousSessionLow;
+            }
+            return true;
         }
 
         public static void EnsurePersistenceLoaded()
@@ -229,32 +263,6 @@ namespace Glitch.UI
                     if (string.IsNullOrWhiteSpace(normalizedRoot))
                         continue;
 
-                    InstrumentFeedState state;
-                    if (!StateByInstrument.TryGetValue(normalizedRoot, out state) || state == null)
-                    {
-                        state = new InstrumentFeedState(normalizedRoot);
-                        StateByInstrument[normalizedRoot] = state;
-                    }
-
-                    DateTime feedUpdatedUtc = NormalizeUtcTimestamp(feed.LastUpdatedUtc, DateTime.MinValue);
-                    if (feedUpdatedUtc != DateTime.MinValue && feedUpdatedUtc >= state.LastUpdatedUtc)
-                        state.LastUpdatedUtc = feedUpdatedUtc;
-
-                    if (!string.IsNullOrWhiteSpace(feed.InstrumentFullName))
-                        state.InstrumentFullName = feed.InstrumentFullName;
-                    if (HasPositiveValue(feed.CurrentPrice))
-                        state.CurrentPrice = feed.CurrentPrice;
-                    if (!string.IsNullOrWhiteSpace(feed.SessionName))
-                        state.SessionName = feed.SessionName;
-                    if (feed.SessionHigh.HasValue)
-                        state.SessionHigh = feed.SessionHigh;
-                    if (feed.SessionLow.HasValue)
-                        state.SessionLow = feed.SessionLow;
-                    if (feed.PreviousSessionHigh.HasValue)
-                        state.PreviousSessionHigh = feed.PreviousSessionHigh;
-                    if (feed.PreviousSessionLow.HasValue)
-                        state.PreviousSessionLow = feed.PreviousSessionLow;
-
                     if (feed.Readings == null)
                         continue;
 
@@ -266,21 +274,7 @@ namespace Glitch.UI
                         if (!TryNormalizeIncomingReading(reading, out GlitchIndicatorReading normalized))
                             continue;
 
-                        if (HasPositiveValue(normalized.InstrumentPointValueUsd))
-                            state.InstrumentPointValueUsd = normalized.InstrumentPointValueUsd;
-                        if (HasPositiveValue(normalized.InstrumentTickSize))
-                            state.InstrumentTickSize = normalized.InstrumentTickSize;
-                        if (!string.IsNullOrWhiteSpace(normalized.InstrumentEconomicsSource))
-                            state.InstrumentEconomicsSource = normalized.InstrumentEconomicsSource;
-                        GlitchIndicatorReading existing;
-                        if (!state.TimeframeReadings.TryGetValue(normalized.Minutes, out existing) ||
-                            existing == null ||
-                            normalized.UtcTime >= existing.UtcTime)
-                        {
-                            state.TimeframeReadings[normalized.Minutes] = normalized;
-                            if (normalized.Minutes == 1 && !string.IsNullOrWhiteSpace(normalized.DescriptiveStateJson))
-                                state.DescriptiveStateJson = normalized.DescriptiveStateJson;
-                        }
+                        StoreReadingUnsafe(normalized, DateTime.UtcNow);
                     }
                 }
             }
@@ -891,6 +885,19 @@ namespace Glitch.UI
             GlitchIndicatorReading clone = reading.Clone();
             clone.InstrumentRoot = normalizedRoot;
             clone.InstrumentFullName = ClampText(clone.InstrumentFullName, 96);
+            if (string.IsNullOrWhiteSpace(clone.InstrumentFullName))
+                clone.InstrumentFullName = normalizedRoot;
+            if (!string.Equals(NormalizeInstrumentRoot(clone.InstrumentFullName), normalizedRoot,
+                    StringComparison.OrdinalIgnoreCase))
+                return false;
+            clone.Publisher = ClampText(clone.Publisher, 64);
+            // Older compiled indicator assemblies do not expose Publisher yet.
+            if (string.IsNullOrEmpty(clone.Publisher))
+            {
+                string evidence = clone.DescriptiveStateJson ?? string.Empty;
+                clone.Publisher = evidence.Contains("glitch_analytics_bridge") ? "glitch_analytics_bridge"
+                    : evidence.Contains("glitch_ai_market_ingest") ? "glitch_ai_market_ingest" : string.Empty;
+            }
             DateTime incomingUtc = NormalizeUtcTimestamp(reading.UtcTime, DateTime.MinValue);
             if (incomingUtc == default || incomingUtc > DateTime.UtcNow.AddMinutes(5))
                 clone.UtcTime = DateTime.UtcNow;
@@ -1007,12 +1014,6 @@ namespace Glitch.UI
                     continue;
 
                 DateTime legacyUpdatedUtc = NormalizeUtcTimestamp(ReadLegacyDateTime(legacyState, "LastUpdatedUtc", DateTime.MinValue), DateTime.MinValue);
-                double? legacyCurrentPrice = ReadLegacyNullableDouble(legacyState, "CurrentPrice");
-                string legacySessionName = ReadLegacyString(legacyState, "SessionName");
-                double? legacySessionHigh = ReadLegacyNullableDouble(legacyState, "SessionHigh");
-                double? legacySessionLow = ReadLegacyNullableDouble(legacyState, "SessionLow");
-                double? legacyPreviousSessionHigh = ReadLegacyNullableDouble(legacyState, "PreviousSessionHigh");
-                double? legacyPreviousSessionLow = ReadLegacyNullableDouble(legacyState, "PreviousSessionLow");
                 IDictionary legacyTimeframeReadings =
                     ReadLegacyMemberValue(legacyState, "TimeframeReadings") as IDictionary;
                 var convertedReadings = new List<GlitchIndicatorReading>();
@@ -1037,54 +1038,14 @@ namespace Glitch.UI
 
                 lock (SyncRoot)
                 {
-                    InstrumentFeedState lockedState;
-                    if (!StateByInstrument.TryGetValue(normalizedRoot, out lockedState) || lockedState == null)
-                    {
-                        lockedState = new InstrumentFeedState(normalizedRoot);
-                        StateByInstrument[normalizedRoot] = lockedState;
-                    }
-
-                    bool legacyIsNewerOrEqual =
-                        legacyUpdatedUtc != DateTime.MinValue &&
-                        legacyUpdatedUtc >= lockedState.LastUpdatedUtc;
-
-                    if (legacyUpdatedUtc != DateTime.MinValue && legacyUpdatedUtc > lockedState.LastUpdatedUtc)
-                        lockedState.LastUpdatedUtc = legacyUpdatedUtc;
-
-                    if (HasPositiveValue(legacyCurrentPrice) &&
-                        (legacyIsNewerOrEqual || !HasPositiveValue(lockedState.CurrentPrice)))
-                        lockedState.CurrentPrice = legacyCurrentPrice;
-
-                    if (!string.IsNullOrWhiteSpace(legacySessionName) &&
-                        (legacyIsNewerOrEqual || string.IsNullOrWhiteSpace(lockedState.SessionName)))
-                        lockedState.SessionName = legacySessionName;
-
-                    if (legacySessionHigh.HasValue &&
-                        (legacyIsNewerOrEqual || !lockedState.SessionHigh.HasValue))
-                        lockedState.SessionHigh = legacySessionHigh;
-                    if (legacySessionLow.HasValue &&
-                        (legacyIsNewerOrEqual || !lockedState.SessionLow.HasValue))
-                        lockedState.SessionLow = legacySessionLow;
-                    if (legacyPreviousSessionHigh.HasValue &&
-                        (legacyIsNewerOrEqual || !lockedState.PreviousSessionHigh.HasValue))
-                        lockedState.PreviousSessionHigh = legacyPreviousSessionHigh;
-                    if (legacyPreviousSessionLow.HasValue &&
-                        (legacyIsNewerOrEqual || !lockedState.PreviousSessionLow.HasValue))
-                        lockedState.PreviousSessionLow = legacyPreviousSessionLow;
-
                     for (int i = 0; i < convertedReadings.Count; i++)
                     {
                         GlitchIndicatorReading converted = convertedReadings[i];
                         if (converted == null || converted.Minutes <= 0)
                             continue;
 
-                        GlitchIndicatorReading existing;
-                        if (!lockedState.TimeframeReadings.TryGetValue(converted.Minutes, out existing) ||
-                            existing == null ||
-                            converted.UtcTime >= existing.UtcTime)
-                        {
-                            lockedState.TimeframeReadings[converted.Minutes] = converted;
-                        }
+                        if (TryNormalizeIncomingReading(converted, out GlitchIndicatorReading normalized))
+                            StoreReadingUnsafe(normalized, DateTime.UtcNow);
                     }
                 }
             }
@@ -1194,6 +1155,7 @@ namespace Glitch.UI
                 return null;
 
             reading.UtcTime = ReadLegacyDateTime(legacyReading, "UtcTime", fallbackUtc);
+            reading.Publisher = ReadLegacyString(legacyReading, "Publisher");
             reading.Open = ReadLegacyNullableDouble(legacyReading, "Open");
             reading.High = ReadLegacyNullableDouble(legacyReading, "High");
             reading.Low = ReadLegacyNullableDouble(legacyReading, "Low");
@@ -1440,6 +1402,7 @@ namespace Glitch.UI
 
             public string InstrumentRoot { get; }
             public string InstrumentFullName { get; set; }
+            public string Publisher { get; set; }
             public DateTime LastUpdatedUtc { get; set; }
             public double? CurrentPrice { get; set; }
             public double? InstrumentPointValueUsd { get; set; }
@@ -1501,6 +1464,7 @@ namespace Glitch.UI
     {
         public string InstrumentRoot { get; set; }
         public string InstrumentFullName { get; set; }
+        public string Publisher { get; set; }
         public int Minutes { get; set; }
         public DateTime UtcTime { get; set; }
         public double? Open { get; set; }
@@ -1557,6 +1521,7 @@ namespace Glitch.UI
             {
                 InstrumentRoot = InstrumentRoot,
                 InstrumentFullName = InstrumentFullName,
+                Publisher = Publisher,
                 Minutes = Minutes,
                 UtcTime = UtcTime,
                 Open = Open,

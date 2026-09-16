@@ -30,6 +30,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             public string InstrumentRoot { get; set; }
             public string InstrumentFullName { get; set; }
+            public string Publisher { get; set; }
             public int Minutes { get; set; }
             public DateTime UtcTime { get; set; }
             public double? Open { get; set; }
@@ -395,6 +396,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             SetProperty(message, "InstrumentRoot", reading.InstrumentRoot);
             SetProperty(message, "InstrumentFullName", reading.InstrumentFullName);
+            SetProperty(message, "Publisher", reading.Publisher);
             SetProperty(message, "Minutes", reading.Minutes);
             SetProperty(message, "UtcTime", reading.UtcTime);
             SetProperty(message, "Open", reading.Open);

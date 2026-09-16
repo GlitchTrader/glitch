@@ -409,6 +409,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             return new GlitchBridgeBusCompat.BridgeReading
             {
+                Publisher = "glitch_ai_market_ingest",
                 InstrumentRoot = root,
                 InstrumentFullName = instrument == null ? null : instrument.FullName,
                 Minutes = minutes,

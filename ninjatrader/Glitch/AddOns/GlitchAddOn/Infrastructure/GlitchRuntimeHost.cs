@@ -642,6 +642,7 @@ namespace Glitch.Infrastructure
             }
             foreach (GlitchCommand command in commands)
                 DispatchNewCommand(command, runtimeEvent.Kind);
+            CompleteUnscheduledManagement(runtimeEvent.Input);
             var flattenCompleted = runtimeEvent.Input as FlattenCompletedObserved;
             if (flattenCompleted != null)
             {
@@ -664,6 +665,32 @@ namespace Glitch.Infrastructure
             PublishNotice(
                 "System", "Persistence",
                 "native_mutations_blocked|reason=" + Clean(reason));
+        }
+
+        private void CompleteUnscheduledManagement(GlitchInput input)
+        {
+            var exit = input as HermesExitRequested;
+            var change = input as HermesProtectionChangeRequested;
+            IGlitchHermesIntent intent = exit as IGlitchHermesIntent ?? change;
+            if (intent == null)
+                return;
+            string operationId = "HERMES|" + intent.IntentId + (change == null ? "" : "|CHANGE|MASTER");
+            if (_engine.GetOperationPhase(operationId).HasValue)
+                return;
+            // The position/protection may disappear between admission and the
+            // serialized reducer. A no-op must not remain 'intent_dispatched'.
+            const string code = "position_management_not_scheduled";
+            string message = "No native management operation: position is flat, unknown, or has no matching protection.";
+            lock (_hermesGate)
+            {
+                if (_hermesReceipts.TryGetValue(intent.IntentId, out GlitchHermesSubmissionReceipt receipt))
+                {
+                    receipt.Status = "failed";
+                    receipt.Code = code;
+                    receipt.Message = message;
+                }
+            }
+            GlitchExecutionEvidenceWriter.TryAppend(intent.IntentId, "failed", code, message, DateTime.UtcNow);
         }
 
         private void OnRuntimeInputFailed(Exception error)

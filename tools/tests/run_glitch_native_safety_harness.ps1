@@ -25,15 +25,20 @@ $sourcePaths = @(
     'ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/GlitchMutationGate.cs',
     'ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/GlitchOperationJournal.cs',
     'ninjatrader/Glitch/AddOns/GlitchAddOn/Infrastructure/GlitchRuntimeHost.cs',
+    'ninjatrader/Glitch/AddOns/GlitchAddOn/UI/Analytics/GlitchAnalyticsFeedBus.cs',
     'tools/tests/GlitchNativeSafetyDoubles.cs',
     'tools/tests/GlitchHostRecoveryDoubles.cs',
     'tools/tests/GlitchHostRecoveryHarness.cs',
+    'tools/tests/GlitchFeedAuthorityHarness.cs',
     'tools/tests/GlitchNativeSafetyHarness.cs'
 )
 $syntaxTrees = [Collections.Generic.List[Microsoft.CodeAnalysis.SyntaxTree]]::new()
 $parseOptions = [Microsoft.CodeAnalysis.CSharp.CSharpParseOptions]::Default
 if ($SourceRevision) { $parseOptions = $parseOptions.WithPreprocessorSymbols([string[]]@('BASELINE')) }
 foreach ($relativePath in $sourcePaths) {
+    if ($SourceRevision -and $relativePath -in @(
+        'ninjatrader/Glitch/AddOns/GlitchAddOn/UI/Analytics/GlitchAnalyticsFeedBus.cs',
+        'tools/tests/GlitchFeedAuthorityHarness.cs')) { continue }
     $sourcePath = Join-Path $repoRoot $relativePath
     if ($SourceRevision -and $relativePath.StartsWith('ninjatrader/')) {
         $sourceText = (& git -C $repoRoot show "${SourceRevision}:$relativePath") -join "`n"

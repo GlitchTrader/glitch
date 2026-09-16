@@ -633,6 +633,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 SessionTracker session = UpdateSessionTracker(minutes, bip);
                 bool published = GlitchBridgeBusCompat.Publish(new GlitchBridgeBusCompat.BridgeReading
                 {
+                    Publisher = "glitch_analytics_bridge",
                     InstrumentRoot = _instrumentRoot,
                     InstrumentFullName = Instrument == null ? null : Instrument.FullName,
                     Minutes = minutes,
@@ -1881,6 +1882,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             DateTime readingUtc = DateTime.UtcNow;
             return new GlitchBridgeBusCompat.BridgeReading
             {
+                Publisher = "glitch_analytics_bridge",
                 InstrumentRoot = _instrumentRoot,
                 InstrumentFullName = Instrument == null ? null : Instrument.FullName,
                 Minutes = minutes,

@@ -285,11 +285,38 @@ internal static class GlitchNativeSafetyHarness
         }
     }
 
+#if !BASELINE
+    private static void TestManagementContractIdentity()
+    {
+        Account.All.Clear();
+        var account = new Account { Name = "ContractTest" };
+        Account.All.Add(account);
+        var held = new Instrument { FullName = "M2K 09-26" };
+        held.MasterInstrument.Name = "M2K";
+        var rolled = new Instrument { FullName = "M2K 12-26" };
+        rolled.MasterInstrument.Name = "M2K";
+        account.SetPosition(held, -1);
+        Assert(NinjaTraderGateway.TryResolvePositionInstrument(account.Name, "M2K", out string contract, out string failure)
+            && contract == held.FullName, "management followed chart expiry instead of held native contract");
+        account.SetPosition(rolled, 1);
+        Assert(!NinjaTraderGateway.TryResolvePositionInstrument(account.Name, "M2K", out contract, out failure)
+            && failure == "position_contract_ambiguous", "two expiries were silently collapsed into one root");
+        account.SetPosition(held, 0); account.SetPosition(rolled, 0);
+        Assert(!NinjaTraderGateway.TryResolvePositionInstrument(account.Name, "M2K", out contract, out failure)
+            && failure == "position_already_flat", "flat account received a market-contract fallback");
+        Account.All.Clear();
+    }
+
+#endif
     public static int Main()
     {
         try
         {
             GlitchHostRecoveryHarness.Run();
+#if !BASELINE
+            TestManagementContractIdentity();
+            GlitchFeedAuthorityHarness.Run();
+#endif
             TestFlattenDiscoversNativeExposure();
             TestOmittedNonterminalOrders();
             TestLateInstrumentBlocksFalseCompletion();

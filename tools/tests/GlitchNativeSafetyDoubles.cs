@@ -21,6 +21,7 @@ namespace NinjaTrader.Cbi
     public class MarketData { public Quote Bid = new Quote(); public Quote Ask = new Quote(); }
     public class MasterInstrument
     {
+        public string Name;
         public double TickSize = 0.1;
         public double PointValue = 5;
         public double RoundToTickSize(double value)

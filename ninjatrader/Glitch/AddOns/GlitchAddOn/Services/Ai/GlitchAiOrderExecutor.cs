@@ -118,7 +118,13 @@ namespace Glitch.Services
             }
             string instrumentRoot = validation.Instrument;
             string snapshotHash = GlitchAiJsonFields.ExtractString(rawJson, "snapshot_hash");
-            if (!TryResolveInstrument(snapshotHash, instrumentRoot, out string instrumentFullName))
+            bool managesPosition = action == "EXIT" || action == "MOVE_STOP" || action == "MOVE_TP";
+            string instrumentFullName;
+            string instrumentFailure = "instrument_unavailable";
+            bool resolved = managesPosition
+                ? NinjaTraderGateway.TryResolvePositionInstrument(account, instrumentRoot, out instrumentFullName, out instrumentFailure)
+                : TryResolveInstrument(snapshotHash, instrumentRoot, out instrumentFullName);
+            if (!resolved)
             {
                 return SubmitNoAction(
                     host,
@@ -126,7 +132,7 @@ namespace Glitch.Services
                     rawJson,
                     contentFingerprint,
                     "failed",
-                    "instrument_unavailable",
+                    instrumentFailure,
                     instrumentRoot);
             }
 

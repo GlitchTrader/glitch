@@ -69,7 +69,16 @@ internal static class GlitchHostRecoveryHarness
             .GetField("_mutationGate", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(Host)).IsFenced(Account.Name);
         public FlattenCompletedObserved[] Completions()
         {
-            Assert(Journal.TryLoad(out var records, out string error), error);
+            IReadOnlyList<GlitchRecoveryRecord> records = null;
+            string error = null;
+            bool loaded = false;
+            // This fixture reads through a separate journal instance while the
+            // host finishes its atomic append. Wait for file-sharing, not facts.
+            SpinWait.SpinUntil(() => {
+                loaded = Journal.TryLoad(out records, out error);
+                return loaded || !(error ?? "").StartsWith("IOException:");
+            }, 3000);
+            Assert(loaded, error);
             return records.Select(r => r.Input).OfType<FlattenCompletedObserved>().ToArray();
         }
         public void Enter(string id)
@@ -160,6 +169,18 @@ internal static class GlitchHostRecoveryHarness
 
     public static void Run()
     {
+#if !BASELINE
+        using (var f = new Fixture())
+        {
+            f.Start();
+            var request = new HermesExitRequested("already-flat", f.Account.Name, f.Instrument.FullName);
+            f.Host.SubmitHermes(request);
+            Assert(SpinWait.SpinUntil(() => f.Host.FindHermesSubmission(
+                    request.IntentId, request.ContentFingerprint)?.Code == "position_management_not_scheduled", 2000),
+                "flat management remained permanently pending");
+            Assert(f.Account.Creates == 0 && f.Account.Submits == 0, "flat management created exposure");
+        }
+#endif
         ClearedUnknownDoesNotStrandFence();
         UnresolvedNativeStateStaysFenced();
         OnlyLatestFlattenMayResolve();

@@ -97,6 +97,33 @@ namespace Glitch.Infrastructure
             _flattenTimeout = flattenTimeout;
         }
 
+        internal static bool TryResolvePositionInstrument(
+            string accountName, string instrumentRoot, out string instrumentFullName, out string failure)
+        {
+            instrumentFullName = null;
+            failure = "position_account_unavailable";
+            Account account;
+            lock (Account.All)
+                account = Account.All.FirstOrDefault(value => value != null
+                    && string.Equals(value.Name, accountName, StringComparison.OrdinalIgnoreCase));
+            if (account == null)
+                return false;
+            string[] contracts;
+            lock (account.Positions)
+                contracts = account.Positions.Where(value => value?.Instrument != null
+                        && value.Quantity > 0 && value.MarketPosition != MarketPosition.Flat
+                        && string.Equals(value.Instrument.MasterInstrument?.Name, instrumentRoot,
+                            StringComparison.OrdinalIgnoreCase))
+                    .Select(value => value.Instrument.FullName)
+                    .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            failure = contracts.Length == 0 ? "position_already_flat" : "position_contract_ambiguous";
+            if (contracts.Length != 1)
+                return false;
+            instrumentFullName = contracts[0];
+            failure = null;
+            return true;
+        }
+
         public void Start(Action<GlitchInput> publish)
         {
             if (publish == null)
