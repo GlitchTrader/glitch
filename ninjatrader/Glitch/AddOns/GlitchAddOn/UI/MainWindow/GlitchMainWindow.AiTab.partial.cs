@@ -498,6 +498,10 @@ namespace Glitch.UI
         {
             if (!aiAutoOn)
                 return L("ai.cadence.paused", "Scheduled calls are paused");
+            if (health != null && string.Equals(health.DecisionWorkerStatus, "deferred", StringComparison.Ordinal)
+                && (health.DecisionWorkerDeferralReason == "stale_market_package"
+                    || health.DecisionWorkerDeferralReason == "stale_feed_observation"))
+                return L("ai.cadence.waiting_fresh_data", "Waiting for fresh market data; no model call");
             if (!latestDecisionUtc.HasValue)
                 return L("ai.status.waiting_first", "Waiting for the first completed decision");
             if (health != null

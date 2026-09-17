@@ -323,6 +323,7 @@ ai.status.auto_off	AI Auto is off	A IA Automática está desligada	La IA Automá
 ai.cadence.next_format	Next decision in about {0}m	Próxima decisão em cerca de {0}min	Próxima decisión en unos {0}min	下一次决策约在 {0} 分钟后	Prochaine décision dans environ {0} min	Следующее решение примерно через {0} мин
 ai.cadence.due	Decision due; waiting for the completed result	Decisão prevista; aguardando o resultado concluído	Decisión pendiente; esperando el resultado completado	决策已到时间；正在等待完成结果	Décision attendue ; en attente du résultat terminé	Срок решения наступил; ожидается завершённый результат
 ai.cadence.overdue	Decision overdue - inspect the background worker	Decisão atrasada — verifique o processo em segundo plano	Decisión atrasada — revise el proceso en segundo plano	决策逾期 — 请检查后台进程	Décision en retard — vérifiez le processus en arrière-plan	Решение просрочено — проверьте фоновый процесс
+ai.cadence.waiting_fresh_data	Waiting for fresh market data; no model call	Aguardando dados de mercado atualizados; sem chamada ao modelo	Esperando datos de mercado actualizados; sin llamada al modelo	等待最新市场数据；未调用模型	En attente de données de marché à jour ; aucun appel au modèle	Ожидание свежих рыночных данных; модель не вызывается
 ai.decision.latest	Latest AI Decision	Última Decisão da IA	Última Decisión de IA	最新 AI 决策	Dernière Décision IA	Последнее Решение ИИ
 ai.stage.snapshots	Snapshots	Snapshots	Snapshots	快照	Snapshots	Снимки
 ai.stage.packet	Packet Sealed	Pacote Selado	Paquete Sellado	数据包已封存	Paquet Scellé	Пакет Запечатан

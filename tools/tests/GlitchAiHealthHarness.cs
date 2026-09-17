@@ -40,7 +40,7 @@ internal static class GlitchAiHealthHarness
             foreach (string reason in new[] { "weekend", "maintenance_window", "market_session_closed", "native_daily_capture_locked_and_group_flat" })
             {
                 File.WriteAllText(events, Event("llm_skipped", reason, "2026-09-11T22:00:00Z", "20260911T2200Z"));
-                Require(GlitchAiHealthEvaluator.RecentHealthyDeferral(events, now, now, false) == reason,
+                Require(GlitchAiHealthEvaluator.RecentWorkerDeferral(events, now, now, false) == reason,
                     "flat native admission deferral was not recognized");
                 GlitchAiPortfolioSnapshotReader.PositionAccount = "Master";
                 if (reason != "native_daily_capture_locked_and_group_flat")
@@ -49,7 +49,25 @@ internal static class GlitchAiHealthHarness
                 GlitchAiPortfolioSnapshotReader.PositionAccount = "";
             }
             GlitchAiPortfolioSnapshotReader.PositionAccount = "Master";
-            foreach (string reason in new[] { "stale_market_package", "position_state_packet_lagging_native_transition", "unknown" })
+            foreach (string reason in new[] { "stale_market_package", "stale_feed_observation" })
+            {
+                File.WriteAllText(events, Event("llm_skipped", reason, "2026-09-11T22:00:00Z", "20260911T2200Z"));
+                var health = GlitchAiHealthEvaluator.Evaluate(now);
+                Require(health.OverallStatus == "degraded", "stale input was reported healthy");
+                Require(health.DecisionWorkerStatus == "deferred" && health.DecisionWorkerDeferralReason == reason,
+                    "fresh worker admission skip did not identify its actual reason");
+                Require(health.ReasonCodes.Contains(reason == "stale_market_package" ? "market_package_not_ready" : "market_feed_stale"),
+                    "stale data defect was hidden");
+                Require(!health.ReasonCodes.Contains("decision_worker_overdue"), "data admission was mislabeled as a missing worker");
+                File.WriteAllText(attempt, "{\"status\":\"failed\",\"started_utc\":\"2026-09-11T21:57:00Z\"}");
+                Require(GlitchAiHealthEvaluator.Evaluate(now).ReasonCodes.Contains("decision_worker_failed"), "stale data skip hid model failure");
+                File.WriteAllText(attempt, "{\"status\":\"started\",\"started_utc\":\"2026-09-11T21:50:00Z\"}");
+                Require(GlitchAiHealthEvaluator.Evaluate(now).ReasonCodes.Contains("decision_worker_stalled"), "stale data skip hid model stall");
+                File.WriteAllText(attempt, "{\"status\":\"completed\",\"started_utc\":\"2026-09-11T21:57:00Z\"}");
+                File.WriteAllText(events, Event("llm_skipped", reason, "2026-09-11T21:50:00Z", "20260911T2150Z"));
+                Require(GlitchAiHealthEvaluator.Evaluate(now).ReasonCodes.Contains("decision_worker_overdue"), "old data skip hid worker silence");
+            }
+            foreach (string reason in new[] { "position_state_packet_lagging_native_transition", "unknown" })
             {
                 File.WriteAllText(events, Event("llm_skipped", reason, "2026-09-11T22:00:00Z", "20260911T2200Z"));
                 Require(GlitchAiHealthEvaluator.Evaluate(now).ReasonCodes.Contains("decision_worker_overdue"), "unsafe deferral hid missing decisions");
@@ -63,11 +81,11 @@ internal static class GlitchAiHealthHarness
                 Event("failed", "weekend", "2026-09-11T22:00:00Z", "20260911T2200Z") })
             {
                 File.WriteAllText(events, invalid);
-                Require(GlitchAiHealthEvaluator.RecentHealthyDeferral(events, now, now, false) == null,
+                Require(GlitchAiHealthEvaluator.RecentWorkerDeferral(events, now, now, false) == null,
                     "invalid or unrelated skip was accepted");
             }
             File.WriteAllText(events, new string('x', 20000) + "\n" + Event("llm_skipped", "weekend", "2026-09-11T22:00:00Z", "20260911T2200Z"));
-            Require(GlitchAiHealthEvaluator.RecentHealthyDeferral(events, now, now, false) == "weekend", "bounded tail lost final record");
+            Require(GlitchAiHealthEvaluator.RecentWorkerDeferral(events, now, now, false) == "weekend", "bounded tail lost final record");
             File.WriteAllText(events, Event("llm_skipped", "weekend", "2026-09-11T22:00:00Z", "20260911T2200Z"));
             File.WriteAllText(attempt, "{\"status\":\"failed\",\"started_utc\":\"2026-09-11T21:57:00Z\"}");
             Require(GlitchAiHealthEvaluator.Evaluate(now).ReasonCodes.Contains("decision_worker_failed"), "deferral hid model failure");

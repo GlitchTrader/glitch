@@ -198,7 +198,7 @@ namespace Glitch.Services
                 }
             }
 
-            string deferredReason = RecentHealthyDeferral(
+            string deferredReason = RecentWorkerDeferral(
                 Path.Combine(exchange, "hermes", "events", "cycles.jsonl"),
                 packetWindowUtc, nowUtc, masterPositioned);
 
@@ -227,6 +227,10 @@ namespace Glitch.Services
             {
                 result.DecisionWorkerStatus = "deferred";
                 result.DecisionWorkerDeferralReason = deferredReason;
+                if (deferredReason == "stale_market_package")
+                    result.ReasonCodes.Add("market_package_not_ready");
+                else if (deferredReason == "stale_feed_observation" && !result.ReasonCodes.Contains("market_feed_stale"))
+                    result.ReasonCodes.Add("market_feed_stale");
             }
             else if (result.Operating && result.FeedAgeSeconds >= 0 && result.FeedAgeSeconds <= 180
                 && latestAttempt != null && packetWindowUtc != DateTime.MinValue
@@ -257,12 +261,12 @@ namespace Glitch.Services
             return result;
         }
 
-        internal static string RecentHealthyDeferral(
+        internal static string RecentWorkerDeferral(
             string path, DateTime packetWindowUtc, DateTime nowUtc, bool positioned)
         {
             // Read only the final bounded record, not the growing session log.
-            // A current successful admission skip is heartbeat evidence; it is
-            // not permission to suppress a failed/stalled model attempt above.
+            // A current admission skip proves worker activity, not data health.
+            // Failed/stalled attempts stay visible; stale data stays degraded.
             try
             {
                 string line;
@@ -296,6 +300,7 @@ namespace Glitch.Services
                     || cycleUtc > packetWindowUtc || cycleUtc < packetWindowUtc.AddMinutes(-1)) return null;
                 string reason = record["reason"] as string;
                 return reason == "weekend" || reason == "maintenance_window" || reason == "market_session_closed"
+                    || reason == "stale_market_package" || reason == "stale_feed_observation"
                     || (!positioned && reason == "native_daily_capture_locked_and_group_flat") ? reason : null;
             }
             catch { return null; }
