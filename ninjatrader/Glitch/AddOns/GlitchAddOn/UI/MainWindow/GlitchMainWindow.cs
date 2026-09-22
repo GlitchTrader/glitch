@@ -660,6 +660,12 @@ namespace Glitch.UI
             var stoppingTrigger = new Trigger { Property = FrameworkElement.TagProperty, Value = "Stopping" };
             stoppingTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, L("header.button.ai_auto_stopping", "AI Auto Stopping...")));
             style.Triggers.Add(stoppingTrigger);
+            var heldTrigger = new Trigger { Property = FrameworkElement.TagProperty, Value = "Held" };
+            heldTrigger.Setters.Add(new Setter(ContentControl.ContentProperty, L("header.button.ai_auto_held", "AI Needs Resume")));
+            heldTrigger.Setters.Add(new Setter(Control.BackgroundProperty, OrangeAccentBrush));
+            heldTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, OrangeAccentBrush));
+            heldTrigger.Setters.Add(new Setter(FrameworkElement.ToolTipProperty, L("ai.cadence.provider_held", "Model calls blocked; check provider usage and resume AI Auto")));
+            style.Triggers.Add(heldTrigger);
             return style;
         }
 
@@ -868,7 +874,7 @@ namespace Glitch.UI
 
             bool tradingJobEnabled = GlitchAiAutoRuntimeController.IsTradingJobEnabled();
             _aiTradingButton.Tag = !paused && tradingJobEnabled
-                ? "Running"
+                ? (GlitchAiAutoRuntimeController.HasProviderUsageHold() ? "Held" : "Running")
                 : "Stopped";
         }
 
@@ -879,7 +885,8 @@ namespace Glitch.UI
 
             GlitchHermesControlState state = GlitchHermesControlStateStore.Load();
             bool tradingJobEnabled = GlitchAiAutoRuntimeController.IsTradingJobEnabled();
-            bool targetEnabled = state.TradingPaused || !tradingJobEnabled;
+            bool targetEnabled = state.TradingPaused || !tradingJobEnabled
+                || GlitchAiAutoRuntimeController.HasProviderUsageHold();
 
             // OFF records the User's entry pause synchronously before waiting
             // for the background scheduler to stop.

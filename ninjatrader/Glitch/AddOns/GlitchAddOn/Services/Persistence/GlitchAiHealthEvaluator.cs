@@ -23,6 +23,7 @@ namespace Glitch.Services
         public string DecisionWorkerDeferralReason { get; set; }
         public double DecisionAttemptAgeSeconds { get; set; } = -1;
         public string LearningWorkerStatus { get; set; }
+        public string LearningWorkerDeferralReason { get; set; }
         public double LearningWorkerAgeSeconds { get; set; } = -1;
         public bool TelemetryServerRunning { get; set; }
         public bool IntentServerRunning { get; set; }
@@ -70,6 +71,7 @@ namespace Glitch.Services
             sb.Append("},");
             sb.Append("\"learning_worker\":{");
             sb.Append("\"status\":").Append(GlitchSnapshotJson.String(LearningWorkerStatus)).Append(',');
+            sb.Append("\"deferral_reason\":").Append(GlitchSnapshotJson.String(LearningWorkerDeferralReason ?? string.Empty)).Append(',');
             sb.Append("\"age_seconds\":").Append(FormatNumber(LearningWorkerAgeSeconds));
             sb.Append("},");
             sb.Append("\"servers\":{");
@@ -167,13 +169,17 @@ namespace Glitch.Services
             {
                 string attemptJson = SafeRead(latestAttempt.FullName);
                 result.DecisionWorkerStatus = GlitchAiJsonFields.ExtractString(attemptJson, "status") ?? "unknown";
+                if (result.DecisionWorkerStatus == "deferred")
+                    result.DecisionWorkerDeferralReason = GlitchAiJsonFields.ExtractString(attemptJson, "reason");
                 result.DecisionAttemptAgeSeconds = AgeSeconds(latestAttempt.FullName, "started_utc", nowUtc);
             }
 
             string learningPath = Path.Combine(exchange, "hermes", "supervisor", "learning-worker-status.json");
-            result.LearningWorkerStatus = File.Exists(learningPath)
-                ? GlitchAiJsonFields.ExtractString(SafeRead(learningPath), "status") ?? "unknown"
-                : "waiting";
+            string learningJson = File.Exists(learningPath) ? SafeRead(learningPath) : null;
+            result.LearningWorkerStatus = learningJson != null
+                ? GlitchAiJsonFields.ExtractString(learningJson, "status") ?? "unknown" : "waiting";
+            if (result.LearningWorkerStatus == "deferred")
+                result.LearningWorkerDeferralReason = GlitchAiJsonFields.ExtractString(learningJson, "reason");
             result.LearningWorkerAgeSeconds = AgeSeconds(learningPath, "recorded_utc", nowUtc);
 
             bool masterPositioned = false;
@@ -220,6 +226,8 @@ namespace Glitch.Services
                 || string.Equals(result.DecisionWorkerStatus, "execution_failed", StringComparison.Ordinal)
                 || string.Equals(result.DecisionWorkerStatus, "delivery_incomplete", StringComparison.Ordinal))
                 result.ReasonCodes.Add("decision_worker_" + result.DecisionWorkerStatus);
+            else if (result.DecisionWorkerStatus == "deferred" && IsProviderUsageHold(result.DecisionWorkerDeferralReason))
+                result.ReasonCodes.Add("decision_worker_provider_usage_hold");
             else if (string.Equals(result.DecisionWorkerStatus, "started", StringComparison.Ordinal)
                 && result.DecisionAttemptAgeSeconds > 360)
                 result.ReasonCodes.Add("decision_worker_stalled");
@@ -246,6 +254,8 @@ namespace Glitch.Services
             }
             if (string.Equals(result.LearningWorkerStatus, "failed", StringComparison.Ordinal))
                 result.LearningReasonCodes.Add("learning_worker_failed");
+            else if (result.LearningWorkerStatus == "deferred" && IsProviderUsageHold(result.LearningWorkerDeferralReason))
+                result.LearningReasonCodes.Add("learning_worker_provider_usage_hold");
             else if ((string.Equals(result.LearningWorkerStatus, "started", StringComparison.Ordinal)
                     || string.Equals(result.LearningWorkerStatus, "running", StringComparison.Ordinal))
                 && result.LearningWorkerAgeSeconds > LearningWorkerStalledAfterSeconds)
@@ -259,6 +269,12 @@ namespace Glitch.Services
                 ? "off"
                 : result.ReasonCodes.Count == 0 ? "on" : "degraded";
             return result;
+        }
+
+        internal static bool IsProviderUsageHold(string reason)
+        {
+            return reason == "provider_usage_limit_requires_explicit_resume"
+                || reason == "provider_usage_hold_unreadable";
         }
 
         internal static string RecentWorkerDeferral(

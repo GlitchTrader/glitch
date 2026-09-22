@@ -22,6 +22,11 @@ namespace Glitch.Services
         private const string CoreJobName = "glitch-direct-operator";
         private const int CommandTimeoutMilliseconds = 20000;
 
+        public static bool HasProviderUsageHold()
+        {
+            return File.Exists(Path.Combine(GetProfileRoot(), "runtime", "provider-usage-hold.json"));
+        }
+
         public static bool IsTradingJobEnabled()
         {
             try

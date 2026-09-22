@@ -498,6 +498,9 @@ namespace Glitch.UI
         {
             if (!aiAutoOn)
                 return L("ai.cadence.paused", "Scheduled calls are paused");
+            if (health != null && health.DecisionWorkerStatus == "deferred"
+                && GlitchAiHealthEvaluator.IsProviderUsageHold(health.DecisionWorkerDeferralReason))
+                return L("ai.cadence.provider_held", "Model calls blocked; check provider usage and resume AI Auto");
             if (health != null && string.Equals(health.DecisionWorkerStatus, "deferred", StringComparison.Ordinal)
                 && (health.DecisionWorkerDeferralReason == "stale_market_package"
                     || health.DecisionWorkerDeferralReason == "stale_feed_observation"))

@@ -284,6 +284,7 @@ analytics.button.opened_macro	Opened Nasdaq Macro	Nasdaq Macro aberto	Nasdaq Mac
 tab.glitch_ai	Glitch AI	IA da Glitch	IA de Glitch	Glitch AI	IA Glitch	Glitch ИИ
 header.button.ai_auto_off	Glitch AI	IA da Glitch	IA de Glitch	Glitch AI	IA Glitch	Glitch ИИ
 header.button.ai_auto_on	AI Auto On	IA Automática Ligada	IA Automática Activada	AI 自动已开启	IA Auto Activée	Авто-ИИ Включён
+header.button.ai_auto_held	AI Needs Resume	Retomar IA	Reanudar IA	恢复 AI	Relancer IA	Возобновить ИИ
 header.button.ai_auto_starting	AI Auto Starting...	Iniciando IA Automática...	Iniciando IA Automática...	正在启动 AI 自动交易…	Démarrage de l'IA Auto…	Запуск Авто-ИИ…
 header.button.ai_auto_stopping	AI Auto Stopping...	Parando IA Automática...	Deteniendo IA Automática...	正在停止 AI 自动交易…	Arrêt de l'IA Auto…	Остановка Авто-ИИ…
 ai.scope.title	AI Trading Scope	Escopo de Negociação por IA	Ámbito de Trading con IA	AI 交易范围	Périmètre de Trading IA	Область Торговли ИИ
@@ -324,6 +325,7 @@ ai.cadence.next_format	Next decision in about {0}m	Próxima decisão em cerca de
 ai.cadence.due	Decision due; waiting for the completed result	Decisão prevista; aguardando o resultado concluído	Decisión pendiente; esperando el resultado completado	决策已到时间；正在等待完成结果	Décision attendue ; en attente du résultat terminé	Срок решения наступил; ожидается завершённый результат
 ai.cadence.overdue	Decision overdue - inspect the background worker	Decisão atrasada — verifique o processo em segundo plano	Decisión atrasada — revise el proceso en segundo plano	决策逾期 — 请检查后台进程	Décision en retard — vérifiez le processus en arrière-plan	Решение просрочено — проверьте фоновый процесс
 ai.cadence.waiting_fresh_data	Waiting for fresh market data; no model call	Aguardando dados de mercado atualizados; sem chamada ao modelo	Esperando datos de mercado actualizados; sin llamada al modelo	等待最新市场数据；未调用模型	En attente de données de marché à jour ; aucun appel au modèle	Ожидание свежих рыночных данных; модель не вызывается
+ai.cadence.provider_held	Model calls blocked; check provider usage and resume AI Auto	Chamadas ao modelo bloqueadas; verifique o limite do provedor e retome a IA Automática	Llamadas al modelo bloqueadas; revise el límite del proveedor y reanude IA Automática	模型调用已暂停；请检查提供商用量并恢复自动 AI	Appels au modèle bloqués ; vérifiez le quota du fournisseur et relancez IA Auto	Вызовы модели заблокированы; проверьте лимит провайдера и возобновите Авто-ИИ
 ai.decision.latest	Latest AI Decision	Última Decisão da IA	Última Decisión de IA	最新 AI 决策	Dernière Décision IA	Последнее Решение ИИ
 ai.stage.snapshots	Snapshots	Snapshots	Snapshots	快照	Snapshots	Снимки
 ai.stage.packet	Packet Sealed	Pacote Selado	Paquete Sellado	数据包已封存	Paquet Scellé	Пакет Запечатан

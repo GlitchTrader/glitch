@@ -91,7 +91,27 @@ internal static class GlitchAiHealthHarness
             Require(GlitchAiHealthEvaluator.Evaluate(now).ReasonCodes.Contains("decision_worker_failed"), "deferral hid model failure");
             File.WriteAllText(attempt, "{\"status\":\"started\",\"started_utc\":\"2026-09-11T21:50:00Z\"}");
             Require(GlitchAiHealthEvaluator.Evaluate(now).ReasonCodes.Contains("decision_worker_stalled"), "deferral hid active stall");
-            Console.WriteLine("Glitch health harness passed (all instruments, masters, deferrals, failures, stalls).");
+            // Quota holds are operational failures, not healthy market abstentions.
+            // Repeated fresh deferred records must not hide a day without cognition.
+            foreach (string reason in new[] { "provider_usage_limit_requires_explicit_resume", "provider_usage_hold_unreadable" })
+            {
+                File.WriteAllText(attempt, "{\"status\":\"deferred\",\"started_utc\":\"2026-09-11T21:57:00Z\",\"reason\":\"" + reason + "\"}");
+                File.WriteAllText(Path.Combine(root, "hermes", "supervisor", "learning-worker-status.json"),
+                    "{\"status\":\"deferred\",\"recorded_utc\":\"2026-09-11T22:00:00Z\",\"reason\":\"" + reason + "\"}");
+                var health = GlitchAiHealthEvaluator.Evaluate(now);
+                Require(health.OverallStatus == "degraded", "quota-held worker was reported healthy");
+                Require(health.DecisionWorkerDeferralReason == reason, "quota cause was lost");
+                Require(health.ReasonCodes.Contains("decision_worker_provider_usage_hold"), "quota hold was not actionable");
+                Require(health.LearningReasonCodes.Contains("learning_worker_provider_usage_hold"), "learner quota hold was hidden");
+                Require(health.ToJson().Contains("\"deferral_reason\":\"" + reason + "\""), "quota cause missing from health JSON");
+            }
+            File.WriteAllText(attempt, "{\"status\":\"completed\",\"started_utc\":\"2026-09-11T22:00:00Z\"}");
+            File.WriteAllText(Path.Combine(root, "hermes", "supervisor", "learning-worker-status.json"),
+                "{\"status\":\"waiting\",\"recorded_utc\":\"2026-09-11T22:00:00Z\",\"reason\":\"trading_resumed\"}");
+            var resumed = GlitchAiHealthEvaluator.Evaluate(now);
+            Require(!resumed.ReasonCodes.Contains("decision_worker_provider_usage_hold"), "quota warning survived a new completed decision");
+            Require(!resumed.LearningReasonCodes.Contains("learning_worker_provider_usage_hold"), "quota warning survived learner resume");
+            Console.WriteLine("Glitch health harness passed (all instruments, masters, deferrals, failures, stalls, provider holds and recovery).");
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
