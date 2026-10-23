@@ -535,9 +535,74 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             double high = Highs[bip][0];
             double low = Lows[bip][0];
-            SessionBlock block = SessionBlock.Resolve(Times[bip][0]);
+            DateTime barLocal = Times[bip][0].ToLocalTime();
+            SessionBlock block = SessionBlock.Resolve(barLocal);
             tracker.Update(block.Key, block.Name, high, low);
+            // Incremental tracker alone resets to the live bar after recompile/reload.
+            // Rehydrate current and previous session extremes from loaded 1m history.
+            if (minutes == 1)
+                RebuildSessionExtremesFromBars(tracker, bip, block.Key);
             return tracker;
+        }
+
+        private void RebuildSessionExtremesFromBars(SessionTracker tracker, int bip, string currentSessionKey)
+        {
+            if (tracker == null || string.IsNullOrWhiteSpace(currentSessionKey)
+                || CurrentBars == null || bip < 0 || bip >= CurrentBars.Length || CurrentBars[bip] < 0
+                || Times == null || bip >= Times.Length || Times[bip] == null || Times[bip].Count == 0
+                || Highs == null || Lows == null)
+                return;
+
+            // ~33h of 1m bars covers prior RTH/London/Asia handoff after a reload.
+            int bars = Math.Min(CurrentBars[bip] + 1, 2000);
+            double? currentHigh = null;
+            double? currentLow = null;
+            double? previousHigh = null;
+            double? previousLow = null;
+            string previousKey = null;
+            bool enteredCurrent = false;
+
+            for (int barsAgo = bars - 1; barsAgo >= 0; barsAgo--)
+            {
+                DateTime barLocal = Times[bip][barsAgo].ToLocalTime();
+                SessionBlock block = SessionBlock.Resolve(barLocal);
+                double barHigh = Highs[bip][barsAgo];
+                double barLow = Lows[bip][barsAgo];
+
+                if (string.Equals(block.Key, currentSessionKey, StringComparison.Ordinal))
+                {
+                    enteredCurrent = true;
+                    if (!currentHigh.HasValue || barHigh > currentHigh.Value)
+                        currentHigh = barHigh;
+                    if (!currentLow.HasValue || barLow < currentLow.Value)
+                        currentLow = barLow;
+                    continue;
+                }
+
+                if (enteredCurrent)
+                    continue;
+
+                if (!string.Equals(previousKey, block.Key, StringComparison.Ordinal))
+                {
+                    previousKey = block.Key;
+                    previousHigh = barHigh;
+                    previousLow = barLow;
+                }
+                else
+                {
+                    if (!previousHigh.HasValue || barHigh > previousHigh.Value)
+                        previousHigh = barHigh;
+                    if (!previousLow.HasValue || barLow < previousLow.Value)
+                        previousLow = barLow;
+                }
+            }
+
+            tracker.ReplaceFromHistory(
+                currentHigh,
+                currentLow,
+                previousHigh,
+                previousLow,
+                previousSessionObserved: !string.IsNullOrWhiteSpace(previousKey));
         }
 
         private void LogLoadedSeries()
@@ -685,6 +750,11 @@ namespace NinjaTrader.NinjaScript.Indicators
             public double? CurrentLow { get; private set; }
             public double? PreviousHigh { get; private set; }
             public double? PreviousLow { get; private set; }
+            /// <summary>
+            /// complete = prior session observed in loaded bars; partial_no_previous = history
+            /// starts inside the current session (typical right after reload with short lookback).
+            /// </summary>
+            public string ExtremesStatus { get; private set; }
             private string _sessionKey;
 
             public void Update(string sessionKey, string name, double high, double low)
@@ -698,6 +768,11 @@ namespace NinjaTrader.NinjaScript.Indicators
                     {
                         PreviousHigh = CurrentHigh;
                         PreviousLow = CurrentLow;
+                        ExtremesStatus = "complete";
+                    }
+                    else
+                    {
+                        ExtremesStatus = "partial_no_previous";
                     }
 
                     _sessionKey = sessionKey;
@@ -711,6 +786,31 @@ namespace NinjaTrader.NinjaScript.Indicators
                     CurrentHigh = high;
                 if (!CurrentLow.HasValue || low < CurrentLow.Value)
                     CurrentLow = low;
+            }
+
+            public void ReplaceFromHistory(
+                double? currentHigh,
+                double? currentLow,
+                double? previousHigh,
+                double? previousLow,
+                bool previousSessionObserved)
+            {
+                if (currentHigh.HasValue)
+                    CurrentHigh = currentHigh;
+                if (currentLow.HasValue)
+                    CurrentLow = currentLow;
+                if (previousSessionObserved)
+                {
+                    PreviousHigh = previousHigh;
+                    PreviousLow = previousLow;
+                    ExtremesStatus = "complete";
+                }
+                else
+                {
+                    // Do not invent prior extremes; keep null and advertise partial.
+                    if (!PreviousHigh.HasValue && !PreviousLow.HasValue)
+                        ExtremesStatus = "partial_no_previous";
+                }
             }
         }
 

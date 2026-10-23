@@ -143,7 +143,7 @@ function Invoke-HermesBounded {
     $arguments = @(
         ('"' + $Hermes + '"'), '-p', $ProfileName,
         '--toolsets', 'clarify',
-        '--skills', 'glitch-trade-mnq,glitch-build-intent',
+        '--skills', 'glitch-trade-mnq,glitch-volume-profile,glitch-build-intent',
         '--usage-file', ('"' + $Usage + '"'), '-z', ('"' + $Prompt.Replace('"', '\"') + '"')
     ) -join ' '
     $start = New-Object Diagnostics.ProcessStartInfo

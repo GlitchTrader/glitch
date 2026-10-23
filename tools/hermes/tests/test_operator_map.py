@@ -141,6 +141,7 @@ class OperatorMapTests(unittest.TestCase):
             "glitch-market-scan",
             "glitch-setup-state",
             "glitch-order-flow",
+            "glitch-volume-profile",
             "glitch-position-management",
             "glitch-build-intent",
             "glitch-learn",

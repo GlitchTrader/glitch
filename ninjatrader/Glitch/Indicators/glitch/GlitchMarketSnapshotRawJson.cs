@@ -81,6 +81,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             public double? SessionLow { get; set; }
             public double? PreviousSessionHigh { get; set; }
             public double? PreviousSessionLow { get; set; }
+            public string VolumeProfileJson { get; set; }
             public List<RawTimeframeBarPayload> TimeframeBars { get; set; }
         }
 
@@ -204,8 +205,13 @@ namespace NinjaTrader.NinjaScript.Indicators
                 + "\"high\":" + JsonNullableNumber(snapshot.SessionHigh) + ","
                 + "\"low\":" + JsonNullableNumber(snapshot.SessionLow) + ","
                 + "\"previous_high\":" + JsonNullableNumber(snapshot.PreviousSessionHigh) + ","
-                + "\"previous_low\":" + JsonNullableNumber(snapshot.PreviousSessionLow)
+                + "\"previous_low\":" + JsonNullableNumber(snapshot.PreviousSessionLow) + ","
+                + "\"extremes_status\":" + JsonString(
+                    snapshot.PreviousSessionHigh.HasValue && snapshot.PreviousSessionLow.HasValue
+                        ? "complete"
+                        : "partial_no_previous")
                 + "},"
+                + VolumeProfileProperty(snapshot.VolumeProfileJson)
                 + "\"missing_timeframes_minutes\":" + JsonIntArray(missingMinutes == null ? Array.Empty<int>() : missingMinutes.ToArray()) + ","
                 + "\"timeframe_bars\":[" + string.Join(",", bars) + "]"
                 + "}";
@@ -275,6 +281,14 @@ namespace NinjaTrader.NinjaScript.Indicators
                 + "\"order_flow_reliability\":" + JsonNullableNumber(derived.OrderFlowReliability)
                 + "}"
                 + "}";
+        }
+
+        private static string VolumeProfileProperty(string value)
+        {
+            string raw = JsonRawObjectOrNull(value);
+            if (raw == "null")
+                return string.Empty;
+            return "\"volume_profile\":" + raw + ",";
         }
 
         private static string JsonString(string value)

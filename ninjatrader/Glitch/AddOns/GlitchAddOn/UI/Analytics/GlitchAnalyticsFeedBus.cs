@@ -145,7 +145,12 @@ namespace Glitch.UI
                 return false;
             state.TimeframeReadings[reading.Minutes] = reading.Clone();
             if (reading.Minutes == 1)
+            {
                 state.DescriptiveStateJson = reading.DescriptiveStateJson;
+                if (!string.IsNullOrEmpty(reading.VolumeProfileJson))
+                    state.VolumeProfileJson = reading.VolumeProfileJson;
+                reading.VolumeProfileJson = null;
+            }
             if (reading.UtcTime >= state.LastUpdatedUtc)
             {
                 state.LastUpdatedUtc = reading.UtcTime;
@@ -154,12 +159,33 @@ namespace Glitch.UI
                 state.InstrumentTickSize = reading.InstrumentTickSize;
                 state.InstrumentEconomicsSource = reading.InstrumentEconomicsSource;
                 state.SessionName = reading.SessionName;
-                state.SessionHigh = reading.SessionHigh;
-                state.SessionLow = reading.SessionLow;
-                state.PreviousSessionHigh = reading.PreviousSessionHigh;
-                state.PreviousSessionLow = reading.PreviousSessionLow;
+                // Never shrink session extremes on a republish after indicator reload.
+                state.SessionHigh = MergeSessionHigh(state.SessionHigh, reading.SessionHigh);
+                state.SessionLow = MergeSessionLow(state.SessionLow, reading.SessionLow);
+                if (reading.PreviousSessionHigh.HasValue)
+                    state.PreviousSessionHigh = reading.PreviousSessionHigh;
+                if (reading.PreviousSessionLow.HasValue)
+                    state.PreviousSessionLow = reading.PreviousSessionLow;
             }
             return true;
+        }
+
+        private static double? MergeSessionHigh(double? retained, double? incoming)
+        {
+            if (!retained.HasValue)
+                return incoming;
+            if (!incoming.HasValue)
+                return retained;
+            return incoming.Value > retained.Value ? incoming : retained;
+        }
+
+        private static double? MergeSessionLow(double? retained, double? incoming)
+        {
+            if (!retained.HasValue)
+                return incoming;
+            if (!incoming.HasValue)
+                return retained;
+            return incoming.Value < retained.Value ? incoming : retained;
         }
 
         public static void EnsurePersistenceLoaded()
@@ -727,18 +753,19 @@ namespace Glitch.UI
                 SessionName = freshestSessionReading != null && !string.IsNullOrWhiteSpace(freshestSessionReading.SessionName)
                     ? freshestSessionReading.SessionName
                     : state.SessionName,
-                SessionHigh = freshestSessionReading != null && freshestSessionReading.SessionHigh.HasValue
-                    ? freshestSessionReading.SessionHigh
-                    : state.SessionHigh,
-                SessionLow = freshestSessionReading != null && freshestSessionReading.SessionLow.HasValue
-                    ? freshestSessionReading.SessionLow
-                    : state.SessionLow,
+                SessionHigh = MergeSessionHigh(
+                    state.SessionHigh,
+                    freshestSessionReading != null ? freshestSessionReading.SessionHigh : null),
+                SessionLow = MergeSessionLow(
+                    state.SessionLow,
+                    freshestSessionReading != null ? freshestSessionReading.SessionLow : null),
                 PreviousSessionHigh = freshestSessionReading != null && freshestSessionReading.PreviousSessionHigh.HasValue
                     ? freshestSessionReading.PreviousSessionHigh
                     : state.PreviousSessionHigh,
                 PreviousSessionLow = freshestSessionReading != null && freshestSessionReading.PreviousSessionLow.HasValue
                     ? freshestSessionReading.PreviousSessionLow
                     : state.PreviousSessionLow,
+                VolumeProfileJson = state.VolumeProfileJson,
                 TimeframeReadings = readings
             };
             return true;
@@ -1426,6 +1453,7 @@ namespace Glitch.UI
             public double? SessionLow { get; set; }
             public double? PreviousSessionHigh { get; set; }
             public double? PreviousSessionLow { get; set; }
+            public string VolumeProfileJson { get; set; }
             public Dictionary<int, GlitchIndicatorReading> TimeframeReadings { get; }
         }
 
@@ -1469,6 +1497,7 @@ namespace Glitch.UI
         public double? SessionLow { get; set; }
         public double? PreviousSessionHigh { get; set; }
         public double? PreviousSessionLow { get; set; }
+        public string VolumeProfileJson { get; set; }
         public Dictionary<int, GlitchIndicatorReading> TimeframeReadings { get; set; }
     }
 
@@ -1526,6 +1555,7 @@ namespace Glitch.UI
         public double? SessionLow { get; set; }
         public double? PreviousSessionHigh { get; set; }
         public double? PreviousSessionLow { get; set; }
+        public string VolumeProfileJson { get; set; }
 
         public GlitchIndicatorReading Clone()
         {
@@ -1582,7 +1612,8 @@ namespace Glitch.UI
                 SessionHigh = SessionHigh,
                 SessionLow = SessionLow,
                 PreviousSessionHigh = PreviousSessionHigh,
-                PreviousSessionLow = PreviousSessionLow
+                PreviousSessionLow = PreviousSessionLow,
+                VolumeProfileJson = VolumeProfileJson
             };
         }
     }
