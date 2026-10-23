@@ -1,0 +1,94 @@
+{
+  "snapshot": {
+    "schema_version": "glitch.market.snapshot.v2",
+    "created_utc": "2026-09-30T14:05:00.0000000Z",
+    "snapshot_id": "20260930T140500Z",
+    "source_mode": "live",
+    "instruments": [
+      {
+        "instrument": "MNQ",
+        "current_price": 100.5,
+        "instrument_economics": {
+          "point_value_usd": 2,
+          "tick_size": 0.25,
+          "source": "fixture"
+        },
+        "session": {
+          "name": "NYC",
+          "high": 101,
+          "low": 100,
+          "previous_high": 102,
+          "previous_low": 99
+        },
+        "timeframe_bars": [
+          {
+            "minutes": 1,
+            "utc_time": "2026-09-30T14:05:00.0000000Z",
+            "open": 100.25,
+            "high": 100.75,
+            "low": 100.25,
+            "close": 100.5,
+            "indicators": { "atr": 2 }
+          }
+        ],
+        "volume_profile": {
+          "schema_version": "glitch.volume_at_price.v1",
+          "status": "ready",
+          "session_key": "NYC|2026093008",
+          "tick_size": 0.25,
+          "classification": "bid_ask_at_quote_else_tick_rule",
+          "session_truncated": false,
+          "session_omitted_bins": 0,
+          "session_bid_total": 71.5,
+          "session_ask_total": 100.5,
+          "session_volume_total": 172,
+          "session_rows": [
+            { "p": 100, "b": 20, "a": 20 },
+            { "p": 100.25, "b": 4, "a": 6 },
+            { "p": 100.5, "b": 30, "a": 50 },
+            { "p": 100.75, "b": 4, "a": 6 },
+            { "p": 101, "b": 3, "a": 5 },
+            { "p": 101.25, "b": 1, "a": 0 },
+            { "p": 101.75, "b": 0.5, "a": 0.5 },
+            { "p": 102, "b": 0.5, "a": 0.5 },
+            { "p": 102.25, "b": 0.5, "a": 0.5 },
+            { "p": 102.5, "b": 8, "a": 12 }
+          ],
+          "full_map": {
+            "poc": 100.5,
+            "vah": 100.75,
+            "val": 100,
+            "value_area_fraction": 0.7,
+            "levels": [
+              { "name": "session_high", "price": 101, "volume_above": 24, "volume_below": 148 },
+              { "name": "session_low", "price": 100, "volume_above": 132, "volume_below": 0 },
+              { "name": "previous_session_high", "price": 102, "volume_above": 21, "volume_below": 150 },
+              { "name": "previous_session_low", "price": 99, "volume_above": 172, "volume_below": 0 },
+              { "name": "session_open", "price": 100.25, "volume_above": 122, "volume_below": 40 },
+              { "name": "open_high", "price": 100.5, "volume_above": 42, "volume_below": 50 }
+            ]
+          },
+          "bars_1m": [
+            { "utc_time": "2026-09-30T14:00:00.0000000Z", "rows": [{ "p": 100.5, "b": 1, "a": 1 }] },
+            { "utc_time": "2026-09-30T14:01:00.0000000Z", "rows": [{ "p": 100.75, "b": 1, "a": 0 }] },
+            { "utc_time": "2026-09-30T14:02:00.0000000Z", "rows": [{ "p": 101, "b": 0.5, "a": 0.5 }] },
+            { "utc_time": "2026-09-30T14:03:00.0000000Z", "rows": [{ "p": 100.5, "b": 2, "a": 1 }] },
+            { "utc_time": "2026-09-30T14:04:00.0000000Z", "rows": [{ "p": 100.25, "b": 1, "a": 2 }] }
+          ]
+        }
+      }
+    ]
+  },
+  "ohlc_1m": [
+    { "utc": "2026-09-30T14:01:00Z", "o": 100.25, "h": 100.5, "l": 100, "c": 100.25 },
+    { "utc": "2026-09-30T14:02:00Z", "o": 100.25, "h": 101.25, "l": 100.25, "c": 100.5 },
+    { "utc": "2026-09-30T14:03:00Z", "o": 100.5, "h": 101.25, "l": 100.5, "c": 101.25 },
+    { "utc": "2026-09-30T14:04:00Z", "o": 101, "h": 101.25, "l": 100.25, "c": 100.25 },
+    { "utc": "2026-09-30T14:05:00Z", "o": 100, "h": 100.75, "l": 99.75, "c": 100.75 }
+  ],
+  "swings": [
+    { "price": 99.5, "label": "LL" },
+    { "price": 100.25, "label": "HL" },
+    { "price": 102.75, "label": "HH" }
+  ]
+}

@@ -82,6 +82,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             public double? SessionLow { get; set; }
             public double? PreviousSessionHigh { get; set; }
             public double? PreviousSessionLow { get; set; }
+            public string VolumeProfileJson { get; set; }
         }
 
         public static bool IsAvailable()
@@ -446,6 +447,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             SetProperty(message, "SessionLow", reading.SessionLow);
             SetProperty(message, "PreviousSessionHigh", reading.PreviousSessionHigh);
             SetProperty(message, "PreviousSessionLow", reading.PreviousSessionLow);
+            SetProperty(message, "VolumeProfileJson", reading.VolumeProfileJson);
 
             return message;
         }

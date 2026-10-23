@@ -221,7 +221,11 @@ namespace NinjaTrader.NinjaScript.Indicators
                 + "\"high\":" + JsonNullableNumber(snapshot.SessionHigh) + ","
                 + "\"low\":" + JsonNullableNumber(snapshot.SessionLow) + ","
                 + "\"previous_high\":" + JsonNullableNumber(snapshot.PreviousSessionHigh) + ","
-                + "\"previous_low\":" + JsonNullableNumber(snapshot.PreviousSessionLow)
+                + "\"previous_low\":" + JsonNullableNumber(snapshot.PreviousSessionLow) + ","
+                + "\"extremes_status\":" + JsonString(
+                    snapshot.PreviousSessionHigh.HasValue && snapshot.PreviousSessionLow.HasValue
+                        ? "complete"
+                        : "partial_no_previous")
                 + "},"
                 + "\"missing_timeframes_minutes\":" + JsonIntArray(missingMinutes == null ? Array.Empty<int>() : missingMinutes.ToArray()) + ","
                 + "\"timeframe_readings\":[" + string.Join(",", readings) + "]"

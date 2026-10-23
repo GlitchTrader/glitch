@@ -320,6 +320,7 @@ namespace Glitch.Services
                 SessionLow = snapshot.SessionLow,
                 PreviousSessionHigh = snapshot.PreviousSessionHigh,
                 PreviousSessionLow = snapshot.PreviousSessionLow,
+                VolumeProfileJson = snapshot.VolumeProfileJson,
                 TimeframeBars = bars
             };
         }

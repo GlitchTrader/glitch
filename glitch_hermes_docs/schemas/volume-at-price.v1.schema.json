@@ -1,0 +1,268 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Glitch volume-at-price v1",
+  "$defs": {
+    "row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["p", "b", "a"],
+      "properties": {
+        "p": { "type": "number" },
+        "b": {
+          "type": "number",
+          "minimum": 0,
+          "multipleOf": 0.5,
+          "description": "Bid volume. Whole numbers as integers; 50/50 splits as n.5."
+        },
+        "a": {
+          "type": "number",
+          "minimum": 0,
+          "multipleOf": 0.5,
+          "description": "Ask volume. Whole numbers as integers; 50/50 splits as n.5."
+        }
+      }
+    },
+    "sorted_rows": {
+      "type": "array",
+      "x-glitch-row-order": "p-ascending-strict",
+      "description": "Strictly increasing p. JSON Schema has no standard sort keyword; GlitchVolumeAtPrice sorts and volume_profile.rows_are_sorted rejects violations.",
+      "items": { "$ref": "#/$defs/row" }
+    },
+    "named_level": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "price", "volume_above", "volume_below"],
+      "properties": {
+        "name": {
+          "enum": [
+            "session_high",
+            "session_low",
+            "previous_session_high",
+            "previous_session_low",
+            "session_open",
+            "open_high"
+          ]
+        },
+        "price": { "type": "number" },
+        "volume_above": { "type": "number", "minimum": 0 },
+        "volume_below": { "type": "number", "minimum": 0 }
+      }
+    },
+    "volume_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "status", "classification"],
+      "properties": {
+        "schema_version": { "const": "glitch.volume_at_price.v1" },
+        "status": { "enum": ["ready", "warming", "unavailable"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "session_key": { "type": "string", "minLength": 1 },
+        "tick_size": { "type": "number", "exclusiveMinimum": 0 },
+        "classification": {
+          "enum": ["bid_ask_at_quote_else_tick_rule", "tick_rule_only"]
+        },
+        "session_truncated": { "type": "boolean" },
+        "session_omitted_bins": { "type": "integer", "minimum": 0 },
+        "session_bid_total": { "type": "number", "minimum": 0 },
+        "session_ask_total": { "type": "number", "minimum": 0 },
+        "session_volume_total": { "type": "number", "minimum": 0 },
+        "session_rows": {
+          "allOf": [{ "$ref": "#/$defs/sorted_rows" }],
+          "maxItems": 800
+        },
+        "full_map": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["poc", "vah", "val", "value_area_fraction", "levels"],
+          "properties": {
+            "poc": { "type": "number" },
+            "vah": { "type": "number" },
+            "val": { "type": "number" },
+            "value_area_fraction": { "const": 0.7 },
+            "levels": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/named_level" }
+            }
+          }
+        },
+        "bars_1m": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["utc_time", "rows"],
+            "properties": {
+              "utc_time": { "type": "string", "minLength": 1 },
+              "bar_truncated": { "type": "boolean" },
+              "bar_omitted_bins": { "type": "integer", "minimum": 0 },
+              "rows": {
+                "allOf": [{ "$ref": "#/$defs/sorted_rows" }],
+                "maxItems": 120
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "const": "ready" } },
+            "required": ["status"]
+          },
+          "then": {
+            "required": [
+              "session_key",
+              "tick_size",
+              "session_rows",
+              "full_map",
+              "session_volume_total"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": { "status": { "enum": ["warming", "unavailable"] } },
+            "required": ["status"]
+          },
+          "then": { "required": ["reason"] }
+        }
+      ]
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["p", "total", "distance_ticks"],
+      "properties": {
+        "p": { "type": "number" },
+        "total": { "type": "number", "minimum": 0 },
+        "distance_ticks": { "type": "number", "minimum": 0 },
+        "distance_atr_1m": { "type": "number", "minimum": 0 }
+      }
+    },
+    "vacuum": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["p_near", "p_far", "span_ticks", "distance_ticks"],
+      "properties": {
+        "p_near": { "type": "number" },
+        "p_far": { "type": "number" },
+        "span_ticks": { "type": "integer", "minimum": 4 },
+        "distance_ticks": { "type": "number", "minimum": 0 },
+        "distance_atr_1m": { "type": "number", "minimum": 0 },
+        "distance_usd_1ct": { "type": "number", "minimum": 0 }
+      }
+    },
+    "level_facts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "price"],
+      "properties": {
+        "name": {
+          "enum": [
+            "session_high",
+            "session_low",
+            "previous_session_high",
+            "previous_session_low",
+            "session_open",
+            "open_high",
+            "swing"
+          ]
+        },
+        "label": { "type": "string" },
+        "price": { "type": "number" },
+        "volume_at": { "type": "number", "minimum": 0 },
+        "volume_near": { "type": "number", "minimum": 0 },
+        "bid_near": { "type": "number", "minimum": 0 },
+        "ask_near": { "type": "number", "minimum": 0 },
+        "volume_above": { "type": "number", "minimum": 0 },
+        "volume_below": { "type": "number", "minimum": 0 },
+        "touch_count": { "type": "integer", "minimum": 0 },
+        "outcomes": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["bar_utc", "classification"],
+            "properties": {
+              "bar_utc": { "type": "string", "minLength": 1 },
+              "classification": {
+                "enum": ["rejection", "acceptance", "unresolved"]
+              }
+            }
+          }
+        },
+        "nearest_vacuum_beyond": { "$ref": "#/$defs/vacuum" },
+        "beyond_up": { "$ref": "#/$defs/vacuum" },
+        "beyond_down": { "$ref": "#/$defs/vacuum" }
+      }
+    },
+    "volume_profile_facts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version"],
+      "properties": {
+        "schema_version": { "const": "glitch.volume_profile_facts.v1" },
+        "nodes_scope": { "enum": ["session", "truncated_window"] },
+        "ohlc_source": {
+          "enum": ["market_structure_ledger", "packet_frames", "fixture"]
+        },
+        "probe_tolerance_ticks": { "type": "number", "minimum": 0 },
+        "poc": { "type": "number" },
+        "vah": { "type": "number" },
+        "val": { "type": "number" },
+        "value_area_fraction": { "const": 0.7 },
+        "hvn": {
+          "type": "array",
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/node" }
+        },
+        "lvn": {
+          "type": "array",
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/vacuum" }
+        },
+        "levels": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/level_facts" }
+        },
+        "candle_facts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "value", "bar_utc"],
+            "properties": {
+              "name": {
+                "enum": [
+                  "engulfing_bull",
+                  "engulfing_bear",
+                  "close_above_prior_close",
+                  "close_below_prior_close",
+                  "n_candle_up",
+                  "n_candle_down"
+                ]
+              },
+              "value": { "type": "boolean" },
+              "bar_utc": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "omitted": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["field", "reason"],
+            "properties": {
+              "field": { "type": "string", "minLength": 1 },
+              "reason": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    }
+  },
+  "description": "volume_profile nests on a glitch.market.snapshot.v2 instrument. packet_for_model strips it and attaches volume_profile_facts per instrument."
+}

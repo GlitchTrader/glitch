@@ -13,6 +13,7 @@ namespace NinjaTrader.NinjaScript.Indicators
     /// <summary>
     /// Writes versioned, daily gzip JSONL parts for historical backtest input.
     /// Each line remains a canonical glitch.market.snapshot.v2 document.
+    /// Optional volume_profile on the instrument is the offline copy of that minute's profile.
     /// </summary>
     internal static class GlitchHistoricalCorpusWriter
     {

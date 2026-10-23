@@ -37,7 +37,7 @@ using NinjaTrader.NinjaScript.Indicators;
 
 namespace NinjaTrader.NinjaScript.Indicators
 {
-    public class GlitchAnalyticsBridge : Indicator
+    public partial class GlitchAnalyticsBridge : Indicator
     {
         private static readonly int[] TargetMinutes = { 1, 5, 15, 60 };
         private const int MinBarsForSignal = 30;
@@ -72,6 +72,9 @@ namespace NinjaTrader.NinjaScript.Indicators
         private WilliamsR[] _williamsRByBip;
         private UltimateOscillator[] _ultimateOscillatorByBip;
         private HMA[] _hma9ByBip;
+        private HMA[] _hma12ByBip;
+        private HMA[] _hma18ByBip;
+        private HMA[] _hma43ByBip;
         private SMA[] _sma10ByBip;
         private SMA[] _smaByBip;
         private SMA[] _sma30ByBip;
@@ -105,6 +108,9 @@ namespace NinjaTrader.NinjaScript.Indicators
         private bool _isOrderFlowRuntimeAvailable;
         private bool _hasLoggedOrderFlowUnavailable;
         private int _orderFlowTickBip = -1;
+        private readonly GlitchVolumeAtPrice _volumeAtPrice = new GlitchVolumeAtPrice();
+        private string _volumeSessionKey;
+        private int _volumeSessionStamp = int.MinValue;
 
         private readonly Queue<OrderFlowTapeSample> _orderFlowTape = new Queue<OrderFlowTapeSample>();
         private double _orderFlowTapeBuyVolume;
@@ -168,6 +174,11 @@ namespace NinjaTrader.NinjaScript.Indicators
         public double OrderFlowBlend { get; set; }
 
         [NinjaScriptProperty]
+        [Range(5, 120)]
+        [Display(Name = "ORB Window Minutes", Order = 11, GroupName = "Parameters")]
+        public int OrbWindowMinutes { get; set; }
+
+        [NinjaScriptProperty]
         [Browsable(false)]
         [Display(Name = "Enable Historical Snapshot Export", Order = 1, GroupName = "Historical Export")]
         public bool EnableHistoricalSnapshotExport { get; set; }
@@ -209,6 +220,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 PerformanceMode = true;
                 EnableOrderFlowLayer = false;
                 OrderFlowBlend = 0.8;
+                OrbWindowMinutes = 30;
                 EnableHistoricalSnapshotExport = false;
                 HistoricalExportDirectory = string.Empty;
             }
@@ -217,7 +229,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 if (PublishToGlitchUi || EnableHistoricalSnapshotExport)
                     AddMissingTimeframeSeries();
 
-                if (EnableOrderFlowLayer)
+                if (EnableOrderFlowLayer || EnableHistoricalSnapshotExport)
                     AddOrderFlowTickSeries();
             }
             else if (State == State.DataLoaded)
@@ -258,6 +270,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Array.Clear(_depthBidByLevel, 0, _depthBidByLevel.Length);
                 Array.Clear(_depthAskByLevel, 0, _depthAskByLevel.Length);
                 _orderFlowTickBip = ResolveOrderFlowTickBip();
+                _volumeAtPrice.Reset();
+                _volumeSessionKey = null;
+                _volumeSessionStamp = int.MinValue;
 
                 InitializeOrderFlowIndicators();
 
@@ -319,6 +334,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                 _williamsRByBip = null;
                 _ultimateOscillatorByBip = null;
                 _hma9ByBip = null;
+                _hma12ByBip = null;
+                _hma18ByBip = null;
+                _hma43ByBip = null;
                 _sma10ByBip = null;
                 _sma30ByBip = null;
                 _sma50ByBip = null;
@@ -340,9 +358,14 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         protected override void OnBarUpdate()
         {
-            if (_isOrderFlowRuntimeAvailable && _orderFlowTickBip > 0 && BarsInProgress == _orderFlowTickBip)
+            if (_orderFlowTickBip > 0 && BarsInProgress == _orderFlowTickBip)
             {
-                RefreshOrderFlowFromTickSeries();
+                // Historical/replay only. Realtime volume comes from OnMarketData
+                // Last trades so we do not double-count when ChartControl is null.
+                if (State != State.Realtime)
+                    AccumulateHistoricalVolumeTick();
+                if (_isOrderFlowRuntimeAvailable)
+                    RefreshOrderFlowFromTickSeries();
                 return;
             }
 
@@ -482,9 +505,6 @@ namespace NinjaTrader.NinjaScript.Indicators
             double previousTradePrice = _lastTradePrice;
             _lastTradePrice = tradePrice;
 
-            if (!_isOrderFlowRuntimeAvailable)
-                return;
-
             double tradeVolume = marketDataUpdate.Volume > 0 ? marketDataUpdate.Volume : 0;
             if (tradeVolume <= 0)
                 return;
@@ -525,6 +545,23 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
 
             if (buyVolume <= 0 && sellVolume <= 0)
+                return;
+
+            // Volume-at-price must keep updating in realtime even without a chart.
+            // Gating on ChartControl froze the session map for hours while still
+            // publishing status=ready into Hermes packets (vacuum-stop poison).
+            if (State == State.Realtime)
+            {
+                bool atQuote = atQuoteVolume > 0;
+                AccumulateClassifiedVolume(
+                    tradePrice,
+                    sellVolume,
+                    buyVolume,
+                    marketDataUpdate.Time,
+                    atQuote);
+            }
+
+            if (!_isOrderFlowRuntimeAvailable)
                 return;
 
             _orderFlowTape.Enqueue(new OrderFlowTapeSample
@@ -1129,6 +1166,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             _williamsRByBip = new WilliamsR[seriesCount];
             _ultimateOscillatorByBip = new UltimateOscillator[seriesCount];
             _hma9ByBip = new HMA[seriesCount];
+            _hma12ByBip = new HMA[seriesCount];
+            _hma18ByBip = new HMA[seriesCount];
+            _hma43ByBip = new HMA[seriesCount];
             _sma10ByBip = new SMA[seriesCount];
             _smaByBip = new SMA[seriesCount];
             _sma30ByBip = new SMA[seriesCount];
@@ -1163,6 +1203,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                 _williamsRByBip[bip] = WilliamsR(BarsArray[bip], 14);
                 _ultimateOscillatorByBip[bip] = UltimateOscillator(BarsArray[bip], 7, 14, 28);
                 _hma9ByBip[bip] = HMA(BarsArray[bip], 9);
+                _hma12ByBip[bip] = HMA(BarsArray[bip], 12);
+                _hma18ByBip[bip] = HMA(BarsArray[bip], 18);
+                _hma43ByBip[bip] = HMA(BarsArray[bip], 43);
                 _sma10ByBip[bip] = SMA(BarsArray[bip], 10);
                 _smaByBip[bip] = SMA(BarsArray[bip], 20);
                 _sma30ByBip[bip] = SMA(BarsArray[bip], 30);
@@ -1532,6 +1575,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 OrderFlowDepthImbalance = orderFlowDepthImbalance,
                 OrderFlowHint = orderFlowHint
             };
+            PopulateAdaptiveEvidence(bip, ref signal, null);
             return true;
         }
 
@@ -1869,7 +1913,203 @@ namespace NinjaTrader.NinjaScript.Indicators
             DateTime barLocal = Times[bip][0].ToLocalTime();
             SessionBlock block = SessionBlock.Resolve(barLocal);
             tracker.Update(block.Key, block.Name, block.StartLocal, Opens[bip][0], Highs[bip][0], Lows[bip][0]);
+            if (minutes == 1)
+            {
+                // Incremental Update alone forgets prior extremes after recompile/reload.
+                RebuildSessionExtremesFromBars(tracker, block.Key);
+                RebuildSessionOrb(tracker);
+            }
+            else
+                EnsurePrimaryOrbUpdated();
             return tracker;
+        }
+
+        private void EnsurePrimaryOrbUpdated()
+        {
+            int bip = ResolveBipForMinutes(1);
+            if (bip < 0 || Times == null || bip >= Times.Length || Times[bip] == null || Times[bip].Count == 0
+                || CurrentBars == null || bip >= CurrentBars.Length || CurrentBars[bip] < 0)
+                return;
+
+            SessionTracker tracker;
+            if (!_sessionByMinutes.TryGetValue(1, out tracker) || tracker == null)
+            {
+                tracker = new SessionTracker();
+                _sessionByMinutes[1] = tracker;
+            }
+
+            SessionBlock block = SessionBlock.Resolve(Times[bip][0].ToLocalTime());
+            tracker.Update(block.Key, block.Name, block.StartLocal, Opens[bip][0], Highs[bip][0], Lows[bip][0]);
+            RebuildSessionExtremesFromBars(tracker, block.Key);
+            RebuildSessionOrb(tracker);
+        }
+
+        private void RebuildSessionExtremesFromBars(SessionTracker tracker, string currentSessionKey)
+        {
+            if (tracker == null || string.IsNullOrWhiteSpace(currentSessionKey))
+                return;
+
+            int bip = ResolveBipForMinutes(1);
+            if (bip < 0 || Times == null || bip >= Times.Length || Times[bip] == null || Times[bip].Count == 0
+                || CurrentBars == null || bip >= CurrentBars.Length || CurrentBars[bip] < 0
+                || Highs == null || Lows == null)
+                return;
+
+            int bars = Math.Min(CurrentBars[bip] + 1, 2000);
+            double? currentHigh = null;
+            double? currentLow = null;
+            double? previousHigh = null;
+            double? previousLow = null;
+            string previousKey = null;
+            bool enteredCurrent = false;
+
+            for (int barsAgo = bars - 1; barsAgo >= 0; barsAgo--)
+            {
+                DateTime barLocal = Times[bip][barsAgo].ToLocalTime();
+                SessionBlock block = SessionBlock.Resolve(barLocal);
+                double barHigh = Highs[bip][barsAgo];
+                double barLow = Lows[bip][barsAgo];
+
+                if (string.Equals(block.Key, currentSessionKey, StringComparison.Ordinal))
+                {
+                    enteredCurrent = true;
+                    if (!currentHigh.HasValue || barHigh > currentHigh.Value)
+                        currentHigh = barHigh;
+                    if (!currentLow.HasValue || barLow < currentLow.Value)
+                        currentLow = barLow;
+                    continue;
+                }
+
+                if (enteredCurrent)
+                    continue;
+
+                if (!string.Equals(previousKey, block.Key, StringComparison.Ordinal))
+                {
+                    previousKey = block.Key;
+                    previousHigh = barHigh;
+                    previousLow = barLow;
+                }
+                else
+                {
+                    if (!previousHigh.HasValue || barHigh > previousHigh.Value)
+                        previousHigh = barHigh;
+                    if (!previousLow.HasValue || barLow < previousLow.Value)
+                        previousLow = barLow;
+                }
+            }
+
+            tracker.ReplaceFromHistory(
+                currentHigh,
+                currentLow,
+                previousHigh,
+                previousLow,
+                previousSessionObserved: !string.IsNullOrWhiteSpace(previousKey));
+        }
+
+        private void RebuildSessionOrb(SessionTracker primary)
+        {
+            if (primary == null || string.IsNullOrWhiteSpace(primary.SessionKey) || primary.StartLocal == DateTime.MinValue)
+                return;
+
+            int bip = ResolveBipForMinutes(1);
+            if (bip < 0 || Times == null || bip >= Times.Length || Times[bip] == null || Times[bip].Count == 0
+                || CurrentBars == null || bip >= CurrentBars.Length || CurrentBars[bip] < 0)
+                return;
+
+            int windowMinutes = Math.Max(5, OrbWindowMinutes);
+            int bars = Math.Min(CurrentBars[bip] + 1, 600);
+            double? high = null;
+            double? low = null;
+            bool frozen = false;
+            for (int barsAgo = bars - 1; barsAgo >= 0; barsAgo--)
+            {
+                DateTime barLocal = Times[bip][barsAgo].ToLocalTime();
+                if (!string.Equals(SessionBlock.Resolve(barLocal).Key, primary.SessionKey, StringComparison.Ordinal))
+                    continue;
+
+                double elapsed = (barLocal - primary.StartLocal).TotalMinutes;
+                if (elapsed < 0)
+                    continue;
+
+                if (elapsed <= windowMinutes)
+                {
+                    double barHigh = Highs[bip][barsAgo];
+                    double barLow = Lows[bip][barsAgo];
+                    if (!high.HasValue || barHigh > high.Value)
+                        high = barHigh;
+                    if (!low.HasValue || barLow < low.Value)
+                        low = barLow;
+                }
+                else
+                {
+                    frozen = true;
+                }
+            }
+
+            primary.ReplaceOrb(high, low, frozen);
+        }
+
+        private SessionTracker TryGetPrimaryOrbSession()
+        {
+            SessionTracker tracker;
+            if (_sessionByMinutes.TryGetValue(1, out tracker) && tracker != null)
+                return tracker;
+            return null;
+        }
+
+        private string CachedVolumeSessionKey(DateTime barUtc)
+        {
+            DateTime local = barUtc.ToLocalTime();
+            int stamp = local.Year * 1000000 + local.Month * 10000 + local.Day * 100 + local.Hour;
+            if (_volumeSessionKey != null && stamp == _volumeSessionStamp)
+                return _volumeSessionKey;
+            SessionBlock block = SessionBlock.Resolve(local);
+            _volumeSessionKey = block.Key;
+            _volumeSessionStamp = stamp;
+            return _volumeSessionKey;
+        }
+
+        private void AccumulateClassifiedVolume(double price, double bid, double ask, DateTime barTime, bool atQuote)
+        {
+            double? tick = PublishedTickSize();
+            if (!tick.HasValue || price <= 0)
+                return;
+            DateTime utc = barTime.Kind == DateTimeKind.Utc ? barTime : barTime.ToUniversalTime();
+            _volumeAtPrice.AddClassified(price, bid, ask, tick.Value, CachedVolumeSessionKey(utc), utc, atQuote);
+        }
+
+        private void AccumulateHistoricalVolumeTick()
+        {
+            if (CurrentBars == null || BarsInProgress < 0 || BarsInProgress >= CurrentBars.Length || CurrentBars[BarsInProgress] < 0)
+                return;
+            double price = Closes[BarsInProgress][0];
+            double volume = Volumes[BarsInProgress][0];
+            double? tick = PublishedTickSize();
+            if (!tick.HasValue || price <= 0 || volume <= 0)
+                return;
+            DateTime utc = Times[BarsInProgress][0].ToUniversalTime();
+            _volumeAtPrice.AddTickRule(price, volume, tick.Value, CachedVolumeSessionKey(utc), utc);
+        }
+
+        private string BuildVolumeProfileJson(SessionTracker session, bool sealOpenMinute, DateTime barUtc)
+        {
+            RefreshInstrumentEconomics();
+            double? tick = PublishedTickSize();
+            if (!tick.HasValue)
+                return _volumeAtPrice.BuildUnavailable("tick_size_missing");
+            if (sealOpenMinute)
+                _volumeAtPrice.SealOpenMinute(barUtc);
+            string key = session == null ? null : session.SessionKey;
+            if (string.IsNullOrEmpty(key))
+                key = CachedVolumeSessionKey(barUtc);
+            return _volumeAtPrice.BuildJson(
+                tick.Value,
+                key,
+                session == null ? (double?)null : session.CurrentHigh,
+                session == null ? (double?)null : session.CurrentLow,
+                session == null ? (double?)null : session.PreviousHigh,
+                session == null ? (double?)null : session.PreviousLow,
+                session == null ? (double?)null : session.SessionOpen);
         }
 
         private GlitchBridgeBusCompat.BridgeReading BuildBridgeReading(
@@ -1879,6 +2119,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             SessionTracker session)
         {
             RefreshInstrumentEconomics();
+            PopulateAdaptiveEvidence(bip, ref signal, session);
             DateTime readingUtc = DateTime.UtcNow;
             return new GlitchBridgeBusCompat.BridgeReading
             {
@@ -1941,7 +2182,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                 SessionHigh = session == null ? null : session.CurrentHigh,
                 SessionLow = session == null ? null : session.CurrentLow,
                 PreviousSessionHigh = session == null ? null : session.PreviousHigh,
-                PreviousSessionLow = session == null ? null : session.PreviousLow
+                PreviousSessionLow = session == null ? null : session.PreviousLow,
+                VolumeProfileJson = minutes == 1
+                    ? BuildVolumeProfileJson(session, false, readingUtc)
+                    : null
             };
         }
 
@@ -2377,9 +2621,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                 return false;
 
             string descriptiveStateJson = null;
+            SessionTracker descriptiveSession = UpdateSessionTracker(minutes, bip);
+            PopulateAdaptiveEvidence(bip, ref signal, descriptiveSession);
             if (minutes == 1)
             {
-                SessionTracker descriptiveSession = UpdateSessionTracker(minutes, bip);
                 descriptiveStateJson = BuildDescriptiveStateJson(
                     bip,
                     minutes,
@@ -2505,6 +2750,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 SessionLow = primarySession == null ? null : primarySession.CurrentLow,
                 PreviousSessionHigh = primarySession == null ? null : primarySession.PreviousHigh,
                 PreviousSessionLow = primarySession == null ? null : primarySession.PreviousLow,
+                VolumeProfileJson = BuildVolumeProfileJson(primarySession, true, barCloseUtc),
                 TimeframeBars = bars
             };
 
@@ -3133,6 +3379,17 @@ namespace NinjaTrader.NinjaScript.Indicators
             public double? OrderFlowAggressionBalance;
             public double? OrderFlowDepthImbalance;
             public string OrderFlowHint;
+            public double? Hma12;
+            public double? Hma18;
+            public double? Hma43;
+            public double? HmaTrendAlignment;
+            public double? PriceToHma12Distance;
+            public string PriceVsVwapSide;
+            public double? OrbHigh;
+            public double? OrbLow;
+            public string OrbState;
+            public string ReversalCandle;
+            public string PivotBreakoutState;
         }
 
         private struct OrderFlowTapeSample
@@ -3155,6 +3412,10 @@ namespace NinjaTrader.NinjaScript.Indicators
             public double? CurrentLow { get; private set; }
             public double? PreviousHigh { get; private set; }
             public double? PreviousLow { get; private set; }
+            public double? OrbHigh { get; private set; }
+            public double? OrbLow { get; private set; }
+            public bool OrbFrozen { get; private set; }
+            public string ExtremesStatus { get; private set; }
 
             public void Update(string sessionKey, string name, DateTime startLocal, double open, double high, double low)
             {
@@ -3167,6 +3428,11 @@ namespace NinjaTrader.NinjaScript.Indicators
                     {
                         PreviousHigh = CurrentHigh;
                         PreviousLow = CurrentLow;
+                        ExtremesStatus = "complete";
+                    }
+                    else
+                    {
+                        ExtremesStatus = "partial_no_previous";
                     }
 
                     SessionKey = sessionKey;
@@ -3175,6 +3441,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                     SessionOpen = open;
                     CurrentHigh = high;
                     CurrentLow = low;
+                    OrbHigh = null;
+                    OrbLow = null;
+                    OrbFrozen = false;
                     return;
                 }
 
@@ -3182,6 +3451,36 @@ namespace NinjaTrader.NinjaScript.Indicators
                     CurrentHigh = high;
                 if (!CurrentLow.HasValue || low < CurrentLow.Value)
                     CurrentLow = low;
+            }
+
+            public void ReplaceFromHistory(
+                double? currentHigh,
+                double? currentLow,
+                double? previousHigh,
+                double? previousLow,
+                bool previousSessionObserved)
+            {
+                if (currentHigh.HasValue)
+                    CurrentHigh = currentHigh;
+                if (currentLow.HasValue)
+                    CurrentLow = currentLow;
+                if (previousSessionObserved)
+                {
+                    PreviousHigh = previousHigh;
+                    PreviousLow = previousLow;
+                    ExtremesStatus = "complete";
+                }
+                else if (!PreviousHigh.HasValue && !PreviousLow.HasValue)
+                {
+                    ExtremesStatus = "partial_no_previous";
+                }
+            }
+
+            public void ReplaceOrb(double? high, double? low, bool frozen)
+            {
+                OrbHigh = high;
+                OrbLow = low;
+                OrbFrozen = frozen && high.HasValue && low.HasValue;
             }
         }
 

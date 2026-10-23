@@ -1432,9 +1432,41 @@ def _attach_observation_layers(instrument: dict[str, Any]) -> None:
     instrument["heuristic_projections"] = projections
 
 
-def packet_for_model(packet: dict[str, Any], scenario: dict[str, Any]) -> dict[str, Any]:
+def load_volume_structure(exchange: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Read the market-structure ledger. Missing state is not a decision gate."""
+    try:
+        import market_structure
+        state = market_structure.load_state(
+            exchange / "hermes" / "supervisor" / "market-structure-state.json"
+        )
+        bars = state.get("bars") if isinstance(state, dict) else None
+        if not isinstance(bars, list):
+            return [], []
+        atr = 0.0
+        for bar in reversed(bars):
+            if isinstance(bar, dict) and isinstance(bar.get("atr"), (int, float)) and float(bar["atr"]) > 0:
+                atr = float(bar["atr"])
+                break
+        swings = market_structure.swing_pivots(bars, atr)
+        return bars, swings if isinstance(swings, list) else []
+    except Exception:
+        return [], []
+
+
+def packet_for_model(
+    packet: dict[str, Any],
+    scenario: dict[str, Any],
+    ledger_bars: list[dict[str, Any]] | None = None,
+    swings: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Expose only current routes, truthful observation semantics, and Glitch limits."""
     model_packet = json.loads(json.dumps(packet))
+    import volume_profile
+    volume_profile.apply_to_model_packet(
+        model_packet,
+        ledger_bars=ledger_bars,
+        swings=swings,
+    )
     policy = model_packet.get("policy")
     if not isinstance(policy, dict):
         return model_packet
@@ -1621,7 +1653,7 @@ def invoke_hermes(profile: str, prompt: str, timeout_seconds: int) -> dict[str, 
         "--model", CORE_MODEL,
         "--provider", CORE_PROVIDER,
         "--max-turns", "4",
-        "--skills", "glitch-trade-mnq,glitch-build-intent",
+        "--skills", "glitch-trade-mnq,glitch-volume-profile,glitch-build-intent",
         "--toolsets", "memory",
     ]
     wrapper = (
@@ -1816,6 +1848,7 @@ def build_prompt(
     scenario: dict[str, Any],
     journals: dict[str, Any],
     directive: dict[str, Any] | None = None,
+    structure: tuple[list[dict[str, Any]], list[dict[str, Any]]] | None = None,
 ) -> str:
     decisions = []
     for book in scenario["books"]:
@@ -1856,14 +1889,19 @@ def build_prompt(
         "decisions": decisions,
     }
     envelope = {
-        "decision_packet": packet_for_model(packet, scenario),
+        "decision_packet": packet_for_model(
+            packet,
+            scenario,
+            ledger_bars=None if structure is None else structure[0],
+            swings=None if structure is None else structure[1],
+        ),
         "execution_scope": scenario,
         "recent_glitch_ledger": journals,
         "operator_advisory": directive,
         "required_output_template": output_template,
     }
     prompt = (
-        "Apply the Glitch SOUL, glitch-trade-mnq, and glitch-build-intent to CURRENT_CYCLE. "
+        "Apply the Glitch SOUL, glitch-trade-mnq, glitch-volume-profile, and glitch-build-intent to CURRENT_CYCLE. "
         "Current NinjaTrader/Glitch packet, ledger, positions, orders, fills, balances, PnL, brackets, receipts, and outcomes are authoritative; "
         "memory and learning artifacts are interpretations. Analyze the five-frame path, multi-timeframe regime, structure, liquidity, volatility, "
         "order flow, Mag7, and news as supplied. Timeframe rows are live observations unless explicitly marked closed. Packet continuity gaps and missing "
@@ -2283,7 +2321,7 @@ def run_once(
     journals = journal_tail(glitch_data)
     journals.update(learning_context(exchange))
     journals["active_trade_state"] = trade_state
-    prompt = build_prompt(packet, scenario, journals, directive)
+    prompt = build_prompt(packet, scenario, journals, directive, load_volume_structure(exchange))
     write_json_atomic(attempt_path, {
         "schema_version": "glitch.hermes.model_attempt.v1",
         "cycle_id": packet_id,

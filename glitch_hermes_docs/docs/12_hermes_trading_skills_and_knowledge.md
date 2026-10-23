@@ -114,11 +114,12 @@ The v7 Glitch overlay is deliberately consolidated:
 | Skill | Purpose |
 |---|---|
 | `glitch-trade-mnq` | Read the multi-timeframe sequence; classify regime; reason about liquidity, order flow, Mag7/news, geometry, exposure, and management |
+| `glitch-volume-profile` | Compare effort and result at a price: acceptance, vacuums, bid/ask, and repeated area tests. Not an entry rule |
 | `glitch-build-intent` | Encode a chosen decision into the strict protected intent contract without adding strategy |
 | `glitch-learn` | Debrief, supervise, plan, maintain memory, and evaluate reversible evidence-linked guidance |
 | `glitch-runtime` | Reconcile Hermes-owned runtime state and formulate bounded source-defect escalations |
 
-The direct operator loads only `glitch-trade-mnq` and
+The direct operator loads `glitch-trade-mnq`, `glitch-volume-profile`, and
 `glitch-build-intent`. Learning loops load only `glitch-learn`.
 `glitch-runtime` remains available to interactive diagnosis and recovery rather
 than consuming every trading decision. SOUL carries durable identity and truth
